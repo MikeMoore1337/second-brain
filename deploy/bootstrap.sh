@@ -137,6 +137,8 @@ check_git_worktree() {
     [[ ! -e "$marker_path" ]] || die "$label имеет незавершённую Git operation: $marker"
   done
 
+  git -C "$path" fetch --no-tags origin main >/dev/null 2>&1 \
+    || die "$label: git fetch origin main завершился ошибкой; credentials не изменяются и не выводятся"
   local_sha="$(git -C "$path" rev-parse --verify 'refs/heads/main^{commit}' 2>/dev/null)" \
     || die "$label: local main недоступен"
   origin_sha="$(git -C "$path" rev-parse --verify 'refs/remotes/origin/main^{commit}' 2>/dev/null)" \

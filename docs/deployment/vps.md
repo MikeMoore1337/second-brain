@@ -28,9 +28,11 @@ sibling Git repositories. Git submodule не используется, а vault 
 то есть указывает на sibling vault.
 
 Bootstrap проверяет Linux, не-root пользователя, Git worktrees на `main`, clean
-state, отсутствие незавершённой Git operation, совпадение `main` и
-`origin/main`, приватность vault/runtime, Python 3.14 и `uv`. После проверки он
-выполняет:
+state, отсутствие незавершённой Git operation и приватность vault/runtime. Для
+проверки актуального remote он сначала выполняет только
+`git fetch --no-tags origin main` в каждом repository, а затем сравнивает
+`main` и обновлённый `origin/main`. После этого он проверяет Python 3.14 и `uv`
+и выполняет:
 
 ```text
 uv sync --locked --python 3.14
@@ -82,7 +84,7 @@ runtime. Путь — пример; замените его на выбранн�
    существующего непустого каталога: при таком состоянии остановитесь.
 
    ```bash
-   SECOND_BRAIN_ROOT=/srv/second-brain
+   SECOND_BRAIN_ROOT="$HOME/.local/share/second-brain"
    mkdir -p "$SECOND_BRAIN_ROOT"
    git clone https://github.com/MikeMoore1337/second-brain.git "$SECOND_BRAIN_ROOT/second-brain"
    git clone https://github.com/MikeMoore1337/second-brain-vault.git "$SECOND_BRAIN_ROOT/second-brain-vault"
