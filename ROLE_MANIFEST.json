@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "pack_version": "1.0.0",
+  "repository": "MikeMoore1337/second-brain",
+  "default_role": "qa-engineer",
+  "selection_policy": {
+    "primary_roles_max": 1,
+    "additional_roles": "only_when_material",
+    "mandatory_security_review_when": [
+      "vault_write_semantics",
+      "secrets_or_credentials",
+      "privacy_or_personal_data",
+      "destructive_or_mass_vault_change",
+      "untrusted_external_content"
+    ]
+  },
+  "roles": [
+    {
+      "id": "knowledge-architect",
+      "file": "ai/roles/knowledge_architect.md",
+      "purpose": "Architecture of knowledge, vault contracts, PARA/Zettelkasten and metadata.",
+      "preferred_agents": [
+        "inbox-processor",
+        "knowledge-distiller",
+        "vault-maintainer"
+      ]
+    },
+    {
+      "id": "knowledge-curator",
+      "file": "ai/roles/knowledge_curator.md",
+      "purpose": "Quality, deduplication, links, provenance and note lifecycle.",
+      "preferred_agents": [
+        "inbox-processor",
+        "knowledge-distiller",
+        "review-agent"
+      ]
+    },
+    {
+      "id": "automation-engineer",
+      "file": "ai/roles/automation_engineer.md",
+      "purpose": "CLI, scheduled workflows, Git automation and operational reliability.",
+      "preferred_agents": [
+        "vault-maintainer",
+        "review-agent"
+      ]
+    },
+    {
+      "id": "integration-engineer",
+      "file": "ai/roles/integration_engineer.md",
+      "purpose": "Ports/adapters for external APIs, LLM providers, Telegram, GitHub and Obsidian boundaries.",
+      "preferred_agents": [
+        "research-agent",
+        "inbox-processor"
+      ]
+    },
+    {
+      "id": "qa-engineer",
+      "file": "ai/roles/qa_engineer.md",
+      "purpose": "Tests, regression prevention, acceptance criteria and deterministic behavior.",
+      "preferred_agents": []
+    },
+    {
+      "id": "security-reviewer",
+      "file": "ai/roles/security_reviewer.md",
+      "purpose": "Vault write safety, path containment, secrets, privacy and destructive-operation review.",
+      "preferred_agents": [
+        "vault-maintainer"
+      ]
+    }
+  ]
+}

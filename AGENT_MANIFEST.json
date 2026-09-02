@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "pack_version": "1.0.0",
+  "agents": [
+    {
+      "id": "inbox-processor",
+      "file": "ai/agents/inbox_processor.md",
+      "primary_roles": [
+        "knowledge-curator"
+      ],
+      "support_roles": [
+        "knowledge-architect",
+        "security-reviewer"
+      ],
+      "default_mode": "dry-run",
+      "writes_vault": "only_via_existing_application_use_cases_and_explicit_apply"
+    },
+    {
+      "id": "knowledge-distiller",
+      "file": "ai/agents/knowledge_distiller.md",
+      "primary_roles": [
+        "knowledge-curator"
+      ],
+      "support_roles": [
+        "knowledge-architect"
+      ],
+      "default_mode": "draft",
+      "writes_vault": "no_direct_write"
+    },
+    {
+      "id": "research-agent",
+      "file": "ai/agents/research_agent.md",
+      "primary_roles": [
+        "knowledge-curator"
+      ],
+      "support_roles": [
+        "integration-engineer",
+        "security-reviewer"
+      ],
+      "default_mode": "draft",
+      "writes_vault": "no_direct_write"
+    },
+    {
+      "id": "vault-maintainer",
+      "file": "ai/agents/vault_maintainer.md",
+      "primary_roles": [
+        "knowledge-architect"
+      ],
+      "support_roles": [
+        "knowledge-curator",
+        "qa-engineer",
+        "security-reviewer"
+      ],
+      "default_mode": "read-only",
+      "writes_vault": "never_without_separate_explicit_apply_task"
+    },
+    {
+      "id": "review-agent",
+      "file": "ai/agents/review_agent.md",
+      "primary_roles": [
+        "knowledge-curator"
+      ],
+      "support_roles": [
+        "knowledge-architect"
+      ],
+      "default_mode": "read-only",
+      "writes_vault": "draft_only_unless_explicit_apply"
+    }
+  ]
+}

@@ -5,6 +5,12 @@ Markdown/YAML-файлы внешнего vault являются канонич�
 Obsidian — основной поддерживаемый клиент, но ядро не зависит ни от Obsidian,
 ни от Git.
 
+## Agent & Role Pack v1
+
+Навигация по ролям и повторяемым workflow: [AGENTS.md](AGENTS.md),
+[ROLE_MANIFEST.json](ROLE_MANIFEST.json), [AGENT_MANIFEST.json](AGENT_MANIFEST.json)
+и [ai/README.md](ai/README.md).
+
 Релиз Foundation проверяет контракт vault, metadata заметок, Obsidian wikilinks,
 path containment и размеры вложений. Safe Write Operations v1 добавляет ровно
 один write use case: безопасное создание managed note типа `project`, `area`,
