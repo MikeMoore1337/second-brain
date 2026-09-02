@@ -31,6 +31,7 @@ DEFAULT_MAX_BYTES = 5_000_000
 MAX_MAX_BYTES = 5_000_000
 
 _SAFE_BACKEND = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}\Z")
+_NUMERIC_IPV4_LABEL = re.compile(r"(?:0[xX][0-9a-fA-F]+|[0-9]+)\Z")
 _CREDENTIAL_QUERY_KEYS = frozenset(
     {
         "api_key",
@@ -259,6 +260,8 @@ def _reject_non_public_literal_ip(hostname: str) -> None:
     try:
         address = ipaddress.ip_address(hostname)
     except ValueError:
+        if _looks_like_numeric_ipv4(hostname):
+            raise ResearchInvalidRequestError() from None
         return
     if not isinstance(address, (IPv4Address, IPv6Address)) or (
         not address.is_global
@@ -270,6 +273,15 @@ def _reject_non_public_literal_ip(hostname: str) -> None:
         or address.is_reserved
     ):
         raise ResearchInvalidRequestError()
+
+
+def _looks_like_numeric_ipv4(hostname: str) -> bool:
+    """Распознать dotted decimal/octal/hex IPv4 aliases без DNS lookup."""
+
+    labels = hostname.split(".")
+    return 2 <= len(labels) <= 4 and all(
+        _NUMERIC_IPV4_LABEL.fullmatch(label) is not None for label in labels
+    )
 
 
 def _check_cancellation(cancellation: CancellationToken) -> bool:

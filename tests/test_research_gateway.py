@@ -177,6 +177,11 @@ def test_urls_with_userinfo_or_credential_parameters_are_rejected(uri: str) -> N
         "http://224.0.0.1/article",
         "http://0.0.0.0/article",
         "http://100.64.0.1/article",
+        "http://127.1/article",
+        "http://127.0.1/article",
+        "http://0177.0.0.1/article",
+        "http://0x7f.0.0.1/article",
+        "http://127.000.000.001/article",
     ],
 )
 def test_local_internal_and_non_global_literal_targets_are_rejected(uri: str) -> None:
