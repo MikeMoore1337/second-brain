@@ -36,6 +36,7 @@ def _make_clone(tmp_path: Path, root: Path, name: str) -> tuple[Path, Path]:
     _run_git(tmp_path, "init", "--bare", str(origin))
     _run_git(seed, "remote", "add", "origin", str(origin))
     _run_git(seed, "push", "origin", "main")
+    _run_git(tmp_path, "--git-dir", str(origin), "symbolic-ref", "HEAD", "refs/heads/main")
 
     clone = root / name
     _run_git(root, "clone", str(origin), str(clone))
