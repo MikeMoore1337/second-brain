@@ -27,6 +27,12 @@ uv run second-brain --env-file .env doctor
 uv run second-brain --env-file .env vault validate
 ```
 
+## VPS runtime
+
+Первичный user-level bootstrap и безопасное обновление Linux layout описаны в
+[runbook VPS runtime](docs/deployment/vps.md). Реальный SSH/deploy, web/API,
+systemd и reverse proxy в текущий этап не входят.
+
 ## Безопасное создание managed note
 
 Команда `note create` по умолчанию работает в режиме `dry-run`: она читает
