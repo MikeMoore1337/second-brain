@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import os
 import uuid
+from collections.abc import MutableMapping
 from datetime import datetime
 from io import StringIO
 from pathlib import Path, PurePosixPath
@@ -303,7 +304,12 @@ class FileSystemVaultWriter:
 def _filename_from_title(title: str) -> str:
     if not isinstance(title, str) or not title.strip():
         raise WriteSafetyError("CREATE_INVALID_TITLE", "title must be a non-empty filename")
-    value = title.strip()
+    if title != title.strip():
+        raise WriteSafetyError(
+            "CREATE_INVALID_TITLE",
+            "title must not start or end with whitespace",
+        )
+    value = title
     if value in {".", ".."} or any(char in _INVALID_FILENAME_CHARACTERS for char in value):
         raise WriteSafetyError(
             "CREATE_INVALID_TITLE",
@@ -325,13 +331,28 @@ def _render_template(
     if parsed.error is not None:
         raise WriteSafetyError("CREATE_TEMPLATE_INVALID", parsed.error)
     if parsed.has_front_matter:
-        data = dict(parsed.data)
+        if parsed.header is None:
+            raise WriteSafetyError(
+                "CREATE_TEMPLATE_INVALID",
+                "template front matter header is unavailable",
+            )
+        yaml = YAML()
+        yaml.allow_duplicate_keys = False
+        yaml.allow_unicode = True
+        yaml.preserve_quotes = True
+        try:
+            data = yaml.load(parsed.header)
+        except Exception as exc:  # ruamel exposes several parser/constructor exception types
+            raise WriteSafetyError("CREATE_TEMPLATE_INVALID", str(exc)) from exc
+        if data is None:
+            data = {}
+        if not isinstance(data, MutableMapping):
+            raise WriteSafetyError("CREATE_TEMPLATE_INVALID", "front matter must be a mapping")
+        # Round-trip YAML preserves unknown fields and their comments/quoting/flow style;
+        # only managed metadata is intentionally replaced for the new note.
         data["id"] = str(note_id)
         data["type"] = note_type.value
         data["created"] = created.isoformat(timespec="seconds")
-        yaml = YAML(typ="safe")
-        yaml.default_flow_style = False
-        yaml.allow_unicode = True
         stream = StringIO()
         yaml.dump(data, stream)
         return f"---\n{stream.getvalue().rstrip(chr(10))}\n---\n{parsed.body}"

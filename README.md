@@ -41,6 +41,9 @@ uv run second-brain --env-file .env note create `
   --type project --title "Мой проект" --apply
 ```
 
+Каждый отдельный запуск `dry-run` и последующий отдельный `--apply` получает
+новые UUIDv7 и `created`; состояние между запусками не хранится.
+
 Операция проверяет containment vault-relative пути и отсутствие symlink/junction
 в target/template path, никогда не перезаписывает существующий файл, пишет
 через временный файл с эксклюзивным созданием, проверяет созданную note полным

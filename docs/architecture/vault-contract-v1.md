@@ -62,7 +62,10 @@ attempt и все три поля обязаны быть корректными
 Markdown является managed note.
 
 Templates и attachments не являются notes. Неизвестные front matter fields
-принимаются и должны сохраняться будущими точечными write-операциями.
+принимаются и должны сохраняться будущими точечными write-операциями. При
+`note create` template front matter обрабатывается round-trip YAML с сохранением
+неизвестных полей, comments, quoting и flow-style; заменяются только `id`, `type`
+и `created` новой заметки.
 Корневые служебные каталоги Obsidian (`.obsidian`, `.trash`) и Git (`.git`)
 не входят в объявленные content roots и поэтому не классифицируются как notes.
 

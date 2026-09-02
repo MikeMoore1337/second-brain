@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+import os
+import subprocess
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid7
@@ -13,7 +15,8 @@ from typer.testing import CliRunner
 
 from second_brain.adapters.vault import FileSystemVaultReader, FileSystemVaultWriter
 from second_brain.adapters.vault.frontmatter import parse_front_matter
-from second_brain.application.writes import CreateStatus
+from second_brain.application.services import CreateManagedNote
+from second_brain.application.writes import CreateManagedNoteRequest, CreateStatus
 from second_brain.domain.models import NoteType, parse_uuid7
 from second_brain.entrypoints.cli.app import app
 from tests.conftest import create_vault, snapshot_tree, write_note
@@ -61,9 +64,10 @@ def test_apply_creates_managed_note_from_external_template_and_validates_it(
 ) -> None:
     vault = create_vault(tmp_path / "vault")
     install_templates(vault)
+    before = snapshot_tree(vault)
 
     result = create_command(
-        vault, "--type", "project", "--title", "Roadmap", "--apply", "--format", "json"
+        vault, "--type", "project", "--title", "Мой проект", "--apply", "--format", "json"
     )
 
     assert result.exit_code == 0, result.stdout
@@ -74,13 +78,38 @@ def test_apply_creates_managed_note_from_external_template_and_validates_it(
     assert payload["rollback"] == "not-needed"
     assert payload["post_write_validation"]["errors"] == 0
 
-    target = vault / "10 Projects" / "Roadmap.md"
+    target = vault / "10 Projects" / "Мой проект.md"
     parsed = parse_front_matter(target.read_text(encoding="utf-8"))
     assert parsed.data["type"] == "project"
     assert parse_uuid7(parsed.data["id"]).version == 7
     assert parsed.data["created"].tzinfo is not None
     assert parsed.body == "# Project template\n"
     assert not list((vault / "10 Projects").glob(".second-brain-*.tmp"))
+    after = snapshot_tree(vault)
+    assert set(after) - set(before) == {"10 Projects/Мой проект.md"}
+    assert {path: after[path] for path in before} == before
+
+
+def test_injected_time_is_written_as_exact_rfc3339_created_value(tmp_path: Path) -> None:
+    vault = create_vault(tmp_path / "vault")
+    install_templates(vault)
+    fixed_now = datetime(2026, 9, 2, 15, 4, 5, 123456, tzinfo=timezone(timedelta(hours=3)))
+
+    result = CreateManagedNote(
+        FileSystemVaultReader(vault),
+        FileSystemVaultWriter(vault),
+    ).execute(
+        CreateManagedNoteRequest(
+            NoteType.PROJECT,
+            "Timed",
+            apply=True,
+            now=fixed_now,
+        )
+    )
+
+    assert result.status is CreateStatus.CREATED
+    content = (vault / "10 Projects" / "Timed.md").read_text(encoding="utf-8")
+    assert "created: 2026-09-02T15:04:05+03:00\n" in content
 
 
 def test_template_front_matter_fields_are_preserved_when_metadata_is_added(
@@ -89,7 +118,12 @@ def test_template_front_matter_fields_are_preserved_when_metadata_is_added(
     vault = create_vault(tmp_path / "vault")
     install_templates(vault)
     (vault / "_templates" / "Project.md").write_text(
-        "---\ncustom_field: retained\ntags: [template]\n---\n# Custom template\n",
+        "---\n"
+        "# Keep this template comment\n"
+        'custom_field: "retained" # Keep this inline comment\n'
+        'flow_field: [one, "two"]\n'
+        "tags: [template]\n"
+        "---\n# Custom template\n",
         encoding="utf-8",
     )
 
@@ -100,6 +134,10 @@ def test_template_front_matter_fields_are_preserved_when_metadata_is_added(
     assert parsed.data["custom_field"] == "retained"
     assert parsed.data["tags"] == ["template"]
     assert parsed.body == "# Custom template\n"
+    rendered = (vault / "10 Projects" / "Custom.md").read_text(encoding="utf-8")
+    assert "# Keep this template comment\n" in rendered
+    assert 'custom_field: "retained" # Keep this inline comment\n' in rendered
+    assert 'flow_field: [one, "two"]\n' in rendered
 
 
 @pytest.mark.parametrize(
@@ -155,6 +193,66 @@ def test_unsafe_title_is_rejected_without_writing_outside_vault(tmp_path: Path) 
     assert snapshot_tree(vault) == before
 
 
+@pytest.mark.parametrize("title", ["Roadmap ", "Roadmap.", "Roadmap\x1f", "CON", " Roadmap"])
+def test_cross_platform_unsafe_titles_are_rejected_without_writing(
+    tmp_path: Path,
+    title: str,
+) -> None:
+    vault = create_vault(tmp_path / "vault")
+    install_templates(vault)
+    before = snapshot_tree(vault)
+
+    result = create_command(vault, "--type", "project", "--title", title, "--apply")
+
+    assert result.exit_code == 1
+    assert "CREATE_INVALID_TITLE" in result.stdout
+    assert snapshot_tree(vault) == before
+
+
+def test_missing_template_is_rejected_without_writing(tmp_path: Path) -> None:
+    vault = create_vault(tmp_path / "vault")
+    install_templates(vault)
+    (vault / "_templates" / "Project.md").unlink()
+    before = snapshot_tree(vault)
+
+    result = create_command(vault, "--type", "project", "--title", "Missing", "--apply")
+
+    assert result.exit_code == 1
+    assert "CREATE_TEMPLATE_MISSING" in result.stdout
+    assert snapshot_tree(vault) == before
+
+
+def test_broken_linked_template_is_rejected_without_writing(tmp_path: Path) -> None:
+    vault = create_vault(tmp_path / "vault")
+    install_templates(vault)
+    template = vault / "_templates" / "Project.md"
+    template.unlink()
+    try:
+        template.symlink_to(tmp_path / "missing-template.md")
+    except OSError as exc:
+        pytest.skip(f"symlink creation unavailable: {exc}")
+    before = snapshot_tree(vault)
+
+    result = create_command(vault, "--type", "project", "--title", "Linked template", "--apply")
+
+    assert result.exit_code == 1
+    assert "CREATE_LINKED_PATH" in result.stdout
+    assert snapshot_tree(vault) == before
+
+
+def test_invalid_utf8_template_is_rejected_without_writing(tmp_path: Path) -> None:
+    vault = create_vault(tmp_path / "vault")
+    install_templates(vault)
+    (vault / "_templates" / "Project.md").write_bytes(b"\xff\xfe")
+    before = snapshot_tree(vault)
+
+    result = create_command(vault, "--type", "project", "--title", "Invalid UTF8", "--apply")
+
+    assert result.exit_code == 1
+    assert "CREATE_TEMPLATE_READ_FAILED" in result.stdout
+    assert snapshot_tree(vault) == before
+
+
 def test_linked_target_root_is_rejected_before_any_write(tmp_path: Path) -> None:
     vault = create_vault(tmp_path / "vault")
     install_templates(vault)
@@ -172,6 +270,30 @@ def test_linked_target_root_is_rejected_before_any_write(tmp_path: Path) -> None
     assert result.exit_code == 1
     assert "CREATE_LINKED_PATH" in result.stdout
     assert not (outside / "Linked.md").exists()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows junction behavior is tested conditionally")
+def test_windows_junction_target_root_escape_is_rejected(tmp_path: Path) -> None:
+    vault = create_vault(tmp_path / "vault")
+    install_templates(vault)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    project_root = vault / "10 Projects"
+    project_root.rmdir()
+    completed = subprocess.run(
+        ["cmd.exe", "/d", "/c", "mklink", "/J", str(project_root), str(outside)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        pytest.skip(f"junction creation unavailable: {completed.stderr or completed.stdout}")
+
+    result = create_command(vault, "--type", "project", "--title", "Junction")
+
+    assert result.exit_code == 1
+    assert "CREATE_LINKED_PATH" in result.stdout or "CREATE_PATH_ESCAPE" in result.stdout
+    assert not (outside / "Junction.md").exists()
 
 
 def test_post_write_validation_failure_rolls_back_created_note(tmp_path: Path) -> None:
