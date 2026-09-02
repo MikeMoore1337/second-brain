@@ -104,7 +104,7 @@ class FakeVersionControl:
 
     def changed_paths(self) -> tuple[str, ...]:
         self.events.append("git.changed")
-        if "git.rollback-status" in self.events:
+        if "note.rollback" in self.events or "git.rollback-status" in self.events:
             return self.cleanup_paths
         return self._changed_paths
 
@@ -165,7 +165,11 @@ class FakePullRequest:
         return "https://github.com/MikeMoore1337/second-brain/pull/123"
 
 
-def make_note_result(status: CreateStatus = CreateStatus.CREATED) -> CreateManagedNoteResult:
+def make_note_result(
+    status: CreateStatus = CreateStatus.CREATED,
+    *,
+    include_receipt: bool = False,
+) -> CreateManagedNoteResult:
     plan = CreateNotePlan(
         NoteType.PROJECT,
         "Proposal",
@@ -180,8 +184,8 @@ def make_note_result(status: CreateStatus = CreateStatus.CREATED) -> CreateManag
     return CreateManagedNoteResult(
         status,
         plan=plan,
-        apply_requested=status is CreateStatus.CREATED,
-        receipt=receipt if status is CreateStatus.CREATED else None,
+        apply_requested=status in {CreateStatus.CREATED, CreateStatus.ROLLED_BACK},
+        receipt=receipt if status is CreateStatus.CREATED or include_receipt else None,
         diagnostics=(
             Diagnostic(
                 "CREATE_FAILED",
@@ -259,11 +263,13 @@ def test_apply_rejects_git_preflight_without_note_or_mutation(
     assert pr.requests == []
 
 
-def test_note_creation_failure_stops_before_commit_push_and_pr() -> None:
+def test_safe_write_rollback_cleans_empty_branch_without_duplicate_rollback() -> None:
     events: list[str] = []
+    git = FakeVersionControl(events, changed_paths=())
     workflow, _, git, pr = make_workflow(
-        make_note_result(CreateStatus.REJECTED),
+        make_note_result(CreateStatus.ROLLED_BACK),
         events,
+        git=git,
     )
 
     result = workflow.execute(CreateNoteProposalRequest(NoteType.PROJECT, "Proposal", apply=True))
@@ -276,8 +282,57 @@ def test_note_creation_failure_stops_before_commit_push_and_pr() -> None:
         "git.preflight",
         "pr.auth",
         "git.branch",
+        "git.head",
         "note.execute",
+        "git.head",
+        "git.changed",
+        "git.switch-main",
+        "git.delete-branch",
     ]
+    assert "note.rollback" not in events
+    assert git.commit_paths == []
+    assert pr.requests == []
+
+
+def test_safe_write_failure_rolls_back_receipt_once_before_branch_cleanup() -> None:
+    events: list[str] = []
+    git = FakeVersionControl(events, cleanup_paths=())
+    workflow, _, git, pr = make_workflow(
+        make_note_result(CreateStatus.REJECTED, include_receipt=True),
+        events,
+        git=git,
+    )
+
+    result = workflow.execute(CreateNoteProposalRequest(NoteType.PROJECT, "Proposal", apply=True))
+
+    assert result.status is ProposalStatus.REJECTED
+    assert events.count("note.rollback") == 1
+    assert events[-4:] == [
+        "note.rollback",
+        "git.changed",
+        "git.switch-main",
+        "git.delete-branch",
+    ]
+    assert git.commit_paths == []
+    assert pr.requests == []
+
+
+def test_safe_write_failure_preserves_branch_when_cleanup_is_unproven() -> None:
+    events: list[str] = []
+    git = FakeVersionControl(events, changed_paths=("10 Projects/Proposal.md",))
+    workflow, _, git, pr = make_workflow(
+        make_note_result(CreateStatus.REJECTED),
+        events,
+        git=git,
+    )
+
+    result = workflow.execute(CreateNoteProposalRequest(NoteType.PROJECT, "Proposal", apply=True))
+
+    assert result.status is ProposalStatus.REJECTED
+    assert any(item.code == "PROPOSAL_RECOVERY_UNAVAILABLE" for item in result.diagnostics)
+    assert events[-2:] == ["git.head", "git.changed"]
+    assert "git.switch-main" not in events
+    assert "git.delete-branch" not in events
     assert git.commit_paths == []
     assert pr.requests == []
 
@@ -328,6 +383,7 @@ def test_success_order_stages_and_commits_only_exact_created_path() -> None:
         "git.preflight",
         "pr.auth",
         "git.branch",
+        "git.head",
         "note.execute",
         "git.changed",
         "git.stage",

@@ -207,6 +207,33 @@ class CreateNoteProposal:
             )
 
         try:
+            pre_note_head = self.version_control.head_sha()
+        except ProposalPortError as exc:
+            return CreateNoteProposalResult(
+                ProposalStatus.REJECTED,
+                diagnostics=(
+                    _diagnostic(
+                        "PROPOSAL_COMMIT_STATE_UNKNOWN",
+                        f"не удалось подтвердить пустой automation branch: {exc}; "
+                        "branch сохранена для recovery",
+                    ),
+                ),
+                **common,
+            )
+        except (OSError, ValueError) as exc:
+            return CreateNoteProposalResult(
+                ProposalStatus.REJECTED,
+                diagnostics=(
+                    _diagnostic(
+                        "PROPOSAL_COMMIT_STATE_UNKNOWN",
+                        f"не удалось подтвердить пустой automation branch: {exc}; "
+                        "branch сохранена для recovery",
+                    ),
+                ),
+                **common,
+            )
+
+        try:
             note_result = self.note_creator.execute(
                 CreateManagedNoteRequest(
                     request.note_type,
@@ -216,10 +243,12 @@ class CreateNoteProposal:
                 )
             )
         except (OSError, ValueError) as exc:
-            return CreateNoteProposalResult(
-                ProposalStatus.REJECTED,
-                diagnostics=(_diagnostic("PROPOSAL_NOTE_CREATE_FAILED", str(exc)),),
-                **common,
+            return self._handle_note_failure(
+                branch=branch,
+                note_result=None,
+                common=common,
+                pre_note_head=pre_note_head,
+                diagnostics=[_diagnostic("PROPOSAL_NOTE_CREATE_FAILED", str(exc))],
             )
 
         if note_result.status is not CreateStatus.CREATED:
@@ -230,12 +259,12 @@ class CreateNoteProposal:
                     "Safe Write не создал подтверждённую note; commit/push/PR не выполнялись",
                 )
             )
-            return CreateNoteProposalResult(
-                ProposalStatus.REJECTED,
-                note=note_result.plan,
-                diagnostics=tuple(diagnostics),
-                rollback_succeeded=note_result.rollback_succeeded,
-                **common,
+            return self._handle_note_failure(
+                branch=branch,
+                note_result=note_result,
+                common=common,
+                pre_note_head=pre_note_head,
+                diagnostics=diagnostics,
             )
 
         if note_result.plan is None:
@@ -269,6 +298,176 @@ class CreateNoteProposal:
             commit_message=commit_message,
             note_result=note_result,
             common=common,
+        )
+
+    def _handle_note_failure(
+        self,
+        *,
+        branch: str,
+        note_result: CreateManagedNoteResult | None,
+        common: _ProposalFields,
+        pre_note_head: str,
+        diagnostics: list[Diagnostic],
+    ) -> CreateNoteProposalResult:
+        """Очистить только доказанно пустую branch после отказа Safe Write."""
+
+        plan = note_result.plan if note_result is not None else None
+        rollback_succeeded = (
+            note_result.rollback_succeeded if note_result is not None else None
+        )
+
+        try:
+            current_head = self.version_control.head_sha()
+        except (ProposalPortError, OSError, ValueError) as exc:
+            diagnostics.append(
+                _diagnostic(
+                    "PROPOSAL_COMMIT_STATE_UNKNOWN",
+                    f"не удалось подтвердить отсутствие commit: {exc}; branch сохранена",
+                )
+            )
+            return CreateNoteProposalResult(
+                ProposalStatus.REJECTED,
+                note=plan,
+                diagnostics=tuple(diagnostics),
+                rollback_succeeded=rollback_succeeded,
+                **common,
+            )
+
+        if current_head != pre_note_head:
+            diagnostics.append(
+                _diagnostic(
+                    "PROPOSAL_COMMIT_CREATED_BEFORE_FAILURE",
+                    f"commit уже существует ({current_head}); branch сохранена для recovery",
+                )
+            )
+            return CreateNoteProposalResult(
+                ProposalStatus.REJECTED,
+                note=plan,
+                commit_sha=current_head,
+                diagnostics=tuple(diagnostics),
+                rollback_succeeded=rollback_succeeded,
+                **common,
+            )
+
+        safe_write_already_rolled_back = note_result is not None and (
+            note_result.status is CreateStatus.ROLLED_BACK
+            or note_result.rollback_succeeded is True
+        )
+        receipt = note_result.receipt if note_result is not None else None
+        if not safe_write_already_rolled_back and receipt is not None:
+            if plan is None:
+                diagnostics.append(
+                    _diagnostic(
+                        "PROPOSAL_RECOVERY_UNAVAILABLE",
+                        "Safe Write receipt не связан с note plan; branch сохранена",
+                    )
+                )
+                return CreateNoteProposalResult(
+                    ProposalStatus.REJECTED,
+                    diagnostics=tuple(diagnostics),
+                    rollback_succeeded=rollback_succeeded,
+                    **common,
+                )
+            try:
+                rollback_succeeded = self.note_creator.rollback(receipt)
+            except (OSError, ValueError) as exc:
+                rollback_succeeded = False
+                diagnostics.append(
+                    _diagnostic("PROPOSAL_NOTE_ROLLBACK_FAILED", str(exc), plan.relative_path)
+                )
+            if not rollback_succeeded:
+                diagnostics.append(
+                    _diagnostic(
+                        "PROPOSAL_NOTE_ROLLBACK_FAILED",
+                        "Safe Write receipt не подтвердил безопасное удаление созданной note; "
+                        "branch сохранена",
+                        plan.relative_path,
+                    )
+                )
+                return CreateNoteProposalResult(
+                    ProposalStatus.REJECTED,
+                    note=plan,
+                    diagnostics=tuple(diagnostics),
+                    rollback_succeeded=False,
+                    **common,
+                )
+
+        if note_result is not None and note_result.status is CreateStatus.ROLLED_BACK:
+            if note_result.rollback_succeeded is False:
+                diagnostics.append(
+                    _diagnostic(
+                        "PROPOSAL_NOTE_ROLLBACK_FAILED",
+                        "Safe Write сообщил о неудачном rollback; branch сохранена для recovery",
+                        plan.relative_path if plan is not None else None,
+                    )
+                )
+                return CreateNoteProposalResult(
+                    ProposalStatus.REJECTED,
+                    note=plan,
+                    diagnostics=tuple(diagnostics),
+                    rollback_succeeded=False,
+                    **common,
+                )
+
+        try:
+            remaining_paths = self.version_control.changed_paths()
+        except (ProposalPortError, OSError, ValueError) as exc:
+            diagnostics.append(
+                _diagnostic(
+                    "PROPOSAL_CLEANUP_STATUS_FAILED",
+                    f"не удалось подтвердить чистое состояние после Safe Write: {exc}; "
+                    "branch сохранена",
+                )
+            )
+            return CreateNoteProposalResult(
+                ProposalStatus.REJECTED,
+                note=plan,
+                diagnostics=tuple(diagnostics),
+                rollback_succeeded=rollback_succeeded,
+                **common,
+            )
+        if remaining_paths:
+            if receipt is None and not safe_write_already_rolled_back:
+                diagnostics.append(
+                    _diagnostic(
+                        "PROPOSAL_RECOVERY_UNAVAILABLE",
+                        "без Safe Write receipt нельзя подтвердить безопасный rollback; "
+                        "branch сохранена",
+                    )
+                )
+            diagnostics.append(
+                _diagnostic(
+                    "PROPOSAL_CLEANUP_BLOCKED",
+                    "после Safe Write остались изменения; branch сохранена: "
+                    f"{_paths_text(remaining_paths)}",
+                )
+            )
+            return CreateNoteProposalResult(
+                ProposalStatus.REJECTED,
+                note=plan,
+                diagnostics=tuple(diagnostics),
+                rollback_succeeded=rollback_succeeded,
+                **common,
+            )
+
+        try:
+            self.version_control.switch_to_main()
+            self.version_control.delete_local_branch(branch)
+        except (ProposalPortError, OSError, ValueError) as exc:
+            diagnostics.append(
+                _diagnostic(
+                    "PROPOSAL_BRANCH_CLEANUP_FAILED",
+                    f"не удалось удалить только пустую automation branch: {exc}; "
+                    "branch сохранена для recovery",
+                    branch,
+                )
+            )
+        return CreateNoteProposalResult(
+            ProposalStatus.REJECTED,
+            note=plan,
+            diagnostics=tuple(diagnostics),
+            rollback_succeeded=rollback_succeeded,
+            **common,
         )
 
     def _create_note_for_dry_run(
