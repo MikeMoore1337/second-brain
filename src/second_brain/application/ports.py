@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Protocol
+from enum import StrEnum
+from threading import Event
+from typing import TYPE_CHECKING, Protocol
 from uuid import UUID
 
 from second_brain.application.reports import VaultSnapshot
@@ -14,6 +17,9 @@ from second_brain.application.writes import (
     WriteReceipt,
 )
 from second_brain.domain.models import NoteType, VaultManifest
+
+if TYPE_CHECKING:
+    from second_brain.application.research import ResearchRequest, ResearchSource
 
 
 class VaultReader(Protocol):
@@ -51,6 +57,148 @@ class ManagedNoteCreationPort(Protocol):
 
     def rollback(self, receipt: WriteReceipt) -> bool:
         """Безопасно откатить receipt созданной note."""
+
+
+class CancellationToken(Protocol):
+    """Минимальный сигнал отмены для bounded внешней операции."""
+
+    def is_cancelled(self) -> bool:
+        """Вернуть, была ли операция отменена владельцем запроса."""
+
+
+@dataclass(slots=True)
+class CancellationTokenSource:
+    """Потокобезопасный источник минимального cancellation token."""
+
+    _event: Event = field(default_factory=Event)
+
+    def cancel(self) -> None:
+        """Установить cancellation signal, не выполняя cleanup или I/O."""
+
+        self._event.set()
+
+    def is_cancelled(self) -> bool:
+        """Позволить gateway и будущему adapter наблюдать signal."""
+
+        return self._event.is_set()
+
+    @property
+    def token(self) -> CancellationToken:
+        """Вернуть этот же объект через read-only protocol boundary."""
+
+        return self
+
+
+class ResearchErrorCode(StrEnum):
+    """Стабильные application-коды ошибок research boundary."""
+
+    INVALID_REQUEST = "RESEARCH_INVALID_REQUEST"
+    CANCELLED = "RESEARCH_CANCELLED"
+    TIMEOUT = "RESEARCH_TIMEOUT"
+    BACKEND_UNAVAILABLE = "RESEARCH_BACKEND_UNAVAILABLE"
+    UPSTREAM_FAILURE = "RESEARCH_UPSTREAM_FAILURE"
+    MALFORMED_RESULT = "RESEARCH_MALFORMED_RESULT"
+    CONTENT_TOO_LARGE = "RESEARCH_CONTENT_TOO_LARGE"
+
+
+_RESEARCH_ERROR_MESSAGES = {
+    ResearchErrorCode.INVALID_REQUEST: "research request failed validation",
+    ResearchErrorCode.CANCELLED: "research request was cancelled",
+    ResearchErrorCode.TIMEOUT: "research backend timed out",
+    ResearchErrorCode.BACKEND_UNAVAILABLE: "research backend is unavailable",
+    ResearchErrorCode.UPSTREAM_FAILURE: "research backend failed",
+    ResearchErrorCode.MALFORMED_RESULT: "research backend returned an invalid result",
+    ResearchErrorCode.CONTENT_TOO_LARGE: "research content exceeds the request limit",
+}
+
+
+class ResearchError(RuntimeError):
+    """Безопасная application error boundary, независимая от upstream tools."""
+
+    def __init__(self, code: ResearchErrorCode | str, message: str | None = None) -> None:
+        """Создать error с кодом taxonomy и заранее безопасным сообщением."""
+
+        normalized = _normalize_research_error_code(code)
+        self.code = normalized.value
+        self.message = message or _RESEARCH_ERROR_MESSAGES[normalized]
+        super().__init__(self.message)
+
+    def as_dict(self) -> dict[str, str]:
+        """Вернуть безопасное машинное представление без upstream details."""
+
+        return {"code": self.code, "message": self.message}
+
+
+class ResearchInvalidRequestError(ResearchError):
+    """Запрос нарушает application или public-target policy."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(ResearchErrorCode.INVALID_REQUEST, message)
+
+
+class ResearchCancelledError(ResearchError):
+    """Операция отменена до или после вызова внешнего порта."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(ResearchErrorCode.CANCELLED, message)
+
+
+class ResearchTimeoutError(ResearchError):
+    """Future adapter сообщил bounded operation timeout."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(ResearchErrorCode.TIMEOUT, message)
+
+
+class ResearchBackendUnavailableError(ResearchError):
+    """Backend или его runtime недоступен для выполнения read."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(ResearchErrorCode.BACKEND_UNAVAILABLE, message)
+
+
+class ResearchUpstreamError(ResearchError):
+    """Upstream read завершился ошибкой без раскрытия raw diagnostics."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(ResearchErrorCode.UPSTREAM_FAILURE, message)
+
+
+class ResearchMalformedResultError(ResearchError):
+    """Port вернул результат, не соответствующий normalized DTO contract."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(ResearchErrorCode.MALFORMED_RESULT, message)
+
+
+class ResearchContentTooLargeError(ResearchError):
+    """UTF-8 content результата превышает request max_bytes."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(ResearchErrorCode.CONTENT_TOO_LARGE, message)
+
+
+class ExternalResearchPort(Protocol):
+    """Read-only application boundary для будущего public research adapter."""
+
+    def read(
+        self,
+        request: ResearchRequest,
+        *,
+        cancellation: CancellationToken,
+    ) -> ResearchSource:
+        """Прочитать один внешний источник и вернуть normalized DTO."""
+
+
+def _normalize_research_error_code(code: ResearchErrorCode | str) -> ResearchErrorCode:
+    """Свести enum или известную строку к закрытой taxonomy."""
+
+    if isinstance(code, ResearchErrorCode):
+        return code
+    try:
+        return ResearchErrorCode(code)
+    except ValueError:
+        return ResearchErrorCode.UPSTREAM_FAILURE
 
 
 class ProposalPortError(RuntimeError):

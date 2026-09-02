@@ -63,9 +63,18 @@ push remote branch и commit сохраняются как partial result. Бу�
 адрес `brain.mikemoore.top` относится только к Web UI/API и не должен появиться
 в domain/application или локальном CLI.
 
-External research/Agent Reach — отдельный будущий кандидат на
-`ExternalResearchPort`/`ResearchGateway`. Он не является обязательной зависимостью,
-не получает write-доступ к vault и не входит в Foundation.
+External research — отдельная read-only application boundary. В
+`application.research` находятся `ResearchRequest`, normalized `ResearchSource` и
+тонкий `ResearchGateway`, а `application.ports.ExternalResearchPort` определяет
+единственную операцию `read`. Gateway принимает только public `http`/`https` для
+`web`, `github`, `rss` и `youtube`, проверяет URL, лимиты, cancellation и
+результат, после чего оставляет внешний `content` недоверенными данными в памяти.
+
+В production adapter пока отсутствует: контракт не вызывает сеть, Agent Reach,
+внешние CLI, LLM, Git или vault writer, не читает credentials и не содержит
+destination path. Agent Reach остаётся отдельным будущим кандидатом на adapter;
+полная SSRF-защита (redirects, DNS rebinding, resolved IP policy и egress) должна
+быть решена внутри будущего network adapter.
 
 ## Поиск
 
