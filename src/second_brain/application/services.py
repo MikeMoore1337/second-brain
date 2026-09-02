@@ -206,8 +206,14 @@ class CreateManagedNote:
             CreateStatus.CREATED,
             plan=plan,
             validation_report=post_report,
+            receipt=receipt,
             apply_requested=True,
         )
+
+    def rollback(self, receipt: WriteReceipt) -> bool:
+        """Безопасно откатить созданную note через тот же writer receipt."""
+
+        return _safe_rollback(self.writer, receipt)
 
 
 def _post_write_is_valid(report: ScanReport, plan: CreateNotePlan) -> bool:

@@ -33,7 +33,10 @@ wikilinks, возвращая `VaultSnapshot` с `MarkdownDocument`, raw links �
 `ManagedNoteWriter`, а после `--apply` повторно читает vault тем же scanner.
 Filesystem-adapter отвечает за containment, linked-path protection, temporary
 write, no-overwrite publication и receipt для rollback. Git, LLM, Search, API,
-Telegram и worker остаются вне этой границы.
+Telegram и worker остаются вне этой границы. Отдельный `CreateNoteProposal`
+оркестрирует существующий `CreateManagedNote` через optional
+`VersionControlPort` и `PullRequestPort`; их реализации изолированы в Git/`gh`
+adapters и не добавляют зависимости к domain или обычному `note create`.
 
 ## Read-only и write-политика
 
@@ -53,10 +56,12 @@ Markdown; частично заполненная schema считается ош
 
 ## Будущие границы
 
-Автоматизация изменяет только `automation/*` branch и создаёт PR; прямой push в
-`main` не является штатным режимом. Будущий внешний адрес `brain.mikemoore.top`
-относится только к Web UI/API и не должен появиться в domain/application или
-локальном CLI.
+Proposal automation изменяет только новую `automation/*` branch и создаёт PR с
+`base=main`; прямой write/commit/push в `main`, force push и auto-merge запрещены.
+Dry-run proposal не вызывает сеть и не меняет Git state. При ошибке PR после
+push remote branch и commit сохраняются как partial result. Будущий внешний
+адрес `brain.mikemoore.top` относится только к Web UI/API и не должен появиться
+в domain/application или локальном CLI.
 
 External research/Agent Reach — отдельный будущий кандидат на
 `ExternalResearchPort`/`ResearchGateway`. Он не является обязательной зависимостью,

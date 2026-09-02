@@ -51,6 +51,36 @@ scanner validation и при ошибке удаляет только файл, 
 identity и SHA-256. Git, LLM, Search, API, Telegram, Agent Reach и Inbox promote
 в этот use case не входят.
 
+## Git proposal workflow
+
+Отдельная команда `proposal note create` превращает создание новой managed note
+в reviewable proposal. По умолчанию это dry-run: выполняются только локальные
+read-only Git preflight и обычный Safe Write plan; branch, vault, index, refs,
+commit, push, `gh` и сеть не изменяются и не вызываются:
+
+```powershell
+uv run second-brain --env-file .env proposal note create `
+  --type project --title "Мой проект"
+```
+
+Для apply нужны Git worktree vault, чистый и синхронизированный `main`,
+настроенный `origin`, установленный `git` и авторизованный GitHub CLI (`gh
+auth status`). После явного `--apply` workflow создаёт только новую
+`automation/*` branch, публикует одну новую note, stage/commit делает только
+для её exact path, выполняет non-force push и создаёт PR
+`automation/* -> main`:
+
+```powershell
+uv run second-brain --env-file .env proposal note create `
+  --type project --title "Мой проект" --apply
+```
+
+Workflow не выполняет pull, rebase, merge, reset, force push или auto-merge.
+Если PR не удалось создать после успешного push, результат имеет status
+`partial`: remote branch и commit сохраняются, а PR можно создать отдельно.
+Ошибки до commit откатывают note только через её Safe Write receipt, когда это
+безопасно; полезный commit автоматически не удаляется.
+
 Файл окружения выбирается явно. Относительный
 `SECOND_BRAIN_VAULT_PATH` разрешается относительно parent выбранного env-файла,
 но никогда не относительно текущего рабочего каталога процесса. Без env-файла и

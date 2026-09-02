@@ -11,7 +11,16 @@ from typing import Annotated
 
 import typer
 
+from second_brain.adapters.git import GitVersionControlAdapter
+from second_brain.adapters.github import GitHubPullRequestAdapter
 from second_brain.adapters.vault import FileSystemVaultReader, FileSystemVaultWriter
+from second_brain.application.ports import ProposalPortError
+from second_brain.application.proposals import (
+    CreateNoteProposal,
+    CreateNoteProposalRequest,
+    CreateNoteProposalResult,
+    ProposalStatus,
+)
 from second_brain.application.reports import ScanReport
 from second_brain.application.services import CreateManagedNote, DoctorVault, ValidateVault
 from second_brain.application.writes import (
@@ -45,8 +54,12 @@ app = typer.Typer(
 )
 vault_app = typer.Typer(help="Команды для внешнего vault.")
 note_app = typer.Typer(help="Команды для managed note.")
+proposal_app = typer.Typer(help="Git proposal workflow для новой managed note.")
+proposal_note_app = typer.Typer(help="Proposal-команды для managed note.")
 app.add_typer(vault_app, name="vault")
 app.add_typer(note_app, name="note")
+app.add_typer(proposal_app, name="proposal")
+proposal_app.add_typer(proposal_note_app, name="note")
 
 
 @app.callback()
@@ -145,6 +158,64 @@ def create(
     raise typer.Exit(code=0 if result.successful else 1)
 
 
+@proposal_note_app.command("create")
+def proposal_create(
+    ctx: typer.Context,
+    note_type_argument: Annotated[
+        str | None,
+        typer.Argument(help="Тип заметки: project, area, resource или zettel."),
+    ] = None,
+    title_argument: Annotated[
+        str | None,
+        typer.Argument(help="Безопасное имя создаваемого Markdown-файла."),
+    ] = None,
+    note_type_option: Annotated[
+        str | None,
+        typer.Option("--type", help="Тип заметки: project, area, resource или zettel."),
+    ] = None,
+    title_option: Annotated[
+        str | None,
+        typer.Option("--title", "--name", help="Безопасное имя создаваемого Markdown-файла."),
+    ] = None,
+    apply: Annotated[
+        bool,
+        typer.Option("--apply", help="Создать branch, note, commit, push и PR."),
+    ] = False,
+    output_format: Annotated[
+        OutputFormat,
+        typer.Option("--format", help="Формат результата: text или json."),
+    ] = OutputFormat.TEXT,
+) -> None:
+    """Предложить создание одной managed note через automation/* и PR."""
+
+    try:
+        note_type = _create_note_type(note_type_argument, note_type_option)
+        title = _create_title(title_argument, title_option)
+        options = _root_options(ctx)
+        config = load_config(env_file=options.env_file, vault_path_override=options.vault_path)
+        note_creator = CreateManagedNote(
+            FileSystemVaultReader(config.vault_path),
+            FileSystemVaultWriter(config.vault_path),
+        )
+        result = CreateNoteProposal(
+            note_creator,
+            GitVersionControlAdapter(config.vault_path),
+            GitHubPullRequestAdapter(config.vault_path),
+        ).execute(CreateNoteProposalRequest(note_type, title, apply=apply))
+    except (ConfigurationError, WriteSafetyError, ProposalPortError) as exc:
+        typer.echo(f"Ошибка конфигурации proposal: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    except OSError as exc:
+        typer.echo(f"Ошибка выполнения proposal: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+
+    if output_format is OutputFormat.JSON:
+        typer.echo(json.dumps(result.as_dict(), ensure_ascii=False, indent=2))
+    else:
+        typer.echo(_render_proposal_text(result))
+    raise typer.Exit(code=0 if result.successful else 1)
+
+
 def _run(ctx: typer.Context, output_format: OutputFormat, *, use_doctor: bool) -> None:
     options = _root_options(ctx)
     try:
@@ -240,6 +311,61 @@ def _render_create_text(result: CreateManagedNoteResult) -> str:
         lines.append("Rollback: выполнен безопасно")
     elif result.rollback_succeeded is False:
         lines.append("Rollback: не выполнен; файл не удалён из-за несовпадения receipt")
+    if result.diagnostics:
+        lines.append("Диагностика:")
+        for diagnostic in result.diagnostics:
+            location = diagnostic.path or "-"
+            lines.append(
+                f"  [{diagnostic.severity.value.upper()}] {diagnostic.code} {location} - "
+                f"{diagnostic.message}"
+            )
+    return "\n".join(lines)
+
+
+def _render_proposal_text(result: CreateNoteProposalResult) -> str:
+    """Показать план и recovery state proposal на русском языке."""
+
+    lines = [
+        f"Результат: {result.status.value}",
+        "Режим: apply (--apply)"
+        if result.apply_requested
+        else "Режим: dry-run (по умолчанию; Git и vault не изменены)",
+        f"Automation branch: {result.branch}",
+        f"Commit message: {result.commit_message}",
+        f"PR: {result.pr_base} <- {result.pr_head}",
+        f"PR title: {result.pr_title}",
+    ]
+    if result.note is not None:
+        lines.extend(
+            [
+                f"Тип: {result.note.note_type.value}",
+                f"Имя: {result.note.title}",
+                f"Путь: {result.note.relative_path}",
+                f"id: {result.note.note_id}",
+                f"created: {result.note.created.isoformat(timespec='seconds')}",
+            ]
+        )
+        if result.status is ProposalStatus.DRY_RUN:
+            lines.append("Diff:")
+            lines.extend(
+                unified_diff(
+                    [],
+                    result.note.content.splitlines(),
+                    fromfile="/dev/null",
+                    tofile=result.note.relative_path,
+                    lineterm="",
+                )
+            )
+    if result.commit_sha is not None:
+        lines.append(f"Head commit: {result.commit_sha}")
+    if result.pr_url is not None:
+        lines.append(f"PR URL: {result.pr_url}")
+    elif result.remote_branch_pushed:
+        lines.append("PR URL: не создан; remote branch и commit сохранены для recovery")
+    if result.rollback_succeeded is True:
+        lines.append("Rollback note: выполнен безопасно")
+    elif result.rollback_succeeded is False:
+        lines.append("Rollback note: не выполнен; branch сохранена")
     if result.diagnostics:
         lines.append("Диагностика:")
         for diagnostic in result.diagnostics:

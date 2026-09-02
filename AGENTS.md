@@ -39,6 +39,12 @@
   выполняется только с явным `--apply`.
 - При точечных изменениях нужно сохранять неизвестные front matter fields и
   Obsidian wikilinks.
+- Proposal automation для новой managed note пишет только в новую
+  `automation/*` branch и публикует изменения через PR в `main`; прямой
+  automation write/commit/push в `main`, force push и auto-merge запрещены.
+- Proposal dry-run не вызывает network и не меняет vault, Git refs, index или
+  worktree. Apply требует clean/synced `main` и не выполняет pull, rebase, merge
+  или reset автоматически.
 - Секреты и настоящий `.env` не коммитятся.
 - Commit, push, PR, merge и deploy выполняются только по явному запросу.
 

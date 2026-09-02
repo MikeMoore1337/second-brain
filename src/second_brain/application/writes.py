@@ -73,6 +73,7 @@ class CreateManagedNoteResult:
     validation_report: ScanReport | None = None
     rollback_succeeded: bool | None = None
     apply_requested: bool = False
+    receipt: WriteReceipt | None = None
 
     @property
     def applied(self) -> bool:
