@@ -18,6 +18,7 @@ class FrontMatterResult:
     has_front_matter: bool
     error: str | None = None
     error_line: int | None = None
+    header: str | None = None
 
 
 def parse_front_matter(text: str) -> FrontMatterResult:
@@ -61,4 +62,9 @@ def parse_front_matter(text: str) -> FrontMatterResult:
             "front matter must be a mapping",
             2,
         )
-    return FrontMatterResult(data, "".join(lines[closing_index + 1 :]), True)
+    return FrontMatterResult(
+        data,
+        "".join(lines[closing_index + 1 :]),
+        True,
+        header=header,
+    )

@@ -5,9 +5,10 @@ Markdown/YAML-файлы внешнего vault являются канонич�
 Obsidian — основной поддерживаемый клиент, но ядро не зависит ни от Obsidian,
 ни от Git.
 
-Релиз Foundation намеренно работает только на чтение. Он проверяет контракт
-vault, metadata заметок, Obsidian wikilinks, path containment и размеры вложений,
-не изменяя файлы и не обращаясь к сети.
+Релиз Foundation проверяет контракт vault, metadata заметок, Obsidian wikilinks,
+path containment и размеры вложений. Safe Write Operations v1 добавляет ровно
+один write use case: безопасное создание managed note типа `project`, `area`,
+`resource` или `zettel` из существующего vault template.
 
 ## Настройка разработки
 
@@ -20,6 +21,36 @@ uv run second-brain --env-file .env doctor
 uv run second-brain --env-file .env vault validate
 ```
 
+## Безопасное создание managed note
+
+Команда `note create` по умолчанию работает в режиме `dry-run`: она читает
+manifest и template, строит путь, front matter и diff, но не изменяет vault.
+
+```powershell
+uv run second-brain --env-file .env note create `
+  --type project --title "Мой проект"
+```
+
+Поддерживаются типы `project`, `area`, `resource` и `zettel`; каждый тип пишет
+только в соответствующий root из `second-brain.yaml` и использует одноимённый
+файл из `_templates`. Для реальной записи требуется отдельное явное
+подтверждение:
+
+```powershell
+uv run second-brain --env-file .env note create `
+  --type project --title "Мой проект" --apply
+```
+
+Каждый отдельный запуск `dry-run` и последующий отдельный `--apply` получает
+новые UUIDv7 и `created`; состояние между запусками не хранится.
+
+Операция проверяет containment vault-relative пути и отсутствие symlink/junction
+в target/template path, никогда не перезаписывает существующий файл, пишет
+через временный файл с эксклюзивным созданием, проверяет созданную note полным
+scanner validation и при ошибке удаляет только файл, совпадающий с receipt по
+identity и SHA-256. Git, LLM, Search, API, Telegram, Agent Reach и Inbox promote
+в этот use case не входят.
+
 Файл окружения выбирается явно. Относительный
 `SECOND_BRAIN_VAULT_PATH` разрешается относительно parent выбранного env-файла,
 но никогда не относительно текущего рабочего каталога процесса. Без env-файла и
@@ -30,6 +61,10 @@ uv run second-brain --env-file .env vault validate
 - `0`: сканирование завершено без validation errors;
 - `1`: сканирование завершено и обнаружило validation errors;
 - `2`: ошибка конфигурации или runtime не позволила выполнить корректное scan.
+
+Для `note create` код `0` означает dry-run или успешно созданную note, `1` —
+защитный отказ либо rollback после неуспешной post-write validation, `2` —
+ошибку конфигурации или runtime.
 
 Обе команды поддерживают `--format text` (по умолчанию) и `--format json`.
 

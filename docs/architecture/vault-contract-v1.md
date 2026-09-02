@@ -51,15 +51,29 @@ tags: []
 `created` и `updated` должны быть RFC 3339 с явным UTC offset. `id` не зависит от
 filename, title или пути и не меняется при rename/move.
 
+Safe Write Operations v1 создаёт только `project`, `area`, `resource` или
+`zettel`. Root и template выбираются по manifest; содержимое template не
+дублируется в коде. `id` генерируется через stdlib `uuid.uuid7()` на Python
+3.14, а `created` получает явный локальный UTC offset.
+
 В Inbox Markdown без любого из `id`, `type`, `created` считается unmanaged и
 получает warning. Если присутствует хотя бы одно из этих полей, это managed
 attempt и все три поля обязаны быть корректными. В остальных content roots каждый
 Markdown является managed note.
 
 Templates и attachments не являются notes. Неизвестные front matter fields
-принимаются и должны сохраняться будущими точечными write-операциями.
+принимаются и должны сохраняться будущими точечными write-операциями. При
+`note create` template front matter обрабатывается round-trip YAML с сохранением
+неизвестных полей, comments, quoting и flow-style; заменяются только `id`, `type`
+и `created` новой заметки.
 Корневые служебные каталоги Obsidian (`.obsidian`, `.trash`) и Git (`.git`)
 не входят в объявленные content roots и поэтому не классифицируются как notes.
+
+Создание выполняется только после dry-run и явного `--apply`. Target не может
+быть существующим или linked path и не перезаписывается. Перед публикацией
+используется временный файл с эксклюзивным созданием; после публикации scanner
+проверяет managed metadata и весь vault. При ошибке проверки выполняется
+безопасный rollback только файла, чьи identity и SHA-256 совпадают с receipt.
 
 ## Wikilinks
 
