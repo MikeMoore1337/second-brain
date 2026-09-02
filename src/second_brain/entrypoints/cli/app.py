@@ -13,8 +13,13 @@ import typer
 
 from second_brain.adapters.git import GitVersionControlAdapter
 from second_brain.adapters.github import GitHubPullRequestAdapter
+from second_brain.adapters.research.jina_reader import JinaReaderWebAdapter
 from second_brain.adapters.vault import FileSystemVaultReader, FileSystemVaultWriter
-from second_brain.application.ports import ProposalPortError
+from second_brain.application.ports import (
+    CancellationTokenSource,
+    ProposalPortError,
+    ResearchError,
+)
 from second_brain.application.proposals import (
     CreateNoteProposal,
     CreateNoteProposalRequest,
@@ -22,6 +27,15 @@ from second_brain.application.proposals import (
     ProposalStatus,
 )
 from second_brain.application.reports import ScanReport
+from second_brain.application.research import (
+    DEFAULT_MAX_BYTES,
+    DEFAULT_TIMEOUT_SECONDS,
+    ResearchGateway,
+    ResearchInvalidRequestError,
+    ResearchRequest,
+    ResearchSource,
+    SourceKind,
+)
 from second_brain.application.services import CreateManagedNote, DoctorVault, ValidateVault
 from second_brain.application.writes import (
     CreateManagedNoteRequest,
@@ -50,15 +64,17 @@ class CliOptions:
 
 app = typer.Typer(
     no_args_is_help=True,
-    help="Проверка vault и безопасное создание managed note.",
+    help="Read-only команды Second Brain и безопасное создание managed note.",
 )
 vault_app = typer.Typer(help="Команды для внешнего vault.")
 note_app = typer.Typer(help="Команды для managed note.")
 proposal_app = typer.Typer(help="Git proposal workflow для новой managed note.")
 proposal_note_app = typer.Typer(help="Proposal-команды для managed note.")
+research_app = typer.Typer(help="Read-only чтение внешних research sources.")
 app.add_typer(vault_app, name="vault")
 app.add_typer(note_app, name="note")
 app.add_typer(proposal_app, name="proposal")
+app.add_typer(research_app, name="research")
 proposal_app.add_typer(proposal_note_app, name="note")
 
 
@@ -103,6 +119,57 @@ def validate(
     """Провалидировать manifest, notes, links и attachments vault."""
 
     _run(ctx, output_format, use_doctor=False)
+
+
+@research_app.command("read")
+def research_read(
+    source_type: Annotated[
+        str,
+        typer.Option("--type", help="Тип источника; в v1 поддерживается только web."),
+    ] = SourceKind.WEB.value,
+    url: Annotated[
+        str,
+        typer.Option("--url", help="Публичный URL web-страницы."),
+    ] = "",
+    timeout: Annotated[
+        int,
+        typer.Option("--timeout", help="Лимит операции в секундах."),
+    ] = DEFAULT_TIMEOUT_SECONDS,
+    max_bytes: Annotated[
+        int,
+        typer.Option("--max-bytes", help="Жёсткий лимит UTF-8 content в bytes."),
+    ] = DEFAULT_MAX_BYTES,
+    output_format: Annotated[
+        OutputFormat,
+        typer.Option("--format", help="Формат результата: text или json."),
+    ] = OutputFormat.TEXT,
+) -> None:
+    """Прочитать одну публичную web-страницу без vault и записи."""
+
+    try:
+        source_kind = _research_source_kind(source_type)
+        source = ResearchGateway(JinaReaderWebAdapter()).read(
+            ResearchRequest(
+                source_kind=source_kind,
+                uri=url,
+                timeout_seconds=timeout,
+                max_bytes=max_bytes,
+            ),
+            cancellation=CancellationTokenSource(),
+        )
+    except ResearchError as exc:
+        _echo_research_error(exc, output_format)
+        raise typer.Exit(code=1) from None
+    except OSError:
+        # Runtime failure is intentionally separated from research taxonomy.
+        typer.echo("Ошибка runtime CLI: не удалось запустить research backend.", err=True)
+        raise typer.Exit(code=2) from None
+
+    if output_format is OutputFormat.JSON:
+        typer.echo(json.dumps(_research_source_as_dict(source), ensure_ascii=False, indent=2))
+    else:
+        typer.echo(_render_research_text(source))
+    raise typer.Exit(code=0)
 
 
 @note_app.command("create")
@@ -214,6 +281,83 @@ def proposal_create(
     else:
         typer.echo(_render_proposal_text(result))
     raise typer.Exit(code=0 if result.successful else 1)
+
+
+def _research_source_kind(value: str) -> SourceKind:
+    """Разобрать закрытый CLI source kind без расширения adapter scope."""
+
+    try:
+        source_kind = SourceKind(value.strip().casefold())
+    except ValueError:
+        raise ResearchInvalidRequestError() from None
+    if source_kind is not SourceKind.WEB:
+        raise ResearchInvalidRequestError()
+    return source_kind
+
+
+def _echo_research_error(error: ResearchError, output_format: OutputFormat) -> None:
+    """Вывести безопасную русскую диагностику без upstream stderr/details."""
+
+    message = _research_error_message(error.code)
+    if output_format is OutputFormat.JSON:
+        typer.echo(
+            json.dumps(
+                {"error": {"code": error.code, "message": message}},
+                ensure_ascii=False,
+                indent=2,
+            ),
+            err=True,
+        )
+    else:
+        typer.echo(f"Ошибка research: {error.code} — {message}", err=True)
+
+
+def _research_error_message(code: str) -> str:
+    """Сопоставить закрытый application code с коротким human diagnostic."""
+
+    messages = {
+        "RESEARCH_INVALID_REQUEST": "запрос не прошёл проверку публичного web-источника",
+        "RESEARCH_CANCELLED": "чтение отменено",
+        "RESEARCH_TIMEOUT": "research backend превысил лимит времени",
+        "RESEARCH_BACKEND_UNAVAILABLE": "research backend недоступен; проверьте системный curl",
+        "RESEARCH_UPSTREAM_FAILURE": "research backend вернул ошибку",
+        "RESEARCH_MALFORMED_RESULT": "research backend вернул некорректный результат",
+        "RESEARCH_CONTENT_TOO_LARGE": "ответ превышает заданный лимит размера",
+    }
+    return messages.get(code, "операция research завершилась ошибкой")
+
+
+def _research_source_as_dict(source: ResearchSource) -> dict[str, object]:
+    """Сериализовать normalized source без интерпретации external content."""
+
+    return {
+        "uri": source.uri,
+        "source_kind": source.source_kind.value,
+        "retrieved_at": source.retrieved_at.isoformat(),
+        "backend": source.backend,
+        "content": source.content,
+        "title": source.title,
+        "author": source.author,
+        "media_type": source.media_type,
+        "upstream_id": source.upstream_id,
+        "published_at": source.published_at.isoformat() if source.published_at else None,
+    }
+
+
+def _render_research_text(source: ResearchSource) -> str:
+    """Показать metadata и исходный untrusted content без последующей обработки."""
+
+    return "\n".join(
+        [
+            f"Источник: {source.uri}",
+            f"Тип: {source.source_kind.value}",
+            f"Backend: {source.backend}",
+            f"Получено: {source.retrieved_at.isoformat()}",
+            f"Media type: {source.media_type or '-'}",
+            "Content (untrusted external text):",
+            source.content,
+        ]
+    )
 
 
 def _run(ctx: typer.Context, output_format: OutputFormat, *, use_doctor: bool) -> None:
