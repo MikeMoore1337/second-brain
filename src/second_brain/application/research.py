@@ -279,7 +279,7 @@ def _looks_like_numeric_ipv4(hostname: str) -> bool:
     """Распознать dotted decimal/octal/hex IPv4 aliases без DNS lookup."""
 
     labels = hostname.split(".")
-    return 2 <= len(labels) <= 4 and all(
+    return 1 <= len(labels) <= 4 and all(
         _NUMERIC_IPV4_LABEL.fullmatch(label) is not None for label in labels
     )
 
