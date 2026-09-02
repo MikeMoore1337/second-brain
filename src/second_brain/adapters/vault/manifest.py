@@ -9,10 +9,9 @@ from typing import Any, cast
 
 from ruamel.yaml import YAML
 
+from second_brain.application.reports import Diagnostic, DiagnosticSeverity
 from second_brain.domain.models import (
     AttachmentPolicy,
-    Diagnostic,
-    DiagnosticSeverity,
     VaultManifest,
     VaultPaths,
     parse_uuid7,
@@ -60,13 +59,25 @@ def _relative_path(value: object, key: str, diagnostics: list[Diagnostic]) -> Pu
             _error("MANIFEST_INVALID_PATH", f"paths.{key} must be a non-empty string")
         )
         return None
-    normalized = value.replace("\\", "/")
-    candidate = PurePosixPath(normalized)
-    windows_candidate = PureWindowsPath(normalized)
+    candidate = PurePosixPath(value)
+    windows_candidate = PureWindowsPath(value)
     if candidate.is_absolute() or windows_candidate.is_absolute() or windows_candidate.drive:
         diagnostics.append(_error("MANIFEST_ABSOLUTE_PATH", f"paths.{key} must be vault-relative"))
         return None
-    if not candidate.parts or any(part in {"", ".", ".."} for part in candidate.parts):
+    if "\\" in value:
+        diagnostics.append(
+            _error("MANIFEST_NON_CANONICAL_PATH", f"paths.{key} must use '/' separators")
+        )
+        return None
+    raw_parts = value.split("/")
+    if any(part in {"", ".", ".."} for part in raw_parts):
+        diagnostics.append(
+            _error(
+                "MANIFEST_UNSAFE_PATH", f"paths.{key} must not contain empty, '.' or '..' segments"
+            )
+        )
+        return None
+    if not candidate.parts:
         diagnostics.append(
             _error(
                 "MANIFEST_UNSAFE_PATH", f"paths.{key} must not contain empty, '.' or '..' segments"

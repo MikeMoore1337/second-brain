@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from second_brain.application.ports import VaultReader
-from second_brain.domain.models import ScanReport
+from second_brain.application.reports import ScanReport
+from second_brain.application.validation import build_report
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,9 +16,9 @@ class ValidateVault:
     reader: VaultReader
 
     def execute(self) -> ScanReport:
-        """Вернуть полный validation report."""
+        """Оркестрировать чтение и вернуть полный validation report."""
 
-        return self.reader.scan()
+        return build_report(self.reader.scan())
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,6 +28,6 @@ class DoctorVault:
     reader: VaultReader
 
     def execute(self) -> ScanReport:
-        """Вернуть полный diagnostic report."""
+        """Оркестрировать чтение и вернуть полный diagnostic report."""
 
-        return self.reader.scan()
+        return build_report(self.reader.scan())

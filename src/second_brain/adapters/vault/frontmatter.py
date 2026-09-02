@@ -29,7 +29,8 @@ def parse_front_matter(text: str) -> FrontMatterResult:
 
     closing_index: int | None = None
     for index in range(1, len(lines)):
-        if lines[index].strip() in {"---", "..."}:
+        line = lines[index].rstrip("\r\n")
+        if line.rstrip(" \t") in {"---", "..."}:
             closing_index = index
             break
     if closing_index is None:

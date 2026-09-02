@@ -14,10 +14,15 @@ _MARKDOWN = MarkdownIt("commonmark")
 
 
 def extract_links(markdown: str, source_path: str) -> tuple[LinkReference, ...]:
-    """Извлечь базовые wikilinks из Markdown, пропуская code spans/blocks."""
+    """Извлечь links из полного Markdown-документа, пропуская front matter и code."""
+
+    return extract_links_from_body(parse_front_matter(markdown).body, source_path)
+
+
+def extract_links_from_body(body: str, source_path: str) -> tuple[LinkReference, ...]:
+    """Извлечь links из body, который уже отделён от front matter."""
 
     links: list[LinkReference] = []
-    body = parse_front_matter(markdown).body
     for token in _MARKDOWN.parse(body):
         if token.type != "inline" or token.children is None:
             continue

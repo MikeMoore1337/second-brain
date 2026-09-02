@@ -15,17 +15,20 @@ Vault является каноническим источником истин�
 ```text
 entrypoints/cli
         |
-application: use cases, ports, reports
+application: use cases, ports, validation, reports
         |
-domain: Note, NoteId, NoteType, VaultManifest, rules
+domain: NoteRecord, MarkdownDocument, NoteType, VaultManifest, rules
         ^
         |
 adapters/vault: filesystem, YAML, Markdown, wikilinks
 ```
 
-`domain` не знает о filesystem, Git, Obsidian, HTTP, SQLite или LLM. `application`
-оркестрирует use cases через порты. `adapters/vault` выполняет безопасное
-read-only чтение файловой системы. В будущих этапах Git, LLM, Search, API,
+`domain` не знает о filesystem, Git, Obsidian, HTTP, SQLite или LLM. `adapters/vault`
+выполняет безопасное read-only чтение, containment и разбор YAML/front matter/
+wikilinks, возвращая `VaultSnapshot` с `MarkdownDocument`, raw links и diagnostics
+чтения/parsing. `application`
+оркестрирует use cases, выполняет note schema и cross-record validation, а затем
+формирует `ScanReport` и diagnostics через порты. В будущих этапах Git, LLM, Search, API,
 Telegram и worker появятся только как отдельные adapters/entrypoints.
 
 ## Read-only политика

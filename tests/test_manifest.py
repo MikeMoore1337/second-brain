@@ -2,8 +2,10 @@
 
 from pathlib import Path
 
+import pytest
+
 from second_brain.adapters.vault.manifest import load_manifest
-from second_brain.domain.models import DiagnosticSeverity
+from second_brain.application.reports import DiagnosticSeverity
 from tests.conftest import VALID_VAULT_ID, create_vault
 
 
@@ -55,6 +57,33 @@ def test_root_manifest_path_is_rejected(tmp_path: Path) -> None:
 
     assert result.manifest is None
     assert any(item.code == "MANIFEST_UNSAFE_PATH" for item in result.diagnostics)
+
+
+@pytest.mark.parametrize(
+    ("path_value", "diagnostic_code"),
+    [
+        ("10 Projects/./Sub", "MANIFEST_UNSAFE_PATH"),
+        ("10 Projects//Sub", "MANIFEST_UNSAFE_PATH"),
+        ("./10 Projects", "MANIFEST_UNSAFE_PATH"),
+        (r"10 Projects\Sub", "MANIFEST_NON_CANONICAL_PATH"),
+    ],
+)
+def test_noncanonical_manifest_paths_are_rejected(
+    tmp_path: Path,
+    path_value: str,
+    diagnostic_code: str,
+) -> None:
+    vault = create_vault(tmp_path / "vault")
+    manifest = vault / "second-brain.yaml"
+    content = manifest.read_text(encoding="utf-8").replace(
+        "projects: 10 Projects", f"projects: {path_value}"
+    )
+    manifest.write_text(content, encoding="utf-8")
+
+    result = load_manifest(manifest)
+
+    assert result.manifest is None
+    assert any(item.code == diagnostic_code for item in result.diagnostics)
 
 
 def test_unsupported_schema_version_is_rejected(tmp_path: Path) -> None:

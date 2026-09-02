@@ -1,1 +1,1 @@
-"""Application use cases и ports."""
+"""Application use cases, ports, validation и reports."""

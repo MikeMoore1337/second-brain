@@ -11,9 +11,9 @@ from typing import Annotated
 import typer
 
 from second_brain.adapters.vault import FileSystemVaultReader
+from second_brain.application.reports import ScanReport
 from second_brain.application.services import DoctorVault, ValidateVault
 from second_brain.config import ConfigurationError, load_config
-from second_brain.domain.models import ScanReport
 
 
 class OutputFormat(StrEnum):
