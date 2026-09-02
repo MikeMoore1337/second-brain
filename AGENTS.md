@@ -32,8 +32,11 @@
 ## Безопасность
 
 - Read-only команды не изменяют vault, не вызывают Git, сеть или LLM.
-- Будущая запись в vault требует path containment, dry-run/diff, hash
-  preconditions, atomic replacement и post-write validation.
+- Запись в vault требует path containment, dry-run/diff, hash preconditions,
+  временный файл, no-overwrite publication, post-write validation и безопасный
+  rollback. В текущем этапе разрешён только use case создания одной managed
+  note типа `project`, `area`, `resource` или `zettel`; реальная запись
+  выполняется только с явным `--apply`.
 - При точечных изменениях нужно сохранять неизвестные front matter fields и
   Obsidian wikilinks.
 - Секреты и настоящий `.env` не коммитятся.

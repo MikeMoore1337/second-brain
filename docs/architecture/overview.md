@@ -10,7 +10,7 @@
 Vault является каноническим источником истины. Индексы, SQLite, embeddings и
 кэш относятся к производному состоянию и могут быть пересозданы из vault.
 
-## Слои Foundation
+## Слои Foundation и Safe Write Operations
 
 ```text
 entrypoints/cli
@@ -27,11 +27,15 @@ adapters/vault: filesystem, YAML, Markdown, wikilinks
 выполняет безопасное read-only чтение, containment и разбор YAML/front matter/
 wikilinks, возвращая `VaultSnapshot` с `MarkdownDocument`, raw links и diagnostics
 чтения/parsing. `application`
-оркестрирует use cases, выполняет note schema и cross-record validation, а затем
-формирует `ScanReport` и diagnostics через порты. В будущих этапах Git, LLM, Search, API,
-Telegram и worker появятся только как отдельные adapters/entrypoints.
+оркестрирует read-only use cases, выполняет note schema и cross-record validation,
+а затем формирует `ScanReport` и diagnostics через порты. Safe Write Operations v1
+добавляет отдельный `CreateManagedNote`: application сначала строит plan через
+`ManagedNoteWriter`, а после `--apply` повторно читает vault тем же scanner.
+Filesystem-adapter отвечает за containment, linked-path protection, temporary
+write, no-overwrite publication и receipt для rollback. Git, LLM, Search, API,
+Telegram и worker остаются вне этой границы.
 
-## Read-only политика
+## Read-only и write-политика
 
 Foundation не пишет в vault, не вызывает Git, сеть или LLM. Относительный путь
 `SECOND_BRAIN_VAULT_PATH` разрешается относительно `config_root` выбранного
@@ -40,6 +44,12 @@ env-файла. Неявный fallback на process `cwd` запрещён.
 Scanner не следует symlink/junction, проверяет resolved path containment и
 пропускает linked entries с diagnostic. Inbox может временно содержать unmanaged
 Markdown; частично заполненная schema считается ошибкой.
+
+`note create` по умолчанию только формирует dry-run/diff. Только `--apply`
+разрешает публикацию одного нового Markdown-файла. Existing target не заменяется:
+публикация использует эксклюзивное создание, а не `os.replace`. После публикации
+созданная note проходит post-write validation; при ошибке rollback удаляет файл
+только при совпадении сохранённых identity и SHA-256.
 
 ## Будущие границы
 
