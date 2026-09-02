@@ -312,9 +312,7 @@ class CreateNoteProposal:
         """Очистить только доказанно пустую branch после отказа Safe Write."""
 
         plan = note_result.plan if note_result is not None else None
-        rollback_succeeded = (
-            note_result.rollback_succeeded if note_result is not None else None
-        )
+        rollback_succeeded = note_result.rollback_succeeded if note_result is not None else None
 
         try:
             current_head = self.version_control.head_sha()
