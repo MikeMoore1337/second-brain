@@ -349,11 +349,28 @@ class CreateNoteProposal:
                 **common,
             )
 
+        safe_write_rollback_reported = (
+            note_result is not None and note_result.rollback_succeeded is not None
+        )
         safe_write_already_rolled_back = note_result is not None and (
-            note_result.status is CreateStatus.ROLLED_BACK
-            or note_result.rollback_succeeded is True
+            note_result.status is CreateStatus.ROLLED_BACK or safe_write_rollback_reported
         )
         receipt = note_result.receipt if note_result is not None else None
+        if note_result is not None and note_result.rollback_succeeded is False:
+            diagnostics.append(
+                _diagnostic(
+                    "PROPOSAL_NOTE_ROLLBACK_FAILED",
+                    "Safe Write сообщил о неудачном rollback; branch сохранена для recovery",
+                    plan.relative_path if plan is not None else None,
+                )
+            )
+            return CreateNoteProposalResult(
+                ProposalStatus.REJECTED,
+                note=plan,
+                diagnostics=tuple(diagnostics),
+                rollback_succeeded=False,
+                **common,
+            )
         if not safe_write_already_rolled_back and receipt is not None:
             if plan is None:
                 diagnostics.append(
@@ -382,23 +399,6 @@ class CreateNoteProposal:
                         "Safe Write receipt не подтвердил безопасное удаление созданной note; "
                         "branch сохранена",
                         plan.relative_path,
-                    )
-                )
-                return CreateNoteProposalResult(
-                    ProposalStatus.REJECTED,
-                    note=plan,
-                    diagnostics=tuple(diagnostics),
-                    rollback_succeeded=False,
-                    **common,
-                )
-
-        if note_result is not None and note_result.status is CreateStatus.ROLLED_BACK:
-            if note_result.rollback_succeeded is False:
-                diagnostics.append(
-                    _diagnostic(
-                        "PROPOSAL_NOTE_ROLLBACK_FAILED",
-                        "Safe Write сообщил о неудачном rollback; branch сохранена для recovery",
-                        plan.relative_path if plan is not None else None,
                     )
                 )
                 return CreateNoteProposalResult(
