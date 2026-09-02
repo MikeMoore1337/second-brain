@@ -1,0 +1,60 @@
+# Обзор архитектуры
+
+## Границы репозиториев
+
+`second-brain` — программное ядро: domain/application, адаптеры, CLI, тесты,
+автоматизация и документация. `second-brain-vault` — независимый приватный
+репозиторий с пользовательскими Markdown/YAML-знаниями, вложениями, шаблонами и
+безопасной частью конфигурации Obsidian.
+
+Vault является каноническим источником истины. Индексы, SQLite, embeddings и
+кэш относятся к производному состоянию и могут быть пересозданы из vault.
+
+## Слои Foundation
+
+```text
+entrypoints/cli
+        |
+application: use cases, ports, validation, reports
+        |
+domain: NoteRecord, MarkdownDocument, NoteType, VaultManifest, rules
+        ^
+        |
+adapters/vault: filesystem, YAML, Markdown, wikilinks
+```
+
+`domain` не знает о filesystem, Git, Obsidian, HTTP, SQLite или LLM. `adapters/vault`
+выполняет безопасное read-only чтение, containment и разбор YAML/front matter/
+wikilinks, возвращая `VaultSnapshot` с `MarkdownDocument`, raw links и diagnostics
+чтения/parsing. `application`
+оркестрирует use cases, выполняет note schema и cross-record validation, а затем
+формирует `ScanReport` и diagnostics через порты. В будущих этапах Git, LLM, Search, API,
+Telegram и worker появятся только как отдельные adapters/entrypoints.
+
+## Read-only политика
+
+Foundation не пишет в vault, не вызывает Git, сеть или LLM. Относительный путь
+`SECOND_BRAIN_VAULT_PATH` разрешается относительно `config_root` выбранного
+env-файла. Неявный fallback на process `cwd` запрещён.
+
+Scanner не следует symlink/junction, проверяет resolved path containment и
+пропускает linked entries с diagnostic. Inbox может временно содержать unmanaged
+Markdown; частично заполненная schema считается ошибкой.
+
+## Будущие границы
+
+Автоматизация изменяет только `automation/*` branch и создаёт PR; прямой push в
+`main` не является штатным режимом. Будущий внешний адрес `brain.mikemoore.top`
+относится только к Web UI/API и не должен появиться в domain/application или
+локальном CLI.
+
+External research/Agent Reach — отдельный будущий кандидат на
+`ExternalResearchPort`/`ResearchGateway`. Он не является обязательной зависимостью,
+не получает write-доступ к vault и не входит в Foundation.
+
+## Поиск
+
+SQLite FTS5 планируется как будущий search v1. Его базовый `unicode61` не решает
+русскую морфологию, а Porter stemmer предназначен для английского языка. Сравнение
+нормализации, лемматизации, trigram и embeddings выполняется позднее на русском
+query corpus.

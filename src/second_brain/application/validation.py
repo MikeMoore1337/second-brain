@@ -1,0 +1,335 @@
+"""Application validation и cross-record diagnostics для read-only vault scan."""
+
+from __future__ import annotations
+
+import posixpath
+from collections import defaultdict
+from collections.abc import Iterable
+from pathlib import PurePosixPath
+from typing import Any
+from uuid import UUID
+
+from second_brain.application.reports import (
+    Diagnostic,
+    DiagnosticSeverity,
+    ScanReport,
+    VaultSnapshot,
+)
+from second_brain.domain.models import (
+    AttachmentRecord,
+    LinkReference,
+    MarkdownDocument,
+    NoteRecord,
+    NoteType,
+    VaultManifest,
+    parse_rfc3339,
+    parse_uuid7,
+)
+
+_MANAGED_FIELDS = frozenset(("id", "type", "created"))
+
+
+def build_report(snapshot: VaultSnapshot) -> ScanReport:
+    """Собрать итоговый report из raw DTO и выполнить application validation."""
+
+    diagnostics = list(snapshot.diagnostics)
+    notes = [_validate_document(document, diagnostics) for document in snapshot.documents]
+    _report_attachment_diagnostics(snapshot.attachments, snapshot.manifest, diagnostics)
+    _report_duplicate_ids(notes, diagnostics)
+    _report_link_diagnostics(notes, snapshot.attachments, snapshot.links, diagnostics)
+    return ScanReport(
+        vault_path=snapshot.vault_path,
+        manifest=snapshot.manifest,
+        notes=tuple(notes),
+        links=snapshot.links,
+        attachments=snapshot.attachments,
+        diagnostics=tuple(diagnostics),
+    )
+
+
+def _validate_document(
+    document: MarkdownDocument,
+    diagnostics: list[Diagnostic],
+) -> NoteRecord:
+    data = dict(document.front_matter)
+    marker_present = bool(_MANAGED_FIELDS.intersection(data))
+    managed = not document.in_inbox or marker_present
+    if not managed:
+        diagnostics.append(
+            Diagnostic(
+                "UNMANAGED_INBOX_NOTE",
+                "Inbox Markdown has no id, type, or created field and is temporarily unmanaged",
+                DiagnosticSeverity.WARNING,
+                document.relative_path,
+            )
+        )
+        return NoteRecord(document.relative_path, data, document.body, False)
+
+    note_id = _parse_note_id(data, document.relative_path, diagnostics)
+    note_type = _parse_note_type(data, document.relative_path, diagnostics)
+    created = _parse_note_timestamp(
+        data, "created", document.relative_path, diagnostics, required=True
+    )
+    updated = _parse_note_timestamp(
+        data, "updated", document.relative_path, diagnostics, required=False
+    )
+    tags = _parse_tags(data, document.relative_path, diagnostics)
+    return NoteRecord(
+        relative_path=document.relative_path,
+        front_matter=data,
+        body=document.body,
+        managed=True,
+        note_id=note_id,
+        note_type=note_type,
+        created=created,
+        updated=updated,
+        tags=tags,
+    )
+
+
+def _parse_note_id(data: dict[str, Any], path: str, diagnostics: list[Diagnostic]) -> UUID | None:
+    if "id" not in data:
+        diagnostics.append(
+            Diagnostic(
+                "NOTE_MISSING_ID", "managed note requires id", DiagnosticSeverity.ERROR, path
+            )
+        )
+        return None
+    try:
+        return parse_uuid7(data["id"])
+    except ValueError as exc:
+        diagnostics.append(Diagnostic("NOTE_INVALID_ID", str(exc), DiagnosticSeverity.ERROR, path))
+        return None
+
+
+def _parse_note_type(
+    data: dict[str, Any], path: str, diagnostics: list[Diagnostic]
+) -> NoteType | None:
+    if "type" not in data:
+        diagnostics.append(
+            Diagnostic(
+                "NOTE_MISSING_TYPE", "managed note requires type", DiagnosticSeverity.ERROR, path
+            )
+        )
+        return None
+    value = data["type"]
+    try:
+        return NoteType(value)
+    except ValueError:
+        allowed = ", ".join(item.value for item in NoteType)
+        diagnostics.append(
+            Diagnostic(
+                "NOTE_INVALID_TYPE",
+                f"type must be one of: {allowed}",
+                DiagnosticSeverity.ERROR,
+                path,
+            )
+        )
+        return None
+
+
+def _parse_note_timestamp(
+    data: dict[str, Any],
+    field: str,
+    path: str,
+    diagnostics: list[Diagnostic],
+    required: bool,
+) -> Any:
+    if field not in data:
+        if required:
+            diagnostics.append(
+                Diagnostic(
+                    "NOTE_MISSING_TIMESTAMP",
+                    f"managed note requires {field}",
+                    DiagnosticSeverity.ERROR,
+                    path,
+                )
+            )
+        return None
+    try:
+        return parse_rfc3339(data[field])
+    except ValueError as exc:
+        diagnostics.append(
+            Diagnostic("NOTE_INVALID_TIMESTAMP", f"{field}: {exc}", DiagnosticSeverity.ERROR, path)
+        )
+        return None
+
+
+def _parse_tags(data: dict[str, Any], path: str, diagnostics: list[Diagnostic]) -> tuple[str, ...]:
+    if "tags" not in data:
+        return ()
+    value = data["tags"]
+    if not isinstance(value, list) or not all(
+        isinstance(item, str) and item.strip() for item in value
+    ):
+        diagnostics.append(
+            Diagnostic(
+                "NOTE_INVALID_TAGS",
+                "tags must be a list of non-empty strings",
+                DiagnosticSeverity.ERROR,
+                path,
+            )
+        )
+        return ()
+    return tuple(value)
+
+
+def _report_attachment_diagnostics(
+    attachments: Iterable[AttachmentRecord],
+    manifest: VaultManifest | None,
+    diagnostics: list[Diagnostic],
+) -> None:
+    if manifest is None:
+        return
+    warning_size = manifest.attachments.warning_size_bytes
+    max_size = manifest.attachments.max_size_bytes
+    for attachment in attachments:
+        if attachment.size_bytes > max_size:
+            diagnostics.append(
+                Diagnostic(
+                    "ATTACHMENT_TOO_LARGE",
+                    f"attachment is larger than the {max_size} byte limit",
+                    DiagnosticSeverity.ERROR,
+                    attachment.relative_path,
+                )
+            )
+        elif attachment.size_bytes >= warning_size:
+            diagnostics.append(
+                Diagnostic(
+                    "ATTACHMENT_LARGE",
+                    f"attachment is at or above the {warning_size} byte warning threshold",
+                    DiagnosticSeverity.WARNING,
+                    attachment.relative_path,
+                )
+            )
+
+
+def _report_duplicate_ids(notes: Iterable[NoteRecord], diagnostics: list[Diagnostic]) -> None:
+    paths_by_id: defaultdict[UUID, list[str]] = defaultdict(list)
+    for note in notes:
+        if note.note_id is not None:
+            paths_by_id[note.note_id].append(note.relative_path)
+    for note_id, paths in sorted(paths_by_id.items(), key=lambda item: str(item[0])):
+        if len(paths) > 1:
+            diagnostics.append(
+                Diagnostic(
+                    "DUPLICATE_NOTE_ID",
+                    f"note id {note_id} is used by: {', '.join(sorted(paths))}",
+                    DiagnosticSeverity.ERROR,
+                )
+            )
+
+
+def _report_link_diagnostics(
+    notes: Iterable[NoteRecord],
+    attachments: Iterable[AttachmentRecord],
+    links: Iterable[LinkReference],
+    diagnostics: list[Diagnostic],
+) -> None:
+    note_paths: defaultdict[str, list[str]] = defaultdict(list)
+    attachment_paths: defaultdict[str, list[str]] = defaultdict(list)
+    for note in notes:
+        _add_note_keys(note.relative_path, note_paths)
+    for attachment in attachments:
+        _add_attachment_keys(attachment.relative_path, attachment_paths)
+    for link in links:
+        if not link.target and link.fragment is not None:
+            continue
+        if not link.target:
+            diagnostics.append(
+                Diagnostic(
+                    "EMPTY_WIKILINK_TARGET",
+                    f"wikilink has no note target: {link.raw}",
+                    DiagnosticSeverity.ERROR,
+                    link.source_path,
+                )
+            )
+            continue
+        if "://" in link.target:
+            continue
+        matches = _resolve_link(link, note_paths, attachment_paths)
+        if len(matches) == 0:
+            diagnostics.append(
+                Diagnostic(
+                    "BROKEN_WIKILINK",
+                    f"wikilink target does not resolve: {link.raw}",
+                    DiagnosticSeverity.ERROR,
+                    link.source_path,
+                )
+            )
+        elif len(matches) > 1:
+            diagnostics.append(
+                Diagnostic(
+                    "AMBIGUOUS_WIKILINK",
+                    f"wikilink target resolves to multiple files: {link.raw}",
+                    DiagnosticSeverity.ERROR,
+                    link.source_path,
+                )
+            )
+
+
+def _add_note_keys(path: str, index: defaultdict[str, list[str]]) -> None:
+    normalized = _key(path)
+    index[normalized].append(path)
+    if normalized.endswith(".md"):
+        index[normalized[:-3]].append(path)
+    basename = PurePosixPath(normalized).name
+    index[basename].append(path)
+    if basename.endswith(".md"):
+        index[basename[:-3]].append(path)
+
+
+def _add_attachment_keys(path: str, index: defaultdict[str, list[str]]) -> None:
+    normalized = _key(path)
+    index[normalized].append(path)
+    index[PurePosixPath(normalized).name].append(path)
+
+
+def _resolve_link(
+    link: LinkReference,
+    note_paths: defaultdict[str, list[str]],
+    attachment_paths: defaultdict[str, list[str]],
+) -> list[str]:
+    target = link.target.replace("\\", "/").strip().lstrip("/")
+    if not target:
+        return []
+    note_candidates = _link_candidates(target, link.source_path)
+    for candidate in note_candidates:
+        matches = _unique(note_paths.get(_key(candidate), []))
+        if matches:
+            return matches
+    if link.is_embed or PurePosixPath(target).suffix:
+        for candidate in note_candidates:
+            matches = _unique(attachment_paths.get(_key(candidate), []))
+            if matches:
+                return matches
+    fallback = _unique(note_paths.get(_key(target), []))
+    if fallback:
+        return fallback
+    if link.is_embed:
+        return _unique(attachment_paths.get(_key(target), []))
+    return []
+
+
+def _link_candidates(target: str, source_path: str) -> tuple[str, ...]:
+    variants = (target,) if target.casefold().endswith(".md") else (target, f"{target}.md")
+    values: list[str] = []
+    source_parent = PurePosixPath(source_path).parent
+    for variant in variants:
+        values.append(variant)
+        relative = posixpath.normpath(str(source_parent / variant))
+        if relative != ".." and not relative.startswith("../"):
+            values.append(relative)
+    return tuple(dict.fromkeys(values))
+
+
+def _unique(values: Iterable[str]) -> list[str]:
+    return list(dict.fromkeys(values))
+
+
+def _key(value: str) -> str:
+    normalized = posixpath.normpath(value.replace("\\", "/"))
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    normalized = normalized.lstrip("/")
+    return normalized.casefold()
