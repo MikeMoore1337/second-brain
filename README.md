@@ -11,7 +11,7 @@ vault, metadata заметок, Obsidian wikilinks, path containment и разм
 
 ## Настройка разработки
 
-Требуются Python 3.12 или новее и [uv](https://docs.astral.sh/uv/).
+Требуются Python 3.14 и [uv](https://docs.astral.sh/uv/).
 
 ```powershell
 uv sync

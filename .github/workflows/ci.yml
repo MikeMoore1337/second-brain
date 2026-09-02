@@ -10,9 +10,6 @@ permissions:
 
 jobs:
   quality:
-    strategy:
-      matrix:
-        python-version: ["3.12", "3.14"]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -20,18 +17,18 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.14"
       - name: Set up uv
         uses: astral-sh/setup-uv@v6
         with:
           version: "0.11.32"
       - name: Install locked dependencies
-        run: uv sync --locked --python ${{ matrix.python-version }}
+        run: uv sync --locked --python 3.14
       - name: Check formatting
-        run: uv run --python ${{ matrix.python-version }} ruff format --check .
+        run: uv run --python 3.14 ruff format --check .
       - name: Lint
-        run: uv run --python ${{ matrix.python-version }} ruff check .
+        run: uv run --python 3.14 ruff check .
       - name: Type check
-        run: uv run --python ${{ matrix.python-version }} mypy src tests
+        run: uv run --python 3.14 mypy src tests
       - name: Test
-        run: uv run --python ${{ matrix.python-version }} pytest
+        run: uv run --python 3.14 pytest

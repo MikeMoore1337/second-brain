@@ -7,7 +7,7 @@ name = "second-brain"
 version = "0.1.0"
 description = "Открытое Markdown-first ядро автоматизации личной базы знаний"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Mike Moore" }]
@@ -35,14 +35,14 @@ packages = ["src/second_brain"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 extend-ignore = ["RUF001", "RUF002"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 strict = true
 files = ["src", "tests"]
 
