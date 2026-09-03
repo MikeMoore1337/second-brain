@@ -32,11 +32,11 @@ read-only capability, а `domain`, vault и Safe Write Operations не меня�
 подключению Agent Reach как библиотеки. Для production data retrieval сначала
 нужен отдельный process-based adapter и отдельное security/operations решение.
 
-Следующий узкий implementation slice реализует только public `WEB` через
-фиксированный Jina Reader и bounded системный `curl`, непосредственно в
-Second Brain. Это не Agent Reach integration: пакет, CLI, config, cookies и
-MCP Agent Reach не используются; RSS, YouTube и GitHub остаются отдельными
-будущими adapter issues.
+Первые узкие implementation slices реализуют public `WEB` через фиксированный
+Jina Reader и public RSS/Atom через отдельный direct adapter Second Brain с
+feedparser, adapter-level DNS/IP validation и `--resolve` pinning. Это не Agent
+Reach integration: пакет, CLI, config, cookies и MCP Agent Reach не
+используются; YouTube и GitHub остаются будущими adapter issues.
 
 ## Контекст и baseline
 
