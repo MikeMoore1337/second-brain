@@ -1,6 +1,7 @@
 # Agent Reach technical spike v1: `ExternalResearchPort` и безопасная интеграционная граница
 
-Статус: завершённый technical/design spike, без production adapter.
+Статус: завершённый technical/design spike; Agent Reach production adapter не
+реализуется.
 
 Дата проверки: 2026-09-02 (Europe/Moscow).
 
@@ -30,6 +31,12 @@ read-only capability, а `domain`, vault и Safe Write Operations не меня�
 Иными словами, **GO** относится к контракту и безопасной границе, а не к
 подключению Agent Reach как библиотеки. Для production data retrieval сначала
 нужен отдельный process-based adapter и отдельное security/operations решение.
+
+Следующий узкий implementation slice реализует только public `WEB` через
+фиксированный Jina Reader и bounded системный `curl`, непосредственно в
+Second Brain. Это не Agent Reach integration: пакет, CLI, config, cookies и
+MCP Agent Reach не используются; RSS, YouTube и GitHub остаются отдельными
+будущими adapter issues.
 
 ## Контекст и baseline
 

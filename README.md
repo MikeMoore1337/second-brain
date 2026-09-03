@@ -27,6 +27,21 @@ uv run second-brain --env-file .env doctor
 uv run second-brain --env-file .env vault validate
 ```
 
+## Public web research
+
+Read-only команда `research read` читает одну публичную web-страницу через
+фиксированный Jina Reader и системный `curl`; vault для этого не требуется.
+Команда ничего не пишет, не вызывает Git или LLM:
+
+```powershell
+uv run second-brain research read `
+  --type web --url "https://example.com/article"
+```
+
+`curl` — внешний optional runtime prerequisite для этой команды и не
+устанавливается приложением. RSS, YouTube, GitHub и live smoke в этот этап не
+входят.
+
 ## VPS runtime
 
 Первичный user-level bootstrap и безопасное обновление Linux layout описаны в

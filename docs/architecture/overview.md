@@ -70,11 +70,22 @@ External research — отдельная read-only application boundary. В
 `web`, `github`, `rss` и `youtube`, проверяет URL, лимиты, cancellation и
 результат, после чего оставляет внешний `content` недоверенными данными в памяти.
 
-В production adapter пока отсутствует: контракт не вызывает сеть, Agent Reach,
-внешние CLI, LLM, Git или vault writer, не читает credentials и не содержит
-destination path. Agent Reach остаётся отдельным будущим кандидатом на adapter;
-полная SSRF-защита (redirects, DNS rebinding, resolved IP policy и egress) должна
-быть решена внутри будущего network adapter.
+Первый production adapter реализует только `SourceKind.WEB`: он называется
+`jina-reader` и вызывает фиксированный `https://r.jina.ai/` через системный
+`curl` в bounded subprocess. `ResearchGateway` остаётся первой validation
+boundary, а adapter использует explicit argv, `shell=False`, отключённый
+`.curlrc`, HTTPS-only и отсутствие redirect-following, cookies, auth и proxy
+credentials. stdout ограничен `request.max_bytes`, stderr не входит в public
+DTO, timeout и cancellation останавливают текущий процесс. Отсутствующий
+`curl` отображается как `RESEARCH_BACKEND_UNAVAILABLE`.
+
+CLI `research read` только печатает normalized `ResearchSource` и не требует
+vault, не пишет файлы, не вызывает Git или LLM. `content` внешнего источника
+всегда остаётся недоверенным текстом. RSS, YouTube, GitHub, authenticated
+sources, retries и direct request к source hostname в этот adapter не входят.
+Agent Reach не импортируется и не запускается; полная SSRF-защита внешнего
+сервиса Jina (включая его redirects, DNS rebinding и egress policy) остаётся
+отдельным ограничением этого узкого public-web slice.
 
 ## Поиск
 
