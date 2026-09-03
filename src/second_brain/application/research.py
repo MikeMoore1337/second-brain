@@ -201,7 +201,9 @@ def _validate_public_uri(uri: object, source_kind: SourceKind) -> None:
         raise ResearchInvalidRequestError()
 
     normalized_host = hostname.rstrip(".").casefold()
-    if _is_local_or_internal_hostname(normalized_host):
+    if _is_local_or_internal_hostname(normalized_host) and not (
+        source_kind is SourceKind.RSS and _is_ipv6_literal(normalized_host)
+    ):
         raise ResearchInvalidRequestError()
     _reject_non_public_literal_ip(normalized_host)
     if source_kind is SourceKind.GITHUB and normalized_host not in _GITHUB_HOSTS:
@@ -250,6 +252,15 @@ def _is_local_or_internal_hostname(hostname: str) -> bool:
         or any(hostname.endswith(suffix) for suffix in _LOCAL_HOST_SUFFIXES)
         or "." not in hostname
     )
+
+
+def _is_ipv6_literal(hostname: str) -> bool:
+    """Распознать IPv6 literal только для RSS public-IP validation path."""
+
+    try:
+        return isinstance(ipaddress.ip_address(hostname), IPv6Address)
+    except ValueError:
+        return False
 
 
 def _reject_non_public_literal_ip(hostname: str) -> None:

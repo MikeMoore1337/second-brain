@@ -14,8 +14,6 @@ from ipaddress import IPv4Address, IPv6Address
 from typing import Protocol
 from urllib.parse import urlsplit
 
-import feedparser  # type: ignore[import-untyped]
-
 from second_brain.application.ports import (
     CancellationToken,
     ResearchBackendUnavailableError,
@@ -37,12 +35,23 @@ from .process import (
     _ProcessExecutionError,
     _ProcessTimedOut,
 )
+from .rss_worker import (
+    MultiprocessingParserWorker,
+    NormalizedFeed,
+    ParserWorker,
+    _ParserCancelled,
+    _ParserContentTooLarge,
+    _ParserMalformed,
+    _ParserTimedOut,
+    _ParserUnavailable,
+)
 
 RSS_BACKEND = "feedparser"
 RSS_MEDIA_TYPE = "application/rss+xml"
 ATOM_MEDIA_TYPE = "application/atom+xml"
 
 _DNS_POLL_INTERVAL_SECONDS = 0.01
+_MAX_METADATA_BYTES = 8_192
 _LOCAL_HOSTNAMES = frozenset(
     {
         "localhost",
@@ -187,6 +196,7 @@ class PublicRssAdapter:
 
     resolver: DnsResolver = field(default_factory=SocketDnsResolver)
     runner: ProcessRunner = field(default_factory=BoundedProcessRunner)
+    parser_worker: ParserWorker = field(default_factory=MultiprocessingParserWorker)
     clock: Callable[[], datetime] = field(default=lambda: datetime.now(UTC))
 
     def read(
@@ -248,16 +258,40 @@ class PublicRssAdapter:
         if len(result.stdout) > request.max_bytes:
             raise ResearchContentTooLargeError()
 
+        if time.monotonic() >= deadline:
+            raise ResearchTimeoutError()
         try:
-            parsed = feedparser.parse(result.stdout)
-            source = _normalize_feed(parsed, request, self.clock)
+            retrieved_at = self.clock()
+        except Exception:
+            raise ResearchMalformedResultError() from None
+        if not _has_explicit_offset(retrieved_at):
+            raise ResearchMalformedResultError()
+
+        try:
+            normalized = self.parser_worker.run(
+                result.stdout,
+                max_bytes=request.max_bytes,
+                deadline=deadline,
+                cancellation=cancellation,
+            )
+        except _ParserCancelled:
+            raise ResearchCancelledError() from None
+        except _ParserTimedOut:
+            raise ResearchTimeoutError() from None
+        except _ParserContentTooLarge:
+            raise ResearchContentTooLargeError() from None
         except ResearchContentTooLargeError:
             raise
-        except ResearchMalformedResultError, _FeedNormalizationError:
+        except _ParserMalformed, _ParserUnavailable:
             raise ResearchMalformedResultError() from None
         except Exception:
             raise ResearchMalformedResultError() from None
-        return source
+
+        if cancellation.is_cancelled():
+            raise ResearchCancelledError()
+        if time.monotonic() >= deadline:
+            raise ResearchTimeoutError()
+        return _build_research_source(request, retrieved_at, normalized)
 
     def _resolve_pinned_ip(
         self,
@@ -448,11 +482,9 @@ def _build_curl_argv(
     target: _RssTarget,
     pinned_ip: IPv4Address | IPv6Address,
 ) -> tuple[str, ...]:
-    """Собрать закрытый curl argv с одним уже validated --resolve address."""
+    """Собрать закрытый curl argv с DNS pinning только для DNS hostname."""
 
-    resolve_address = f"[{pinned_ip}]" if isinstance(pinned_ip, IPv6Address) else str(pinned_ip)
-    resolve_value = f"{target.hostname}:{target.port}:{resolve_address}"
-    return (
+    argv = [
         CURL_EXECUTABLE,
         "--disable",
         "--silent",
@@ -463,19 +495,19 @@ def _build_curl_argv(
         f"={target.scheme}",
         "--max-redirs",
         "0",
-        "--resolve",
-        resolve_value,
-        "--url",
-        target.uri,
-    )
+    ]
+    if target.literal_ip is None:
+        resolve_address = f"[{pinned_ip}]" if isinstance(pinned_ip, IPv6Address) else str(pinned_ip)
+        argv.extend(("--resolve", f"{target.hostname}:{target.port}:{resolve_address}"))
+    argv.extend(("--url", target.uri))
+    return tuple(argv)
 
 
 def _normalize_feed(
     parsed: object,
-    request: ResearchRequest,
-    clock: Callable[[], datetime],
-) -> ResearchSource:
-    """Преобразовать только уже parsed bytes в один normalized ResearchSource."""
+    max_bytes: int,
+) -> NormalizedFeed:
+    """Преобразовать только уже parsed bytes в bounded normalized feed DTO."""
 
     if not isinstance(parsed, Mapping) or _mapping_value(parsed, "bozo"):
         raise _FeedNormalizationError()
@@ -502,28 +534,82 @@ def _normalize_feed(
 
     feed_title = _single_line_text(_mapping_value(feed_object, "title")) or None
     feed_author = _feed_author(feed_object)
+    _ensure_metadata_bounded(feed_title)
+    _ensure_metadata_bounded(feed_author)
     content = _render_feed_content(feed_title, entries)
     if not content:
         raise _FeedNormalizationError()
     try:
-        if len(content.encode("utf-8")) > request.max_bytes:
+        if len(content.encode("utf-8")) > max_bytes:
             raise ResearchContentTooLargeError()
     except UnicodeEncodeError:
         raise _FeedNormalizationError() from None
 
-    retrieved_at = clock()
-    if not _has_explicit_offset(retrieved_at):
-        raise _FeedNormalizationError()
-    return ResearchSource(
-        uri=request.uri,
-        source_kind=SourceKind.RSS,
-        retrieved_at=retrieved_at,
-        backend=RSS_BACKEND,
+    return NormalizedFeed(
         content=content,
         title=feed_title,
         author=feed_author,
         media_type=media_type,
     )
+
+
+def _build_research_source(
+    request: ResearchRequest,
+    retrieved_at: datetime,
+    normalized: NormalizedFeed,
+) -> ResearchSource:
+    """Построить существующий ResearchSource после bounded worker boundary."""
+
+    if not isinstance(normalized, NormalizedFeed):
+        raise ResearchMalformedResultError()
+    if not isinstance(normalized.content, str):
+        raise ResearchMalformedResultError()
+    try:
+        if len(normalized.content.encode("utf-8")) > request.max_bytes:
+            raise ResearchContentTooLargeError()
+    except UnicodeEncodeError:
+        raise ResearchMalformedResultError() from None
+    if not _is_safe_metadata(normalized.title) or not _is_safe_metadata(normalized.author):
+        raise ResearchMalformedResultError()
+    if normalized.media_type not in {RSS_MEDIA_TYPE, ATOM_MEDIA_TYPE}:
+        raise ResearchMalformedResultError()
+    return ResearchSource(
+        uri=request.uri,
+        source_kind=SourceKind.RSS,
+        retrieved_at=retrieved_at,
+        backend=RSS_BACKEND,
+        content=normalized.content,
+        title=normalized.title,
+        author=normalized.author,
+        media_type=normalized.media_type,
+    )
+
+
+def _ensure_metadata_bounded(value: str | None) -> None:
+    """Не передавать в IPC потенциально огромные title/author поля."""
+
+    if value is None:
+        return
+    try:
+        if len(value.encode("utf-8")) > _MAX_METADATA_BYTES:
+            raise ResearchContentTooLargeError()
+    except UnicodeEncodeError:
+        raise _FeedNormalizationError() from None
+
+
+def _is_safe_metadata(value: object) -> bool:
+    """Проверить bounded text fields повторно после worker IPC."""
+
+    if value is None:
+        return True
+    if not isinstance(value, str) or "\x00" in value:
+        return False
+    if any(ord(char) < 32 for char in value):
+        return False
+    try:
+        return len(value.encode("utf-8")) <= _MAX_METADATA_BYTES
+    except UnicodeEncodeError:
+        return False
 
 
 def _feed_author(feed: Mapping[object, object]) -> str | None:

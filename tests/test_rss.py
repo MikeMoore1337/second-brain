@@ -2,15 +2,22 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from threading import Event
+from multiprocessing.connection import Connection
+from threading import Event, Thread
 
 import feedparser  # type: ignore[import-untyped]
 import pytest
 
 from second_brain.adapters.research.process import ProcessResult
-from second_brain.adapters.research.rss import PublicRssAdapter
+from second_brain.adapters.research.rss import PublicRssAdapter, _normalize_feed
+from second_brain.adapters.research.rss_worker import (
+    MultiprocessingParserWorker,
+    NormalizedFeed,
+    ParserWorker,
+)
 from second_brain.application.ports import (
     CancellationToken,
     CancellationTokenSource,
@@ -102,10 +109,30 @@ class FakeRunner:
         return self.result
 
 
+class FakeParserWorker:
+    """Deterministic parser seam для unit tests без child-process overhead."""
+
+    def __init__(self) -> None:
+        self.inputs: list[bytes] = []
+
+    def run(
+        self,
+        raw_bytes: bytes,
+        *,
+        max_bytes: int,
+        deadline: float,
+        cancellation: CancellationToken,
+    ) -> NormalizedFeed:
+        del deadline, cancellation
+        self.inputs.append(raw_bytes)
+        return _normalize_feed(feedparser.parse(raw_bytes), max_bytes)
+
+
 def make_adapter(
     raw: bytes = RSS_20,
     *,
     addresses: Sequence[str] | Exception = ("93.184.216.34", "8.8.8.8"),
+    parser_worker: ParserWorker | None = None,
 ) -> tuple[PublicRssAdapter, FakeResolver, FakeRunner]:
     resolver = FakeResolver(addresses)
     runner = FakeRunner(ProcessResult(0, raw, b"diagnostic secret"))
@@ -113,6 +140,7 @@ def make_adapter(
         PublicRssAdapter(
             resolver=resolver,
             runner=runner,
+            parser_worker=parser_worker or FakeParserWorker(),
             clock=lambda: datetime(2026, 9, 3, 12, 0, tzinfo=UTC),
         ),
         resolver,
@@ -269,16 +297,30 @@ def test_empty_or_failed_dns_is_safe_error(
     assert runner.calls == []
 
 
-def test_literal_public_ip_is_validated_and_pinned_without_dns() -> None:
+def test_literal_public_ip_is_validated_without_dns_or_resolve() -> None:
     adapter, resolver, runner = make_adapter(addresses=OSError("must not run"))
 
     source = read(adapter, ResearchRequest(SourceKind.RSS, "https://93.184.216.34/feed.xml"))
 
     assert source.uri == "https://93.184.216.34/feed.xml"
     assert resolver.calls == []
-    assert runner.calls[0][0][runner.calls[0][0].index("--resolve") + 1] == (
-        "93.184.216.34:443:93.184.216.34"
-    )
+    argv = runner.calls[0][0]
+    assert "--resolve" not in argv
+    assert argv[argv.index("--url") + 1] == "https://93.184.216.34/feed.xml"
+
+
+def test_literal_public_ipv6_is_validated_without_dns_or_resolve() -> None:
+    adapter, resolver, runner = make_adapter(addresses=OSError("must not run"))
+    uri = "https://[2001:4860:4860::8888]/feed.xml"
+
+    source = read(adapter, ResearchRequest(SourceKind.RSS, uri))
+
+    assert source.uri == uri
+    assert resolver.calls == []
+    argv = runner.calls[0][0]
+    assert "--resolve" not in argv
+    assert argv[argv.index("--proto") + 1] == "=https"
+    assert argv[argv.index("--url") + 1] == uri
 
 
 def test_trailing_dot_hostname_is_used_for_resolve_pinning() -> None:
@@ -356,6 +398,97 @@ def test_normalized_content_overflow_is_rejected(monkeypatch: pytest.MonkeyPatch
         read(adapter, request)
 
     assert len(runner.calls) == 1
+
+
+def test_real_parser_worker_preserves_rss_and_atom_regression() -> None:
+    for raw, expected_media_type in (
+        (RSS_20, "application/rss+xml"),
+        (ATOM_10, "application/atom+xml"),
+    ):
+        adapter, _resolver, _runner = make_adapter(
+            raw,
+            addresses=("8.8.8.8",),
+            parser_worker=MultiprocessingParserWorker(),
+        )
+
+        source = read(adapter)
+
+        assert source.media_type == expected_media_type
+        assert source.content
+
+
+def _slow_parser_worker(
+    _send_conn: Connection,
+    _raw_bytes: bytes,
+    _max_bytes: int,
+) -> None:
+    """Deterministic stuck parser fixture; parent must terminate this child."""
+
+    time.sleep(30)
+
+
+def _secret_failing_parser_worker(
+    _send_conn: Connection,
+    _raw_bytes: bytes,
+    _max_bytes: int,
+) -> None:
+    """Fixture for verifying that child failure details never cross the boundary."""
+
+    raise RuntimeError("parser secret should stay in the worker")
+
+
+def test_slow_parser_timeout_terminates_worker() -> None:
+    worker = MultiprocessingParserWorker(target=_slow_parser_worker)
+    adapter, _resolver, _runner = make_adapter(parser_worker=worker)
+
+    with pytest.raises(ResearchTimeoutError):
+        read(
+            adapter,
+            ResearchRequest(
+                SourceKind.RSS,
+                "https://feeds.example.org/feed.xml",
+                timeout_seconds=1,
+            ),
+        )
+
+    assert worker.last_process is not None
+    assert not worker.last_process.is_alive()
+
+
+def test_parser_cancellation_terminates_worker() -> None:
+    worker = MultiprocessingParserWorker(target=_slow_parser_worker)
+    adapter, _resolver, _runner = make_adapter(parser_worker=worker)
+    cancellation = CancellationTokenSource()
+
+    def cancel_after_worker_starts() -> None:
+        assert worker.started.wait(5)
+        cancellation.cancel()
+
+    cancel_thread = Thread(target=cancel_after_worker_starts)
+    cancel_thread.start()
+    try:
+        with pytest.raises(ResearchCancelledError):
+            adapter.read(
+                ResearchRequest(SourceKind.RSS, "https://feeds.example.org/feed.xml"),
+                cancellation=cancellation,
+            )
+    finally:
+        cancel_thread.join()
+
+    assert worker.last_process is not None
+    assert not worker.last_process.is_alive()
+
+
+def test_parser_worker_hides_child_exception_details() -> None:
+    worker = MultiprocessingParserWorker(target=_secret_failing_parser_worker)
+    adapter, _resolver, _runner = make_adapter(parser_worker=worker)
+
+    with pytest.raises(ResearchMalformedResultError) as error:
+        read(adapter)
+
+    assert "parser secret" not in str(error.value)
+    assert worker.last_process is not None
+    assert not worker.last_process.is_alive()
 
 
 @pytest.mark.parametrize("raw", [b"not xml", b"\xff\xfe\x00"])
