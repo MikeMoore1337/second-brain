@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from second_brain.application.research import ResearchSource, SourceKind
+from second_brain.application.research import ResearchRequest, ResearchSource, SourceKind
 from second_brain.entrypoints.cli.app import app
 from tests.conftest import create_vault, managed_note, snapshot_tree, write_note
 
@@ -142,3 +142,92 @@ def test_research_read_supports_text_output_without_vault(
     assert "Источник: https://example.com/article" in result.stdout
     assert "Content (untrusted external text):" in result.stdout
     assert source.content in result.stdout
+
+
+def test_research_read_rss_supports_json_without_vault(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = ResearchSource(
+        uri="https://feeds.example.org/feed.xml",
+        source_kind=SourceKind.RSS,
+        retrieved_at=datetime(2026, 9, 3, 12, 0, tzinfo=UTC),
+        backend="feedparser",
+        content="# Лента\n\n## Запись",
+        title="Лента",
+        media_type="application/rss+xml",
+    )
+
+    class FakeAdapter:
+        def read(self, request: ResearchRequest, *, cancellation: object) -> ResearchSource:
+            assert request.source_kind is SourceKind.RSS
+            return source
+
+    monkeypatch.setattr(
+        "second_brain.entrypoints.cli.app.PublicRssAdapter",
+        lambda: FakeAdapter(),
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "research",
+            "read",
+            "--type",
+            "rss",
+            "--url",
+            source.uri,
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["source_kind"] == "rss"
+    assert payload["backend"] == "feedparser"
+    assert payload["content"] == source.content
+
+
+def test_research_read_rss_supports_text_output_without_vault(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = ResearchSource(
+        uri="https://feeds.example.org/feed.xml",
+        source_kind=SourceKind.RSS,
+        retrieved_at=datetime(2026, 9, 3, 12, 0, tzinfo=UTC),
+        backend="feedparser",
+        content="# Лента\n\n## Запись",
+        media_type="application/rss+xml",
+    )
+
+    class FakeAdapter:
+        def read(self, request: object, *, cancellation: object) -> ResearchSource:
+            return source
+
+    monkeypatch.setattr(
+        "second_brain.entrypoints.cli.app.PublicRssAdapter",
+        lambda: FakeAdapter(),
+    )
+
+    result = runner.invoke(
+        app,
+        ["research", "read", "--type", "rss", "--url", source.uri],
+    )
+
+    assert result.exit_code == 0
+    assert "Тип: rss" in result.stdout
+    assert source.content in result.stdout
+
+
+@pytest.mark.parametrize("source_type", ["github", "youtube"])
+def test_research_read_unsupported_source_types_remain_rejected_without_vault(
+    source_type: str,
+) -> None:
+    result = runner.invoke(
+        app,
+        ["research", "read", "--type", source_type, "--url", "https://example.com/source"],
+    )
+
+    assert result.exit_code == 1
+    assert "RESEARCH_INVALID_REQUEST" in result.stderr
+    assert "vault" not in result.stderr.casefold()

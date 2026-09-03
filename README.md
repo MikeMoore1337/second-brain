@@ -27,20 +27,26 @@ uv run second-brain --env-file .env doctor
 uv run second-brain --env-file .env vault validate
 ```
 
-## Public web research
+## Public web и RSS research
 
 Read-only команда `research read` читает одну публичную web-страницу через
-фиксированный Jina Reader и системный `curl`; vault для этого не требуется.
-Команда ничего не пишет, не вызывает Git или LLM:
+фиксированный Jina Reader или один публичный RSS/Atom feed напрямую через
+системный `curl`. Для RSS adapter перед запросом выполняются public DNS/IP
+validation и pinning; vault для этого не требуется. Команда ничего не пишет,
+не вызывает Git или LLM:
 
 ```powershell
 uv run second-brain research read `
   --type web --url "https://example.com/article"
+uv run second-brain research read `
+  --type rss --url "https://example.com/feed.xml"
 ```
 
 `curl` — внешний optional runtime prerequisite для этой команды и не
-устанавливается приложением. RSS, YouTube, GitHub и live smoke в этот этап не
-входят.
+устанавливается приложением; Python dependency `feedparser` устанавливается
+из locked `uv.lock`. RSS/Atom parsing получает только уже загруженные bounded
+bytes и не загружает item links/enclosures. YouTube, GitHub и live smoke в этот
+этап не входят.
 
 ## VPS runtime
 

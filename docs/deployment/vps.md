@@ -67,8 +67,12 @@ manager или административной установкой Python яв
 
 Команда `research read` — отдельный optional use case. Для неё на VPS должен
 быть заранее доступен системный `curl` в `PATH`; приложение не устанавливает
-его автоматически. Обычный bootstrap и vault smoke не требуют `curl`, если
-research adapter не используется.
+его автоматически. RSS/Atom adapter дополнительно делает direct egress только
+после adapter-level public DNS/IP validation и использует locked `--resolve`
+pinning без redirects. Python dependencies, включая `feedparser`, ставятся
+штатным `uv sync --locked --python 3.14`; вручную добавлять их в runtime не
+нужно. Обычный bootstrap и vault smoke не требуют `curl`, если research adapter
+не используется.
 
 Для proposal workflow дополнительно требуется `gh` и уже настроенная auth
 сессия. Проверка включается отдельной опцией `--check-gh` и использует только

@@ -70,19 +70,25 @@ External research — отдельная read-only application boundary. В
 `web`, `github`, `rss` и `youtube`, проверяет URL, лимиты, cancellation и
 результат, после чего оставляет внешний `content` недоверенными данными в памяти.
 
-Первый production adapter реализует только `SourceKind.WEB`: он называется
-`jina-reader` и вызывает фиксированный `https://r.jina.ai/` через системный
-`curl` в bounded subprocess. `ResearchGateway` остаётся первой validation
-boundary, а adapter использует explicit argv, `shell=False`, отключённый
-`.curlrc`, HTTPS-only и отсутствие redirect-following, cookies, auth и proxy
-credentials. stdout ограничен `request.max_bytes`, stderr не входит в public
-DTO, timeout и cancellation останавливают текущий процесс. Отсутствующий
-`curl` отображается как `RESEARCH_BACKEND_UNAVAILABLE`.
+Production adapters v1 реализуют два узких public read path. `SourceKind.WEB`
+обслуживает `jina-reader` через фиксированный `https://r.jina.ai/`, а
+`SourceKind.RSS` обслуживает `feedparser` через direct bounded `curl` к
+исходному HTTP(S) host. Для RSS adapter самостоятельно выполняются DNS
+resolution, проверка всех candidate IP на public/global policy и pinning
+выбранного address через `--resolve`; unsafe или mixed result отклоняется до
+curl. `ResearchGateway` остаётся первой validation boundary, а оба adapter-а
+используют explicit argv, `shell=False`, отключённый `.curlrc`, отсутствие
+redirect-following, cookies, auth и proxy credentials. stdout ограничен
+`request.max_bytes`, stderr не входит в public DTO, timeout и cancellation
+останавливают текущий процесс. RSS parser получает только bounded bytes и не
+ходит по item links, enclosures или images. Отсутствующий `curl` отображается
+как `RESEARCH_BACKEND_UNAVAILABLE`.
 
 CLI `research read` только печатает normalized `ResearchSource` и не требует
 vault, не пишет файлы, не вызывает Git или LLM. `content` внешнего источника
-всегда остаётся недоверенным текстом. RSS, YouTube, GitHub, authenticated
-sources, retries и direct request к source hostname в этот adapter не входят.
+всегда остаётся недоверенным текстом; RSS/Atom HTML нормализуется в plain text
+без исполнения scripts или загрузки внешних ресурсов. YouTube, GitHub,
+authenticated sources, retries и persistence в этот этап не входят.
 Agent Reach не импортируется и не запускается; полная SSRF-защита внешнего
 сервиса Jina (включая его redirects, DNS rebinding и egress policy) остаётся
 отдельным ограничением этого узкого public-web slice.

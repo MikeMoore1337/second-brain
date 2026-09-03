@@ -14,6 +14,7 @@ import typer
 from second_brain.adapters.git import GitVersionControlAdapter
 from second_brain.adapters.github import GitHubPullRequestAdapter
 from second_brain.adapters.research.jina_reader import JinaReaderWebAdapter
+from second_brain.adapters.research.rss import PublicRssAdapter
 from second_brain.adapters.vault import FileSystemVaultReader, FileSystemVaultWriter
 from second_brain.application.ports import (
     CancellationTokenSource,
@@ -125,11 +126,11 @@ def validate(
 def research_read(
     source_type: Annotated[
         str,
-        typer.Option("--type", help="Тип источника; в v1 поддерживается только web."),
+        typer.Option("--type", help="Тип источника: web или rss."),
     ] = SourceKind.WEB.value,
     url: Annotated[
         str,
-        typer.Option("--url", help="Публичный URL web-страницы."),
+        typer.Option("--url", help="Публичный URL web-страницы или RSS/Atom feed."),
     ] = "",
     timeout: Annotated[
         int,
@@ -144,11 +145,11 @@ def research_read(
         typer.Option("--format", help="Формат результата: text или json."),
     ] = OutputFormat.TEXT,
 ) -> None:
-    """Прочитать одну публичную web-страницу без vault и записи."""
+    """Прочитать один публичный web/RSS источник без vault и записи."""
 
     try:
         source_kind = _research_source_kind(source_type)
-        source = ResearchGateway(JinaReaderWebAdapter()).read(
+        source = ResearchGateway(_research_adapter(source_kind)).read(
             ResearchRequest(
                 source_kind=source_kind,
                 uri=url,
@@ -284,15 +285,25 @@ def proposal_create(
 
 
 def _research_source_kind(value: str) -> SourceKind:
-    """Разобрать закрытый CLI source kind без расширения adapter scope."""
+    """Разобрать закрытый CLI source kind и не включать unsupported adapters."""
 
     try:
         source_kind = SourceKind(value.strip().casefold())
     except ValueError:
         raise ResearchInvalidRequestError() from None
-    if source_kind is not SourceKind.WEB:
+    if source_kind not in {SourceKind.WEB, SourceKind.RSS}:
         raise ResearchInvalidRequestError()
     return source_kind
+
+
+def _research_adapter(source_kind: SourceKind) -> JinaReaderWebAdapter | PublicRssAdapter:
+    """Явно сопоставить поддержанные CLI-типы с production adapters."""
+
+    if source_kind is SourceKind.WEB:
+        return JinaReaderWebAdapter()
+    if source_kind is SourceKind.RSS:
+        return PublicRssAdapter()
+    raise ResearchInvalidRequestError()
 
 
 def _echo_research_error(error: ResearchError, output_format: OutputFormat) -> None:
@@ -316,7 +327,7 @@ def _research_error_message(code: str) -> str:
     """Сопоставить закрытый application code с коротким human diagnostic."""
 
     messages = {
-        "RESEARCH_INVALID_REQUEST": "запрос не прошёл проверку публичного web-источника",
+        "RESEARCH_INVALID_REQUEST": "запрос не прошёл проверку публичного web/RSS-источника",
         "RESEARCH_CANCELLED": "чтение отменено",
         "RESEARCH_TIMEOUT": "research backend превысил лимит времени",
         "RESEARCH_BACKEND_UNAVAILABLE": "research backend недоступен; проверьте системный curl",

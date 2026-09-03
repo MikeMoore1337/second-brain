@@ -12,6 +12,7 @@ license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Mike Moore" }]
 dependencies = [
+  "feedparser>=6.0,<7",
   "markdown-it-py>=4.0,<5",
   "pydantic>=2.11,<3",
   "pydantic-settings>=2.10,<3",
