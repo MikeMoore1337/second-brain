@@ -19,6 +19,7 @@ from second_brain.application.writes import (
 from second_brain.domain.models import NoteType, VaultManifest
 
 if TYPE_CHECKING:
+    from second_brain.application.llm import LlmRequest, NoteDraft
     from second_brain.application.research import ResearchRequest, ResearchSource
 
 
@@ -190,6 +191,108 @@ class ExternalResearchPort(Protocol):
         """Прочитать один внешний источник и вернуть normalized DTO."""
 
 
+class LlmErrorCode(StrEnum):
+    """Стабильные application-коды ошибок LLM boundary."""
+
+    INVALID_REQUEST = "LLM_INVALID_REQUEST"
+    CANCELLED = "LLM_CANCELLED"
+    TIMEOUT = "LLM_TIMEOUT"
+    BACKEND_UNAVAILABLE = "LLM_BACKEND_UNAVAILABLE"
+    UPSTREAM_FAILURE = "LLM_UPSTREAM_FAILURE"
+    MALFORMED_RESULT = "LLM_MALFORMED_RESULT"
+    CONTENT_TOO_LARGE = "LLM_CONTENT_TOO_LARGE"
+
+
+_LLM_ERROR_MESSAGES = {
+    LlmErrorCode.INVALID_REQUEST: "LLM request failed validation",
+    LlmErrorCode.CANCELLED: "LLM request was cancelled",
+    LlmErrorCode.TIMEOUT: "LLM backend timed out",
+    LlmErrorCode.BACKEND_UNAVAILABLE: "LLM backend is unavailable",
+    LlmErrorCode.UPSTREAM_FAILURE: "LLM backend failed",
+    LlmErrorCode.MALFORMED_RESULT: "LLM backend returned an invalid note draft",
+    LlmErrorCode.CONTENT_TOO_LARGE: "LLM note draft exceeds the request limit",
+}
+
+
+class LlmError(RuntimeError):
+    """Безопасная application error boundary без provider details."""
+
+    def __init__(self, code: LlmErrorCode | str, message: str | None = None) -> None:
+        """Создать ошибку с фиксированным сообщением taxonomy."""
+
+        del message
+        normalized = _normalize_llm_error_code(code)
+        self.code = normalized.value
+        self.message = _LLM_ERROR_MESSAGES[normalized]
+        super().__init__(self.message)
+
+    def as_dict(self) -> dict[str, str]:
+        """Вернуть безопасное машинное представление без upstream details."""
+
+        return {"code": self.code, "message": self.message}
+
+
+class LlmInvalidRequestError(LlmError):
+    """Запрос не соответствует bounded application policy."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(LlmErrorCode.INVALID_REQUEST, message)
+
+
+class LlmCancelledError(LlmError):
+    """Операция отменена до или после вызова LLM port."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(LlmErrorCode.CANCELLED, message)
+
+
+class LlmTimeoutError(LlmError):
+    """Future provider adapter сообщил bounded operation timeout."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(LlmErrorCode.TIMEOUT, message)
+
+
+class LlmBackendUnavailableError(LlmError):
+    """Backend или его runtime недоступен для structured draft generation."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(LlmErrorCode.BACKEND_UNAVAILABLE, message)
+
+
+class LlmUpstreamError(LlmError):
+    """Upstream failure без раскрытия provider diagnostics."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(LlmErrorCode.UPSTREAM_FAILURE, message)
+
+
+class LlmMalformedResultError(LlmError):
+    """Port вернул результат вне typed NoteDraft contract."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(LlmErrorCode.MALFORMED_RESULT, message)
+
+
+class LlmContentTooLargeError(LlmError):
+    """Размер одного поля или combined NoteDraft превышает bounded limit."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(LlmErrorCode.CONTENT_TOO_LARGE, message)
+
+
+class LlmPort(Protocol):
+    """Единственная provider-neutral операция structured note draft generation."""
+
+    def draft_note(
+        self,
+        request: LlmRequest,
+        *,
+        cancellation: CancellationToken,
+    ) -> NoteDraft:
+        """Сгенерировать один semantic draft без write/network authority."""
+
+
 def _normalize_research_error_code(code: ResearchErrorCode | str) -> ResearchErrorCode:
     """Свести enum или известную строку к закрытой taxonomy."""
 
@@ -199,6 +302,17 @@ def _normalize_research_error_code(code: ResearchErrorCode | str) -> ResearchErr
         return ResearchErrorCode(code)
     except ValueError:
         return ResearchErrorCode.UPSTREAM_FAILURE
+
+
+def _normalize_llm_error_code(code: LlmErrorCode | str) -> LlmErrorCode:
+    """Свести enum или известную строку к закрытой LLM taxonomy."""
+
+    if isinstance(code, LlmErrorCode):
+        return code
+    try:
+        return LlmErrorCode(code)
+    except TypeError, ValueError:
+        return LlmErrorCode.UPSTREAM_FAILURE
 
 
 class ProposalPortError(RuntimeError):
