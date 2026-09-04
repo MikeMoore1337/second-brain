@@ -244,6 +244,8 @@ def _request_payload(instruction: str, context: str) -> dict[str, object]:
         },
         "stream": False,
         "temperature": 0,
+        "reasoning_effort": None,
+        "chat_template_kwargs": {"enable_thinking": False},
     }
 
 
