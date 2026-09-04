@@ -414,8 +414,9 @@ improvement.
 ### Request
 
 Adapter реализует существующий LlmPort и принимает ровно один
-LlmRequest. Ниже canonical body; max_completion_tokens вычисляется из
-bounded request.max_output_bytes и не должен заменить application validation.
+LlmRequest. Ниже canonical body. Application `max_output_bytes` и derived byte
+caps остаются authoritative; отдельный `max_completion_tokens` в request v1 не
+используется.
 
 > **Implementation erratum (2026-09-04).** Для native Workers AI моделей
 > `@cf/...` поле `response_format.json_schema` содержит bare JSON Schema
@@ -461,17 +462,27 @@ bounded request.max_output_bytes и не должен заменить applicati
   },
   "stream": false,
   "temperature": 0,
-  "max_completion_tokens": 1024
+  "reasoning_effort": null,
+  "chat_template_kwargs": {
+    "enable_thinking": false
+  }
 }
 ~~~
 
 {bounded_instruction} — UTF-8 bounded instruction из LlmRequest.
 {escaped_context} — результат collision-safe escape_context над UTF-8 bounded
 context из LlmRequest; exact framing markers в нем отсутствуют. Raw semantic
-text сохраняется, кроме необходимого escape exact delimiters.
-Значение max_completion_tokens в примере равно 1024. В implementation это
-число вычисляется детерминированно из max_output_bytes, например
-min(1024, max(1, max_output_bytes // 4)) с отдельным верхним cap adapter-а.
+text сохраняется, кроме необходимого escape exact delimiters. Отдельный
+`max_completion_tokens` в canonical request v1 не используется; application
+`max_output_bytes` и derived byte caps остаются authoritative.
+
+`@cf/zai-org/glm-4.7-flash` является reasoning-capable model. Для NoteDraft v1
+reasoning принудительно отключается fixed provider controls:
+`reasoning_effort: null` и `chat_template_kwargs.enable_thinking: false`.
+Цель — bounded deterministic structured output и экономия free quota; reasoning
+не является product requirement. Если provider возвращает `reasoning_content`,
+это только metadata и не fallback output: оно не заменяет
+`message.content` и не попадает в NoteDraft.
 
 Request не содержит tools, function calls, chat history, provider-specific
 memory, streaming, retry metadata или fallback instructions. Нужны ровно два

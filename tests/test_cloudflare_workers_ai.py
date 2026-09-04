@@ -45,6 +45,7 @@ from second_brain.domain.models import NoteType
 
 SECRET = "sentinel-cloudflare-token-never-public"
 ACCOUNT_ID = "account-opaque-123"
+REASONING_CONTENT = "private reasoning that is never a result"
 
 
 def make_request(*, max_output_bytes: int = 64 * 1024) -> LlmRequest:
@@ -208,10 +209,20 @@ def test_request_builder_is_fixed_and_collision_safe() -> None:
 
     body = cloudflare.build_request_body(request)
     payload = json.loads(body)
-    assert set(payload) == {"model", "messages", "response_format", "stream", "temperature"}
+    assert set(payload) == {
+        "model",
+        "messages",
+        "response_format",
+        "stream",
+        "temperature",
+        "reasoning_effort",
+        "chat_template_kwargs",
+    }
     assert payload["model"] == cloudflare.CLOUDFLARE_MODEL
     assert payload["stream"] is False
     assert payload["temperature"] == 0
+    assert payload["reasoning_effort"] is None
+    assert payload["chat_template_kwargs"] == {"enable_thinking": False}
     assert "max_completion_tokens" not in payload
     assert "tools" not in payload
     assert "functions" not in payload
@@ -286,6 +297,18 @@ def test_derived_wire_caps_accept_application_boundaries() -> None:
     assert cloudflare.REQUEST_BODY_CAP > 192 * 1024
 
 
+def test_request_fixed_bytes_are_derived_from_the_full_canonical_shape() -> None:
+    empty_body = cloudflare._compact_json_bytes(cloudflare._request_payload("", ""))
+
+    assert (len(empty_body) - 2 * cloudflare.JSON_STRING_BYTES(0)) == cloudflare.REQUEST_FIXED_BYTES
+    assert cloudflare.request_body_cap() == (
+        cloudflare.REQUEST_FIXED_BYTES
+        + cloudflare.JSON_STRING_BYTES(MAX_INSTRUCTION_BYTES)
+        + cloudflare.JSON_STRING_BYTES(MAX_CONTEXT_BYTES)
+        + cloudflare.ENVELOPE_OVERHEAD_BYTES
+    )
+
+
 def test_derived_response_cap_includes_the_two_json_layers() -> None:
     content = "я" * (MAX_CONTENT_BYTES // 2)
     inner = make_inner(
@@ -305,6 +328,7 @@ def test_derived_response_cap_includes_the_two_json_layers() -> None:
 def test_valid_response_passes_gateway_and_provider_metadata_is_ignored() -> None:
     body = make_outer(
         make_inner(tags=["knowledge"], links=["[[Связь]]"]),
+        message_overrides={"reasoning_content": REASONING_CONTENT},
         outer_overrides={
             "id": "provider-id",
             "model": cloudflare.CLOUDFLARE_MODEL,
@@ -327,6 +351,28 @@ def test_valid_response_passes_gateway_and_provider_metadata_is_ignored() -> Non
     assert runner.request.account_id == ACCOUNT_ID
     assert runner.request.api_token == SECRET
     assert SECRET not in repr(runner.request)
+    assert REASONING_CONTENT not in repr(draft)
+    assert not hasattr(draft, "reasoning_content")
+
+
+def test_reasoning_only_truncated_response_is_malformed_and_not_public() -> None:
+    body = make_outer(
+        make_inner(),
+        finish_reason="length",
+        message_overrides={
+            "content": None,
+            "reasoning_content": REASONING_CONTENT,
+        },
+    )
+    port, _runner = make_port(worker_result(body))
+
+    with pytest.raises(LlmMalformedResultError) as error:
+        port.draft_note(make_request(), cancellation=CancellationTokenSource())
+
+    assert error.value.code == LlmErrorCode.MALFORMED_RESULT.value
+    assert REASONING_CONTENT not in str(error.value)
+    assert REASONING_CONTENT not in repr(error.value)
+    assert REASONING_CONTENT not in str(error.value.as_dict())
 
 
 @pytest.mark.parametrize(
