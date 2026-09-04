@@ -133,9 +133,6 @@ class PublicGitHubAdapter:
         _raise_if_cancelled(cancellation)
         _remaining(self.monotonic, deadline)
 
-        # If even the metadata-only representation cannot fit, avoid a needless
-        # README request; a README can only make the final source larger.
-        _build_content(metadata, None, request.max_bytes)
         _raise_if_cancelled(cancellation)
         _remaining(self.monotonic, deadline)
 
@@ -525,8 +522,6 @@ def _normalize_readme(raw_bytes: bytes) -> str:
         text = raw_bytes.decode("utf-8")
     except AttributeError, UnicodeDecodeError:
         raise ResearchMalformedResultError() from None
-    if not text.strip():
-        raise ResearchMalformedResultError()
     return text.replace("\r\n", "\n").replace("\r", "\n")
 
 

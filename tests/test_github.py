@@ -197,6 +197,52 @@ def test_github_readme_404_returns_metadata_only_success() -> None:
     assert len(runner.calls) == 2
 
 
+def test_github_short_readme_can_fit_when_metadata_only_fallback_cannot() -> None:
+    metadata_block = (
+        "Repository: github/.github\n"
+        "Description: Public project\n"
+        "Default branch: main\n"
+        "Language: Markdown\n"
+        "Topics: Research, zeta\n"
+        "README:\n"
+        "\n"
+    )
+    max_bytes = len(f"{metadata_block}x".encode())
+    assert len(f"{metadata_block}(отсутствует)".encode()) > max_bytes
+
+    runner = FakeRunner(
+        [
+            ProcessResult(0, _metadata_response(), b""),
+            ProcessResult(0, _response(200, b"x"), b""),
+        ]
+    )
+
+    source = _read(runner, max_bytes=max_bytes)
+
+    assert source.content == f"{metadata_block}x"
+    assert len(runner.calls) == 2
+
+
+@pytest.mark.parametrize("body", [b"", b" \t\r\n "])
+def test_github_existing_empty_or_whitespace_readme_is_success(body: bytes) -> None:
+    runner = FakeRunner(
+        [
+            ProcessResult(0, _metadata_response(), b""),
+            ProcessResult(0, _response(200, body), b""),
+        ]
+    )
+
+    source = _read(runner)
+
+    assert source.media_type == "text/markdown"
+    assert "(отсутствует)" not in source.content
+    assert len(runner.calls) == 2
+    if body == b"":
+        assert source.content.endswith("README:\n\n")
+    else:
+        assert source.content.endswith("README:\n\n \t\n ")
+
+
 @pytest.mark.parametrize("status", [403, 429, 500])
 def test_github_readme_unexpected_status_is_safe_upstream_error_without_fallback(
     status: int,
@@ -307,12 +353,11 @@ def test_github_malformed_or_mismatched_metadata_is_rejected(metadata: dict[str,
     assert len(runner.calls) == 1
 
 
-@pytest.mark.parametrize("body", [b"", b"not utf-8: \xff"])
-def test_github_empty_or_invalid_utf8_readme_is_malformed(body: bytes) -> None:
+def test_github_invalid_utf8_readme_is_malformed() -> None:
     runner = FakeRunner(
         [
             ProcessResult(0, _metadata_response(), b""),
-            ProcessResult(0, _response(200, body), b""),
+            ProcessResult(0, _response(200, b"not utf-8: \xff"), b""),
         ]
     )
 
