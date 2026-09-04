@@ -744,6 +744,34 @@ def test_subprocess_runner_uses_sanitized_env_and_fixed_argv() -> None:
     assert process.kill_calls == 0
 
 
+@pytest.mark.skipif(
+    sys.platform != "win32", reason="Windows-specific OpenSSL environment regression"
+)
+def test_windows_sanitized_environment_initializes_ssl_in_real_isolated_child() -> None:
+    environment = cloudflare._safe_worker_environment(SECRET)
+    argv = [sys.executable, "-I", "-c", "import ssl; ssl.create_default_context()"]
+
+    assert "SYSTEMROOT" in environment
+    assert all(name.casefold() != "systemroot" or name == "SYSTEMROOT" for name in environment)
+    assert "CLOUDFLARE_API_TOKEN" not in environment
+    assert "CLOUDFLARE_ACCOUNT_ID" not in environment
+    assert all(SECRET not in value for value in environment.values())
+    assert SECRET not in " ".join(argv)
+
+    completed = subprocess.run(
+        argv,
+        env=environment,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+
+    public_diagnostics = completed.stdout + completed.stderr
+    assert SECRET.encode() not in public_diagnostics
+    assert completed.returncode == 0
+
+
 def test_subprocess_runner_cancellation_terminates_worker_and_cleans_pipes() -> None:
     process = FakeProcess(block=True)
     created = threading.Event()

@@ -112,6 +112,7 @@ _WORKER_MODULE = "second_brain.adapters.llm.cloudflare_workers_ai_worker"
 _SAFE_WORKER_ENVIRONMENT_NAMES = frozenset(
     {"PATH", "Path", "SystemRoot", "WINDIR", "TEMP", "TMP", "TMPDIR"}
 )
+_WINDOWS_SYSTEM_ROOT_ENVIRONMENT_NAME = "SYSTEMROOT"
 
 
 class CloudflareWorkersAiConfigError(ValueError):
@@ -682,7 +683,7 @@ class WorkerRunner(Protocol):
 def _safe_worker_environment(secret: str | None = None) -> dict[str, str]:
     """Собрать explicit allowlist без provider credentials и общего env."""
 
-    return {
+    environment = {
         name: value
         for name, value in os.environ.items()
         if (
@@ -691,6 +692,23 @@ def _safe_worker_environment(secret: str | None = None) -> dict[str, str]:
             and (not secret or secret not in value)
         )
     }
+    if os.name == "nt":
+        system_root = next(
+            (
+                value
+                for name, value in os.environ.items()
+                if name.casefold() == "systemroot"
+                and type(value) is str
+                and (not secret or secret not in value)
+            ),
+            None,
+        )
+        if system_root is not None:
+            for name in tuple(environment):
+                if name.casefold() == "systemroot":
+                    del environment[name]
+            environment[_WINDOWS_SYSTEM_ROOT_ENVIRONMENT_NAME] = system_root
+    return environment
 
 
 def _worker_argv() -> tuple[str, ...]:
