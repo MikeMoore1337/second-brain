@@ -32,6 +32,10 @@
 ## Безопасность
 
 - Local/offline read-only команды не вызывают сеть или LLM.
+- Networked `llm draft` и `research draft` остаются read-only и только возвращают
+  validated `NoteDraft`; они не получают `--apply` и не пишут в vault. Команда
+  `note create-from-draft --file PATH` является отдельной local/offline write
+  operation: dry-run по умолчанию, реальная запись только с явным `--apply`.
 - Explicitly networked read-only команды могут выполнять только заявленную
   внешнюю read-operation; это не является общим разрешением сети для любых
   read-only команд. `research read` выполняет максимум одну research

@@ -100,6 +100,33 @@ uv run second-brain llm draft --instruction "Создай заметку о ре
 автоматического сохранения, retry, fallback и tools нет. JSON содержит ровно
 `title`, `note_type`, `content`, `tags` и `links`.
 
+## Reviewed NoteDraft -> Safe Write
+
+Networked `llm draft` и `research draft` только возвращают JSON-драфт и не имеют
+`--apply`. Пользователь сначала сохраняет и проверяет файл, затем запускает
+отдельную local/offline-команду:
+
+```powershell
+uv run second-brain note create-from-draft `
+  --file draft.json
+uv run second-brain note create-from-draft `
+  --file draft.json --apply
+```
+
+У команды ровно три options: `--file PATH`, `--apply` и `--format text|json`;
+`--apply` по умолчанию выключен. Dry-run не меняет vault, Git или другие файлы
+и показывает конечный relative path и rendered Markdown. Команда не вызывает
+research/LLM, network или Git/GitHub и не требует Cloudflare credentials.
+
+Маппинг reviewed draft lossless: `title` используется только существующей safe
+filename policy; application генерирует UUIDv7, `created` с явным offset и
+выбирает root по manifest; `note_type` становится `type`; `content` становится
+body без semantic rewrite и без template body; `tags` и `links` сохраняются как
+YAML front matter lists в исходном порядке. `links` не разрешаются и не
+превращаются в backlinks. При явном `--apply` используется полный Safe Write
+pipeline с containment, symlink/junction checks, temporary file, no-overwrite,
+post-write validation и receipt-based rollback.
+
 ## VPS runtime
 
 Первичный user-level bootstrap и безопасное обновление Linux layout описаны в

@@ -6,6 +6,7 @@ import json
 import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import cast
 
 from second_brain.application.ports import (
     CancellationToken,
@@ -140,6 +141,18 @@ def _validate_draft(draft: object, max_output_bytes: int) -> None:
     _validate_links(draft.links)
     if _combined_draft_bytes(draft) > max_output_bytes:
         raise LlmContentTooLargeError()
+
+
+def validate_note_draft(
+    draft: object,
+    max_output_bytes: int = MAX_MAX_OUTPUT_BYTES,
+) -> NoteDraft:
+    """Проверить и вернуть NoteDraft через тот же semantic validator, что и LLM."""
+
+    if type(max_output_bytes) is not int or not (1 <= max_output_bytes <= MAX_MAX_OUTPUT_BYTES):
+        raise LlmInvalidRequestError()
+    _validate_draft(draft, max_output_bytes)
+    return cast(NoteDraft, draft)
 
 
 def _validate_tags(tags: object) -> None:
@@ -305,4 +318,5 @@ __all__ = [
     "LlmTimeoutError",
     "LlmUpstreamError",
     "NoteDraft",
+    "validate_note_draft",
 ]

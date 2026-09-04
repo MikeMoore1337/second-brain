@@ -5,17 +5,21 @@ from __future__ import annotations
 import hashlib
 import os
 import uuid
-from collections.abc import MutableMapping
+from collections.abc import Callable, MutableMapping
 from datetime import datetime
 from io import StringIO
 from pathlib import Path, PurePosixPath
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from ruamel.yaml import YAML
 
-from second_brain.adapters.vault.frontmatter import parse_front_matter
+from second_brain.adapters.vault.frontmatter import FrontMatterResult, parse_front_matter
 from second_brain.application.writes import CreateNotePlan, WriteReceipt, WriteSafetyError
 from second_brain.domain.models import NoteType, VaultManifest
+
+if TYPE_CHECKING:
+    from second_brain.application.llm import NoteDraft
 
 _CONTENT_ROOTS = {
     NoteType.PROJECT: "projects",
@@ -64,6 +68,49 @@ class FileSystemVaultWriter:
     ) -> CreateNotePlan:
         """Проверить пути, прочитать template и собрать dry-run plan."""
 
+        return self._prepare(
+            manifest,
+            note_type,
+            title,
+            note_id,
+            created,
+            lambda template_text: _render_template(template_text, note_type, note_id, created),
+        )
+
+    def prepare_from_draft(
+        self,
+        manifest: VaultManifest,
+        draft: NoteDraft,
+        note_id: UUID,
+        created: datetime,
+    ) -> CreateNotePlan:
+        """Собрать draft-based plan с lossless body и additive front matter."""
+
+        return self._prepare(
+            manifest,
+            draft.note_type,
+            draft.title,
+            note_id,
+            created,
+            lambda template_text: _render_draft_template(
+                template_text,
+                draft,
+                note_id,
+                created,
+            ),
+        )
+
+    def _prepare(
+        self,
+        manifest: VaultManifest,
+        note_type: NoteType,
+        title: str,
+        note_id: UUID,
+        created: datetime,
+        render: Callable[[str], str],
+    ) -> CreateNotePlan:
+        """Общий read-only planning boundary для обоих create flows."""
+
         root_name = _CONTENT_ROOTS.get(note_type)
         template_name = _TEMPLATE_NAMES.get(note_type)
         if root_name is None or template_name is None:
@@ -109,7 +156,7 @@ class FileSystemVaultWriter:
         self._check_path_components(target_path, "target")
         self._ensure_target_absent(target_path, target_root)
         relative_path = _relative(self.root, target_path)
-        content = _render_template(template_text, note_type, note_id, created)
+        content = render(template_text)
         return CreateNotePlan(
             note_type,
             title,
@@ -327,35 +374,10 @@ def _filename_from_title(title: str) -> str:
 def _render_template(
     template_text: str, note_type: NoteType, note_id: UUID, created: datetime
 ) -> str:
-    parsed = parse_front_matter(template_text)
-    if parsed.error is not None:
-        raise WriteSafetyError("CREATE_TEMPLATE_INVALID", parsed.error)
-    if parsed.has_front_matter:
-        if parsed.header is None:
-            raise WriteSafetyError(
-                "CREATE_TEMPLATE_INVALID",
-                "template front matter header is unavailable",
-            )
-        yaml = YAML()
-        yaml.allow_duplicate_keys = False
-        yaml.allow_unicode = True
-        yaml.preserve_quotes = True
-        try:
-            data = yaml.load(parsed.header)
-        except Exception as exc:  # ruamel exposes several parser/constructor exception types
-            raise WriteSafetyError("CREATE_TEMPLATE_INVALID", str(exc)) from exc
-        if data is None:
-            data = {}
-        if not isinstance(data, MutableMapping):
-            raise WriteSafetyError("CREATE_TEMPLATE_INVALID", "front matter must be a mapping")
-        # Round-trip YAML preserves unknown fields and their comments/quoting/flow style;
-        # only managed metadata is intentionally replaced for the new note.
-        data["id"] = str(note_id)
-        data["type"] = note_type.value
-        data["created"] = created.isoformat(timespec="seconds")
-        stream = StringIO()
-        yaml.dump(data, stream)
-        return f"---\n{stream.getvalue().rstrip(chr(10))}\n---\n{parsed.body}"
+    parsed, data = _load_template_data(template_text)
+    if data is not None:
+        _set_managed_metadata(data, note_type, note_id, created)
+        return _dump_front_matter(data) + parsed.body
     front_matter = (
         "---\n"
         f"id: {note_id}\n"
@@ -364,6 +386,89 @@ def _render_template(
         "---\n"
     )
     return front_matter + template_text
+
+
+def _render_draft_template(
+    template_text: str,
+    draft: NoteDraft,
+    note_id: UUID,
+    created: datetime,
+) -> str:
+    """Render only draft body while preserving template front matter defaults."""
+
+    _, data = _load_template_data(template_text)
+    if data is not None:
+        _set_managed_metadata(data, draft.note_type, note_id, created)
+        data["tags"] = list(draft.tags)
+        data["links"] = list(draft.links)
+        return _dump_front_matter(data) + draft.content
+
+    data = {
+        "id": str(note_id),
+        "type": draft.note_type.value,
+        "created": created.isoformat(timespec="seconds"),
+        "tags": list(draft.tags),
+        "links": list(draft.links),
+    }
+    return _dump_front_matter(data) + draft.content
+
+
+def _load_template_data(
+    template_text: str,
+) -> tuple[FrontMatterResult, MutableMapping[str, object] | None]:
+    """Загрузить template front matter через существующую round-trip YAML policy."""
+
+    parsed = parse_front_matter(template_text)
+    if parsed.error is not None:
+        raise WriteSafetyError("CREATE_TEMPLATE_INVALID", parsed.error)
+    if not parsed.has_front_matter:
+        return parsed, None
+    if parsed.header is None:
+        raise WriteSafetyError(
+            "CREATE_TEMPLATE_INVALID",
+            "template front matter header is unavailable",
+        )
+    yaml = _round_trip_yaml()
+    try:
+        data = yaml.load(parsed.header)
+    except Exception as exc:  # ruamel exposes several parser/constructor exception types
+        raise WriteSafetyError("CREATE_TEMPLATE_INVALID", str(exc)) from exc
+    if data is None:
+        data = {}
+    if not isinstance(data, MutableMapping):
+        raise WriteSafetyError("CREATE_TEMPLATE_INVALID", "front matter must be a mapping")
+    return parsed, data
+
+
+def _set_managed_metadata(
+    data: MutableMapping[str, object],
+    note_type: NoteType,
+    note_id: UUID,
+    created: datetime,
+) -> None:
+    """Заменить только application-managed id/type/created поля."""
+
+    data["id"] = str(note_id)
+    data["type"] = note_type.value
+    data["created"] = created.isoformat(timespec="seconds")
+
+
+def _dump_front_matter(data: MutableMapping[str, object]) -> str:
+    """Сериализовать front matter и не менять переданный Markdown body."""
+
+    stream = StringIO()
+    _round_trip_yaml().dump(data, stream)
+    return f"---\n{stream.getvalue().rstrip(chr(10))}\n---\n"
+
+
+def _round_trip_yaml() -> YAML:
+    """Создать YAML serializer с текущими template round-trip настройками."""
+
+    yaml = YAML()
+    yaml.allow_duplicate_keys = False
+    yaml.allow_unicode = True
+    yaml.preserve_quotes = True
+    return yaml
 
 
 def _create_temp_file(directory: Path, content: str) -> Path:

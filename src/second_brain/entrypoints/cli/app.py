@@ -19,6 +19,7 @@ from second_brain.adapters.research.jina_reader import JinaReaderWebAdapter
 from second_brain.adapters.research.rss import PublicRssAdapter
 from second_brain.adapters.research.youtube import PublicYouTubeAdapter
 from second_brain.adapters.vault import FileSystemVaultReader, FileSystemVaultWriter
+from second_brain.application.draft_files import DraftFileError, read_note_draft_file
 from second_brain.application.llm import (
     DEFAULT_MAX_OUTPUT_BYTES,
     MAX_CONTEXT_BYTES,
@@ -50,8 +51,14 @@ from second_brain.application.research import (
     SourceKind,
 )
 from second_brain.application.research_draft import ResearchDraftGateway, ResearchDraftRequest
-from second_brain.application.services import CreateManagedNote, DoctorVault, ValidateVault
+from second_brain.application.services import (
+    CreateManagedNote,
+    CreateManagedNoteFromDraft,
+    DoctorVault,
+    ValidateVault,
+)
 from second_brain.application.writes import (
+    CreateManagedNoteFromDraftRequest,
     CreateManagedNoteRequest,
     CreateManagedNoteResult,
     CreateStatus,
@@ -357,6 +364,51 @@ def create(
     raise typer.Exit(code=0 if result.successful else 1)
 
 
+@note_app.command("create-from-draft")
+def create_from_draft(
+    ctx: typer.Context,
+    draft_file: Annotated[
+        Path,
+        typer.Option("--file", help="UTF-8 JSON-файл с одним reviewed NoteDraft."),
+    ],
+    apply: Annotated[
+        bool,
+        typer.Option("--apply", help="Подтвердить реальную запись в vault."),
+    ] = False,
+    output_format: Annotated[
+        OutputFormat,
+        typer.Option("--format", help="Формат результата: text или json."),
+    ] = OutputFormat.TEXT,
+) -> None:
+    """Offline Safe Write из reviewed NoteDraft; dry-run по умолчанию."""
+
+    try:
+        draft = read_note_draft_file(draft_file)
+    except DraftFileError as exc:
+        _echo_draft_error(exc, output_format)
+        raise typer.Exit(code=1) from None
+
+    try:
+        options = _root_options(ctx)
+        config = load_config(env_file=options.env_file, vault_path_override=options.vault_path)
+        result = CreateManagedNoteFromDraft(
+            FileSystemVaultReader(config.vault_path),
+            FileSystemVaultWriter(config.vault_path),
+        ).execute(CreateManagedNoteFromDraftRequest(draft, apply=apply))
+    except (ConfigurationError, WriteSafetyError) as exc:
+        typer.echo(f"Ошибка конфигурации записи: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    except OSError as exc:
+        typer.echo(f"Ошибка выполнения записи: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+
+    if output_format is OutputFormat.JSON:
+        typer.echo(json.dumps(result.as_dict(), ensure_ascii=False, indent=2))
+    else:
+        typer.echo(_render_create_text(result))
+    raise typer.Exit(code=0 if result.successful else 1)
+
+
 @proposal_note_app.command("create")
 def proposal_create(
     ctx: typer.Context,
@@ -485,6 +537,24 @@ def _echo_llm_error(error: LlmError, output_format: OutputFormat) -> None:
         )
     else:
         typer.echo(f"Ошибка LLM: {code} — {message}", err=True)
+
+
+def _echo_draft_error(error: DraftFileError, output_format: OutputFormat) -> None:
+    """Вывести безопасную диагностику strict draft decoder без raw content."""
+
+    code = error.code
+    message = error.message
+    if output_format is OutputFormat.JSON:
+        typer.echo(
+            json.dumps(
+                {"error": {"code": code, "message": message}},
+                ensure_ascii=False,
+                indent=2,
+            ),
+            err=True,
+        )
+    else:
+        typer.echo(f"Ошибка draft: {code} — {message}", err=True)
 
 
 def _llm_error_message(code: str) -> str:

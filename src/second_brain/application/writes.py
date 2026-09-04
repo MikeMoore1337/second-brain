@@ -5,11 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from second_brain.application.reports import Diagnostic, ScanReport
 from second_brain.domain.models import NoteType
+
+if TYPE_CHECKING:
+    from second_brain.application.llm import NoteDraft
 
 
 class CreateStatus(StrEnum):
@@ -36,6 +39,15 @@ class CreateManagedNoteRequest:
 
     note_type: NoteType
     title: str
+    apply: bool = False
+    now: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CreateManagedNoteFromDraftRequest:
+    """Входные данные offline Safe Write из уже проверенного NoteDraft."""
+
+    draft: NoteDraft
     apply: bool = False
     now: datetime | None = None
 

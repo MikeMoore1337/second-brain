@@ -54,6 +54,42 @@ Markdown; частично заполненная schema считается ош
 созданная note проходит post-write validation; при ошибке rollback удаляет файл
 только при совпадении сохранённых identity и SHA-256.
 
+### Reviewed NoteDraft -> Safe Write
+
+Связка networked draft generation с записью в vault намеренно остаётся
+двухшаговой:
+
+```text
+networked `llm draft` / `research draft`
+              |
+       reviewed NoteDraft JSON
+              |
+offline `note create-from-draft --file PATH`
+              |
+       dry-run по умолчанию
+              |
+          explicit `--apply`
+              |
+       существующий Safe Write
+```
+
+`note create-from-draft` сначала bounded строго декодирует UTF-8 JSON с ровно
+пятью полями `title`, `note_type`, `content`, `tags` и `links`, затем переиспользует
+semantic validation `NoteDraft`. Команда не вызывает research/LLM, сеть или
+Git/GitHub и не требует Cloudflare credentials. Без `--apply` vault не меняется;
+JSON/text preview показывает конечный relative path и полностью rendered
+Markdown. При `--apply` используется тот же preflight, containment,
+symlink/junction protection, temporary file, no-overwrite publication,
+post-write validation и receipt-based rollback, что и обычный `note create`.
+
+Для draft-based создания `title` проходит существующую safe filename policy,
+`id`/`created` генерируются application, `type` берётся из `note_type`, а
+`content` становится body без semantic rewrite и без body template. `tags` и
+`links` сохраняются как application-managed YAML lists в front matter в исходном
+порядке; `links` остаётся candidate metadata и не запускает resolution или
+backlink creation. Неизвестные поля front matter template сохраняются round-trip;
+schema version не меняется.
+
 ## Будущие границы
 
 Proposal automation изменяет только новую `automation/*` branch и создаёт PR с
@@ -152,11 +188,11 @@ fallback. В v1 этот контракт используется только 
 streaming, chat, tools, embeddings и RAG отсутствуют.
 
 `NoteDraft` содержит только `title`, `note_type`, `content`, `tags` и `links`.
-Он не является `CreateManagedNoteRequest`: текущий Safe Write по-прежнему сам
-определяет UUIDv7, timestamp, path и write plan, а также пока не принимает
-draft `content`, `tags` или `links`. Связка `research -> LLM -> approval ->
-Safe Write` будет отдельным этапом после отдельного решения о расширении
-write-контракта.
+Он не является `CreateManagedNoteRequest`: обычный `CreateManagedNote` по-прежнему
+сам определяет UUIDv7, timestamp, path и write plan. Связка `research -> LLM ->
+approval -> Safe Write` реализуется отдельной offline-командой
+`note create-from-draft`: reviewed JSON является границей approval, а
+networked draft-команды остаются без write capability.
 
 ### Bounded research -> LLM orchestration v1
 
