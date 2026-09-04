@@ -175,6 +175,38 @@ def test_llm_draft_maps_every_llm_error_to_safe_json_diagnostic(
     assert payload["error"]["message"]
 
 
+def test_llm_draft_maps_text_llm_error_to_safe_diagnostic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret = "text-provider-response-secret"
+
+    class FakePort:
+        def draft_note(
+            self,
+            request: LlmRequest,
+            *,
+            cancellation: CancellationToken,
+        ) -> NoteDraft:
+            del request, cancellation
+            raise LlmError(LlmErrorCode.UPSTREAM_FAILURE, secret)
+
+    monkeypatch.setattr(
+        "second_brain.entrypoints.cli.app.CloudflareWorkersAiLlmPort",
+        lambda: FakePort(),
+    )
+
+    result = runner.invoke(
+        app,
+        ["llm", "draft", "--instruction", "Сделай draft", "--format", "text"],
+    )
+
+    assert result.exit_code == 1
+    assert result.stdout == ""
+    assert result.stderr == "Ошибка LLM: LLM_UPSTREAM_FAILURE — LLM backend вернул ошибку\n"
+    assert secret not in result.stderr
+    assert "Traceback" not in result.stderr
+
+
 def test_llm_draft_unexpected_runtime_failure_is_generic_and_exit_two(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

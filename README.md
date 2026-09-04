@@ -62,8 +62,9 @@ issues, PRs, search и другие GitHub endpoints не входят.
 
 ## LLM draft
 
-Read-only команда `llm draft` вызывает существующий Cloudflare Workers AI
-adapter через `LlmGateway` и показывает один проверенный semantic `NoteDraft`.
+Networked read-only команда `llm draft` вызывает существующий Cloudflare
+Workers AI adapter через `LlmGateway` и показывает один проверенный semantic
+`NoteDraft`.
 Она не читает и не изменяет vault, не вызывает Git, research или Safe Write;
 workflow `research -> LLM` будет отдельным этапом.
 

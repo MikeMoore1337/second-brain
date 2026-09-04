@@ -124,7 +124,7 @@ Agent Reach не импортируется и не запускается; по
 structured note draft:
 
 ```text
-`llm draft` CLI
+networked read-only `llm draft` CLI
       |
   LlmGateway
       |
@@ -147,7 +147,8 @@ validation, а ошибки наружу сводит к стабильным к
 provider details. Gateway не вызывает `ResearchGateway`,
 `ExternalResearchPort`, `VaultReader`, `ManagedNoteWriter`, filesystem, Git или
 сеть, не читает provider credentials, не выбирает model и не делает retry или
-fallback. В v1 этот контракт используется только read-only командой `llm draft`;
+fallback. В v1 этот контракт используется только networked read-only командой
+`llm draft`;
 streaming, chat, tools, embeddings и RAG отсутствуют.
 
 `NoteDraft` содержит только `title`, `note_type`, `content`, `tags` и `links`.
@@ -181,10 +182,11 @@ exact `200`, `finish_reason=stop` и строгое JSON-сообщение с �
 и общий 30-секундный deadline останавливают текущий worker через terminate/kill
 с deterministic cleanup.
 
-Adapter подключён только к read-only CLI-команде `llm draft` и не подключён к
-research orchestration, Safe Write, vault, Git, Telegram или production
-deployment workflow. Обычные vault/research commands не требуют Cloudflare
-settings; credentials читаются только при явном создании и вызове adapter.
+Adapter подключён только к networked read-only CLI-команде `llm draft` и не
+подключён к research orchestration, Safe Write, vault, Git, Telegram или
+production deployment workflow. Обычные vault/research commands не требуют
+Cloudflare settings; credentials читаются только при явном создании и вызове
+adapter.
 
 ## Поиск
 

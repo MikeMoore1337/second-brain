@@ -83,7 +83,7 @@ note_app = typer.Typer(help="Команды для managed note.")
 proposal_app = typer.Typer(help="Git proposal workflow для новой managed note.")
 proposal_note_app = typer.Typer(help="Proposal-команды для managed note.")
 research_app = typer.Typer(help="Read-only чтение внешних research sources.")
-llm_app = typer.Typer(help="Read-only команды для LLM note drafts.")
+llm_app = typer.Typer(help="Networked read-only команды для LLM note drafts.")
 app.add_typer(vault_app, name="vault")
 app.add_typer(note_app, name="note")
 app.add_typer(proposal_app, name="proposal")
@@ -208,7 +208,7 @@ def llm_draft(
         typer.Option("--format", help="Формат результата: text или json."),
     ] = OutputFormat.TEXT,
 ) -> None:
-    """Сгенерировать и показать один validated NoteDraft без записи."""
+    """Выполнить одну networked read-only LLM draft operation без записи."""
 
     try:
         draft = LlmGateway(CloudflareWorkersAiLlmPort()).draft_note(

@@ -31,7 +31,16 @@
 
 ## Безопасность
 
-- Read-only команды не изменяют vault, не вызывают Git, сеть или LLM.
+- Local/offline read-only команды не вызывают сеть или LLM.
+- Explicitly networked read-only команды могут выполнять только заявленную
+  внешнюю read-operation; это не является общим разрешением сети для любых
+  read-only команд. `research read` может использовать только свой заявленный
+  research backend, а `llm draft` может выполнить ровно одну LLM draft
+  operation.
+- Обе категории read-only команд не пишут в vault или Git. Для `llm draft`
+  запрещены retry, fallback, tools и function execution.
+- Credentials для networked LLM остаются внутри существующего adapter/security
+  boundary и не становятся CLI или общим read-only контрактом.
 - Запись в vault требует path containment, dry-run/diff, hash preconditions,
   временный файл, no-overwrite publication, post-write validation и безопасный
   rollback. В текущем этапе разрешён только use case создания одной managed
