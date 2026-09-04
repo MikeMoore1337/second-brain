@@ -763,6 +763,7 @@ def test_windows_sanitized_environment_initializes_ssl_in_real_isolated_child() 
         env=environment,
         stdin=subprocess.DEVNULL,
         capture_output=True,
+        timeout=10,
         check=False,
     )
 
