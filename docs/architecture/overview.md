@@ -157,6 +157,35 @@ draft `content`, `tags` или `links`. Связка `research -> LLM -> approva
 Safe Write` будет отдельным этапом после отдельного решения о расширении
 write-контракта.
 
+### Cloudflare Workers AI adapter v1
+
+Первый production LLM adapter реализует `CloudflareWorkersAiLlmPort` с
+фиксированными `cloudflare-workers-ai`, `@cf/zai-org/glm-4.7-flash` и
+`api.cloudflare.com`. Parent process строит bounded canonical request и передаёт
+его вместе с runtime secret через один private framed pipe в одноразовый worker.
+Worker запускается с explicit sanitized environment, создаёт verified TLS
+соединение через Python stdlib и делает ровно один `POST` на fixed
+OpenAI-compatible endpoint; retry, fallback, redirects, proxy override,
+streaming, history и tools отсутствуют. Token не попадает в argv, child env,
+URL, disk, logs или public error/DTO.
+
+Worker возвращает только bounded internal result. Adapter принимает только
+exact `200`, `finish_reason=stop` и строгое JSON-сообщение с пятью полями
+`NoteDraft`, после чего результат остаётся под final validation существующего
+`LlmGateway`. Request/response transport caps derived из application limits и
+учитывают обе JSON layers; adapter не задаёт `max_completion_tokens` без
+документированного model-specific cap и не переводит bytes в неподтверждённое
+число tokens. Поэтому provider-side completion limit, если он срабатывает и
+возвращает не `finish_reason=stop`, является явным ограничением adapter v1 и
+даёт `LLM_MALFORMED_RESULT`; application byte limits не меняются. Cancellation
+и общий 30-секундный deadline останавливают текущий worker через terminate/kill
+с deterministic cleanup.
+
+Adapter не подключён к CLI, research orchestration, Safe Write, vault, Git,
+Telegram или production deployment workflow. Обычные vault/research commands
+не требуют Cloudflare settings; credentials читаются только при явном создании
+и вызове adapter.
+
 ## Поиск
 
 SQLite FTS5 планируется как будущий search v1. Его базовый `unicode61` не решает

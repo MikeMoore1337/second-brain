@@ -23,9 +23,10 @@ sibling Git repositories. Git submodule не используется, а vault 
 
 `<SECOND_BRAIN_ROOT>` — только операторский пример; приложение его не
 хардкодит. `runtime/.env` находится вне обоих repositories и имеет permissions
-`600`. В нём v1 нужен только `SECOND_BRAIN_VAULT_PATH`. В layout выше значение
-`../second-brain-vault` разрешается относительно каталога выбранного env-файла,
-то есть указывает на sibling vault.
+`600`. Для обычного bootstrap и read-only команд в нём нужен только
+`SECOND_BRAIN_VAULT_PATH`. В layout выше значение `../second-brain-vault`
+разрешается относительно каталога выбранного env-файла, то есть указывает на
+sibling vault.
 
 Bootstrap проверяет Linux, не-root пользователя, Git worktrees на `main`, clean
 state, отсутствие незавершённой Git operation и приватность vault/runtime. Для
@@ -82,6 +83,26 @@ Python dependencies, включая `feedparser`, ставятся штатны�
 --python 3.14`; вручную добавлять их в runtime не нужно. Обычный bootstrap и
 vault smoke не требуют `curl` или `yt-dlp`, если research adapter не
 используется.
+
+## Cloudflare Workers AI runtime settings
+
+`CloudflareWorkersAiLlmPort` — отдельный production adapter, не включённый в
+обычные `doctor`, `vault validate` и `research read`. Поэтому эти команды
+работают без Cloudflare settings. При явном вызове adapter process environment
+должен предоставить только:
+
+```text
+CLOUDFLARE_ACCOUNT_ID=<account id>
+CLOUDFLARE_API_TOKEN=<runtime secret>
+```
+
+`CLOUDFLARE_ACCOUNT_ID` используется только как bounded path component.
+`CLOUDFLARE_API_TOKEN` является secret: не помещайте его в repository, argv,
+URL/query, временные файлы, логи или public diagnostics. Передача в worker
+выполняется через private anonymous pipe; child получает explicit sanitized
+allowlisted environment без Cloudflare variables. Не добавляйте model/provider/
+base URL overrides, proxy settings, retry или fallback. Authenticated smoke не
+выполняется bootstrap-ом и остаётся отдельным операторским gate.
 
 Для proposal workflow дополнительно требуется `gh` и уже настроенная auth
 сессия. Проверка включается отдельной опцией `--check-gh` и использует только
