@@ -1146,11 +1146,16 @@ _FORBIDDEN_PROVIDER_FIELDS = ("tool_calls", "function_call", "content_filter")
 
 
 def _has_non_null_forbidden_field(envelope: Mapping[str, object]) -> bool:
-    """Разрешить только отсутствующие или null provider placeholders."""
+    """Разрешить только inert provider placeholders на envelope boundary."""
+
+    if "tool_calls" in envelope:
+        tool_calls = envelope["tool_calls"]
+        if tool_calls is not None and (type(tool_calls) is not list or tool_calls):
+            return True
 
     return any(
         field_name in envelope and envelope[field_name] is not None
-        for field_name in _FORBIDDEN_PROVIDER_FIELDS
+        for field_name in _FORBIDDEN_PROVIDER_FIELDS[1:]
     )
 
 

@@ -507,12 +507,15 @@ messages и один upstream request.
 }
 ~~~
 
-Cloudflare OpenAI-compatible response может содержать стандартные nullable
-placeholder keys `tool_calls`, `function_call` и `content_filter` в `choice` или
-`message`. Adapter принимает такие поля только со значением `null`; любое
-не-`null` значение остаётся `LLM_MALFORMED_RESULT`. Это не является поддержкой
-tools или function calls: `message.content` остаётся единственным payload для
-`NoteDraft`, а tool/function calls не выполняются.
+Cloudflare OpenAI-compatible response может содержать стандартный inert
+placeholder `message.tool_calls: []`. Adapter принимает `tool_calls` в `choice`
+или `message` только в состояниях absent, `null` или empty list; любой
+non-empty/actionable tool payload и любое другое значение остаются
+`LLM_MALFORMED_RESULT`. Для `function_call` и `content_filter` policy не
+меняется: допустимы только absent или `null`, а любое non-null значение
+остаётся malformed. Это не является поддержкой tools или function calls:
+`message.content` остаётся единственным payload для `NoteDraft`, а
+tool/function calls не выполняются.
 
 Детерминированный decoder делает следующее:
 
@@ -522,9 +525,10 @@ tools или function calls: `message.content` остаётся единстве
    successful completion status разрешает дальнейший разбор;
 4. finish_reason length, error, null, unknown и любой иной unexpected reason
    отвергаются как LLM_MALFORMED_RESULT до чтения message.content;
-5. на границах choice и message отсутствующие либо null поля tool_calls,
-   function_call и content_filter допустимы, но любое non-null значение этих
-   полей отвергается как LLM_MALFORMED_RESULT;
+5. на границах choice и message отсутствующие, null или empty-list поля
+   `tool_calls` допустимы; для `function_call` и `content_filter` допустимы
+   только отсутствующие либо null поля, а остальные значения отвергаются как
+   LLM_MALFORMED_RESULT;
 6. после успешного stop проверяет, что message.content — строка; альтернативные
    content blocks отвергаются;
 7. только после этой проверки выполняет один json.loads над content и требует
@@ -591,7 +595,8 @@ Internet:
   fields, wrong types и oversized body;
 - finish_reason fixtures: stop with valid JSON decodes normally; length with
   syntactically valid JSON is rejected as LLM_MALFORMED_RESULT before
-  json.loads; tool_calls, content_filter, unknown and null reasons are rejected;
+  json.loads; non-empty tool_calls, non-null function_call/content_filter,
+  unknown and null reasons are rejected;
 - synthetic HTTP 408/413/429/403/404/5xx и Cloudflare codes 3006, 3007, 3008,
   3036, 3040, 3041, 3042, 5007, 5018, 5035;
 - real CancellationToken cancellation while worker is blocked in connect/read;
