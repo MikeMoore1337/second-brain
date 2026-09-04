@@ -1142,6 +1142,18 @@ def _load_json_object(raw: str | bytes) -> object:
     )
 
 
+_FORBIDDEN_PROVIDER_FIELDS = ("tool_calls", "function_call", "content_filter")
+
+
+def _has_non_null_forbidden_field(envelope: Mapping[str, object]) -> bool:
+    """Разрешить только отсутствующие или null provider placeholders."""
+
+    return any(
+        field_name in envelope and envelope[field_name] is not None
+        for field_name in _FORBIDDEN_PROVIDER_FIELDS
+    )
+
+
 def _decode_note_draft(result: _WorkerResult, *, max_output_bytes: int) -> NoteDraft:
     """Strictly decode outer envelope, finish status and exact five-field inner object."""
 
@@ -1174,16 +1186,12 @@ def _decode_note_draft(result: _WorkerResult, *, max_output_bytes: int) -> NoteD
     finish_reason = choice.get("finish_reason")
     if type(finish_reason) is not str or finish_reason != "stop":
         raise LlmMalformedResultError()
-    if any(
-        field_name in choice for field_name in ("tool_calls", "function_call", "content_filter")
-    ):
+    if _has_non_null_forbidden_field(choice):
         raise LlmMalformedResultError()
     message = choice.get("message")
     if type(message) is not dict:
         raise LlmMalformedResultError()
-    if any(
-        field_name in message for field_name in ("tool_calls", "function_call", "content_filter")
-    ):
+    if _has_non_null_forbidden_field(message):
         raise LlmMalformedResultError()
     content = message.get("content")
     if type(content) is not str:
