@@ -70,7 +70,7 @@ External research — отдельная read-only application boundary. В
 `web`, `github`, `rss` и `youtube`, проверяет URL, лимиты, cancellation и
 результат, после чего оставляет внешний `content` недоверенными данными в памяти.
 
-Production adapters v1 реализуют два узких public read path. `SourceKind.WEB`
+Production adapters v1 реализуют три узких public read path. `SourceKind.WEB`
 обслуживает `jina-reader` через фиксированный `https://r.jina.ai/`, а
 `SourceKind.RSS` обслуживает `feedparser` через direct bounded `curl` к
 исходному HTTP(S) host. Для RSS adapter самостоятельно выполняются DNS
@@ -84,11 +84,28 @@ redirect-following, cookies, auth и proxy credentials. stdout ограниче�
 ходит по item links, enclosures или images. Отсутствующий `curl` отображается
 как `RESEARCH_BACKEND_UNAVAILABLE`.
 
+`SourceKind.YOUTUBE` обслуживает только один public video через внешний
+operator-managed executable `yt-dlp`: сначала bounded `--dump-single-json`
+metadata, затем одна выбранная public VTT caption track. Manual subtitles
+предпочитаются automatic captions; язык выбирается детерминированно как
+`ru`, `en`, затем lexical fallback, а `live_chat` исключается. Оба вызова
+используют `--ignore-config`, `--no-playlist`, `--skip-download`, закрытый
+argv и безопасное окружение без cookies, netrc, auth и proxy; video/audio,
+thumbnails, comments и Whisper/STT не скачиваются. Caption file живёт только
+в `TemporaryDirectory`, проверяется на containment/symlink/reparse/size и
+удаляется после read. Общий deadline покрывает metadata, выбор, получение и
+нормализацию caption. Отсутствующий `yt-dlp` отображается как
+`RESEARCH_BACKEND_UNAVAILABLE`, а отсутствие public captions или ошибка одного
+extraction request — как `RESEARCH_UPSTREAM_FAILURE`; внутренние requests
+yt-dlp не pin-ятся нашим adapter-ом, поэтому DNS rebinding внутри trusted
+runtime остаётся ограничением.
+
 CLI `research read` только печатает normalized `ResearchSource` и не требует
 vault, не пишет файлы, не вызывает Git или LLM. `content` внешнего источника
 всегда остаётся недоверенным текстом; RSS/Atom HTML нормализуется в plain text
-без исполнения scripts или загрузки внешних ресурсов. YouTube, GitHub,
-authenticated sources, retries и persistence в этот этап не входят.
+без исполнения scripts или загрузки внешних ресурсов. YouTube transcript также
+остаётся untrusted plain text; GitHub, authenticated sources, retries и
+persistence в этот этап не входят.
 Agent Reach не импортируется и не запускается; полная SSRF-защита внешнего
 сервиса Jina (включая его redirects, DNS rebinding и egress policy) остаётся
 отдельным ограничением этого узкого public-web slice.

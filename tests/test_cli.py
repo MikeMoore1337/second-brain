@@ -219,7 +219,84 @@ def test_research_read_rss_supports_text_output_without_vault(
     assert source.content in result.stdout
 
 
-@pytest.mark.parametrize("source_type", ["github", "youtube"])
+def test_research_read_youtube_supports_json_without_vault(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = ResearchSource(
+        uri="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        source_kind=SourceKind.YOUTUBE,
+        retrieved_at=datetime(2026, 9, 3, 12, 0, tzinfo=UTC),
+        backend="yt-dlp",
+        content="Русский transcript.",
+        title="Видео",
+        author="Канал",
+        media_type="text/youtube-transcript",
+        upstream_id="dQw4w9WgXcQ",
+    )
+
+    class FakeAdapter:
+        def read(self, request: ResearchRequest, *, cancellation: object) -> ResearchSource:
+            assert request.source_kind is SourceKind.YOUTUBE
+            return source
+
+    monkeypatch.setattr(
+        "second_brain.entrypoints.cli.app.PublicYouTubeAdapter",
+        lambda: FakeAdapter(),
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "research",
+            "read",
+            "--type",
+            "youtube",
+            "--url",
+            source.uri,
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["source_kind"] == "youtube"
+    assert payload["backend"] == "yt-dlp"
+    assert payload["content"] == source.content
+
+
+def test_research_read_youtube_supports_text_output_without_vault(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = ResearchSource(
+        uri="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        source_kind=SourceKind.YOUTUBE,
+        retrieved_at=datetime(2026, 9, 3, 12, 0, tzinfo=UTC),
+        backend="yt-dlp",
+        content="Текст transcript.",
+        media_type="text/youtube-transcript",
+    )
+
+    class FakeAdapter:
+        def read(self, request: object, *, cancellation: object) -> ResearchSource:
+            return source
+
+    monkeypatch.setattr(
+        "second_brain.entrypoints.cli.app.PublicYouTubeAdapter",
+        lambda: FakeAdapter(),
+    )
+
+    result = runner.invoke(
+        app,
+        ["research", "read", "--type", "youtube", "--url", source.uri],
+    )
+
+    assert result.exit_code == 0
+    assert "Тип: youtube" in result.stdout
+    assert source.content in result.stdout
+
+
+@pytest.mark.parametrize("source_type", ["github"])
 def test_research_read_unsupported_source_types_remain_rejected_without_vault(
     source_type: str,
 ) -> None:

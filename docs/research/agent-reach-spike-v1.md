@@ -34,9 +34,11 @@ read-only capability, а `domain`, vault и Safe Write Operations не меня�
 
 Первые узкие implementation slices реализуют public `WEB` через фиксированный
 Jina Reader и public RSS/Atom через отдельный direct adapter Second Brain с
-feedparser, adapter-level DNS/IP validation и `--resolve` pinning. Это не Agent
-Reach integration: пакет, CLI, config, cookies и MCP Agent Reach не
-используются; YouTube и GitHub остаются будущими adapter issues.
+feedparser, adapter-level DNS/IP validation и `--resolve` pinning. Следующий
+узкий YouTube slice использует тот же прямой process-boundary подход: внешний
+operator-managed `yt-dlp` получает bounded metadata и одну public caption track;
+Agent Reach integration для этого не требуется. Пакет, CLI, config, cookies и
+MCP Agent Reach не используются; GitHub остаётся будущим adapter issue.
 
 ## Контекст и baseline
 

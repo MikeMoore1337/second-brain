@@ -15,6 +15,7 @@ from second_brain.adapters.git import GitVersionControlAdapter
 from second_brain.adapters.github import GitHubPullRequestAdapter
 from second_brain.adapters.research.jina_reader import JinaReaderWebAdapter
 from second_brain.adapters.research.rss import PublicRssAdapter
+from second_brain.adapters.research.youtube import PublicYouTubeAdapter
 from second_brain.adapters.vault import FileSystemVaultReader, FileSystemVaultWriter
 from second_brain.application.ports import (
     CancellationTokenSource,
@@ -126,11 +127,11 @@ def validate(
 def research_read(
     source_type: Annotated[
         str,
-        typer.Option("--type", help="Тип источника: web или rss."),
+        typer.Option("--type", help="Тип источника: web, rss или youtube."),
     ] = SourceKind.WEB.value,
     url: Annotated[
         str,
-        typer.Option("--url", help="Публичный URL web-страницы или RSS/Atom feed."),
+        typer.Option("--url", help="Публичный URL web-страницы, RSS/Atom feed или YouTube video."),
     ] = "",
     timeout: Annotated[
         int,
@@ -145,7 +146,7 @@ def research_read(
         typer.Option("--format", help="Формат результата: text или json."),
     ] = OutputFormat.TEXT,
 ) -> None:
-    """Прочитать один публичный web/RSS источник без vault и записи."""
+    """Прочитать один публичный web/RSS/YouTube источник без vault и записи."""
 
     try:
         source_kind = _research_source_kind(source_type)
@@ -291,18 +292,22 @@ def _research_source_kind(value: str) -> SourceKind:
         source_kind = SourceKind(value.strip().casefold())
     except ValueError:
         raise ResearchInvalidRequestError() from None
-    if source_kind not in {SourceKind.WEB, SourceKind.RSS}:
+    if source_kind not in {SourceKind.WEB, SourceKind.RSS, SourceKind.YOUTUBE}:
         raise ResearchInvalidRequestError()
     return source_kind
 
 
-def _research_adapter(source_kind: SourceKind) -> JinaReaderWebAdapter | PublicRssAdapter:
+def _research_adapter(
+    source_kind: SourceKind,
+) -> JinaReaderWebAdapter | PublicRssAdapter | PublicYouTubeAdapter:
     """Явно сопоставить поддержанные CLI-типы с production adapters."""
 
     if source_kind is SourceKind.WEB:
         return JinaReaderWebAdapter()
     if source_kind is SourceKind.RSS:
         return PublicRssAdapter()
+    if source_kind is SourceKind.YOUTUBE:
+        return PublicYouTubeAdapter()
     raise ResearchInvalidRequestError()
 
 
@@ -327,10 +332,14 @@ def _research_error_message(code: str) -> str:
     """Сопоставить закрытый application code с коротким human diagnostic."""
 
     messages = {
-        "RESEARCH_INVALID_REQUEST": "запрос не прошёл проверку публичного web/RSS-источника",
+        "RESEARCH_INVALID_REQUEST": (
+            "запрос не прошёл проверку публичного web/RSS/YouTube-источника"
+        ),
         "RESEARCH_CANCELLED": "чтение отменено",
         "RESEARCH_TIMEOUT": "research backend превысил лимит времени",
-        "RESEARCH_BACKEND_UNAVAILABLE": "research backend недоступен; проверьте системный curl",
+        "RESEARCH_BACKEND_UNAVAILABLE": (
+            "research backend недоступен; проверьте системный curl или yt-dlp"
+        ),
         "RESEARCH_UPSTREAM_FAILURE": "research backend вернул ошибку",
         "RESEARCH_MALFORMED_RESULT": "research backend вернул некорректный результат",
         "RESEARCH_CONTENT_TOO_LARGE": "ответ превышает заданный лимит размера",
