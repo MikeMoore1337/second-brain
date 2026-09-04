@@ -118,6 +118,45 @@ Agent Reach не импортируется и не запускается; по
 сервиса Jina (включая его redirects, DNS rebinding и egress policy) остаётся
 отдельным ограничением этого узкого public-web slice.
 
+### LLM application boundary v1
+
+После public research v1 добавлена отдельная provider-neutral граница для
+будущего structured note draft:
+
+```text
+future caller
+      |
+  LlmGateway
+      |
+    LlmPort
+      |
+future provider adapter
+      |
+validated NoteDraft
+```
+
+`application.llm` содержит bounded `LlmRequest`, semantic `NoteDraft` и тонкий
+`LlmGateway`; `application.ports.LlmPort` определяет единственную операцию
+`draft_note`. `LlmRequest.context` и результат LLM считаются недоверенными
+данными (включая переданный будущим caller-ом `ResearchSource.content`): текст
+не интерпретируется как instruction, не исполняется и не может сам вызвать
+side effect. Gateway применяет deterministic cancellation boundary и bounded
+validation, а ошибки наружу сводит к стабильным кодам `LLM_INVALID_REQUEST`,
+`LLM_CANCELLED`, `LLM_TIMEOUT`, `LLM_BACKEND_UNAVAILABLE`,
+`LLM_UPSTREAM_FAILURE`, `LLM_MALFORMED_RESULT` и `LLM_CONTENT_TOO_LARGE` без
+provider details. Gateway не вызывает `ResearchGateway`,
+`ExternalResearchPort`, `VaultReader`, `ManagedNoteWriter`, filesystem, Git или
+сеть, не читает provider credentials, не выбирает model и не делает retry или
+fallback. Production provider, CLI-команда, streaming, chat, tools, embeddings
+и RAG пока отсутствуют.
+
+`NoteDraft` содержит только `title`, `note_type`, `content`, `tags` и `links`.
+Он не является `CreateManagedNoteRequest`: текущий Safe Write по-прежнему сам
+определяет UUIDv7, timestamp, path и write plan, а также пока не принимает
+draft `content`, `tags` или `links`. Связка `research -> LLM -> approval ->
+Safe Write` будет отдельным этапом после отдельного решения о расширении
+write-контракта.
+
 ## Поиск
 
 SQLite FTS5 планируется как будущий search v1. Его базовый `unicode61` не решает
