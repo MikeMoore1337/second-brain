@@ -355,13 +355,12 @@ def test_valid_response_passes_gateway_and_provider_metadata_is_ignored() -> Non
     assert not hasattr(draft, "reasoning_content")
 
 
-def test_nullable_cloudflare_placeholders_pass_gateway_and_return_note_draft() -> None:
+def test_observed_cloudflare_placeholders_pass_gateway_and_return_note_draft() -> None:
     body = make_outer(
         make_inner(tags=["knowledge"], links=["[[Связь]]"]),
         message_overrides={
             "function_call": None,
-            "tool_calls": None,
-            "content_filter": None,
+            "tool_calls": [],
             "annotations": None,
             "audio": None,
             "reasoning": None,
@@ -369,9 +368,6 @@ def test_nullable_cloudflare_placeholders_pass_gateway_and_return_note_draft() -
             "refusal": None,
         },
         choice_overrides={
-            "function_call": None,
-            "tool_calls": None,
-            "content_filter": None,
             "logprobs": None,
             "stop_reason": None,
             "token_ids": None,
@@ -392,6 +388,42 @@ def test_nullable_cloudflare_placeholders_pass_gateway_and_return_note_draft() -
         content="# Заголовок\n\nТекст.",
         tags=("knowledge",),
         links=("[[Связь]]",),
+    )
+    assert runner.calls == 1
+
+
+def test_null_tool_calls_placeholders_pass_gateway_and_return_note_draft() -> None:
+    body = make_outer(
+        make_inner(),
+        message_overrides={"tool_calls": None},
+        choice_overrides={"tool_calls": None},
+    )
+    port, runner = make_port(worker_result(body))
+
+    draft = LlmGateway(port).draft_note(make_request(), cancellation=CancellationTokenSource())
+
+    assert draft == NoteDraft(
+        title="Заметка",
+        note_type=NoteType.ZETTEL,
+        content="# Заголовок\n\nТекст.",
+        tags=(),
+        links=(),
+    )
+    assert runner.calls == 1
+
+
+def test_empty_choice_tool_calls_placeholder_passes_gateway_and_returns_note_draft() -> None:
+    body = make_outer(make_inner(), choice_overrides={"tool_calls": []})
+    port, runner = make_port(worker_result(body))
+
+    draft = LlmGateway(port).draft_note(make_request(), cancellation=CancellationTokenSource())
+
+    assert draft == NoteDraft(
+        title="Заметка",
+        note_type=NoteType.ZETTEL,
+        content="# Заголовок\n\nТекст.",
+        tags=(),
+        links=(),
     )
     assert runner.calls == 1
 
@@ -443,9 +475,9 @@ def test_non_stop_finish_reason_is_rejected_before_inner_json(
 @pytest.mark.parametrize(
     "kwargs",
     [
-        {"message_overrides": {"tool_calls": []}},
+        {"message_overrides": {"tool_calls": [{"id": "..."}]}},
         {"message_overrides": {"content": ["block"]}},
-        {"choice_overrides": {"tool_calls": []}},
+        {"choice_overrides": {"tool_calls": [{"id": "..."}]}},
         {"outer_overrides": {"error": {"message": "raw secret"}}},
     ],
 )
@@ -459,7 +491,7 @@ def test_forbidden_envelope_shapes_are_malformed(kwargs: dict[str, object]) -> N
 
 @pytest.mark.parametrize(
     ("field_name", "value"),
-    [("tool_calls", []), ("function_call", {}), ("content_filter", {})],
+    [("tool_calls", [{}]), ("function_call", {}), ("content_filter", {})],
 )
 def test_non_null_message_forbidden_fields_are_malformed(field_name: str, value: object) -> None:
     body = make_outer(make_inner(), message_overrides={field_name: value})
@@ -471,10 +503,27 @@ def test_non_null_message_forbidden_fields_are_malformed(field_name: str, value:
 
 @pytest.mark.parametrize(
     ("field_name", "value"),
-    [("tool_calls", []), ("function_call", {}), ("content_filter", {})],
+    [("tool_calls", [{}]), ("function_call", {}), ("content_filter", {})],
 )
 def test_non_null_choice_forbidden_fields_are_malformed(field_name: str, value: object) -> None:
     body = make_outer(make_inner(), choice_overrides={field_name: value})
+    port, _runner = make_port(worker_result(body))
+
+    with pytest.raises(LlmMalformedResultError):
+        port.draft_note(make_request(), cancellation=CancellationTokenSource())
+
+
+@pytest.mark.parametrize(
+    "value",
+    [[{"id": "..."}], {}, "", "anything", 0, False],
+)
+@pytest.mark.parametrize("boundary", ["message", "choice"])
+def test_invalid_tool_calls_are_malformed_at_both_boundaries(
+    boundary: str,
+    value: object,
+) -> None:
+    overrides = {f"{boundary}_overrides": {"tool_calls": value}}
+    body = make_outer(make_inner(), **cast(Any, overrides))
     port, _runner = make_port(worker_result(body))
 
     with pytest.raises(LlmMalformedResultError):
