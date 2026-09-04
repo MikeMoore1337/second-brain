@@ -43,6 +43,15 @@ class ManagedNoteWriter(Protocol):
     ) -> CreateNotePlan:
         """Подготовить план, не изменяя vault."""
 
+    def prepare_from_draft(
+        self,
+        manifest: VaultManifest,
+        draft: NoteDraft,
+        note_id: UUID,
+        created: datetime,
+    ) -> CreateNotePlan:
+        """Подготовить draft-based plan без изменения vault."""
+
     def write(self, plan: CreateNotePlan) -> WriteReceipt:
         """Опубликовать ранее подготовленный план без overwrite."""
 

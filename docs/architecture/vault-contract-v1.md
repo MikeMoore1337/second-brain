@@ -41,6 +41,7 @@ type: zettel
 created: 2026-09-02T12:00:00+03:00
 updated: 2026-09-02T12:00:00+03:00
 tags: []
+links: []
 ---
 ```
 
@@ -65,7 +66,9 @@ Templates и attachments не являются notes. Неизвестные fro
 принимаются и должны сохраняться будущими точечными write-операциями. При
 `note create` template front matter обрабатывается round-trip YAML с сохранением
 неизвестных полей, comments, quoting и flow-style; заменяются только `id`, `type`
-и `created` новой заметки.
+и `created` новой заметки. Для offline `note create-from-draft` поля `tags` и
+additive `links` становятся authoritative YAML lists из reviewed `NoteDraft` с
+сохранением порядка, а body template игнорируется; schema version не меняется.
 Корневые служебные каталоги Obsidian (`.obsidian`, `.trash`) и Git (`.git`)
 не входят в объявленные content roots и поэтому не классифицируются как notes.
 
