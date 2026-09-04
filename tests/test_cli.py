@@ -201,7 +201,7 @@ def test_llm_draft_unexpected_runtime_failure_is_generic_and_exit_two(
 
 
 def test_llm_draft_help_has_exact_options_without_credential_options() -> None:
-    result = runner.invoke(app, ["llm", "draft", "--help"])
+    result = runner.invoke(app, ["llm", "draft", "--help"], terminal_width=120, color=False)
 
     assert result.exit_code == 0
     for option in ("--instruction", "--context", "--max-output-bytes", "--format"):
