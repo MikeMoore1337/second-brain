@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import http.client
 import io
 import json
 import subprocess
@@ -378,6 +379,46 @@ def test_inner_note_draft_schema_and_types_are_strict(inner: dict[str, object]) 
         port.draft_note(make_request(), cancellation=CancellationTokenSource())
 
 
+def test_outer_json_recursion_error_is_malformed_at_gateway(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def recursive_loader(_raw: str | bytes) -> object:
+        raise RecursionError("untrusted outer recursion")
+
+    monkeypatch.setattr(cloudflare, "_load_json_object", recursive_loader)
+    port, _runner = make_port(worker_result(make_outer(make_inner())))
+
+    with pytest.raises(LlmMalformedResultError) as error:
+        LlmGateway(port).draft_note(make_request(), cancellation=CancellationTokenSource())
+
+    assert error.value.code == LlmErrorCode.MALFORMED_RESULT.value
+    assert "untrusted outer recursion" not in str(error.value)
+
+
+def test_inner_json_recursion_error_is_malformed_at_gateway(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = cloudflare._load_json_object
+    calls = 0
+
+    def recursive_inner_loader(raw: str | bytes) -> object:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RecursionError("untrusted inner recursion")
+        return original(raw)
+
+    monkeypatch.setattr(cloudflare, "_load_json_object", recursive_inner_loader)
+    port, _runner = make_port(worker_result(make_outer(make_inner())))
+
+    with pytest.raises(LlmMalformedResultError) as error:
+        LlmGateway(port).draft_note(make_request(), cancellation=CancellationTokenSource())
+
+    assert calls == 2
+    assert error.value.code == LlmErrorCode.MALFORMED_RESULT.value
+    assert "untrusted inner recursion" not in str(error.value)
+
+
 def test_zero_or_multiple_choices_are_malformed() -> None:
     for choices in ([], [{"finish_reason": "stop"}, {"finish_reason": "stop"}]):
         outer = json.dumps({"choices": choices}, separators=(",", ":")).encode()
@@ -437,6 +478,11 @@ class FakeConnection:
 
     def close(self) -> None:
         self.closed = True
+
+
+class RemoteDisconnectedConnection(FakeConnection):
+    def getresponse(self) -> FakeResponse:
+        raise http.client.RemoteDisconnected(SECRET)
 
 
 def test_worker_https_transport_uses_fixed_host_path_tls_and_one_request() -> None:
@@ -543,6 +589,24 @@ def test_worker_extracts_cloudflare_code_without_exposing_error_body() -> None:
     assert SECRET not in str(error.value)
 
 
+def test_worker_remote_disconnected_is_transport_and_backend_unavailable() -> None:
+    connection = RemoteDisconnectedConnection(FakeResponse(200, b""))
+    request = cloudflare._WorkerRequest(ACCOUNT_ID, SECRET, b"{}", 1024)
+
+    result = cloudflare._perform_https_request(
+        request,
+        connection_factory=lambda host, *, timeout, context: connection,
+        ssl_context_factory=lambda: cast(Any, object()),
+    )
+
+    assert result.kind == "transport"
+    port, _runner = make_port(result)
+    with pytest.raises(LlmBackendUnavailableError) as error:
+        LlmGateway(port).draft_note(make_request(), cancellation=CancellationTokenSource())
+    assert SECRET not in str(error.value)
+    assert error.value.code == LlmErrorCode.BACKEND_UNAVAILABLE.value
+
+
 def test_redirect_is_not_followed_and_maps_to_backend_unavailable() -> None:
     response = FakeResponse(302, b'{"location":"https://other.invalid"}')
     connection = FakeConnection(response)
@@ -591,7 +655,12 @@ class FakePipe:
 
 class FakeProcess:
     def __init__(
-        self, stdout: bytes = b"", *, block: bool = False, terminate_stops: bool = True
+        self,
+        stdout: bytes = b"",
+        *,
+        block: bool = False,
+        terminate_stops: bool = True,
+        kill_stops: bool = True,
     ) -> None:
         self.stdin = FakePipe()
         self.stdout = FakePipe(stdout, block=block)
@@ -599,8 +668,10 @@ class FakeProcess:
         self.returncode: int | None = None if block else 0
         self.alive = block
         self.terminate_stops = terminate_stops
+        self.kill_stops = kill_stops
         self.terminate_calls = 0
         self.kill_calls = 0
+        self.wait_calls: list[float | None] = []
 
     def poll(self) -> int | None:
         return None if self.alive else self.returncode
@@ -613,10 +684,12 @@ class FakeProcess:
 
     def kill(self) -> None:
         self.kill_calls += 1
-        self.alive = False
-        self.returncode = -9
+        if self.kill_stops:
+            self.alive = False
+            self.returncode = -9
 
     def wait(self, timeout: float | None = None) -> int:
+        self.wait_calls.append(timeout)
         if self.alive:
             if timeout is not None:
                 raise subprocess.TimeoutExpired("fake-worker", timeout)
@@ -727,6 +800,56 @@ def test_subprocess_runner_timeout_uses_kill_fallback() -> None:
 
     assert process.terminate_calls == 1
     assert process.kill_calls == 1
+    assert process.stdin.closed is True
+    assert process.stdout.closed is True
+    assert process.stderr.closed is True
+
+
+@pytest.mark.parametrize("failure", ["cancelled", "timed_out"])
+def test_subprocess_runner_cleanup_stays_bounded_when_worker_ignores_stop(
+    failure: str,
+) -> None:
+    process = FakeProcess(block=True, terminate_stops=False, kill_stops=False)
+    clock_values = iter((0.0, 0.0) if failure == "cancelled" else (0.0, 1.0))
+    runner = cloudflare.SubprocessWorkerRunner(
+        popen_factory=cast(Any, lambda _argv, **_kwargs: process),
+        clock=lambda: next(clock_values),
+        sleeper=lambda _seconds: None,
+    )
+
+    class CancelOnSecondCheck:
+        checks = 0
+
+        def is_cancelled(self) -> bool:
+            self.checks += 1
+            return self.checks >= 2
+
+    cancellation: CancellationToken
+    deadline: float
+    expected: type[cloudflare._WorkerExecutionError]
+    if failure == "cancelled":
+        cancellation = CancelOnSecondCheck()
+        deadline = 5.0
+        expected = cloudflare._WorkerCancelled
+    else:
+        cancellation = CancellationTokenSource()
+        deadline = 0.5
+        expected = cloudflare._WorkerTimedOut
+
+    with pytest.raises(expected):
+        runner.run(
+            cloudflare._WorkerRequest(ACCOUNT_ID, SECRET, b"{}", 1024),
+            deadline=deadline,
+            cancellation=cancellation,
+        )
+
+    assert process.terminate_calls == 1
+    assert process.kill_calls == 1
+    assert process.alive is True
+    assert process.wait_calls == [
+        cloudflare._TERMINATE_WAIT_SECONDS,
+        cloudflare._KILL_WAIT_SECONDS,
+    ]
     assert process.stdin.closed is True
     assert process.stdout.closed is True
     assert process.stderr.closed is True

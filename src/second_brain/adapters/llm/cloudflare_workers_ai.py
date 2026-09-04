@@ -708,12 +708,13 @@ def _close_pipe(stream: _Readable | _Writable | None) -> None:
 
 
 def _stop_process(process: _ProcessControl) -> None:
-    """Terminate, затем kill только этот worker и дождаться его завершения."""
+    """Best-effort остановить только этот worker с bounded waits."""
 
-    if process.poll() is not None:
-        with suppress(Exception):
-            process.wait()
-        return
+    try:
+        if process.poll() is not None:
+            return
+    except Exception:
+        pass
     with suppress(Exception):
         process.terminate()
     try:
@@ -723,11 +724,8 @@ def _stop_process(process: _ProcessControl) -> None:
         pass
     with suppress(Exception):
         process.kill()
-    try:
+    with suppress(Exception):
         process.wait(timeout=_KILL_WAIT_SECONDS)
-    except Exception:
-        with suppress(Exception):
-            process.wait()
 
 
 @dataclass(slots=True)
@@ -1002,6 +1000,8 @@ def _perform_https_request(
         )
     except TimeoutError:
         return _WorkerResult(kind="timeout")
+    except http.client.RemoteDisconnected:
+        return _WorkerResult(kind="transport")
     except http.client.HTTPException:
         return _WorkerResult(kind="malformed")
     except OSError, TypeError, ValueError, ssl.SSLError:
@@ -1145,7 +1145,7 @@ def _decode_note_draft(result: _WorkerResult, *, max_output_bytes: int) -> NoteD
         raise LlmContentTooLargeError()
     try:
         outer = _load_json_object(result.body)
-    except UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError:
+    except UnicodeDecodeError, json.JSONDecodeError, RecursionError, ValueError, TypeError:
         raise LlmMalformedResultError() from None
     if type(outer) is not dict or "error" in outer:
         raise LlmMalformedResultError()
@@ -1174,7 +1174,7 @@ def _decode_note_draft(result: _WorkerResult, *, max_output_bytes: int) -> NoteD
         raise LlmMalformedResultError()
     try:
         inner = _load_json_object(content)
-    except UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError:
+    except UnicodeDecodeError, json.JSONDecodeError, RecursionError, ValueError, TypeError:
         raise LlmMalformedResultError() from None
     expected_fields = {"title", "note_type", "content", "tags", "links"}
     if type(inner) is not dict or set(inner) != expected_fields:
