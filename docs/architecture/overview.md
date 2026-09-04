@@ -121,16 +121,16 @@ Agent Reach не импортируется и не запускается; по
 ### LLM application boundary v1
 
 После public research v1 добавлена отдельная provider-neutral граница для
-будущего structured note draft:
+structured note draft:
 
 ```text
-future caller
+networked read-only `llm draft` CLI
       |
   LlmGateway
       |
     LlmPort
       |
-future provider adapter
+Cloudflare Workers AI adapter
       |
 validated NoteDraft
 ```
@@ -147,8 +147,9 @@ validation, а ошибки наружу сводит к стабильным к
 provider details. Gateway не вызывает `ResearchGateway`,
 `ExternalResearchPort`, `VaultReader`, `ManagedNoteWriter`, filesystem, Git или
 сеть, не читает provider credentials, не выбирает model и не делает retry или
-fallback. Production provider, CLI-команда, streaming, chat, tools, embeddings
-и RAG пока отсутствуют.
+fallback. В v1 этот контракт используется только networked read-only командой
+`llm draft`;
+streaming, chat, tools, embeddings и RAG отсутствуют.
 
 `NoteDraft` содержит только `title`, `note_type`, `content`, `tags` и `links`.
 Он не является `CreateManagedNoteRequest`: текущий Safe Write по-прежнему сам
@@ -181,10 +182,11 @@ exact `200`, `finish_reason=stop` и строгое JSON-сообщение с �
 и общий 30-секундный deadline останавливают текущий worker через terminate/kill
 с deterministic cleanup.
 
-Adapter не подключён к CLI, research orchestration, Safe Write, vault, Git,
-Telegram или production deployment workflow. Обычные vault/research commands
-не требуют Cloudflare settings; credentials читаются только при явном создании
-и вызове adapter.
+Adapter подключён только к networked read-only CLI-команде `llm draft` и не
+подключён к research orchestration, Safe Write, vault, Git, Telegram или
+production deployment workflow. Обычные vault/research commands не требуют
+Cloudflare settings; credentials читаются только при явном создании и вызове
+adapter.
 
 ## Поиск
 

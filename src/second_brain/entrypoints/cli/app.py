@@ -13,13 +13,22 @@ import typer
 
 from second_brain.adapters.git import GitVersionControlAdapter
 from second_brain.adapters.github import GitHubPullRequestAdapter
+from second_brain.adapters.llm.cloudflare_workers_ai import CloudflareWorkersAiLlmPort
 from second_brain.adapters.research.github import PublicGitHubAdapter
 from second_brain.adapters.research.jina_reader import JinaReaderWebAdapter
 from second_brain.adapters.research.rss import PublicRssAdapter
 from second_brain.adapters.research.youtube import PublicYouTubeAdapter
 from second_brain.adapters.vault import FileSystemVaultReader, FileSystemVaultWriter
+from second_brain.application.llm import (
+    DEFAULT_MAX_OUTPUT_BYTES,
+    LlmGateway,
+    LlmRequest,
+    NoteDraft,
+)
 from second_brain.application.ports import (
     CancellationTokenSource,
+    LlmError,
+    LlmErrorCode,
     ProposalPortError,
     ResearchError,
 )
@@ -74,10 +83,12 @@ note_app = typer.Typer(help="Команды для managed note.")
 proposal_app = typer.Typer(help="Git proposal workflow для новой managed note.")
 proposal_note_app = typer.Typer(help="Proposal-команды для managed note.")
 research_app = typer.Typer(help="Read-only чтение внешних research sources.")
+llm_app = typer.Typer(help="Networked read-only команды для LLM note drafts.")
 app.add_typer(vault_app, name="vault")
 app.add_typer(note_app, name="note")
 app.add_typer(proposal_app, name="proposal")
 app.add_typer(research_app, name="research")
+app.add_typer(llm_app, name="llm")
 proposal_app.add_typer(proposal_note_app, name="note")
 
 
@@ -175,6 +186,50 @@ def research_read(
         typer.echo(json.dumps(_research_source_as_dict(source), ensure_ascii=False, indent=2))
     else:
         typer.echo(_render_research_text(source))
+    raise typer.Exit(code=0)
+
+
+@llm_app.command("draft")
+def llm_draft(
+    instruction: Annotated[
+        str,
+        typer.Option("--instruction", help="Семантическая инструкция для draft generation."),
+    ],
+    context: Annotated[
+        str,
+        typer.Option("--context", help="Необязательный контекст для draft generation."),
+    ] = "",
+    max_output_bytes: Annotated[
+        int,
+        typer.Option("--max-output-bytes", help="Максимальный размер NoteDraft в bytes."),
+    ] = DEFAULT_MAX_OUTPUT_BYTES,
+    output_format: Annotated[
+        OutputFormat,
+        typer.Option("--format", help="Формат результата: text или json."),
+    ] = OutputFormat.TEXT,
+) -> None:
+    """Выполнить одну networked read-only LLM draft operation без записи."""
+
+    try:
+        draft = LlmGateway(CloudflareWorkersAiLlmPort()).draft_note(
+            LlmRequest(
+                instruction=instruction,
+                context=context,
+                max_output_bytes=max_output_bytes,
+            ),
+            cancellation=CancellationTokenSource(),
+        )
+    except LlmError as exc:
+        _echo_llm_error(exc, output_format)
+        raise typer.Exit(code=1) from None
+    except Exception:
+        _echo_llm_runtime_error(output_format)
+        raise typer.Exit(code=2) from None
+
+    if output_format is OutputFormat.JSON:
+        typer.echo(json.dumps(_llm_draft_as_dict(draft), ensure_ascii=False, indent=2))
+    else:
+        typer.echo(_render_llm_text(draft))
     raise typer.Exit(code=0)
 
 
@@ -337,6 +392,79 @@ def _echo_research_error(error: ResearchError, output_format: OutputFormat) -> N
         )
     else:
         typer.echo(f"Ошибка research: {error.code} — {message}", err=True)
+
+
+def _echo_llm_error(error: LlmError, output_format: OutputFormat) -> None:
+    """Вывести безопасную русскую LLM-диагностику без provider details."""
+
+    code = (
+        error.code
+        if isinstance(error.code, str) and error.code in _LLM_ERROR_MESSAGES
+        else (LlmErrorCode.UPSTREAM_FAILURE.value)
+    )
+    message = _llm_error_message(code)
+    if output_format is OutputFormat.JSON:
+        typer.echo(
+            json.dumps(
+                {"error": {"code": code, "message": message}},
+                ensure_ascii=False,
+                indent=2,
+            ),
+            err=True,
+        )
+    else:
+        typer.echo(f"Ошибка LLM: {code} — {message}", err=True)
+
+
+def _llm_error_message(code: str) -> str:
+    """Сопоставить закрытый LLM application code с русским safe diagnostic."""
+
+    return _LLM_ERROR_MESSAGES.get(code, "операция LLM завершилась ошибкой")
+
+
+def _echo_llm_runtime_error(output_format: OutputFormat) -> None:
+    """Скрыть неожиданную локальную ошибку и не печатать exception details."""
+
+    del output_format
+    typer.echo("Ошибка runtime CLI: не удалось выполнить LLM draft.", err=True)
+
+
+def _llm_draft_as_dict(draft: NoteDraft) -> dict[str, object]:
+    """Сериализовать только пять semantic полей NoteDraft."""
+
+    return {
+        "title": draft.title,
+        "note_type": draft.note_type.value,
+        "content": draft.content,
+        "tags": list(draft.tags),
+        "links": list(draft.links),
+    }
+
+
+def _render_llm_text(draft: NoteDraft) -> str:
+    """Показать NoteDraft без нормализации или дополнения generated content."""
+
+    return "\n".join(
+        [
+            f"Title: {draft.title}",
+            f"Type: {draft.note_type.value}",
+            f"Tags: {', '.join(draft.tags) or '-'}",
+            f"Links: {', '.join(draft.links) or '-'}",
+            "Content:",
+            draft.content,
+        ]
+    )
+
+
+_LLM_ERROR_MESSAGES = {
+    LlmErrorCode.INVALID_REQUEST.value: "запрос не прошёл проверку",
+    LlmErrorCode.CANCELLED.value: "операция отменена",
+    LlmErrorCode.TIMEOUT.value: "LLM backend превысил лимит времени",
+    LlmErrorCode.BACKEND_UNAVAILABLE.value: "LLM backend недоступен",
+    LlmErrorCode.UPSTREAM_FAILURE.value: "LLM backend вернул ошибку",
+    LlmErrorCode.MALFORMED_RESULT.value: "LLM backend вернул некорректный NoteDraft",
+    LlmErrorCode.CONTENT_TOO_LARGE.value: "NoteDraft превышает заданный лимит размера",
+}
 
 
 def _research_error_message(code: str) -> str:
