@@ -216,6 +216,8 @@ def test_request_builder_is_fixed_and_collision_safe() -> None:
     assert "tools" not in payload
     assert "functions" not in payload
     assert "history" not in payload
+    assert "fallback" not in payload
+    assert "retry" not in payload
 
     messages = cast(list[dict[str, str]], payload["messages"])
     assert len(messages) == 2
@@ -228,18 +230,25 @@ def test_request_builder_is_fixed_and_collision_safe() -> None:
     assert "{literal}" in user_content
 
     response_format = cast(dict[str, object], payload["response_format"])
-    schema = cast(
-        dict[str, object], cast(dict[str, object], response_format["json_schema"])["schema"]
-    )
-    assert schema["additionalProperties"] is False
-    assert schema["required"] == ["title", "note_type", "content", "tags", "links"]
-    assert set(cast(dict[str, object], schema["properties"])) == {
-        "title",
-        "note_type",
-        "content",
-        "tags",
-        "links",
+    assert set(response_format) == {"type", "json_schema"}
+    assert response_format["type"] == "json_schema"
+    schema = cast(dict[str, object], response_format["json_schema"])
+    assert schema == {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["title", "note_type", "content", "tags", "links"],
+        "properties": {
+            "title": {"type": "string"},
+            "note_type": {
+                "type": "string",
+                "enum": ["project", "area", "resource", "zettel"],
+            },
+            "content": {"type": "string"},
+            "tags": {"type": "array", "items": {"type": "string"}},
+            "links": {"type": "array", "items": {"type": "string"}},
+        },
     }
+    assert {"name", "strict", "schema"}.isdisjoint(schema)
 
 
 def test_escape_context_is_one_pass_and_preserves_non_collisions() -> None:

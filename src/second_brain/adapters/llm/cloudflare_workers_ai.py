@@ -240,11 +240,7 @@ def _request_payload(instruction: str, context: str) -> dict[str, object]:
         ],
         "response_format": {
             "type": "json_schema",
-            "json_schema": {
-                "name": "note_draft",
-                "strict": True,
-                "schema": _note_draft_schema(),
-            },
+            "json_schema": _note_draft_schema(),
         },
         "stream": False,
         "temperature": 0,
