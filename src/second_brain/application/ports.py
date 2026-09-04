@@ -21,6 +21,7 @@ from second_brain.domain.models import NoteType, VaultManifest
 if TYPE_CHECKING:
     from second_brain.application.llm import LlmRequest, NoteDraft
     from second_brain.application.research import ResearchRequest, ResearchSource
+    from second_brain.application.research_draft import ReviewedResearchDraft
 
 
 class VaultReader(Protocol):
@@ -51,6 +52,15 @@ class ManagedNoteWriter(Protocol):
         created: datetime,
     ) -> CreateNotePlan:
         """Подготовить draft-based plan без изменения vault."""
+
+    def prepare_from_reviewed_research_draft(
+        self,
+        manifest: VaultManifest,
+        reviewed_draft: ReviewedResearchDraft,
+        note_id: UUID,
+        created: datetime,
+    ) -> CreateNotePlan:
+        """Подготовить research-derived plan без network и изменения vault."""
 
     def write(self, plan: CreateNotePlan) -> WriteReceipt:
         """Опубликовать ранее подготовленный план без overwrite."""

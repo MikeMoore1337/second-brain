@@ -11,9 +11,11 @@ from uuid import UUID
 from second_brain.application.llm import MAX_MAX_OUTPUT_BYTES, validate_note_draft
 from second_brain.application.ports import LlmError, ManagedNoteWriter, VaultReader
 from second_brain.application.reports import Diagnostic, DiagnosticSeverity, ScanReport
+from second_brain.application.research_draft import ReviewedResearchDraft
 from second_brain.application.validation import build_report
 from second_brain.application.writes import (
     CreateManagedNoteFromDraftRequest,
+    CreateManagedNoteFromReviewedResearchDraftRequest,
     CreateManagedNoteRequest,
     CreateManagedNoteResult,
     CreateNotePlan,
@@ -120,6 +122,86 @@ class CreateManagedNoteFromDraft:
 
     def rollback(self, receipt: WriteReceipt) -> bool:
         """Безопасно откатить draft-based note через тот же writer receipt."""
+
+        return _safe_rollback(self.writer, receipt)
+
+
+@dataclass(frozen=True, slots=True)
+class CreateManagedNoteFromReviewedResearchDraft:
+    """Safe Write для reviewed research draft с одним source в v1."""
+
+    reader: VaultReader
+    writer: ManagedNoteWriter
+
+    def execute(
+        self,
+        request: CreateManagedNoteFromReviewedResearchDraftRequest,
+    ) -> CreateManagedNoteResult:
+        """Проверить reviewed boundary и переиспользовать общий Safe Write pipeline."""
+
+        if type(request) is not CreateManagedNoteFromReviewedResearchDraftRequest:
+            return CreateManagedNoteResult(
+                CreateStatus.REJECTED,
+                diagnostics=(
+                    _diagnostic(
+                        "REVIEWED_RESEARCH_DRAFT_INVALID",
+                        "request does not satisfy the reviewed research draft contract",
+                    ),
+                ),
+            )
+        reviewed = request.reviewed_draft
+        if type(reviewed) is not ReviewedResearchDraft:
+            return CreateManagedNoteResult(
+                CreateStatus.REJECTED,
+                diagnostics=(
+                    _diagnostic(
+                        "REVIEWED_RESEARCH_DRAFT_INVALID",
+                        "reviewed research draft does not satisfy its application contract",
+                    ),
+                ),
+                apply_requested=request.apply,
+            )
+        try:
+            validate_note_draft(reviewed.draft, max_output_bytes=MAX_MAX_OUTPUT_BYTES)
+        except LlmError:
+            return CreateManagedNoteResult(
+                CreateStatus.REJECTED,
+                diagnostics=(
+                    _diagnostic(
+                        "DRAFT_SCHEMA_INVALID",
+                        "draft does not satisfy the NoteDraft semantic contract",
+                    ),
+                ),
+                apply_requested=request.apply,
+            )
+
+        def prepare(
+            manifest: VaultManifest,
+            note_type: NoteType,
+            title: str,
+            note_id: UUID,
+            created: datetime,
+        ) -> CreateNotePlan:
+            del note_type, title
+            return self.writer.prepare_from_reviewed_research_draft(
+                manifest,
+                reviewed,
+                note_id,
+                created,
+            )
+
+        return _execute_create(
+            self.reader,
+            self.writer,
+            note_type=reviewed.draft.note_type,
+            title=reviewed.draft.title,
+            apply=request.apply,
+            now=request.now,
+            prepare=prepare,
+        )
+
+    def rollback(self, receipt: WriteReceipt) -> bool:
+        """Безопасно откатить research-derived note через тот же writer receipt."""
 
         return _safe_rollback(self.writer, receipt)
 

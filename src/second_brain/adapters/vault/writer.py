@@ -20,6 +20,8 @@ from second_brain.domain.models import NoteType, VaultManifest
 
 if TYPE_CHECKING:
     from second_brain.application.llm import NoteDraft
+    from second_brain.application.research import SourceProvenance
+    from second_brain.application.research_draft import ReviewedResearchDraft
 
 _CONTENT_ROOTS = {
     NoteType.PROJECT: "projects",
@@ -95,6 +97,30 @@ class FileSystemVaultWriter:
             lambda template_text: _render_draft_template(
                 template_text,
                 draft,
+                note_id,
+                created,
+            ),
+        )
+
+    def prepare_from_reviewed_research_draft(
+        self,
+        manifest: VaultManifest,
+        reviewed_draft: ReviewedResearchDraft,
+        note_id: UUID,
+        created: datetime,
+    ) -> CreateNotePlan:
+        """Собрать plan reviewed research draft с additive ``sources`` metadata."""
+
+        draft = reviewed_draft.draft
+        return self._prepare(
+            manifest,
+            draft.note_type,
+            draft.title,
+            note_id,
+            created,
+            lambda template_text: _render_reviewed_research_draft_template(
+                template_text,
+                reviewed_draft,
                 note_id,
                 created,
             ),
@@ -411,6 +437,55 @@ def _render_draft_template(
         "links": list(draft.links),
     }
     return _dump_front_matter(data) + draft.content
+
+
+def _render_reviewed_research_draft_template(
+    template_text: str,
+    reviewed_draft: ReviewedResearchDraft,
+    note_id: UUID,
+    created: datetime,
+) -> str:
+    """Сохранить draft body и authoritative reviewed source list без network."""
+
+    draft = reviewed_draft.draft
+    _, data = _load_template_data(template_text)
+    if data is not None:
+        _set_managed_metadata(data, draft.note_type, note_id, created)
+        data["tags"] = list(draft.tags)
+        data["links"] = list(draft.links)
+        data["sources"] = [
+            _source_provenance_to_mapping(source) for source in reviewed_draft.sources
+        ]
+        return _dump_front_matter(data) + draft.content
+
+    data = {
+        "id": str(note_id),
+        "type": draft.note_type.value,
+        "created": created.isoformat(timespec="seconds"),
+        "tags": list(draft.tags),
+        "links": list(draft.links),
+        "sources": [_source_provenance_to_mapping(source) for source in reviewed_draft.sources],
+    }
+    return _dump_front_matter(data) + draft.content
+
+
+def _source_provenance_to_mapping(source: SourceProvenance) -> dict[str, str]:
+    """Сериализовать только validated provider-neutral source metadata."""
+
+    mapping = {
+        "uri": source.uri,
+        "kind": source.source_kind.value,
+        "retrieved_at": source.retrieved_at.isoformat(),
+    }
+    if source.title is not None:
+        mapping["title"] = source.title
+    if source.author is not None:
+        mapping["author"] = source.author
+    if source.published_at is not None:
+        mapping["published_at"] = source.published_at.isoformat()
+    if source.upstream_id is not None:
+        mapping["upstream_id"] = source.upstream_id
+    return mapping
 
 
 def _load_template_data(
