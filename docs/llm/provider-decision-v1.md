@@ -507,24 +507,33 @@ messages и один upstream request.
 }
 ~~~
 
+Cloudflare OpenAI-compatible response может содержать стандартные nullable
+placeholder keys `tool_calls`, `function_call` и `content_filter` в `choice` или
+`message`. Adapter принимает такие поля только со значением `null`; любое
+не-`null` значение остаётся `LLM_MALFORMED_RESULT`. Это не является поддержкой
+tools или function calls: `message.content` остаётся единственным payload для
+`NoteDraft`, а tool/function calls не выполняются.
+
 Детерминированный decoder делает следующее:
 
 1. принимает только успешный HTTP response с bounded body;
 2. проверяет, что choices — массив ровно из одного элемента;
 3. проверяет, что finish_reason присутствует и равен ровно stop; только этот
    successful completion status разрешает дальнейший разбор;
-4. finish_reason length, tool_calls, content_filter, error, null, unknown и
-   любой иной unexpected reason отвергаются как LLM_MALFORMED_RESULT до чтения
-   message.content;
-5. после успешного stop проверяет, что message.content — строка; альтернативные
+4. finish_reason length, error, null, unknown и любой иной unexpected reason
+   отвергаются как LLM_MALFORMED_RESULT до чтения message.content;
+5. на границах choice и message отсутствующие либо null поля tool_calls,
+   function_call и content_filter допустимы, но любое non-null значение этих
+   полей отвергается как LLM_MALFORMED_RESULT;
+6. после успешного stop проверяет, что message.content — строка; альтернативные
    content blocks отвергаются;
-6. только после этой проверки выполняет один json.loads над content и требует
+7. только после этой проверки выполняет один json.loads над content и требует
    JSON object;
-7. требует ровно пять полей title, note_type, content, tags, links; unknown
+8. требует ровно пять полей title, note_type, content, tags, links; unknown
    fields отвергаются;
-8. требует строки для title/note_type/content и массивы строк для tags/links;
-9. преобразует note_type в управляемый NoteType и массивы в tuple;
-10. создает NoteDraft и передает его через существующую final validation в
+9. требует строки для title/note_type/content и массивы строк для tags/links;
+10. преобразует note_type в управляемый NoteType и массивы в tuple;
+11. создает NoteDraft и передает его через существующую final validation в
    LlmGateway.
 
 Provider output полностью недоверенный. JSON Schema на upstream не отменяет

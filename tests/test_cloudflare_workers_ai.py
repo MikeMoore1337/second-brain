@@ -355,6 +355,47 @@ def test_valid_response_passes_gateway_and_provider_metadata_is_ignored() -> Non
     assert not hasattr(draft, "reasoning_content")
 
 
+def test_nullable_cloudflare_placeholders_pass_gateway_and_return_note_draft() -> None:
+    body = make_outer(
+        make_inner(tags=["knowledge"], links=["[[Связь]]"]),
+        message_overrides={
+            "function_call": None,
+            "tool_calls": None,
+            "content_filter": None,
+            "annotations": None,
+            "audio": None,
+            "reasoning": None,
+            "reasoning_content": None,
+            "refusal": None,
+        },
+        choice_overrides={
+            "function_call": None,
+            "tool_calls": None,
+            "content_filter": None,
+            "logprobs": None,
+            "stop_reason": None,
+            "token_ids": None,
+        },
+        outer_overrides={
+            "id": "provider-id",
+            "model": cloudflare.CLOUDFLARE_MODEL,
+            "usage": {"prompt_tokens": 1, "completion_tokens": 2},
+        },
+    )
+    port, runner = make_port(worker_result(body))
+
+    draft = LlmGateway(port).draft_note(make_request(), cancellation=CancellationTokenSource())
+
+    assert draft == NoteDraft(
+        title="Заметка",
+        note_type=NoteType.ZETTEL,
+        content="# Заголовок\n\nТекст.",
+        tags=("knowledge",),
+        links=("[[Связь]]",),
+    )
+    assert runner.calls == 1
+
+
 def test_reasoning_only_truncated_response_is_malformed_and_not_public() -> None:
     body = make_outer(
         make_inner(),
@@ -410,6 +451,30 @@ def test_non_stop_finish_reason_is_rejected_before_inner_json(
 )
 def test_forbidden_envelope_shapes_are_malformed(kwargs: dict[str, object]) -> None:
     body = make_outer(make_inner(), **cast(Any, kwargs))
+    port, _runner = make_port(worker_result(body))
+
+    with pytest.raises(LlmMalformedResultError):
+        port.draft_note(make_request(), cancellation=CancellationTokenSource())
+
+
+@pytest.mark.parametrize(
+    ("field_name", "value"),
+    [("tool_calls", []), ("function_call", {}), ("content_filter", {})],
+)
+def test_non_null_message_forbidden_fields_are_malformed(field_name: str, value: object) -> None:
+    body = make_outer(make_inner(), message_overrides={field_name: value})
+    port, _runner = make_port(worker_result(body))
+
+    with pytest.raises(LlmMalformedResultError):
+        port.draft_note(make_request(), cancellation=CancellationTokenSource())
+
+
+@pytest.mark.parametrize(
+    ("field_name", "value"),
+    [("tool_calls", []), ("function_call", {}), ("content_filter", {})],
+)
+def test_non_null_choice_forbidden_fields_are_malformed(field_name: str, value: object) -> None:
+    body = make_outer(make_inner(), choice_overrides={field_name: value})
     port, _runner = make_port(worker_result(body))
 
     with pytest.raises(LlmMalformedResultError):
