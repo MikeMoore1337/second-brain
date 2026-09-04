@@ -409,6 +409,11 @@ Adapter реализует существующий LlmPort и принимае�
 LlmRequest. Ниже canonical body; max_completion_tokens вычисляется из
 bounded request.max_output_bytes и не должен заменить application validation.
 
+> **Implementation erratum (2026-09-04).** Для native Workers AI моделей
+> `@cf/...` поле `response_format.json_schema` содержит bare JSON Schema
+> напрямую. OpenAI partner-model envelope с `name`, `strict` и вложенным
+> `schema` к этому adapter v1 не относится.
+
 ~~~json
 {
   "model": "@cf/zai-org/glm-4.7-flash",
@@ -425,27 +430,23 @@ bounded request.max_output_bytes и не должен заменить applicati
   "response_format": {
     "type": "json_schema",
     "json_schema": {
-      "name": "note_draft",
-      "strict": true,
-      "schema": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["title", "note_type", "content", "tags", "links"],
-        "properties": {
-          "title": {"type": "string"},
-          "note_type": {
-            "type": "string",
-            "enum": ["project", "area", "resource", "zettel"]
-          },
-          "content": {"type": "string"},
-          "tags": {
-            "type": "array",
-            "items": {"type": "string"}
-          },
-          "links": {
-            "type": "array",
-            "items": {"type": "string"}
-          }
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "note_type", "content", "tags", "links"],
+      "properties": {
+        "title": {"type": "string"},
+        "note_type": {
+          "type": "string",
+          "enum": ["project", "area", "resource", "zettel"]
+        },
+        "content": {"type": "string"},
+        "tags": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "links": {
+          "type": "array",
+          "items": {"type": "string"}
         }
       }
     }
