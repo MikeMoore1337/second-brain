@@ -68,6 +68,7 @@ _VTT_TIMING_PATTERN = re.compile(
     r"^\s*(?:\d{2}:)?\d{2}:\d{2}[.,]\d{3}\s+-->\s+"
     r"(?:\d{2}:)?\d{2}:\d{2}[.,]\d{3}(?:\s+.*)?\s*\Z"
 )
+_VTT_INLINE_TIMESTAMP_PATTERN = re.compile(r"<[0-9]{2,}:[0-5][0-9]:[0-5][0-9]\.[0-9]{3}>")
 _CREDENTIAL_QUERY_SUFFIXES = (
     "token",
     "secret",
@@ -730,7 +731,8 @@ def _normalize_cue_lines(lines: Sequence[str]) -> str:
         return ""
     parser = _CaptionMarkupParser()
     try:
-        parser.feed(" ".join(lines))
+        cue_text = _VTT_INLINE_TIMESTAMP_PATTERN.sub("", " ".join(lines))
+        parser.feed(cue_text)
         parser.close()
     except AssertionError, ValueError:
         raise ResearchMalformedResultError() from None

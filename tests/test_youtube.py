@@ -19,6 +19,7 @@ from second_brain.adapters.research.youtube import (
     YTDLP_BACKEND,
     YTDLP_EXECUTABLE,
     PublicYouTubeAdapter,
+    _normalize_vtt,
 )
 from second_brain.application.ports import (
     CancellationToken,
@@ -177,6 +178,45 @@ def test_youtube_uses_fixed_bounded_argv_and_normalizes_metadata_and_vtt() -> No
     assert source.content == "Привет\nмир\nТекст"
     assert runner.output_templates
     assert not runner.output_templates[0].parent.exists()
+
+
+@pytest.mark.parametrize(
+    ("cue_text", "expected"),
+    [
+        ("<00:00:00.250><c>Hello</c>", "Hello"),
+        ("Hello <00:00:00.500>world", "Hello world"),
+    ],
+)
+def test_inline_webvtt_timestamp_tags_are_removed_before_cue_normalization(
+    cue_text: str,
+    expected: str,
+) -> None:
+    raw_vtt = f"""WEBVTT
+
+00:00:00.000 --> 00:00:02.000
+{cue_text}
+""".encode()
+
+    normalized = _normalize_vtt(raw_vtt, max_bytes=1024)
+
+    assert normalized == expected
+    assert "<00:" not in normalized
+
+
+def test_inline_webvtt_timestamp_removal_preserves_adjacent_cue_dedup() -> None:
+    raw_vtt = b"""WEBVTT
+
+00:00:00.000 --> 00:00:02.000
+<00:00:00.250><c>Hello</c>
+
+00:00:02.000 --> 00:00:04.000
+<c>Hello</c><00:00:02.250> world
+"""
+
+    normalized = _normalize_vtt(raw_vtt, max_bytes=1024)
+
+    assert normalized == "Hello\nworld"
+    assert "<00:" not in normalized
 
 
 def test_manual_caption_is_preferred_over_automatic_even_when_automatic_is_ru() -> None:
