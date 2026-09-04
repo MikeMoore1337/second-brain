@@ -70,7 +70,7 @@ External research — отдельная read-only application boundary. В
 `web`, `github`, `rss` и `youtube`, проверяет URL, лимиты, cancellation и
 результат, после чего оставляет внешний `content` недоверенными данными в памяти.
 
-Production adapters v1 реализуют три узких public read path. `SourceKind.WEB`
+Production adapters v1 реализуют четыре узких public read path. `SourceKind.WEB`
 обслуживает `jina-reader` через фиксированный `https://r.jina.ai/`, а
 `SourceKind.RSS` обслуживает `feedparser` через direct bounded `curl` к
 исходному HTTP(S) host. Для RSS adapter самостоятельно выполняются DNS
@@ -100,12 +100,20 @@ extraction request — как `RESEARCH_UPSTREAM_FAILURE`; внутренние 
 yt-dlp не pin-ятся нашим adapter-ом, поэтому DNS rebinding внутри trusted
 runtime остаётся ограничением.
 
+`SourceKind.GITHUB` обслуживает только URL корня public repository через
+фиксированный `https://api.github.com`: сначала metadata, затем raw README.
+Один read выполняет не более двух serial unauthenticated GET; `README 404`
+даёт metadata-only result. Repository identity сравнивается с input без учёта
+ASCII-регистра, а canonical casing сохраняется в normalized source. Private,
+Enterprise, `gh`, redirects, retries и browsing других GitHub ресурсов не
+поддерживаются.
+
 CLI `research read` только печатает normalized `ResearchSource` и не требует
 vault, не пишет файлы, не вызывает Git или LLM. `content` внешнего источника
 всегда остаётся недоверенным текстом; RSS/Atom HTML нормализуется в plain text
 без исполнения scripts или загрузки внешних ресурсов. YouTube transcript также
-остаётся untrusted plain text; GitHub, authenticated sources, retries и
-persistence в этот этап не входят.
+остаётся untrusted plain text; authenticated sources, retries и persistence в
+этот этап не входят.
 Agent Reach не импортируется и не запускается; полная SSRF-защита внешнего
 сервиса Jina (включая его redirects, DNS rebinding и egress policy) остаётся
 отдельным ограничением этого узкого public-web slice.

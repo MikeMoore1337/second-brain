@@ -65,8 +65,9 @@ branch, не исправляет permissions, не разрешает конф�
 manager или административной установкой Python является отдельным действием
 оператора; `bootstrap.sh` не вызывает для этого привилегированные команды.
 
-Команда `research read` — отдельный optional use case. Для типов `web` и `rss`
-на VPS должен быть заранее доступен системный `curl` в `PATH`; приложение его
+Команда `research read` — отдельный optional use case. Для типов `web`, `rss` и
+`github` на VPS должен быть заранее доступен системный `curl` в `PATH`;
+приложение его
 не устанавливает автоматически. RSS/Atom adapter дополнительно делает direct
 egress только после adapter-level public DNS/IP validation и использует locked
 `--resolve` pinning без redirects. Для типа `youtube` оператор должен заранее
@@ -74,6 +75,9 @@ egress только после adapter-level public DNS/IP validation и исп�
 Brain не устанавливает и не обновляет его, не передаёт ему cookies/auth/netrc
 или proxy environment и не добавляет его в Python dependencies. YouTube adapter
 читает только metadata и одну public VTT caption track без media download.
+GitHub adapter читает только public repository metadata и raw README через
+фиксированный `api.github.com`, максимум двумя serial GET и без credentials;
+нового runtime prerequisite нет.
 Python dependencies, включая `feedparser`, ставятся штатным `uv sync --locked
 --python 3.14`; вручную добавлять их в runtime не нужно. Обычный bootstrap и
 vault smoke не требуют `curl` или `yt-dlp`, если research adapter не
