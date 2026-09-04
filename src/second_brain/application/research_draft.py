@@ -11,6 +11,7 @@ from second_brain.application.llm import (
     LlmRequest,
     NoteDraft,
 )
+from second_brain.application.llm import _validate_request as _validate_llm_request
 from second_brain.application.ports import (
     CancellationToken,
     LlmCancelledError,
@@ -55,6 +56,13 @@ class ResearchDraftGateway:
         if _check_cancellation(cancellation):
             raise ResearchCancelledError()
         _validate_request(request)
+        _validate_llm_request(
+            LlmRequest(
+                instruction=request.instruction,
+                context="",
+                max_output_bytes=request.max_output_bytes,
+            )
+        )
 
         source = self.research_gateway.read(
             ResearchRequest(

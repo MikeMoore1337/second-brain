@@ -10,6 +10,8 @@ import pytest
 from second_brain.application.llm import (
     DEFAULT_MAX_OUTPUT_BYTES,
     MAX_CONTEXT_BYTES,
+    MAX_INSTRUCTION_BYTES,
+    MAX_MAX_OUTPUT_BYTES,
     LlmGateway,
     LlmRequest,
     NoteDraft,
@@ -19,6 +21,7 @@ from second_brain.application.ports import (
     CancellationTokenSource,
     LlmCancelledError,
     LlmErrorCode,
+    LlmInvalidRequestError,
     LlmUpstreamError,
     ResearchCancelledError,
     ResearchErrorCode,
@@ -182,6 +185,66 @@ def test_max_source_cap_is_rejected_before_both_external_ports() -> None:
         )
 
     assert error.value.code == ResearchErrorCode.INVALID_REQUEST.value
+    assert research_port.calls == []
+    assert llm_port.calls == []
+
+
+def test_blank_instruction_is_rejected_before_external_ports() -> None:
+    research_port = FakeResearchPort(make_source())
+    llm_port = FakeLlmPort(make_draft())
+
+    with pytest.raises(LlmInvalidRequestError) as error:
+        make_workflow(research_port, llm_port).draft_note(
+            make_request(instruction=""),
+            cancellation=CancellationTokenSource(),
+        )
+
+    assert error.value.code == LlmErrorCode.INVALID_REQUEST.value
+    assert research_port.calls == []
+    assert llm_port.calls == []
+
+
+def test_oversized_instruction_is_rejected_before_external_ports() -> None:
+    research_port = FakeResearchPort(make_source())
+    llm_port = FakeLlmPort(make_draft())
+
+    with pytest.raises(LlmInvalidRequestError) as error:
+        make_workflow(research_port, llm_port).draft_note(
+            make_request(instruction="x" * (MAX_INSTRUCTION_BYTES + 1)),
+            cancellation=CancellationTokenSource(),
+        )
+
+    assert error.value.code == LlmErrorCode.INVALID_REQUEST.value
+    assert research_port.calls == []
+    assert llm_port.calls == []
+
+
+def test_zero_max_output_bytes_is_rejected_before_external_ports() -> None:
+    research_port = FakeResearchPort(make_source())
+    llm_port = FakeLlmPort(make_draft())
+
+    with pytest.raises(LlmInvalidRequestError) as error:
+        make_workflow(research_port, llm_port).draft_note(
+            make_request(max_output_bytes=0),
+            cancellation=CancellationTokenSource(),
+        )
+
+    assert error.value.code == LlmErrorCode.INVALID_REQUEST.value
+    assert research_port.calls == []
+    assert llm_port.calls == []
+
+
+def test_max_output_bytes_above_absolute_cap_is_rejected_before_external_ports() -> None:
+    research_port = FakeResearchPort(make_source())
+    llm_port = FakeLlmPort(make_draft())
+
+    with pytest.raises(LlmInvalidRequestError) as error:
+        make_workflow(research_port, llm_port).draft_note(
+            make_request(max_output_bytes=MAX_MAX_OUTPUT_BYTES + 1),
+            cancellation=CancellationTokenSource(),
+        )
+
+    assert error.value.code == LlmErrorCode.INVALID_REQUEST.value
     assert research_port.calls == []
     assert llm_port.calls == []
 
