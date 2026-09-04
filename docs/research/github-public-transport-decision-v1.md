@@ -132,10 +132,15 @@ https://github.com/{owner}/{repo}
 * path содержит ровно два ASCII path segments: `owner` и `repo`;
 * `owner` — bounded GitHub account segment: 1–39 символов `[A-Za-z0-9-]`,
   начинается и заканчивается alphanumeric;
-* `repo` — bounded segment до 100 символов `[A-Za-z0-9._-]`, начинается и
-  заканчивается alphanumeric; suffix `.git` запрещён;
+* `repo` — bounded single segment длиной 1–100, состоящий только из ASCII
+  `[A-Za-z0-9._-]`. Начальный и конечный alphanumeric не требуются: это
+  допускает реальное имя repository `.github`; suffix `.git` по-прежнему
+  запрещён контрактом v1 без учёта ASCII-регистра. Это минимальный allow-list
+  имени repository, а не permissive path parser;
 * отсутствуют trailing slash, query, fragment, port, userinfo, whitespace,
-  control characters, backslash, `%`/percent-encoding и dot segments;
+  control characters, backslash и `%`/percent-encoding; точные dot-segments
+  `.` и `..` запрещены, но leading dot в обычном имени вроде `.github`
+  разрешён;
 * path `/owner/repo/issues`, `/pulls`, `/tree`, `/blob` и любые другие
   subpaths отклоняются.
 
@@ -158,12 +163,19 @@ Adapter возвращает существующий `ResearchSource`, без �
 | `source_kind` | `SourceKind.GITHUB`. |
 | `retrieved_at` | Значение adapter clock с явным UTC offset; naive timestamp не принимается. |
 | `backend` | Фиксированный technical identifier `github-rest`. |
-| `title` | `full_name` из metadata (`owner/repo`); если identity отсутствует или не соответствует validated owner/repo — malformed result. |
-| `author` | `owner.login`, если это bounded безопасная строка; иначе `None`, если поле действительно отсутствует. |
+| `title` | Canonical `full_name` из metadata (`owner/repo`). Оба сегмента сравниваются с validated `owner/repo` ASCII-case-insensitively; case-only difference принимается. Отсутствующий, malformed или отличный identity — `RESEARCH_MALFORMED_RESULT`. |
+| `author` | Canonical `owner.login`, если поле присутствует, является bounded owner segment и совпадает с validated `owner` ASCII-case-insensitively. Case-only difference принимается; invalid/mismatched значение — `RESEARCH_MALFORMED_RESULT`. `None` допустим только при действительно отсутствующем поле. |
 | `upstream_id` | Decimal string из положительного repository `id`, если поле имеет ожидаемый тип. Не использовать URL или mutable name как ID. |
 | `media_type` | `text/markdown`, если README принят; `text/plain`, если README отсутствует и возвращён metadata-only result. |
 | `published_at` | `None`: `created_at`, `updated_at` и `pushed_at` не являются публикацией research document. |
 | `content` | Deterministic bounded text: metadata block в фиксированном порядке, blank line, затем raw README. При отсутствии README — тот же metadata block с явной строкой `README: (отсутствует)`. |
+
+Identity validation выполняется после allow-list validation metadata segments и
+использует ASCII case-folding. Поэтому input `GitHub/.GitHub` и metadata
+`full_name=github/.github`, `owner.login=github` дают валидный result, а
+canonical casing из metadata разрешено сохранить в output. Различие не только
+в регистре, отсутствие обязательного `full_name` либо mismatch остаются
+`RESEARCH_MALFORMED_RESULT`.
 
 Metadata block имеет фиксированный порядок:
 
@@ -256,9 +268,13 @@ service, но не является общей гарантией egress-без�
 Следующий implementation PR должен использовать fake/injectable process runner
 и bounded fixtures, а не сеть:
 
-* accepted exact repository-root URL и rejection matrix для `http`, `www`,
-  `api.github.com`, `.git`, trailing slash, query/fragment, encoded/control
+* accepted exact repository-root URL `https://github.com/github/.github`, а
+  также rejection matrix для `http`, `www`, `api.github.com`, `.git`, точных
+  dot-segments `.`, `..`, trailing slash, query/fragment, encoded/control
   characters, subpaths, overlong/invalid segments;
+* mixed-case input, например `https://github.com/GitHub/.GitHub`, с canonical
+  metadata `full_name=github/.github` и `owner.login=github`: accepted, не
+  `RESEARCH_MALFORMED_RESULT`, canonical metadata casing сохраняется в output;
 * exact cURL argv: два serial `GET` максимум, fixed host/path/headers,
   `--disable`, `--noproxy *`, `--proto =https`, `--max-redirs 0`, no
   `Authorization`, cookies, netrc, proxy, arbitrary options или redirect;
