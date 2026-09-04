@@ -133,13 +133,21 @@ streaming для этого режима не поддерживается. В �
 
 Приоритет отдан более свежему и более специфичному evidence:
 
-1. текущая страница модели GLM 4.7 Flash показывает response_format с вариантами
-   text, json_object и json_schema; у json_schema есть name, schema и strict;
+1. текущая per-model страница GLM 4.7 Flash показывает response_format с
+   вариантами text, json_object и json_schema; descriptor json_schema перечисляет
+   name, schema и strict. Это подтверждает structured-output capability модели, но
+   per-model documentation/schema surface сама по себе не фиксирует exact wire
+   shape native OpenAI-compatible route;
 2. официальный changelog запуска GLM 4.7 Flash прямо указывает structured
    output для Workers AI adapters;
 3. отдельная open issue в официальном репозитории документации сообщает о
    несогласованности между общей JSON Mode страницей и per-model schema для
    Llama 3.1 8B Fast.
+
+Для выбранного native `@cf/...` маршрута
+`/client/v4/accounts/{account_id}/ai/v1/chat/completions` exact request mapping
+зафиксирован отдельно: `response_format.json_schema` передается как bare
+NoteDraft JSON Schema, как показано в разделе 5.
 
 Следствие: 8B Fast дешевле, но не принимается как v1 primary без отдельного
 доказательства фактического response_format. 70B Fast имеет structured surface,
