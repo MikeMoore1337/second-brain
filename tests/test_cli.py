@@ -296,7 +296,88 @@ def test_research_read_youtube_supports_text_output_without_vault(
     assert source.content in result.stdout
 
 
-@pytest.mark.parametrize("source_type", ["github"])
+def test_research_read_github_supports_json_without_vault(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = ResearchSource(
+        uri="https://github.com/github/.github",
+        source_kind=SourceKind.GITHUB,
+        retrieved_at=datetime(2026, 9, 4, 12, 0, tzinfo=UTC),
+        backend="github-rest",
+        content="Repository: github/.github\nREADME:\n\n(отсутствует)",
+        title="github/.github",
+        author="github",
+        media_type="text/plain",
+        upstream_id="123456",
+    )
+
+    class FakeAdapter:
+        def read(self, request: ResearchRequest, *, cancellation: object) -> ResearchSource:
+            assert request.source_kind is SourceKind.GITHUB
+            return source
+
+    monkeypatch.setattr(
+        "second_brain.entrypoints.cli.app.PublicGitHubAdapter",
+        lambda: FakeAdapter(),
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "research",
+            "read",
+            "--type",
+            "github",
+            "--url",
+            source.uri,
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["source_kind"] == "github"
+    assert payload["backend"] == "github-rest"
+    assert payload["media_type"] == "text/plain"
+    assert payload["content"] == source.content
+
+
+def test_research_read_github_supports_text_output_without_vault(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = ResearchSource(
+        uri="https://github.com/github/.github",
+        source_kind=SourceKind.GITHUB,
+        retrieved_at=datetime(2026, 9, 4, 12, 0, tzinfo=UTC),
+        backend="github-rest",
+        content="Repository: github/.github\nREADME:\n\n# Public repository",
+        title="github/.github",
+        author="github",
+        media_type="text/markdown",
+        upstream_id="123456",
+    )
+
+    class FakeAdapter:
+        def read(self, request: object, *, cancellation: object) -> ResearchSource:
+            return source
+
+    monkeypatch.setattr(
+        "second_brain.entrypoints.cli.app.PublicGitHubAdapter",
+        lambda: FakeAdapter(),
+    )
+
+    result = runner.invoke(
+        app,
+        ["research", "read", "--type", "github", "--url", source.uri],
+    )
+
+    assert result.exit_code == 0
+    assert "Тип: github" in result.stdout
+    assert source.content in result.stdout
+
+
+@pytest.mark.parametrize("source_type", ["mastodon"])
 def test_research_read_unsupported_source_types_remain_rejected_without_vault(
     source_type: str,
 ) -> None:
