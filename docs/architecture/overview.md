@@ -147,8 +147,8 @@ validation, а ошибки наружу сводит к стабильным к
 provider details. Gateway не вызывает `ResearchGateway`,
 `ExternalResearchPort`, `VaultReader`, `ManagedNoteWriter`, filesystem, Git или
 сеть, не читает provider credentials, не выбирает model и не делает retry или
-fallback. В v1 этот контракт используется только networked read-only командой
-`llm draft`;
+fallback. В v1 этот контракт используется только networked read-only командами
+`llm draft` и `research draft`;
 streaming, chat, tools, embeddings и RAG отсутствуют.
 
 `NoteDraft` содержит только `title`, `note_type`, `content`, `tags` и `links`.
@@ -157,6 +157,40 @@ streaming, chat, tools, embeddings и RAG отсутствуют.
 draft `content`, `tags` или `links`. Связка `research -> LLM -> approval ->
 Safe Write` будет отдельным этапом после отдельного решения о расширении
 write-контракта.
+
+### Bounded research -> LLM orchestration v1
+
+Для одного networked read-only invocation добавлена отдельная application
+граница, не зависящая от конкретных research или LLM adapters:
+
+```text
+research draft CLI
+       |
+ResearchDraftGateway
+       |
+ResearchGateway -> ResearchSource.content -> LlmGateway
+       |                                      |
+ExternalResearchPort                         LlmPort
+                                              |
+                                      validated NoteDraft
+```
+
+`ResearchDraftRequest` содержит `source_kind`, `uri`, пользовательскую
+`instruction`, `research_timeout_seconds`, `max_source_bytes` и
+`max_output_bytes`. `ResearchDraftGateway` проверяет, что
+`max_source_bytes <= MAX_CONTEXT_BYTES`, затем выполняет максимум один
+`ResearchGateway.read`. После успешного чтения он передаёт только
+`ResearchSource.content` напрямую в `LlmRequest.context`, а пользовательскую
+`instruction` — отдельным полем без изменений. Source title, URI, author и
+backend не добавляются в LLM request; content остаётся untrusted context и не
+становится instruction.
+
+После research cancellation проверяется до вызова `LlmGateway`, поэтому один
+запуск делает максимум одну research operation, затем максимум одну LLM draft
+operation. Research error не запускает LLM, LLM error не повторяет research;
+retry, fallback, tools, function execution, chunking и map-reduce отсутствуют.
+Команда возвращает только пять semantic полей `NoteDraft` и не вызывает vault,
+Git или Safe Write.
 
 ### Cloudflare Workers AI adapter v1
 
@@ -182,11 +216,13 @@ exact `200`, `finish_reason=stop` и строгое JSON-сообщение с �
 и общий 30-секундный deadline останавливают текущий worker через terminate/kill
 с deterministic cleanup.
 
-Adapter подключён только к networked read-only CLI-команде `llm draft` и не
-подключён к research orchestration, Safe Write, vault, Git, Telegram или
-production deployment workflow. Обычные vault/research commands не требуют
-Cloudflare settings; credentials читаются только при явном создании и вызове
-adapter.
+Adapter подключён только к networked read-only CLI-командам `llm draft` и
+`research draft`; он не подключён к Safe Write, vault, Git, Telegram или
+production deployment workflow. Обычные vault/research read commands не
+требуют Cloudflare settings; credentials читаются только при явном создании и
+вызове adapter. Существующее provider-specific context framing не меняется:
+orchestration передаёт source content в `LlmRequest.context`, а framing
+остаётся внутри Cloudflare adapter.
 
 ## Поиск
 

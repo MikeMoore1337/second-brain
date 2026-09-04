@@ -21,6 +21,7 @@ from second_brain.adapters.research.youtube import PublicYouTubeAdapter
 from second_brain.adapters.vault import FileSystemVaultReader, FileSystemVaultWriter
 from second_brain.application.llm import (
     DEFAULT_MAX_OUTPUT_BYTES,
+    MAX_CONTEXT_BYTES,
     LlmGateway,
     LlmRequest,
     NoteDraft,
@@ -48,6 +49,7 @@ from second_brain.application.research import (
     ResearchSource,
     SourceKind,
 )
+from second_brain.application.research_draft import ResearchDraftGateway, ResearchDraftRequest
 from second_brain.application.services import CreateManagedNote, DoctorVault, ValidateVault
 from second_brain.application.writes import (
     CreateManagedNoteRequest,
@@ -186,6 +188,75 @@ def research_read(
         typer.echo(json.dumps(_research_source_as_dict(source), ensure_ascii=False, indent=2))
     else:
         typer.echo(_render_research_text(source))
+    raise typer.Exit(code=0)
+
+
+@research_app.command("draft")
+def research_draft(
+    instruction: Annotated[
+        str,
+        typer.Option("--instruction", help="Обязательная пользовательская инструкция для draft."),
+    ],
+    source_type: Annotated[
+        str,
+        typer.Option("--type", help="Тип источника: web, rss, youtube или github."),
+    ] = SourceKind.WEB.value,
+    url: Annotated[
+        str,
+        typer.Option(
+            "--url",
+            help="Публичный URL web-страницы, RSS/Atom feed, YouTube video или GitHub repository.",
+        ),
+    ] = "",
+    timeout: Annotated[
+        int,
+        typer.Option("--timeout", help="Лимит research-операции в секундах."),
+    ] = DEFAULT_TIMEOUT_SECONDS,
+    max_source_bytes: Annotated[
+        int,
+        typer.Option("--max-source-bytes", help="Жёсткий лимит source content в bytes."),
+    ] = MAX_CONTEXT_BYTES,
+    max_output_bytes: Annotated[
+        int,
+        typer.Option("--max-output-bytes", help="Максимальный размер NoteDraft в bytes."),
+    ] = DEFAULT_MAX_OUTPUT_BYTES,
+    output_format: Annotated[
+        OutputFormat,
+        typer.Option("--format", help="Формат результата: text или json."),
+    ] = OutputFormat.TEXT,
+) -> None:
+    """Networked read-only: one research read + at most one LLM draft; без vault/Git writes."""
+
+    try:
+        source_kind = _research_source_kind(source_type)
+        draft = ResearchDraftGateway(
+            ResearchGateway(_research_adapter(source_kind)),
+            LlmGateway(CloudflareWorkersAiLlmPort()),
+        ).draft_note(
+            ResearchDraftRequest(
+                source_kind=source_kind,
+                uri=url,
+                instruction=instruction,
+                research_timeout_seconds=timeout,
+                max_source_bytes=max_source_bytes,
+                max_output_bytes=max_output_bytes,
+            ),
+            cancellation=CancellationTokenSource(),
+        )
+    except ResearchError as exc:
+        _echo_research_error(exc, output_format)
+        raise typer.Exit(code=1) from None
+    except LlmError as exc:
+        _echo_llm_error(exc, output_format)
+        raise typer.Exit(code=1) from None
+    except Exception:
+        _echo_research_draft_runtime_error(output_format)
+        raise typer.Exit(code=2) from None
+
+    if output_format is OutputFormat.JSON:
+        typer.echo(json.dumps(_llm_draft_as_dict(draft), ensure_ascii=False, indent=2))
+    else:
+        typer.echo(_render_llm_text(draft))
     raise typer.Exit(code=0)
 
 
@@ -427,6 +498,13 @@ def _echo_llm_runtime_error(output_format: OutputFormat) -> None:
 
     del output_format
     typer.echo("Ошибка runtime CLI: не удалось выполнить LLM draft.", err=True)
+
+
+def _echo_research_draft_runtime_error(output_format: OutputFormat) -> None:
+    """Скрыть неожиданную локальную ошибку composition и provider details."""
+
+    del output_format
+    typer.echo("Ошибка runtime CLI: не удалось выполнить research draft.", err=True)
 
 
 def _llm_draft_as_dict(draft: NoteDraft) -> dict[str, object]:
