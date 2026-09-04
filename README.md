@@ -27,26 +27,32 @@ uv run second-brain --env-file .env doctor
 uv run second-brain --env-file .env vault validate
 ```
 
-## Public web и RSS research
+## Public web, RSS и YouTube research
 
 Read-only команда `research read` читает одну публичную web-страницу через
 фиксированный Jina Reader или один публичный RSS/Atom feed напрямую через
-системный `curl`. Для RSS adapter перед запросом выполняются public DNS/IP
-validation и pinning; vault для этого не требуется. Команда ничего не пишет,
-не вызывает Git или LLM:
+системный `curl`, а для одного публичного YouTube video получает metadata и
+одну существующую public caption track через внешний `yt-dlp`. Для RSS adapter
+перед запросом выполняются public DNS/IP validation и pinning; vault для этого
+не требуется. Команда ничего не пишет, не вызывает Git, LLM или Agent Reach:
 
 ```powershell
 uv run second-brain research read `
   --type web --url "https://example.com/article"
 uv run second-brain research read `
   --type rss --url "https://example.com/feed.xml"
+uv run second-brain research read `
+  --type youtube --url "https://www.youtube.com/watch?v=<video-id>"
 ```
 
 `curl` — внешний optional runtime prerequisite для этой команды и не
 устанавливается приложением; Python dependency `feedparser` устанавливается
 из locked `uv.lock`. RSS/Atom parsing получает только уже загруженные bounded
-bytes и не загружает item links/enclosures. YouTube, GitHub и live smoke в этот
-этап не входят.
+bytes и не загружает item links/enclosures. Для YouTube `yt-dlp` также должен
+быть заранее установлен оператором как внешний executable: приложение его не
+устанавливает и не обновляет. YouTube read использует только `--skip-download`
+и одну VTT caption track; media download, Whisper/STT, playlists, channels,
+search и live smoke не входят. GitHub остаётся unsupported.
 
 ## VPS runtime
 
