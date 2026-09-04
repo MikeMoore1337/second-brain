@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 from typer.testing import CliRunner
@@ -200,14 +201,28 @@ def test_llm_draft_unexpected_runtime_failure_is_generic_and_exit_two(
     assert "Traceback" not in result.stderr
 
 
-def test_llm_draft_help_has_exact_options_without_credential_options() -> None:
-    result = runner.invoke(app, ["llm", "draft", "--help"], terminal_width=120, color=False)
+def test_llm_draft_command_has_exact_options_without_credential_options() -> None:
+    from typer.main import get_command
 
-    assert result.exit_code == 0
-    for option in ("--instruction", "--context", "--max-output-bytes", "--format"):
-        assert option in result.stdout
-    for forbidden_option in ("--token", "--api-token", "--account-id"):
-        assert forbidden_option not in result.stdout
+    root_command: Any = get_command(app)
+    llm_command: Any = root_command.commands["llm"]
+    draft_command: Any = llm_command.commands["draft"]
+
+    option_names = {
+        option_name
+        for parameter in draft_command.params
+        for option_name in getattr(parameter, "opts", ())
+    }
+
+    assert option_names == {"--instruction", "--context", "--max-output-bytes", "--format"}
+    assert (
+        next(
+            parameter
+            for parameter in draft_command.params
+            if "--instruction" in getattr(parameter, "opts", ())
+        ).required
+        is True
+    )
 
 
 def test_doctor_supports_json_output_and_returns_success(tmp_path: Path) -> None:
