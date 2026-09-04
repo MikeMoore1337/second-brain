@@ -34,10 +34,11 @@
 - Local/offline read-only команды не вызывают сеть или LLM.
 - Explicitly networked read-only команды могут выполнять только заявленную
   внешнюю read-operation; это не является общим разрешением сети для любых
-  read-only команд. `research read` может использовать только свой заявленный
-  research backend, а `llm draft` может выполнить ровно одну LLM draft
-  operation.
-- Обе категории read-only команд не пишут в vault или Git. Для `llm draft`
+  read-only команд. `research read` выполняет максимум одну research
+  operation через свой заявленный research backend, `llm draft` — максимум
+  одну LLM draft operation, а `research draft` — максимум одну research
+  operation, затем максимум одну LLM draft operation.
+- Все эти networked read-only команды не пишут в vault или Git. Для них
   запрещены retry, fallback, tools и function execution.
 - Credentials для networked LLM остаются внутри существующего adapter/security
   boundary и не становятся CLI или общим read-only контрактом.

@@ -66,7 +66,26 @@ Networked read-only команда `llm draft` вызывает существу
 Workers AI adapter через `LlmGateway` и показывает один проверенный semantic
 `NoteDraft`.
 Она не читает и не изменяет vault, не вызывает Git, research или Safe Write;
-workflow `research -> LLM` будет отдельным этапом.
+отдельная команда `research draft` добавляет bounded workflow
+`research -> LLM` без записи.
+
+`research draft` выполняет networked read-only операцию: максимум один
+research read, затем максимум один LLM draft. Только `ResearchSource.content`
+передаётся во внешний LLM provider как untrusted `LlmRequest.context`, без
+добавления metadata, prompt framing или скрытой инструкции со стороны
+orchestration. Лимит `--max-source-bytes` по умолчанию равен
+`MAX_CONTEXT_BYTES`; значение выше этого cap отклоняется до research call.
+
+```powershell
+uv run second-brain research draft `
+  --type web --url "https://example.com/article" `
+  --instruction "Сделай краткий структурированный черновик заметки" `
+  --format json
+```
+
+Команда не читает конфигурацию vault, не пишет в vault или Git, не выполняет
+retry, fallback, tools или function calls. JSON и text используют тот же
+semantic renderer, что и `llm draft`.
 
 Credentials берутся только из process environment и не передаются CLI options:
 
