@@ -9,10 +9,12 @@ import threading
 import time
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
+from second_brain.adapters.research import process as research_process
 from second_brain.adapters.research.jina_reader import (
     JINA_READER_BACKEND,
     JINA_READER_BASE_URL,
@@ -198,6 +200,110 @@ def test_runner_uses_no_shell_and_does_not_inherit_proxy_or_curl_credentials(
     assert "HTTP_PROXY" not in observed["env"]
     assert "CURL_HOME" not in observed["env"]
     assert "HOME" not in observed["env"]
+
+
+@pytest.mark.parametrize("system_root_name", ["SystemRoot", "SYSTEMROOT", "sYsTeMrOoT"])
+def test_windows_like_system_root_is_canonicalized_case_insensitively(
+    monkeypatch: pytest.MonkeyPatch,
+    system_root_name: str,
+) -> None:
+    source_environment = {
+        system_root_name: r"C:\Windows",
+        "PATH": r"C:\Windows\System32",
+        "TEMP": r"C:\Temp",
+    }
+    monkeypatch.setattr(
+        research_process,
+        "os",
+        SimpleNamespace(name="nt", environ=source_environment),
+    )
+
+    environment = research_process._safe_process_environment()
+
+    assert environment["SYSTEMROOT"] == r"C:\Windows"
+    assert [name for name in environment if name.casefold() == "systemroot"] == ["SYSTEMROOT"]
+
+
+def test_windows_safe_environment_preserves_allowlist_and_excludes_secrets_proxy_and_auth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_environment = {
+        "PATH": r"C:\Runtime",
+        "Path": r"C:\Runtime-alt",
+        "SystemRoot": r"C:\Windows",
+        "WINDIR": r"C:\Windows",
+        "TEMP": r"C:\Temp",
+        "TMP": r"C:\Tmp",
+        "TMPDIR": r"C:\TmpDir",
+        "GH_TOKEN": "gh-secret",
+        "GITHUB_TOKEN": "github-secret",
+        "PAT": "pat-secret",
+        "AUTHORIZATION": "Bearer secret",
+        "HTTP_PROXY": "http://proxy.invalid:8080",
+        "HTTPS_PROXY": "https://proxy.invalid:8443",
+        "ALL_PROXY": "socks5://proxy.invalid:1080",
+        "NO_PROXY": "example.com",
+        "CURL_HOME": r"C:\secret-curl",
+        "HOME": r"C:\Users\secret",
+        "USERPROFILE": r"C:\Users\secret",
+        "APPDATA": r"C:\Users\secret\AppData",
+        "UNRELATED": "must-not-pass",
+    }
+    monkeypatch.setattr(
+        research_process,
+        "os",
+        SimpleNamespace(name="nt", environ=source_environment),
+    )
+
+    environment = research_process._safe_process_environment()
+
+    assert environment == {
+        "PATH": r"C:\Runtime",
+        "Path": r"C:\Runtime-alt",
+        "WINDIR": r"C:\Windows",
+        "TEMP": r"C:\Temp",
+        "TMP": r"C:\Tmp",
+        "TMPDIR": r"C:\TmpDir",
+        "SYSTEMROOT": r"C:\Windows",
+    }
+
+
+@pytest.mark.skipif(
+    sys.platform != "win32", reason="Windows-specific OpenSSL environment regression"
+)
+def test_windows_sanitized_research_environment_initializes_ssl_in_real_isolated_child() -> None:
+    environment = research_process._safe_process_environment()
+    argv = [sys.executable, "-I", "-c", "import ssl; ssl.create_default_context()"]
+
+    assert "SYSTEMROOT" in environment
+    assert all(name.casefold() != "systemroot" or name == "SYSTEMROOT" for name in environment)
+
+    completed = subprocess.run(
+        argv,
+        env=environment,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert completed.returncode == 0
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows-specific curl environment regression")
+def test_windows_sanitized_research_environment_runs_curl_version_without_network() -> None:
+    environment = research_process._safe_process_environment()
+
+    completed = subprocess.run(
+        [research_process.CURL_EXECUTABLE, "--version"],
+        env=environment,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert completed.returncode == 0
 
 
 def _python_process(code: str) -> tuple[str, ...]:

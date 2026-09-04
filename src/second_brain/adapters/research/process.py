@@ -31,6 +31,7 @@ _SAFE_ENVIRONMENT_NAMES = frozenset(
         "TMPDIR",
     }
 )
+_WINDOWS_SYSTEM_ROOT_ENVIRONMENT_NAME = "SYSTEMROOT"
 
 
 class ProcessRunner(Protocol):
@@ -208,7 +209,24 @@ class BoundedProcessRunner:
 def _safe_process_environment() -> dict[str, str]:
     """Передать curl только runtime PATH/SystemRoot и temp paths без secrets."""
 
-    return {name: value for name, value in os.environ.items() if name in _SAFE_ENVIRONMENT_NAMES}
+    environment = {
+        name: value for name, value in os.environ.items() if name in _SAFE_ENVIRONMENT_NAMES
+    }
+    if os.name == "nt":
+        system_root = next(
+            (
+                value
+                for name, value in os.environ.items()
+                if name.casefold() == "systemroot" and type(value) is str
+            ),
+            None,
+        )
+        if system_root is not None:
+            for name in tuple(environment):
+                if name.casefold() == "systemroot":
+                    del environment[name]
+            environment[_WINDOWS_SYSTEM_ROOT_ENVIRONMENT_NAME] = system_root
+    return environment
 
 
 def _stop_process(process: subprocess.Popen[bytes]) -> None:
