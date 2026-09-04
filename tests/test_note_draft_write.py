@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -151,6 +153,57 @@ def test_decoder_rejects_non_utf8_and_bounded_file(tmp_path: Path) -> None:
     with pytest.raises(DraftFileError) as oversized_error:
         read_note_draft_file(oversized)
     assert oversized_error.value.code == "DRAFT_FILE_INVALID"
+
+
+def test_decoder_accepts_regular_file_and_rejects_directory(tmp_path: Path) -> None:
+    regular = tmp_path / "draft.json"
+    write_draft(regular, make_payload())
+    assert read_note_draft_file(regular).title == "Reviewed draft"
+
+    directory = tmp_path / "directory.json"
+    directory.mkdir()
+    with pytest.raises(DraftFileError) as raised:
+        read_note_draft_file(directory)
+    assert raised.value.code == "DRAFT_FILE_INVALID"
+
+
+def test_decoder_rejects_symlink_input(tmp_path: Path) -> None:
+    target = tmp_path / "target.json"
+    write_draft(target, make_payload())
+    link = tmp_path / "draft.json"
+    try:
+        link.symlink_to(target)
+    except OSError as exc:
+        pytest.skip(f"symlink creation unavailable: {exc}")
+
+    with pytest.raises(DraftFileError) as raised:
+        read_note_draft_file(link)
+    assert raised.value.code == "DRAFT_FILE_INVALID"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX FIFO")
+def test_decoder_rejects_fifo_without_blocking(tmp_path: Path) -> None:
+    fifo = tmp_path / "draft.json"
+    mkfifo = getattr(os, "mkfifo", None)
+    if mkfifo is None:
+        pytest.skip("POSIX FIFO unavailable")
+    mkfifo(fifo)
+    outcome: list[BaseException] = []
+
+    def decode() -> None:
+        try:
+            read_note_draft_file(fifo)
+        except BaseException as exc:  # pragma: no cover - assertion below inspects it
+            outcome.append(exc)
+
+    worker = threading.Thread(target=decode, daemon=True)
+    worker.start()
+    worker.join(timeout=1)
+    assert not worker.is_alive()
+    assert len(outcome) == 1
+    error = outcome[0]
+    assert isinstance(error, DraftFileError)
+    assert error.code == "DRAFT_FILE_INVALID"
 
 
 @pytest.mark.parametrize(

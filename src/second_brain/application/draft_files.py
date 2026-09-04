@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
+import stat
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -52,12 +55,9 @@ def read_note_draft_file(
     ):
         raise DraftFileError("DRAFT_FILE_INVALID")
     try:
-        with path.open("rb") as stream:
-            raw = stream.read(max_bytes + 1)
-    except OSError, ValueError:
+        raw = _read_bounded_regular_file(path, max_bytes)
+    except OSError, TypeError, UnicodeError, ValueError:
         raise DraftFileError("DRAFT_FILE_INVALID") from None
-    if len(raw) > max_bytes:
-        raise DraftFileError("DRAFT_FILE_INVALID")
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError:
@@ -77,6 +77,70 @@ def read_note_draft_file(
         return validate_note_draft(draft, max_output_bytes=MAX_MAX_OUTPUT_BYTES)
     except LlmError:
         raise DraftFileError("DRAFT_SCHEMA_INVALID") from None
+
+
+class _InvalidRegularFileError(ValueError):
+    """Внутренний отказ для всего, что не является обычным regular file."""
+
+
+def _read_bounded_regular_file(path: Path, max_bytes: int) -> bytes:
+    """Безопасно прочитать bounded bytes только из открытого regular-file FD."""
+
+    descriptor: int | None = None
+    initial_stat = os.lstat(path)
+    _require_regular_input(path, initial_stat)
+    nofollow = getattr(os, "O_NOFOLLOW", 0) or 0
+    flags = os.O_RDONLY
+    flags |= getattr(os, "O_NONBLOCK", 0) or 0
+    flags |= nofollow
+    if os.name == "nt":
+        flags |= getattr(os, "O_BINARY", 0) or 0
+    try:
+        descriptor = os.open(path, flags)
+        opened_stat = os.fstat(descriptor)
+        if not stat.S_ISREG(opened_stat.st_mode):
+            raise _InvalidRegularFileError()
+        current_stat = os.lstat(path)
+        _require_regular_input(path, current_stat)
+        if not os.path.samestat(initial_stat, opened_stat) or not os.path.samestat(
+            current_stat, opened_stat
+        ):
+            raise _InvalidRegularFileError()
+        with os.fdopen(descriptor, "rb", closefd=True) as stream:
+            descriptor = None
+            raw = stream.read(max_bytes + 1)
+        if len(raw) > max_bytes:
+            raise _InvalidRegularFileError()
+        return raw
+    finally:
+        if descriptor is not None:
+            with suppress(OSError):
+                os.close(descriptor)
+
+
+def _require_regular_input(path: Path, result: os.stat_result) -> None:
+    """Fail closed for links, reparse-like paths and all non-regular objects."""
+
+    if _is_link_like_input(path, result) or not stat.S_ISREG(result.st_mode):
+        raise _InvalidRegularFileError()
+
+
+def _is_link_like_input(path: Path, result: os.stat_result) -> bool:
+    """Распознать symlink/reparse-like input без следования к target."""
+
+    if stat.S_ISLNK(result.st_mode):
+        return True
+    reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0) or 0
+    attributes = getattr(result, "st_file_attributes", 0)
+    if reparse_flag and isinstance(attributes, int) and attributes & reparse_flag:
+        return True
+    is_junction = getattr(path, "is_junction", None)
+    if is_junction is not None:
+        try:
+            return bool(is_junction())
+        except OSError:
+            return True
+    return False
 
 
 def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
