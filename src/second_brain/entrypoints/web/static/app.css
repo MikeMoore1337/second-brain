@@ -674,6 +674,53 @@ textarea#review-content {
   font-style: italic;
 }
 
+.save-plan {
+  display: grid;
+  gap: 13px;
+  margin-top: 20px;
+  padding: 17px;
+  border: 1px solid rgba(157, 228, 197, 0.3);
+  border-radius: 12px;
+  background: rgba(157, 228, 197, 0.06);
+}
+
+.save-plan h4,
+.save-plan h5 {
+  margin: 0;
+  color: var(--mint);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.save-plan h4 {
+  font-size: 16px;
+}
+
+.save-plan h5 {
+  font-size: 13px;
+}
+
+.save-plan-explanation {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.save-diff {
+  max-height: 480px;
+  margin: 0;
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text);
+  font: 12px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 .saved-note {
   display: grid;
   gap: 13px;

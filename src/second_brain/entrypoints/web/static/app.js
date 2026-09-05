@@ -24,6 +24,7 @@ if (panel) {
   const noteTypes = ["project", "area", "resource", "zettel"];
   let mode = "url";
   let reviewToken = null;
+  let confirmationToken = null;
   let reviewState = null;
   let busy = false;
 
@@ -47,6 +48,7 @@ if (panel) {
 
   const clearReviewState = () => {
     reviewToken = null;
+    confirmationToken = null;
     reviewState = null;
     result.replaceChildren();
     result.hidden = true;
@@ -73,12 +75,14 @@ if (panel) {
       reviewState.links,
       reviewState.content,
       reviewState.previewButton,
-      reviewState.saveButton,
+      reviewState.prepareButton,
+      reviewState.confirmButton,
     ].forEach((control) => {
       control.disabled = loading || reviewState.saved;
     });
     reviewState.addButton.disabled = loading;
-    reviewState.saveButton.setAttribute("aria-busy", String(loading));
+    reviewState.prepareButton.setAttribute("aria-busy", String(loading));
+    reviewState.confirmButton.setAttribute("aria-busy", String(loading));
     reviewState.previewButton.setAttribute("aria-busy", String(loading));
   };
 
@@ -180,15 +184,21 @@ if (panel) {
     previewButton.className = "review-button review-button-secondary";
     previewButton.type = "button";
     previewButton.textContent = "Предпросмотр";
-    const saveButton = document.createElement("button");
-    saveButton.className = "review-button review-button-primary";
-    saveButton.type = "button";
-    saveButton.textContent = "Сохранить в vault";
+    const prepareButton = document.createElement("button");
+    prepareButton.className = "review-button review-button-primary";
+    prepareButton.type = "button";
+    prepareButton.textContent = "Подготовить сохранение";
+    const confirmButton = document.createElement("button");
+    confirmButton.className = "review-button review-button-primary";
+    confirmButton.type = "button";
+    confirmButton.textContent = "Подтвердить сохранение";
+    confirmButton.hidden = true;
+    confirmButton.disabled = true;
     const addButton = document.createElement("button");
     addButton.className = "review-button review-button-quiet";
     addButton.type = "button";
     addButton.textContent = "Добавить ещё";
-    actions.append(previewButton, saveButton, addButton);
+    actions.append(previewButton, prepareButton, confirmButton, addButton);
     section.append(actions);
 
     const previewStatus = document.createElement("p");
@@ -200,6 +210,10 @@ if (panel) {
     preview.className = "markdown-preview";
     preview.hidden = true;
     section.append(preview);
+    const plan = document.createElement("section");
+    plan.className = "save-plan";
+    plan.hidden = true;
+    section.append(plan);
 
     reviewState = {
       title,
@@ -208,11 +222,69 @@ if (panel) {
       links,
       content,
       previewButton,
-      saveButton,
+      prepareButton,
+      confirmButton,
       addButton,
       previewStatus,
       preview,
+      plan,
       saved: false,
+    };
+
+    const editedDraft = () => {
+      const lines = (value) => value.split(/\r?\n/).filter((item) => item.length > 0);
+      return {
+        title: title.value,
+        note_type: noteType.value,
+        content: content.value,
+        tags: lines(tags.value),
+        links: lines(links.value),
+      };
+    };
+
+    const invalidatePreparedPlan = () => {
+      confirmationToken = null;
+      confirmButton.hidden = true;
+      confirmButton.disabled = true;
+      plan.replaceChildren();
+      plan.hidden = true;
+      previewStatus.textContent = "Изменения требуют новой подготовки Safe Write.";
+    };
+
+    [title, noteType, tags, links, content].forEach((control) => {
+      control.addEventListener("input", invalidatePreparedPlan);
+      control.addEventListener("change", invalidatePreparedPlan);
+    });
+
+    const renderPlan = (payload) => {
+      if (
+        !payload ||
+        payload.status !== "dry-run" ||
+        typeof payload.confirmation_token !== "string" ||
+        payload.note === null ||
+        typeof payload.note !== "object" ||
+        typeof payload.diff !== "string"
+      ) {
+        throw new Error("invalid dry-run response");
+      }
+      plan.replaceChildren();
+      const planHeading = document.createElement("h4");
+      planHeading.textContent = "План Safe Write (dry-run)";
+      const planFields = document.createElement("dl");
+      planFields.className = "draft-fields";
+      addField(planFields, "Тип", payload.note.type);
+      addField(planFields, "Путь", payload.note.relative_path);
+      const explanation = document.createElement("p");
+      explanation.className = "save-plan-explanation";
+      explanation.textContent =
+        "ID и created принадлежат этому dry-run; при подтверждении Safe Write создаст новые значения.";
+      const diffHeading = document.createElement("h5");
+      diffHeading.textContent = "Предлагаемый Markdown-файл";
+      const diff = document.createElement("pre");
+      diff.className = "save-diff";
+      diff.textContent = payload.diff;
+      plan.append(planHeading, planFields, explanation, diffHeading, diff);
+      plan.hidden = false;
     };
 
     previewButton.addEventListener("click", async () => {
@@ -247,25 +319,61 @@ if (panel) {
       }
     });
 
-    saveButton.addEventListener("click", async () => {
+    prepareButton.addEventListener("click", async () => {
       if (busy || !reviewState || reviewState.saved || typeof reviewToken !== "string") {
         return;
       }
-      const lines = (value) => value.split(/\r?\n/).filter((item) => item.length > 0);
-      const editedDraft = {
-        title: title.value,
-        note_type: noteType.value,
-        content: content.value,
-        tags: lines(tags.value),
-        links: lines(links.value),
-      };
+      invalidatePreparedPlan();
+      const originalReviewToken = reviewToken;
+      setLoading(true);
+      previewStatus.textContent = "Готовлю Safe Write dry-run…";
+      try {
+        const response = await fetch("/api/drafts/save/prepare", {
+          method: "POST",
+          headers: requestHeaders,
+          body: JSON.stringify({ review_token: originalReviewToken, draft: editedDraft() }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          const message = payload && payload.error && payload.error.message;
+          setError(typeof message === "string" ? message : "Не удалось подготовить сохранение.");
+          return;
+        }
+        renderPlan(payload);
+        confirmationToken = payload.confirmation_token;
+        confirmButton.hidden = false;
+        confirmButton.disabled = false;
+        previewStatus.textContent = "План подготовлен; проверь diff и подтверди сохранение.";
+      } catch (_error) {
+        setError("Сервис подготовки сохранения недоступен.");
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    confirmButton.addEventListener("click", async () => {
+      if (
+        busy ||
+        !reviewState ||
+        reviewState.saved ||
+        typeof reviewToken !== "string" ||
+        typeof confirmationToken !== "string"
+      ) {
+        return;
+      }
+      const originalReviewToken = reviewToken;
+      const preparedConfirmationToken = confirmationToken;
       setLoading(true);
       status.textContent = "Сохраняю в vault…";
       try {
-        const response = await fetch("/api/drafts/save", {
+        const response = await fetch("/api/drafts/save/apply", {
           method: "POST",
           headers: requestHeaders,
-          body: JSON.stringify({ review_token: reviewToken, draft: editedDraft }),
+          body: JSON.stringify({
+            review_token: originalReviewToken,
+            confirmation_token: preparedConfirmationToken,
+            draft: editedDraft(),
+          }),
         });
         const payload = await response.json();
         if (!response.ok) {
@@ -273,8 +381,19 @@ if (panel) {
           setError(typeof message === "string" ? message : "Не удалось сохранить заметку.");
           return;
         }
+        if (
+          !payload ||
+          payload.status !== "created" ||
+          payload.note === null ||
+          typeof payload.note !== "object"
+        ) {
+          setError("Сервис сохранения вернул неполный результат.");
+          return;
+        }
         reviewToken = null;
+        confirmationToken = null;
         reviewState.saved = true;
+        confirmButton.hidden = true;
         const saved = document.createElement("section");
         saved.className = "saved-note";
         const savedHeading = document.createElement("h4");
@@ -282,13 +401,9 @@ if (panel) {
         saved.append(savedHeading);
         const savedFields = document.createElement("dl");
         savedFields.className = "draft-fields";
-        const note =
-          payload && payload.note !== null && typeof payload.note === "object"
-            ? payload.note
-            : {};
-        addField(savedFields, "Путь", note.relative_path);
-        addField(savedFields, "ID", note.id);
-        addField(savedFields, "Создано", note.created);
+        addField(savedFields, "Путь", payload.note.relative_path);
+        addField(savedFields, "ID", payload.note.id);
+        addField(savedFields, "Создано", payload.note.created);
         saved.append(savedFields);
         section.append(saved);
         status.textContent = "Заметка сохранена";

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from datetime import datetime
-from pathlib import Path
+from difflib import unified_diff
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Final
 from urllib.parse import urlsplit
 
@@ -19,7 +20,12 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from second_brain.application.llm import MAX_CONTEXT_BYTES, NoteDraft, validate_note_draft
 from second_brain.application.ports import LlmError, ResearchError
 from second_brain.application.research import SourceProvenance
-from second_brain.application.writes import CreateManagedNoteResult, CreateStatus, WriteSafetyError
+from second_brain.application.writes import (
+    CreateManagedNoteResult,
+    CreateNotePlan,
+    CreateStatus,
+    WriteSafetyError,
+)
 from second_brain.config import ConfigurationError
 from second_brain.domain.models import NoteType
 
@@ -30,7 +36,7 @@ from .preview import (
     PreviewRenderError,
     render_safe_markdown,
 )
-from .review import ReviewTokenCodec, ReviewTokenError, ReviewTokenMode
+from .review import ReviewTokenClaims, ReviewTokenCodec, ReviewTokenError, ReviewTokenMode
 from .saves import DraftSaveService, build_production_save_service
 
 STATIC_DIR: Final[Path] = Path(__file__).resolve().parent / "static"
@@ -43,13 +49,22 @@ _DRAFT_PATHS: Final[frozenset[str]] = frozenset(
         "/api/drafts/text",
         "/api/drafts/url",
         "/api/drafts/preview",
-        "/api/drafts/save",
+        "/api/drafts/save/prepare",
+        "/api/drafts/save/apply",
     }
 )
-_REVIEW_PATHS: Final[frozenset[str]] = frozenset({"/api/drafts/preview", "/api/drafts/save"})
+_REVIEW_PATHS: Final[frozenset[str]] = frozenset(
+    {
+        "/api/drafts/preview",
+        "/api/drafts/save/prepare",
+        "/api/drafts/save/apply",
+    }
+)
 _SAVE_PREFLIGHT_CODES: Final[frozenset[str]] = frozenset(
     {
+        "CREATE_INVALID_PLAN",
         "CREATE_INVALID_TIMESTAMP",
+        "CREATE_INVALID_TITLE",
         "CREATE_LINKED_PATH",
         "CREATE_PATH_ESCAPE",
         "CREATE_PLAN_FAILED",
@@ -59,6 +74,8 @@ _SAVE_PREFLIGHT_CODES: Final[frozenset[str]] = frozenset(
         "CREATE_TEMPLATE_INVALID",
         "CREATE_TEMPLATE_MISSING",
         "CREATE_TEMPLATE_READ_FAILED",
+        "CREATE_UNSUPPORTED_TYPE",
+        "CREATE_TARGET_CHECK_FAILED",
     }
 )
 _TRUSTED_LOOPBACK_HOSTS: Final[frozenset[str]] = frozenset({"127.0.0.1", "localhost"})
@@ -137,12 +154,22 @@ class PreviewDraftRequest(BaseModel):
     content: StrictStr
 
 
-class SaveDraftRequest(BaseModel):
-    """Strict JSON request for the explicit Web Save operation."""
+class PrepareDraftRequest(BaseModel):
+    """Strict JSON request for the first, dry-run-only Save phase."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
     review_token: StrictStr
+    draft: DraftPayload
+
+
+class ApplyDraftRequest(BaseModel):
+    """Strict JSON request for the confirmed Safe Write apply phase."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    review_token: StrictStr
+    confirmation_token: StrictStr
     draft: DraftPayload
 
 
@@ -152,6 +179,26 @@ class PreviewResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     html: StrictStr
+
+
+class DryRunNotePayload(BaseModel):
+    """Safe application-owned note fields exposed by the dry-run plan."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    type: StrictStr
+    relative_path: StrictStr
+
+
+class PrepareResponse(BaseModel):
+    """Safe full-file dry-run diff and stateless apply confirmation."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    status: StrictStr
+    note: DryRunNotePayload
+    diff: StrictStr
+    confirmation_token: StrictStr
 
 
 class SavedNotePayload(BaseModel):
@@ -209,6 +256,7 @@ _ERRORS: Final[dict[str, tuple[int, str]]] = {
     "DRAFT_INVALID_REQUEST": (400, "draft request failed validation"),
     "DRAFT_CONTENT_TOO_LARGE": (413, "draft content is too large"),
     "REVIEW_TOKEN_INVALID": (400, "review token is invalid or expired"),
+    "SAVE_CONFIRMATION_INVALID": (400, "save confirmation is invalid or expired"),
     "DRAFT_SCHEMA_INVALID": (400, "edited draft failed validation"),
     "PREVIEW_FAILED": (500, "safe Markdown preview failed"),
     "VAULT_UNAVAILABLE": (503, "vault is unavailable for saving"),
@@ -563,9 +611,9 @@ def create_app(
             headers=_DRAFT_ERROR_HEADERS,
         )
 
-    @app.post("/api/drafts/save", include_in_schema=False)
-    def save_draft(payload: SaveDraftRequest) -> Response:
-        """Verify server claims and explicitly apply the existing Safe Write pipeline."""
+    @app.post("/api/drafts/save/prepare", include_in_schema=False)
+    def prepare_save(payload: PrepareDraftRequest) -> Response:
+        """Run Safe Write dry-run and return a reviewable full-file plan."""
 
         try:
             claims = review_tokens.verify(payload.review_token)
@@ -578,13 +626,45 @@ def create_app(
             return _error_response("DRAFT_SCHEMA_INVALID")
 
         try:
-            if claims.mode is ReviewTokenMode.TEXT:
-                result = saver.save_text(draft)
-            else:
-                source = claims.source
-                if source is None:
-                    return _error_response("REVIEW_TOKEN_INVALID")
-                result = saver.save_research(draft, source)
+            result = _run_save_phase(saver, claims, draft, apply=False)
+        except ConfigurationError, WriteSafetyError, OSError:
+            return _error_response("VAULT_UNAVAILABLE")
+        except Exception:
+            return _error_response("SAVE_FAILED")
+        return _prepare_response(
+            result,
+            review_token=payload.review_token,
+            draft=draft,
+            review_tokens=review_tokens,
+            mode=claims.mode,
+        )
+
+    @app.post("/api/drafts/save/apply", include_in_schema=False)
+    def apply_save(payload: ApplyDraftRequest) -> Response:
+        """Require a matching dry-run confirmation before Safe Write apply."""
+
+        try:
+            claims = review_tokens.verify(payload.review_token)
+        except ReviewTokenError:
+            return _error_response("REVIEW_TOKEN_INVALID")
+
+        try:
+            draft = _note_draft_from_payload(payload.draft)
+        except LlmError, ValueError:
+            return _error_response("DRAFT_SCHEMA_INVALID")
+
+        try:
+            review_tokens.verify_confirmation(
+                payload.confirmation_token,
+                review_token=payload.review_token,
+                draft=draft,
+                mode=claims.mode,
+            )
+        except ReviewTokenError:
+            return _error_response("SAVE_CONFIRMATION_INVALID")
+
+        try:
+            result = _run_save_phase(saver, claims, draft, apply=True)
         except ConfigurationError, WriteSafetyError, OSError:
             return _error_response("VAULT_UNAVAILABLE")
         except Exception:
@@ -679,17 +759,113 @@ def _note_draft_from_payload(payload: DraftPayload) -> NoteDraft:
     return validate_note_draft(draft)
 
 
+def _run_save_phase(
+    saver: DraftSaveService,
+    claims: ReviewTokenClaims,
+    draft: NoteDraft,
+    *,
+    apply: bool,
+) -> CreateManagedNoteResult:
+    """Dispatch one server-selected phase without exposing an apply flag to HTTP."""
+
+    mode = claims.mode
+    if mode is ReviewTokenMode.TEXT:
+        return saver.apply_text(draft) if apply else saver.prepare_text(draft)
+    source = claims.source
+    if source is None:
+        raise ReviewTokenError()
+    return saver.apply_research(draft, source) if apply else saver.prepare_research(draft, source)
+
+
+def _prepare_response(
+    result: CreateManagedNoteResult,
+    *,
+    review_token: str,
+    draft: NoteDraft,
+    review_tokens: ReviewTokenCodec,
+    mode: ReviewTokenMode,
+) -> JSONResponse:
+    """Serialize only a successful dry-run plan and its stateless confirmation."""
+
+    if result.status is CreateStatus.CREATED:
+        return _error_response("SAVE_FAILED")
+    if result.status is not CreateStatus.DRY_RUN or result.plan is None:
+        return _save_response(result)
+    relative_path = _safe_relative_path(result.plan.relative_path)
+    if relative_path is None:
+        return _error_response("SAVE_FAILED")
+    try:
+        diff = _plan_diff(result.plan, relative_path)
+        confirmation_token = review_tokens.issue_confirmation(
+            review_token=review_token,
+            draft=draft,
+            mode=mode,
+        )
+    except ReviewTokenError, TypeError, UnicodeError, ValueError:
+        return _error_response("SAVE_FAILED")
+    response = PrepareResponse(
+        status=CreateStatus.DRY_RUN.value,
+        note=DryRunNotePayload(
+            type=result.plan.note_type.value,
+            relative_path=relative_path,
+        ),
+        diff=diff,
+        confirmation_token=confirmation_token,
+    )
+    return JSONResponse(
+        content=response.model_dump(mode="json"),
+        headers=_DRAFT_ERROR_HEADERS,
+    )
+
+
+def _plan_diff(plan: CreateNotePlan, relative_path: str) -> str:
+    """Build a full proposed-file diff with no absolute filesystem identity."""
+
+    if type(plan.content) is not str:
+        raise TypeError("plan content must be text")
+    return "".join(
+        unified_diff(
+            (),
+            plan.content.splitlines(keepends=True),
+            fromfile="/dev/null",
+            tofile=relative_path,
+            lineterm="\n",
+        )
+    )
+
+
+def _safe_relative_path(value: str) -> str | None:
+    """Allow only the application-owned normalized relative POSIX path projection."""
+
+    if type(value) is not str or not value or "\\" in value:
+        return None
+    posix_path = PurePosixPath(value)
+    windows_path = PureWindowsPath(value)
+    if (
+        posix_path.is_absolute()
+        or windows_path.is_absolute()
+        or windows_path.drive
+        or posix_path.as_posix() != value
+        or any(part in {"", ".", ".."} for part in posix_path.parts)
+    ):
+        return None
+    return value
+
+
 def _save_response(result: CreateManagedNoteResult) -> JSONResponse:
     """Expose only safe success fields or a deterministic non-diagnostic error."""
 
     if result.status is CreateStatus.CREATED and result.plan is not None:
+        relative_path = _safe_relative_path(result.plan.relative_path)
+        if relative_path is None:
+            return _error_response("SAVE_FAILED")
         response = SaveResponse(
             status=CreateStatus.CREATED.value,
             note=SavedNotePayload(
                 id=str(result.plan.note_id),
                 type=result.plan.note_type.value,
                 created=result.plan.created,
-                relative_path=result.plan.relative_path,
+                relative_path=relative_path,
             ),
         )
         return JSONResponse(
@@ -739,13 +915,16 @@ __all__ = [
     "DRAFT_REQUEST_HEADER_NAME",
     "DRAFT_REQUEST_HEADER_VALUE",
     "MAX_RAW_DRAFT_BODY_BYTES",
+    "ApplyDraftRequest",
     "DraftPayload",
     "DraftRequestBoundaryMiddleware",
     "DraftResponse",
+    "DryRunNotePayload",
     "ErrorResponse",
+    "PrepareDraftRequest",
+    "PrepareResponse",
     "PreviewDraftRequest",
     "PreviewResponse",
-    "SaveDraftRequest",
     "SaveResponse",
     "SavedNotePayload",
     "SourceProvenancePayload",

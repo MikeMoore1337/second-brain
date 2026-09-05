@@ -13,13 +13,17 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
+from second_brain.application.llm import NoteDraft
 from second_brain.application.research import SourceKind, SourceProvenance
 
 REVIEW_TOKEN_VERSION = 1
 REVIEW_TOKEN_SECRET_BYTES = 32
 MAX_REVIEW_TOKEN_BYTES = 128 * 1024
+MAX_CONFIRMATION_TOKEN_BYTES = 8 * 1024
+_REVIEW_CONTEXT_NONCE_BYTES = 16
 _MAX_REVIEW_PAYLOAD_BYTES = 96 * 1024
 _TOKEN_PREFIX = "v1"
+_CONFIRMATION_PURPOSE = "save-confirmation"
 _SOURCE_FIELDS = frozenset(
     {
         "uri",
@@ -31,6 +35,7 @@ _SOURCE_FIELDS = frozenset(
         "upstream_id",
     }
 )
+_CONFIRMATION_FIELDS = frozenset({"draft_sha256", "mode", "purpose", "review_sha256", "v"})
 
 
 class ReviewTokenError(ValueError):
@@ -62,6 +67,15 @@ class ReviewTokenClaims:
             raise ValueError("research review tokens require one SourceProvenance")
 
 
+@dataclass(frozen=True, slots=True)
+class ConfirmationTokenClaims:
+    """Verified binding between one review token, mode, and edited draft."""
+
+    mode: ReviewTokenMode
+    review_sha256: str
+    draft_sha256: str
+
+
 @dataclass(frozen=True, slots=True, repr=False)
 class ReviewTokenCodec:
     """Issue and verify compact HMAC tokens with a process-local secret."""
@@ -86,7 +100,13 @@ class ReviewTokenCodec:
     def issue_text(self) -> str:
         """Issue a token whose verified mode is text and whose sources are absent."""
 
-        return self._issue({"mode": ReviewTokenMode.TEXT.value, "v": REVIEW_TOKEN_VERSION})
+        return self._issue(
+            {
+                "mode": ReviewTokenMode.TEXT.value,
+                "nonce": _new_context_nonce(),
+                "v": REVIEW_TOKEN_VERSION,
+            }
+        )
 
     def issue_research(self, source: SourceProvenance) -> str:
         """Issue a token bound to exactly one server-generated provenance value."""
@@ -96,19 +116,75 @@ class ReviewTokenCodec:
         return self._issue(
             {
                 "mode": ReviewTokenMode.RESEARCH.value,
+                "nonce": _new_context_nonce(),
                 "source": _source_as_payload(source),
                 "v": REVIEW_TOKEN_VERSION,
             }
         )
 
+    def issue_confirmation(
+        self,
+        *,
+        review_token: str,
+        draft: NoteDraft,
+        mode: ReviewTokenMode,
+    ) -> str:
+        """Issue a short token bound to the exact reviewed context and draft."""
+
+        if type(mode) is not ReviewTokenMode:
+            raise ReviewTokenError()
+        claims = self.verify(review_token)
+        if claims.mode is not mode:
+            raise ReviewTokenError()
+        return self._issue(
+            {
+                "draft_sha256": _draft_digest(draft),
+                "mode": mode.value,
+                "purpose": _CONFIRMATION_PURPOSE,
+                "review_sha256": _review_digest(review_token),
+                "v": REVIEW_TOKEN_VERSION,
+            },
+            max_token_bytes=MAX_CONFIRMATION_TOKEN_BYTES,
+        )
+
     def verify(self, token: str) -> ReviewTokenClaims:
         """Verify signature, canonical JSON, version, and the strict claims shape."""
+
+        return _claims_from_payload(
+            self._verify_signed_payload(token, max_token_bytes=MAX_REVIEW_TOKEN_BYTES)
+        )
+
+    def verify_confirmation(
+        self,
+        token: str,
+        *,
+        review_token: str,
+        draft: NoteDraft,
+        mode: ReviewTokenMode,
+    ) -> ConfirmationTokenClaims:
+        """Verify confirmation signature and its exact review/draft binding."""
+
+        claims = _confirmation_claims_from_payload(
+            self._verify_signed_payload(token, max_token_bytes=MAX_CONFIRMATION_TOKEN_BYTES)
+        )
+        if claims.mode is not mode:
+            raise ReviewTokenError()
+        expected_review_digest = _review_digest(review_token)
+        expected_draft_digest = _draft_digest(draft)
+        if not hmac.compare_digest(claims.review_sha256, expected_review_digest):
+            raise ReviewTokenError()
+        if not hmac.compare_digest(claims.draft_sha256, expected_draft_digest):
+            raise ReviewTokenError()
+        return claims
+
+    def _verify_signed_payload(self, token: str, *, max_token_bytes: int) -> object:
+        """Verify common bounded token framing and return canonical decoded payload."""
 
         try:
             token_bytes = token.encode("ascii") if type(token) is str else b""
         except UnicodeEncodeError:
             raise ReviewTokenError() from None
-        if not token_bytes or len(token_bytes) > MAX_REVIEW_TOKEN_BYTES:
+        if not token_bytes or len(token_bytes) > max_token_bytes:
             raise ReviewTokenError()
         parts = token.split(".") if type(token) is str else []
         if len(parts) != 3 or parts[0] != _TOKEN_PREFIX:
@@ -129,13 +205,18 @@ class ReviewTokenCodec:
             )
             if _canonical_json(decoded) != payload_bytes:
                 raise ReviewTokenError()
-            return _claims_from_payload(decoded)
+            return decoded
         except ReviewTokenError:
             raise
         except UnicodeDecodeError, UnicodeEncodeError, TypeError, ValueError, RecursionError:
             raise ReviewTokenError() from None
 
-    def _issue(self, payload: dict[str, Any]) -> str:
+    def _issue(
+        self,
+        payload: dict[str, Any],
+        *,
+        max_token_bytes: int = MAX_REVIEW_TOKEN_BYTES,
+    ) -> str:
         """Serialize bounded claims and sign the exact canonical bytes."""
 
         try:
@@ -156,9 +237,45 @@ class ReviewTokenCodec:
             token_size = len(token.encode("ascii"))
         except UnicodeEncodeError:
             raise ReviewTokenError() from None
-        if token_size > MAX_REVIEW_TOKEN_BYTES:
+        if token_size > max_token_bytes:
             raise ReviewTokenError()
         return token
+
+
+def _review_digest(review_token: str) -> str:
+    """Hash the exact original review token without storing or embedding it."""
+
+    if type(review_token) is not str:
+        raise ReviewTokenError()
+    try:
+        token_bytes = review_token.encode("ascii")
+    except UnicodeEncodeError:
+        raise ReviewTokenError() from None
+    return hashlib.sha256(token_bytes).hexdigest()
+
+
+def _draft_digest(draft: NoteDraft) -> str:
+    """Hash the canonical five-field NoteDraft representation."""
+
+    if type(draft) is not NoteDraft:
+        raise ReviewTokenError()
+    try:
+        payload = {
+            "content": draft.content,
+            "links": list(draft.links),
+            "note_type": draft.note_type.value,
+            "tags": list(draft.tags),
+            "title": draft.title,
+        }
+        return hashlib.sha256(_canonical_json(payload)).hexdigest()
+    except AttributeError, TypeError, UnicodeEncodeError, ValueError:
+        raise ReviewTokenError() from None
+
+
+def _new_context_nonce() -> str:
+    """Give each generated draft a distinct process-local review context."""
+
+    return _encode_base64url(secrets.token_bytes(_REVIEW_CONTEXT_NONCE_BYTES))
 
 
 def _source_as_payload(source: SourceProvenance) -> dict[str, str | None]:
@@ -185,25 +302,50 @@ def _claims_from_payload(payload: object) -> ReviewTokenClaims:
     """Decode an exact versioned payload without accepting client-added fields."""
 
     if type(payload) is not dict or set(payload) not in (
-        {"mode", "v"},
-        {"mode", "source", "v"},
+        {"mode", "nonce", "v"},
+        {"mode", "nonce", "source", "v"},
     ):
         raise ReviewTokenError()
     version = payload.get("v")
     mode = payload.get("mode")
     if type(version) is not int or version != REVIEW_TOKEN_VERSION or type(mode) is not str:
         raise ReviewTokenError()
+    _strict_nonce(payload)
     try:
         parsed_mode = ReviewTokenMode(mode)
     except ValueError:
         raise ReviewTokenError() from None
     if parsed_mode is ReviewTokenMode.TEXT:
-        if set(payload) != {"mode", "v"}:
+        if set(payload) != {"mode", "nonce", "v"}:
             raise ReviewTokenError()
         return ReviewTokenClaims(parsed_mode)
-    if set(payload) != {"mode", "source", "v"}:
+    if set(payload) != {"mode", "nonce", "source", "v"}:
         raise ReviewTokenError()
     return ReviewTokenClaims(parsed_mode, _source_from_payload(payload.get("source")))
+
+
+def _confirmation_claims_from_payload(payload: object) -> ConfirmationTokenClaims:
+    """Decode an exact confirmation payload without accepting extra claims."""
+
+    if type(payload) is not dict or set(payload) != _CONFIRMATION_FIELDS:
+        raise ReviewTokenError()
+    version = payload.get("v")
+    mode = payload.get("mode")
+    purpose = payload.get("purpose")
+    if (
+        type(version) is not int
+        or version != REVIEW_TOKEN_VERSION
+        or type(mode) is not str
+        or purpose != _CONFIRMATION_PURPOSE
+    ):
+        raise ReviewTokenError()
+    try:
+        parsed_mode = ReviewTokenMode(mode)
+    except ValueError:
+        raise ReviewTokenError() from None
+    review_sha256 = _strict_digest(payload, "review_sha256")
+    draft_sha256 = _strict_digest(payload, "draft_sha256")
+    return ConfirmationTokenClaims(parsed_mode, review_sha256, draft_sha256)
 
 
 def _source_from_payload(payload: object) -> SourceProvenance:
@@ -250,6 +392,31 @@ def _strict_optional_string(payload: dict[str, object], field: str) -> str | Non
     if value is not None and type(value) is not str:
         raise ReviewTokenError()
     return value
+
+
+def _strict_digest(payload: dict[str, object], field: str) -> str:
+    """Read a canonical lowercase SHA-256 hex digest without coercion."""
+
+    value = payload.get(field)
+    if type(value) is not str or len(value) != hashlib.sha256().digest_size * 2:
+        raise ReviewTokenError()
+    if any(character not in "0123456789abcdef" for character in value):
+        raise ReviewTokenError()
+    return value
+
+
+def _strict_nonce(payload: dict[str, object]) -> None:
+    """Require a bounded canonical random context nonce in every review token."""
+
+    value = payload.get("nonce")
+    if type(value) is not str:
+        raise ReviewTokenError()
+    try:
+        decoded = _decode_base64url(value, _REVIEW_CONTEXT_NONCE_BYTES)
+    except ReviewTokenError:
+        raise
+    if len(decoded) != _REVIEW_CONTEXT_NONCE_BYTES:
+        raise ReviewTokenError()
 
 
 def _canonical_json(value: object) -> bytes:
@@ -311,9 +478,11 @@ def _decode_base64url(value: str, max_decoded_bytes: int) -> bytes:
 
 
 __all__ = [
+    "MAX_CONFIRMATION_TOKEN_BYTES",
     "MAX_REVIEW_TOKEN_BYTES",
     "REVIEW_TOKEN_SECRET_BYTES",
     "REVIEW_TOKEN_VERSION",
+    "ConfirmationTokenClaims",
     "ReviewTokenClaims",
     "ReviewTokenCodec",
     "ReviewTokenError",

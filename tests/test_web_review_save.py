@@ -31,6 +31,7 @@ from second_brain.entrypoints.web.app import (
     create_app,
 )
 from second_brain.entrypoints.web.review import (
+    MAX_CONFIRMATION_TOKEN_BYTES,
     MAX_REVIEW_TOKEN_BYTES,
     ReviewTokenCodec,
     ReviewTokenError,
@@ -64,24 +65,55 @@ class FixedDraftService:
 
 
 class RecordingSaveService:
-    """Capture Save calls while returning a caller-selected application result."""
+    """Capture both Safe Write phases while returning caller-selected results."""
 
-    def __init__(self, result: CreateManagedNoteResult | None = None) -> None:
-        self.result = result or make_created_result()
-        self.text_calls: list[NoteDraft] = []
-        self.research_calls: list[tuple[NoteDraft, SourceProvenance]] = []
+    def __init__(
+        self,
+        prepare_result: CreateManagedNoteResult | None = None,
+        apply_result: CreateManagedNoteResult | None = None,
+    ) -> None:
+        self.prepare_result = prepare_result or make_dry_run_result()
+        self.apply_result = apply_result or make_created_result()
+        self.prepare_text_calls: list[NoteDraft] = []
+        self.prepare_research_calls: list[tuple[NoteDraft, SourceProvenance]] = []
+        self.apply_text_calls: list[NoteDraft] = []
+        self.apply_research_calls: list[tuple[NoteDraft, SourceProvenance]] = []
 
-    def save_text(self, draft: NoteDraft) -> CreateManagedNoteResult:
-        self.text_calls.append(draft)
-        return self.result
+    def prepare_text(self, draft: NoteDraft) -> CreateManagedNoteResult:
+        self.prepare_text_calls.append(draft)
+        return self.prepare_result
 
-    def save_research(
+    def prepare_research(
         self,
         draft: NoteDraft,
         source: SourceProvenance,
     ) -> CreateManagedNoteResult:
-        self.research_calls.append((draft, source))
-        return self.result
+        self.prepare_research_calls.append((draft, source))
+        return self.prepare_result
+
+    def apply_text(self, draft: NoteDraft) -> CreateManagedNoteResult:
+        self.apply_text_calls.append(draft)
+        return self.apply_result
+
+    def apply_research(
+        self,
+        draft: NoteDraft,
+        source: SourceProvenance,
+    ) -> CreateManagedNoteResult:
+        self.apply_research_calls.append((draft, source))
+        return self.apply_result
+
+    @property
+    def text_calls(self) -> list[NoteDraft]:
+        """Keep a compact aggregate assertion for all text-phase calls."""
+
+        return [*self.prepare_text_calls, *self.apply_text_calls]
+
+    @property
+    def research_calls(self) -> list[tuple[NoteDraft, SourceProvenance]]:
+        """Keep a compact aggregate assertion for all research-phase calls."""
+
+        return [*self.prepare_research_calls, *self.apply_research_calls]
 
 
 class PreviewTagParser(HTMLParser):
@@ -153,6 +185,32 @@ def make_created_result() -> CreateManagedNoteResult:
     )
 
 
+def make_dry_run_result() -> CreateManagedNoteResult:
+    """Return a safe fake dry-run result with a complete proposed file."""
+
+    return CreateManagedNoteResult(
+        status=CreateStatus.DRY_RUN,
+        plan=CreateNotePlan(
+            note_type=NoteType.RESOURCE,
+            title="Web review note",
+            note_id=parse_uuid7("0198f4c5-6a00-7000-8000-000000000010"),
+            created=datetime(2026, 9, 5, 12, 0, tzinfo=UTC),
+            relative_path="30 Resources/Web review note.md",
+            content=(
+                "---\n"
+                "id: 0198f4c5-6a00-7000-8000-000000000010\n"
+                "type: resource\n"
+                "created: 2026-09-05T12:00:00+00:00\n"
+                "tags: []\n"
+                "links: []\n"
+                "---\n"
+                "# Proposed body\n"
+            ),
+        ),
+        apply_requested=False,
+    )
+
+
 def make_app(
     *,
     draft_service: FixedDraftService | None = None,
@@ -177,12 +235,12 @@ def generate_draft(client: TestClient, path: str = "/api/drafts/text") -> dict[s
     return cast(dict[str, Any], response.json())
 
 
-def save_payload(
+def prepare_payload(
     generated: dict[str, Any],
     *,
     draft: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Build the exact explicit Save request without client provenance."""
+    """Build the exact dry-run request without client provenance."""
 
     return {
         "review_token": generated["review_token"],
@@ -195,6 +253,19 @@ def save_payload(
             "links": generated["draft"]["links"],
         },
     }
+
+
+def apply_payload(
+    generated: dict[str, Any],
+    confirmation_token: str,
+    *,
+    draft: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build the exact confirmed apply request without client provenance."""
+
+    payload = prepare_payload(generated, draft=draft)
+    payload["confirmation_token"] = confirmation_token
+    return payload
 
 
 def test_review_token_round_trip_binds_only_exact_public_provenance() -> None:
@@ -269,10 +340,121 @@ def test_review_token_rejects_unknown_version_fields_oversize_and_other_secret()
         codec.verify(signed_unknown)
 
 
+def test_confirmation_token_binds_review_context_and_exact_edited_draft() -> None:
+    secret = b"test-review-secret-that-is-at-least-32-bytes"
+    codec = ReviewTokenCodec(secret)
+    draft = make_draft()
+    review_token = codec.issue_text()
+    confirmation_token = codec.issue_confirmation(
+        review_token=review_token,
+        draft=draft,
+        mode=ReviewTokenMode.TEXT,
+    )
+
+    claims = codec.verify_confirmation(
+        confirmation_token,
+        review_token=review_token,
+        draft=draft,
+        mode=ReviewTokenMode.TEXT,
+    )
+    assert claims.mode is ReviewTokenMode.TEXT
+    assert len(claims.review_sha256) == 64
+    assert len(claims.draft_sha256) == 64
+    assert len(confirmation_token) <= MAX_CONFIRMATION_TOKEN_BYTES
+    assert secret.decode("ascii") not in confirmation_token
+    assert "vault" not in confirmation_token
+    assert "git" not in confirmation_token.casefold()
+
+    with pytest.raises(ReviewTokenError):
+        codec.verify_confirmation(
+            "not-a-confirmation-token",
+            review_token=review_token,
+            draft=draft,
+            mode=ReviewTokenMode.TEXT,
+        )
+    tampered_parts = confirmation_token.split(".")
+    tampered_parts[2] = ("A" if tampered_parts[2][0] != "A" else "B") + tampered_parts[2][1:]
+    with pytest.raises(ReviewTokenError):
+        codec.verify_confirmation(
+            ".".join(tampered_parts),
+            review_token=review_token,
+            draft=draft,
+            mode=ReviewTokenMode.TEXT,
+        )
+    confirmation_payload = json.loads(
+        base64.urlsafe_b64decode(confirmation_token.split(".")[1] + "===")
+    )
+    confirmation_payload["extra"] = "reject"
+    unknown_payload = json.dumps(
+        confirmation_payload,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    unknown_signature = hmac.new(secret, unknown_payload, hashlib.sha256).digest()
+    unknown_confirmation = ".".join(
+        (
+            "v1",
+            base64.urlsafe_b64encode(unknown_payload).rstrip(b"=").decode("ascii"),
+            base64.urlsafe_b64encode(unknown_signature).rstrip(b"=").decode("ascii"),
+        )
+    )
+    with pytest.raises(ReviewTokenError):
+        codec.verify_confirmation(
+            unknown_confirmation,
+            review_token=review_token,
+            draft=draft,
+            mode=ReviewTokenMode.TEXT,
+        )
+
+    with pytest.raises(ReviewTokenError):
+        codec.verify_confirmation(
+            confirmation_token,
+            review_token=codec.issue_text(),
+            draft=draft,
+            mode=ReviewTokenMode.TEXT,
+        )
+    with pytest.raises(ReviewTokenError):
+        codec.verify_confirmation(
+            confirmation_token,
+            review_token=review_token,
+            draft=NoteDraft(
+                title=draft.title,
+                note_type=draft.note_type,
+                content="changed",
+                tags=draft.tags,
+                links=draft.links,
+            ),
+            mode=ReviewTokenMode.TEXT,
+        )
+    with pytest.raises(ReviewTokenError):
+        codec.verify_confirmation(
+            confirmation_token,
+            review_token=review_token,
+            draft=draft,
+            mode=ReviewTokenMode.RESEARCH,
+        )
+    with pytest.raises(ReviewTokenError):
+        ReviewTokenCodec(b"another-review-secret-that-is-32-bytes").verify_confirmation(
+            confirmation_token,
+            review_token=review_token,
+            draft=draft,
+            mode=ReviewTokenMode.TEXT,
+        )
+
+
+def test_each_generated_text_review_has_a_distinct_context_token() -> None:
+    codec = ReviewTokenCodec(b"test-review-secret-that-is-at-least-32-bytes")
+    assert codec.issue_text() != codec.issue_text()
+
+
 def test_existing_512k_save_boundary_covers_token_draft_and_json_overhead() -> None:
     json_overhead_budget = 4 * 1024
     assert (
-        MAX_REVIEW_TOKEN_BYTES + MAX_MAX_OUTPUT_BYTES + json_overhead_budget
+        MAX_REVIEW_TOKEN_BYTES
+        + MAX_CONFIRMATION_TOKEN_BYTES
+        + MAX_MAX_OUTPUT_BYTES
+        + json_overhead_budget
         < MAX_RAW_DRAFT_BODY_BYTES
     )
 
@@ -371,23 +553,46 @@ def test_text_save_uses_exact_edited_fields_and_existing_safe_write(tmp_path: Pa
     install_templates(vault)
     service = FixedDraftService()
     before = snapshot_tree(vault)
+    edited = {
+        "title": "Edited resource",
+        "note_type": "resource",
+        "content": "## Edited exact body\n\nNo network.",
+        "tags": ["edited", "ordered"],
+        "links": ["[[Exact link]]"],
+    }
 
     with TestClient(
         make_app(draft_service=service, vault_path=vault), base_url=LOOPBACK_BASE_URL
     ) as client:
         generated = generate_draft(client)
+        prepare_response = client.post(
+            "/api/drafts/save/prepare",
+            json=prepare_payload(generated, draft=edited),
+            headers=DRAFT_REQUEST_HEADERS,
+        )
+        assert prepare_response.status_code == 200, prepare_response.text
+        assert prepare_response.headers["cache-control"] == "no-store"
+        prepared = prepare_response.json()
+        assert set(prepared) == {"status", "note", "diff", "confirmation_token"}
+        assert prepared["status"] == "dry-run"
+        assert set(prepared["note"]) == {"type", "relative_path"}
+        assert prepared["note"] == {
+            "type": "resource",
+            "relative_path": "30 Resources/Edited resource.md",
+        }
+        assert prepared["diff"].startswith("--- /dev/null\n+++ 30 Resources/Edited resource.md\n@@")
+        assert "id: " in prepared["diff"]
+        assert "created: " in prepared["diff"]
+        assert "type: resource" in prepared["diff"]
+        assert "tags:" in prepared["diff"]
+        assert "links:" in prepared["diff"]
+        assert "+## Edited exact body\n+\n+No network." in prepared["diff"]
+        assert str(vault) not in prepared["diff"]
+        assert snapshot_tree(vault) == before
+
         response = client.post(
-            "/api/drafts/save",
-            json=save_payload(
-                generated,
-                draft={
-                    "title": "Edited resource",
-                    "note_type": "resource",
-                    "content": "## Edited exact body\n\nNo network.",
-                    "tags": ["edited", "ordered"],
-                    "links": ["[[Exact link]]"],
-                },
-            ),
+            "/api/drafts/save/apply",
+            json=apply_payload(generated, prepared["confirmation_token"], draft=edited),
             headers=DRAFT_REQUEST_HEADERS,
         )
 
@@ -418,23 +623,34 @@ def test_url_save_uses_signed_provenance_and_does_not_call_research_again(tmp_pa
     vault = create_vault(tmp_path / "vault")
     install_templates(vault)
     service = FixedDraftService()
+    edited = {
+        "title": "Reviewed source",
+        "note_type": "resource",
+        "content": "Reviewed body.",
+        "tags": ["source"],
+        "links": [],
+    }
+    before = snapshot_tree(vault)
 
     with TestClient(
         make_app(draft_service=service, vault_path=vault), base_url=LOOPBACK_BASE_URL
     ) as client:
         generated = generate_draft(client, "/api/drafts/url")
+        prepare_response = client.post(
+            "/api/drafts/save/prepare",
+            json=prepare_payload(generated, draft=edited),
+            headers=DRAFT_REQUEST_HEADERS,
+        )
+        assert prepare_response.status_code == 200, prepare_response.text
+        assert prepare_response.headers["cache-control"] == "no-store"
+        prepared = prepare_response.json()
+        assert prepared["status"] == "dry-run"
+        assert "sources:" in prepared["diff"]
+        assert snapshot_tree(vault) == before
+
         response = client.post(
-            "/api/drafts/save",
-            json=save_payload(
-                generated,
-                draft={
-                    "title": "Reviewed source",
-                    "note_type": "resource",
-                    "content": "Reviewed body.",
-                    "tags": ["source"],
-                    "links": [],
-                },
-            ),
+            "/api/drafts/save/apply",
+            json=apply_payload(generated, prepared["confirmation_token"], draft=edited),
             headers=DRAFT_REQUEST_HEADERS,
         )
 
@@ -459,6 +675,115 @@ def test_url_save_uses_signed_provenance_and_does_not_call_research_again(tmp_pa
     assert service.text_calls == 0
 
 
+def test_prepare_is_dry_run_only_and_apply_requires_confirmation() -> None:
+    save_service = RecordingSaveService()
+    with TestClient(make_app(save_service=save_service), base_url=LOOPBACK_BASE_URL) as client:
+        generated = generate_draft(client)
+        prepared = client.post(
+            "/api/drafts/save/prepare",
+            json=prepare_payload(generated),
+            headers=DRAFT_REQUEST_HEADERS,
+        )
+        missing = prepare_payload(generated)
+        rejected = client.post(
+            "/api/drafts/save/apply",
+            json=apply_payload(generated, "not-a-confirmation-token"),
+            headers=DRAFT_REQUEST_HEADERS,
+        )
+        rejected_missing = client.post(
+            "/api/drafts/save/apply",
+            json=missing,
+            headers=DRAFT_REQUEST_HEADERS,
+        )
+
+    assert prepared.status_code == 200, prepared.text
+    assert prepared.json()["status"] == "dry-run"
+    assert len(save_service.prepare_text_calls) == 1
+    assert save_service.apply_text_calls == []
+    assert rejected.status_code == 400
+    assert rejected.json()["error"]["code"] == "SAVE_CONFIRMATION_INVALID"
+    assert rejected_missing.status_code == 400
+    assert save_service.apply_text_calls == []
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("title", "Changed after prepare"),
+        ("note_type", "project"),
+        ("content", "Changed after prepare"),
+        ("tags", ["changed"]),
+        ("links", ["https://example.invalid/changed"]),
+    ],
+)
+def test_apply_rejects_every_edited_field_changed_after_prepare(
+    field: str,
+    value: object,
+) -> None:
+    save_service = RecordingSaveService()
+    with TestClient(make_app(save_service=save_service), base_url=LOOPBACK_BASE_URL) as client:
+        generated = generate_draft(client)
+        prepared = client.post(
+            "/api/drafts/save/prepare",
+            json=prepare_payload(generated),
+            headers=DRAFT_REQUEST_HEADERS,
+        )
+        assert prepared.status_code == 200, prepared.text
+        changed_draft = dict(generated["draft"])
+        changed_draft[field] = value
+        response = client.post(
+            "/api/drafts/save/apply",
+            json=apply_payload(
+                generated,
+                prepared.json()["confirmation_token"],
+                draft=changed_draft,
+            ),
+            headers=DRAFT_REQUEST_HEADERS,
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "SAVE_CONFIRMATION_INVALID"
+    assert save_service.apply_text_calls == []
+
+
+def test_apply_rejects_unknown_fields_without_running_safe_write() -> None:
+    save_service = RecordingSaveService()
+    with TestClient(make_app(save_service=save_service), base_url=LOOPBACK_BASE_URL) as client:
+        generated = generate_draft(client)
+        prepared = client.post(
+            "/api/drafts/save/prepare",
+            json=prepare_payload(generated),
+            headers=DRAFT_REQUEST_HEADERS,
+        )
+        assert prepared.status_code == 200, prepared.text
+        payload = apply_payload(generated, prepared.json()["confirmation_token"])
+        payload["apply"] = True
+        response = client.post(
+            "/api/drafts/save/apply",
+            json=payload,
+            headers=DRAFT_REQUEST_HEADERS,
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "DRAFT_INVALID_REQUEST"
+    assert save_service.apply_text_calls == []
+
+
+def test_legacy_one_phase_save_endpoint_cannot_apply() -> None:
+    save_service = RecordingSaveService()
+    with TestClient(make_app(save_service=save_service), base_url=LOOPBACK_BASE_URL) as client:
+        generated = generate_draft(client)
+        response = client.post(
+            "/api/drafts/save",
+            json=prepare_payload(generated),
+            headers=DRAFT_REQUEST_HEADERS,
+        )
+
+    assert response.status_code == 404
+    assert save_service.text_calls == []
+    assert save_service.research_calls == []
+
+
 def test_save_target_exists_is_a_safe_conflict_without_overwrite(tmp_path: Path) -> None:
     vault = create_vault(tmp_path / "vault")
     install_templates(vault)
@@ -472,8 +797,8 @@ def test_save_target_exists_is_a_safe_conflict_without_overwrite(tmp_path: Path)
     ) as client:
         generated = generate_draft(client)
         response = client.post(
-            "/api/drafts/save",
-            json=save_payload(generated),
+            "/api/drafts/save/prepare",
+            json=prepare_payload(generated),
             headers=DRAFT_REQUEST_HEADERS,
         )
 
@@ -503,11 +828,11 @@ def test_save_rejects_browser_owned_fields(
     save_service = RecordingSaveService()
     with TestClient(make_app(save_service=save_service), base_url=LOOPBACK_BASE_URL) as client:
         generated = generate_draft(client)
-        payload = save_payload(generated)
+        payload = prepare_payload(generated)
         target = payload if location == "top" else cast(dict[str, Any], payload["draft"])
         target[field] = value
         response = client.post(
-            "/api/drafts/save",
+            "/api/drafts/save/prepare",
             json=payload,
             headers=DRAFT_REQUEST_HEADERS,
         )
@@ -532,10 +857,10 @@ def test_save_rejects_invalid_edited_note_draft(field: str, value: object) -> No
     save_service = RecordingSaveService()
     with TestClient(make_app(save_service=save_service), base_url=LOOPBACK_BASE_URL) as client:
         generated = generate_draft(client)
-        payload = save_payload(generated)
+        payload = prepare_payload(generated)
         cast(dict[str, Any], payload["draft"])[field] = value
         response = client.post(
-            "/api/drafts/save",
+            "/api/drafts/save/prepare",
             json=payload,
             headers=DRAFT_REQUEST_HEADERS,
         )
@@ -555,8 +880,8 @@ def test_save_preflight_failure_is_safe_and_writes_nothing(tmp_path: Path) -> No
     with TestClient(make_app(vault_path=vault), base_url=LOOPBACK_BASE_URL) as client:
         generated = generate_draft(client)
         response = client.post(
-            "/api/drafts/save",
-            json=save_payload(generated),
+            "/api/drafts/save/prepare",
+            json=prepare_payload(generated),
             headers=DRAFT_REQUEST_HEADERS,
         )
 
@@ -574,19 +899,19 @@ def test_client_cannot_supply_sources_or_replace_signed_provenance(tmp_path: Pat
         make_app(vault_path=vault, save_service=save_service), base_url=LOOPBACK_BASE_URL
     ) as client:
         generated = generate_draft(client, "/api/drafts/url")
-        extra_sources = save_payload(generated)
+        extra_sources = prepare_payload(generated)
         extra_sources["sources"] = []
         rejected_extra = client.post(
-            "/api/drafts/save",
+            "/api/drafts/save/prepare",
             json=extra_sources,
             headers=DRAFT_REQUEST_HEADERS,
         )
-        tampered = save_payload(generated)
+        tampered = prepare_payload(generated)
         parts = tampered["review_token"].split(".")
         parts[1] = ("A" if parts[1][0] != "A" else "B") + parts[1][1:]
         tampered["review_token"] = ".".join(parts)
         rejected_tamper = client.post(
-            "/api/drafts/save",
+            "/api/drafts/save/prepare",
             json=tampered,
             headers=DRAFT_REQUEST_HEADERS,
         )
@@ -614,9 +939,23 @@ def test_client_cannot_supply_sources_or_replace_signed_provenance(tmp_path: Pat
     [
         ("/api/drafts/preview", {"content": "# preview"}),
         (
-            "/api/drafts/save",
+            "/api/drafts/save/prepare",
             {
                 "review_token": "not-a-token",
+                "draft": {
+                    "title": "Safe title",
+                    "note_type": "resource",
+                    "content": "body",
+                    "tags": [],
+                    "links": [],
+                },
+            },
+        ),
+        (
+            "/api/drafts/save/apply",
+            {
+                "review_token": "not-a-token",
+                "confirmation_token": "not-a-confirmation-token",
                 "draft": {
                     "title": "Safe title",
                     "note_type": "resource",
@@ -665,12 +1004,18 @@ def test_save_maps_rollback_results_without_diagnostics_leak(
         rollback_succeeded=rollback,
         apply_requested=True,
     )
-    save_service = RecordingSaveService(result)
+    save_service = RecordingSaveService(apply_result=result)
     with TestClient(make_app(save_service=save_service), base_url=LOOPBACK_BASE_URL) as client:
         generated = generate_draft(client)
+        prepared = client.post(
+            "/api/drafts/save/prepare",
+            json=prepare_payload(generated),
+            headers=DRAFT_REQUEST_HEADERS,
+        )
+        assert prepared.status_code == 200, prepared.text
         response = client.post(
-            "/api/drafts/save",
-            json=save_payload(generated),
+            "/api/drafts/save/apply",
+            json=apply_payload(generated, prepared.json()["confirmation_token"]),
             headers=DRAFT_REQUEST_HEADERS,
         )
 
@@ -709,8 +1054,8 @@ def test_save_config_is_lazy_and_invalid_config_makes_zero_writes(
         )
         generated = generate_draft(client)
         response = client.post(
-            "/api/drafts/save",
-            json=save_payload(generated),
+            "/api/drafts/save/prepare",
+            json=prepare_payload(generated),
             headers=DRAFT_REQUEST_HEADERS,
         )
 
@@ -725,7 +1070,14 @@ def test_save_config_is_lazy_and_invalid_config_makes_zero_writes(
     assert str(tmp_path) not in response.text
 
 
-@pytest.mark.parametrize("path", ["/api/drafts/preview", "/api/drafts/save"])
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/drafts/preview",
+        "/api/drafts/save/prepare",
+        "/api/drafts/save/apply",
+    ],
+)
 def test_review_routes_use_existing_boundary_and_raw_body_cap(path: str) -> None:
     with TestClient(make_app(), base_url=LOOPBACK_BASE_URL) as client:
         missing_header = client.post(path, json={}, headers={})

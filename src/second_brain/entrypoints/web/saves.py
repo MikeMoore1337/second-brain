@@ -23,17 +23,27 @@ from second_brain.config import load_config
 
 
 class DraftSaveService(Protocol):
-    """Minimal injectable seam for explicit Web Save."""
+    """Minimal injectable seam for the two explicit Web Save phases."""
 
-    def save_text(self, draft: NoteDraft) -> CreateManagedNoteResult:
-        """Save one reviewed text draft through the existing Safe Write use case."""
+    def prepare_text(self, draft: NoteDraft) -> CreateManagedNoteResult:
+        """Prepare one reviewed text draft without publishing it."""
 
-    def save_research(
+    def prepare_research(
         self,
         draft: NoteDraft,
         source: SourceProvenance,
     ) -> CreateManagedNoteResult:
-        """Save one reviewed research draft with server-verified provenance."""
+        """Prepare one reviewed research draft without publishing it."""
+
+    def apply_text(self, draft: NoteDraft) -> CreateManagedNoteResult:
+        """Apply one previously prepared text draft through Safe Write."""
+
+    def apply_research(
+        self,
+        draft: NoteDraft,
+        source: SourceProvenance,
+    ) -> CreateManagedNoteResult:
+        """Apply one previously prepared research draft through Safe Write."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,27 +53,57 @@ class LazyVaultDraftSaveService:
     env_file: Path | None = None
     vault_path_override: str | None = None
 
-    def save_text(self, draft: NoteDraft) -> CreateManagedNoteResult:
-        """Execute text Safe Write with server-owned ``apply=True`` semantics."""
+    def prepare_text(self, draft: NoteDraft) -> CreateManagedNoteResult:
+        """Execute text Safe Write dry-run with server-owned ``apply=False``."""
 
-        reader, writer = self._vault_adapters()
-        return CreateManagedNoteFromDraft(reader, writer).execute(
-            CreateManagedNoteFromDraftRequest(draft=draft, apply=True)
-        )
+        return self._execute_text(draft, apply=False)
 
-    def save_research(
+    def apply_text(self, draft: NoteDraft) -> CreateManagedNoteResult:
+        """Execute text Safe Write apply after server-side confirmation."""
+
+        return self._execute_text(draft, apply=True)
+
+    def prepare_research(
         self,
         draft: NoteDraft,
         source: SourceProvenance,
     ) -> CreateManagedNoteResult:
-        """Execute reviewed research Safe Write without another research/LLM call."""
+        """Execute reviewed research dry-run with ``apply=False``."""
+
+        return self._execute_research(draft, source, apply=False)
+
+    def apply_research(
+        self,
+        draft: NoteDraft,
+        source: SourceProvenance,
+    ) -> CreateManagedNoteResult:
+        """Execute reviewed research apply after server-side confirmation."""
+
+        return self._execute_research(draft, source, apply=True)
+
+    def _execute_text(self, draft: NoteDraft, *, apply: bool) -> CreateManagedNoteResult:
+        """Run the existing text Safe Write with a server-selected phase."""
+
+        reader, writer = self._vault_adapters()
+        return CreateManagedNoteFromDraft(reader, writer).execute(
+            CreateManagedNoteFromDraftRequest(draft=draft, apply=apply)
+        )
+
+    def _execute_research(
+        self,
+        draft: NoteDraft,
+        source: SourceProvenance,
+        *,
+        apply: bool,
+    ) -> CreateManagedNoteResult:
+        """Run the existing reviewed research Safe Write with a server-selected phase."""
 
         reader, writer = self._vault_adapters()
         reviewed = ReviewedResearchDraft(draft=draft, sources=(source,))
         return CreateManagedNoteFromReviewedResearchDraft(reader, writer).execute(
             CreateManagedNoteFromReviewedResearchDraftRequest(
                 reviewed_draft=reviewed,
-                apply=True,
+                apply=apply,
             )
         )
 

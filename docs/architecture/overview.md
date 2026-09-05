@@ -20,16 +20,17 @@ FastAPI web entrypoint
    | +-- Text -> LlmGateway -> NoteDraft + text review_token
    | +-- URL -> ResearchDraftGateway -> NoteDraft + SourceProvenance + research review_token
    | +-- Preview -> safe markdown-it-py renderer -> inert HTML
-   `-- Save -> verified token + edited NoteDraft -> existing Safe Write
+   `-- Save -> Prepare(dry-run diff) -> confirmation -> Apply -> existing Safe Write
 ```
 
 `second-brain web serve` запускает packaged HTML/CSS/JavaScript shell только на
 `127.0.0.1` (default port `8000`, опциональный bounded `--port`).
 `--env-file` и `--vault-path` передаются в app object, но lazy Save service не
-загружает их до реального Save. `create_app()` собирает только лёгкую
+загружает их до явной подготовки или применения Save. `create_app()` собирает только лёгкую
 production composition: credentials, research process, LLM worker и vault не
 читаются/не запускаются до соответствующего POST. `GET /`, `GET /healthz` и
-Preview не вызывают vault или Safe Write.
+Preview не вызывают vault или Safe Write; Prepare вызывает только Safe Write
+dry-run и не меняет vault.
 
 `POST /api/drafts/text` передаёт пользовательский `text` в
 `LlmRequest.context` exact/unmodified и выполняет не более одного LLM draft;
@@ -43,7 +44,9 @@ HTTP boundary использует strict JSON request models с reject unknown 
 safe error envelope и `Cache-Control: no-store`. Host allowlist ограничена
 `127.0.0.1` и `localhost`; CSP разрешает только `connect-src 'self'`, а
 JavaScript делает только same-origin fetch. Server-issued review token подписан
-process-local HMAC-SHA256 secret и хранится только в JS memory; research token
+process-local HMAC-SHA256 secret и хранится только в JS memory; confirmation token
+также stateless, хранится только в памяти UI и привязан к exact review token
+context и ровно пяти полям edited `NoteDraft`. Research token
 содержит только signed `SourceProvenance`, без raw content/backend/provider или
 filesystem/Git metadata. Browser показывает provenance только для чтения.
 Preview использует `markdown-it-py` с disabled raw HTML/linkify; links становятся
@@ -51,13 +54,18 @@ inert text spans, images — text placeholders, а code fence info не попа
 HTML attributes. Единственный `innerHTML` находится в dedicated preview
 container и получает только этот server-generated safe HTML.
 
-Save не принимает `sources` или `apply`. После проверки token сервер собирает
-новый `NoteDraft` из пяти editable fields и вызывает существующий
+Save не принимает отдельного client-controlled `sources` или client-controlled
+`apply`. После проверки review token сервер собирает новый `NoteDraft` из пяти
+editable fields. `POST
+/api/drafts/save/prepare` вызывает существующий
 `CreateManagedNoteFromDraft` для Text либо
-`CreateManagedNoteFromReviewedResearchDraft` для URL с provenance из token;
-`apply=True` устанавливается только внутри этого explicit operation. Save
-загружает vault config lazy, не вызывает Research/LLM/network/Git и возвращает
-только безопасные note fields.
+`CreateManagedNoteFromReviewedResearchDraft` для URL с provenance из token с
+`apply=False`, и возвращает только safe full-file unified diff и HMAC
+confirmation token; этот этап не пишет. Только `POST /api/drafts/save/apply`
+после проверки confirmation token вызывает тот же use case с `apply=True`.
+Apply снова получает только signed provenance, не вызывает Research/LLM/network/Git
+и возвращает только безопасные note fields; Prepare/Apply errors не раскрывают
+absolute paths, receipts или raw diagnostics.
 
 Vault является каноническим источником истины. Индексы, SQLite, embeddings и
 кэш относятся к производному состоянию и могут быть пересозданы из vault.
