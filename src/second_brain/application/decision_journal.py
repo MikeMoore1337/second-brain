@@ -333,9 +333,21 @@ def _parse_sections(
     expected_headings = {f"## {heading}" for heading in expected}
     indexes: list[int] = []
     found: list[str] = []
+    fence_char: str | None = None
+    fence_length = 0
     for index, raw_line in enumerate(lines):
         line = raw_line.rstrip("\r\n")
-        if not line.startswith("##"):
+        if fence_char is not None:
+            if _is_fence_closing(line, fence_char, fence_length):
+                fence_char = None
+                fence_length = 0
+            continue
+
+        opening = _fence_opening(line)
+        if opening is not None:
+            fence_char, fence_length = opening
+            continue
+        if not _is_document_h2(line):
             continue
         if line not in expected_headings:
             raise error_type("heading_unknown")
@@ -365,6 +377,54 @@ def _parse_sections(
             raise error_type("section_too_large")
         sections[heading] = value
     return sections
+
+
+def _fence_opening(line: str) -> tuple[str, int] | None:
+    """Распознать CommonMark-style opening fence без Markdown dependency."""
+
+    leading_spaces = len(line) - len(line.lstrip(" "))
+    if leading_spaces > 3:
+        return None
+    candidate = line[leading_spaces:]
+    if not candidate or candidate[0] not in "`~":
+        return None
+    fence_char = candidate[0]
+    fence_length = 0
+    while fence_length < len(candidate) and candidate[fence_length] == fence_char:
+        fence_length += 1
+    if fence_length < 3:
+        return None
+    info = candidate[fence_length:]
+    if fence_char == "`" and "`" in info:
+        return None
+    return fence_char, fence_length
+
+
+def _is_fence_closing(line: str, fence_char: str, fence_length: int) -> bool:
+    """Проверить closing fence того же типа и не короче opening fence."""
+
+    leading_spaces = len(line) - len(line.lstrip(" "))
+    if leading_spaces > 3:
+        return False
+    candidate = line[leading_spaces:]
+    if not candidate or candidate[0] != fence_char:
+        return False
+    closing_length = 0
+    while closing_length < len(candidate) and candidate[closing_length] == fence_char:
+        closing_length += 1
+    return closing_length >= fence_length and not candidate[closing_length:].strip()
+
+
+def _is_document_h2(line: str) -> bool:
+    """Отличить document-level H2 от H3/H4 и обычного текста."""
+
+    leading_spaces = len(line) - len(line.lstrip(" "))
+    if leading_spaces > 3:
+        return False
+    candidate = line[leading_spaces:]
+    if not candidate.startswith("##") or candidate.startswith("###"):
+        return False
+    return len(candidate) == 2 or candidate[2] in " \t"
 
 
 def _parse_bullet_list(

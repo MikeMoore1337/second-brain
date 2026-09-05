@@ -342,6 +342,122 @@ def test_journal_body_rejects_deterministic_content_violations(body: str) -> Non
         parse_decision_journal_body(body)
 
 
+def test_journal_fenced_backticks_are_narrative_content() -> None:
+    fenced = "```yaml\n## Not a section\nfoo: bar\n```"
+    body = journal_body().replace(
+        "Известна только информация на момент выбора.",
+        f"Известна только информация на момент выбора.\n\n{fenced}",
+        1,
+    )
+
+    record = parse_decision_journal_body(body)
+
+    assert fenced in record.information_known_at_decision_time
+
+
+def test_journal_fenced_required_heading_is_not_duplicate_or_order_error() -> None:
+    fenced = "```text\n## Chosen option\n```"
+    body = journal_body().replace(
+        "Нужно принять решение в русском контексте.",
+        f"Нужно принять решение в русском контексте.\n\n{fenced}",
+        1,
+    )
+
+    record = parse_decision_journal_body(body)
+
+    assert fenced in record.situation
+
+
+def test_journal_tilde_fence_is_not_a_heading_container() -> None:
+    fenced = "~~~text\n## Criteria\n~~~"
+    body = journal_body().replace(
+        "Выбор лучше соответствует ограничениям.",
+        f"Выбор лучше соответствует ограничениям.\n\n{fenced}",
+        1,
+    )
+
+    record = parse_decision_journal_body(body)
+
+    assert fenced in record.reasons
+
+
+def test_journal_fence_closing_must_match_type_and_opening_length() -> None:
+    fenced = "````yaml\n## Chosen option\n````"
+    valid_body = journal_body().replace(
+        "Нужно принять решение в русском контексте.",
+        f"Нужно принять решение в русском контексте.\n\n{fenced}",
+        1,
+    )
+
+    assert fenced in parse_decision_journal_body(valid_body).situation
+
+    short_closing_body = valid_body.replace(fenced, fenced.removesuffix("````") + "```")
+    with pytest.raises(DecisionJournalBodyError) as error:
+        parse_decision_journal_body(short_closing_body)
+
+    assert error.value.reason == "heading_missing"
+
+
+def test_journal_h3_is_narrative_content() -> None:
+    body = journal_body().replace(
+        "Нужно принять решение в русском контексте.",
+        "Нужно принять решение в русском контексте.\n\n### Детали\nДополнительный контекст.",
+        1,
+    )
+
+    record = parse_decision_journal_body(body)
+
+    assert "### Детали" in record.situation
+
+
+def test_journal_real_unknown_h2_still_rejects() -> None:
+    with pytest.raises(DecisionJournalBodyError) as error:
+        parse_decision_journal_body(journal_body() + "\n## Unsupported\n")
+
+    assert error.value.reason == "heading_unknown"
+
+
+def test_journal_real_duplicate_h2_still_rejects() -> None:
+    body = journal_body().replace(
+        "## Reasons\n",
+        "## Reasons\nПервый блок.\n\n## Reasons\n",
+        1,
+    )
+
+    with pytest.raises(DecisionJournalBodyError) as error:
+        parse_decision_journal_body(body)
+
+    assert error.value.reason == "heading_duplicate"
+
+
+def test_journal_unclosed_fence_hides_following_headings() -> None:
+    body = journal_body().replace(
+        "## Information known at decision time\n",
+        "## Information known at decision time\n\n```text\n",
+        1,
+    )
+
+    with pytest.raises(DecisionJournalBodyError) as error:
+        parse_decision_journal_body(body)
+
+    assert error.value.reason == "heading_missing"
+
+
+def test_outcome_fenced_headings_remain_in_each_projection_section() -> None:
+    actual = "```text\n## Reassessment\n```"
+    reassessment = "~~~text\n## Notes\n~~~"
+    notes = "```yaml\n## Actual result\n```"
+
+    record = parse_outcome_observation_body(
+        outcome_body(actual=actual, reassessment=reassessment, notes=notes),
+        DECISION_ID,
+    )
+
+    assert record.actual_result == actual
+    assert record.reassessment == reassessment
+    assert record.notes == notes
+
+
 def test_journal_body_projection_preserves_unicode_and_exact_option_match() -> None:
     body = journal_body(
         options=("Сохранить ёлку", "Переехать в Москву"), chosen="  Сохранить ёлку  "
