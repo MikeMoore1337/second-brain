@@ -20,6 +20,7 @@ from second_brain.domain.models import (
     EvidenceAtPrecision,
     EvidenceKind,
     NoteRecord,
+    NoteType,
     PersonalMemoryMetadata,
     SelfKind,
 )
@@ -41,6 +42,23 @@ _BLOCKING_DIAGNOSTIC_CODES: Final[frozenset[str]] = frozenset(
         "DECISION_JOURNAL_INVALID_BODY",
         "OUTCOME_OBSERVATION_INVALID_BODY",
     }
+)
+_SCOPED_SCAN_DIAGNOSTIC_CODES: Final[frozenset[str]] = frozenset(
+    {
+        "VAULT_ROOT_MISSING",
+        "VAULT_ROOT_NOT_DIRECTORY",
+        "VAULT_LINKED_DIRECTORY",
+        "VAULT_ENTRY_RESOLVE_ERROR",
+        "VAULT_PATH_ESCAPE",
+    }
+)
+_CONTENT_ROOT_FIELDS: Final[tuple[str, ...]] = (
+    "inbox",
+    "projects",
+    "areas",
+    "resources",
+    "zettelkasten",
+    "archive",
 )
 
 
@@ -153,6 +171,7 @@ class BuildPersonalTimeline:
 
         validate_personal_timeline_request(request)
         report = _read_report(self.reader)
+        _validate_scan_completeness(report)
         _validate_evidence_integrity(report)
         known, unknown = _project_timeline_items(report)
 
@@ -208,6 +227,40 @@ def _read_report(reader: VaultReader) -> ScanReport:
     if report.manifest is None:
         raise TimelineVaultUnavailableError()
     return report
+
+
+def _validate_scan_completeness(report: ScanReport) -> None:
+    """Reject scans that cannot prove the complete canonical content scope."""
+
+    for diagnostic in report.diagnostics:
+        if diagnostic.code == "NOTE_FRONT_MATTER_ERROR":
+            raise TimelineEvidenceInvalidError()
+        if diagnostic.code in {
+            "NOTE_READ_ERROR",
+            "VAULT_DIRECTORY_READ_ERROR",
+            "VAULT_OVERLAPPING_ROOTS",
+        }:
+            raise TimelineVaultUnavailableError()
+        if diagnostic.code in _SCOPED_SCAN_DIAGNOSTIC_CODES and _diagnostic_affects_content_scope(
+            diagnostic.path, report
+        ):
+            raise TimelineVaultUnavailableError()
+
+
+def _diagnostic_affects_content_scope(path: str | None, report: ScanReport) -> bool:
+    """Match diagnostic paths against typed manifest content roots, not messages."""
+
+    if path is None or report.manifest is None:
+        return True
+    candidate = PurePosixPath(path)
+    return any(
+        _is_path_under(candidate, getattr(report.manifest.paths, field))
+        for field in _CONTENT_ROOT_FIELDS
+    )
+
+
+def _is_path_under(path: PurePosixPath, root: PurePosixPath) -> bool:
+    return path == root or root in path.parents
 
 
 def _validate_evidence_integrity(report: ScanReport) -> None:
@@ -307,6 +360,7 @@ def _has_valid_storage_identity(note: NoteRecord) -> bool:
         note.managed is True
         and type(note.note_id) is UUID
         and note.note_id.version == 7
+        and type(note.note_type) is NoteType
         and _is_aware(note.created)
         and (note.updated is None or _is_aware(note.updated))
     )

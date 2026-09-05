@@ -465,10 +465,13 @@ storage/audit context и никогда не используются как eve
 сортируется по instant с deterministic path/UUID tie-break, unknown — только по
 relative path и UUID, без использования UUIDv7 или storage timestamps.
 
-Timeline fail-closed при ошибках целостности enrolled evidence и не возвращает
-частичный personal history. Он не имеет `status`, persistence, cache, watcher,
-cursor или write capability: `generated_at` — только injectable application
-clock в in-memory result. `schema_version` не меняется, а
-`second-brain-vault` остаётся отдельным нетронутым репозиторием.
+Timeline fail-closed при ошибках целостности enrolled evidence и при
+incompleteness canonical content scan; он не возвращает частичный personal
+history. Read/root/directory/resolve failures блокируют только по typed
+manifest content roots, тогда как template/attachment-only root failures и
+unrelated diagnostics не блокируют projection. Timeline не имеет `status`,
+persistence, cache, watcher, cursor или write capability: `generated_at` —
+только injectable application clock в in-memory result. `schema_version` не
+меняется, а `second-brain-vault` остаётся отдельным нетронутым репозиторием.
 
 Design-only roadmap будущего Personal Cognitive Twin: [design-roadmap-v1.md](../cognitive-twin/design-roadmap-v1.md).
