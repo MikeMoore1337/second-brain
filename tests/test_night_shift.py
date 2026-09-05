@@ -113,6 +113,20 @@ def test_dependency_states_block_or_stop_dependent_task() -> None:
     )
     assert human.status is GateStatus.HUMAN_REQUIRED
 
+    blocked = evaluate_task_start(
+        policy(),
+        TaskCandidate(
+            issue_number=candidate.issue_number,
+            state=candidate.state,
+            risk_lane=candidate.risk_lane,
+            source=candidate.source,
+            dependencies=candidate.dependencies,
+            dependency_states={81: TaskState.BLOCKED},
+        ),
+        night_mode_enabled=True,
+    )
+    assert blocked.status is GateStatus.HUMAN_REQUIRED
+
 
 def test_selection_skips_blocked_independent_candidate_and_never_invents_roadmap() -> None:
     candidates = (
@@ -237,6 +251,13 @@ def test_merge_gate_requires_exact_reviewed_head_and_all_required_checks() -> No
         _green_merge_evidence(reviewed_head_sha="b" * 40),
     )
     assert stale_review.status is GateStatus.BLOCKED
+
+    abbreviated_review = evaluate_merge_gate(
+        loaded,
+        _green_merge_evidence(current_head_sha="a" * 7, reviewed_head_sha="a" * 7),
+    )
+    assert abbreviated_review.status is GateStatus.BLOCKED
+    assert abbreviated_review.reasons == ("reviewed_head_sha_is_not_full_commit_sha",)
 
     pending_ci = evaluate_merge_gate(
         loaded,

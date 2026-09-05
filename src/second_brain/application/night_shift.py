@@ -251,9 +251,7 @@ def evaluate_task_start(
         if dependency_state is None:
             return _blocked(f"dependency_{dependency}_state_missing")
         if dependency_state in policy.dependency_blocking_states:
-            if dependency_state is TaskState.HUMAN_REQUIRED:
-                return _human(f"dependency_{dependency}_is_{dependency_state.value}")
-            return _blocked(f"dependency_{dependency}_is_{dependency_state.value}")
+            return _human(f"dependency_{dependency}_is_{dependency_state.value}")
         if dependency_state is not policy.dependency_satisfied_state:
             return _blocked(f"dependency_{dependency}_is_not_merged")
 
@@ -333,7 +331,11 @@ def evaluate_merge_gate(policy: NightShiftPolicy, evidence: MergeGateEvidence) -
         return _human(f"risk_lane_{evidence.risk_lane.value.lower()}_cannot_auto_merge")
     if evidence.review_verdict is not NightShiftVerdict.MERGE_READY:
         return _blocked("review_verdict_is_not_merge_ready")
-    if not evidence.current_head_sha or evidence.current_head_sha != evidence.reviewed_head_sha:
+    if not _is_full_commit_sha(evidence.current_head_sha) or not _is_full_commit_sha(
+        evidence.reviewed_head_sha
+    ):
+        return _blocked("reviewed_head_sha_is_not_full_commit_sha")
+    if evidence.current_head_sha != evidence.reviewed_head_sha:
         return _blocked("reviewed_head_sha_is_not_current_head")
     if evidence.human_gate:
         return _human("human_gate_present")
@@ -630,6 +632,10 @@ def _risk_policy(policy: NightShiftPolicy, lane: RiskLane) -> RiskPolicy:
 
 def _check_is_success(value: CheckConclusion | str | None) -> bool:
     return value is CheckConclusion.SUCCESS or value == CheckConclusion.SUCCESS.value
+
+
+def _is_full_commit_sha(value: str) -> bool:
+    return re.fullmatch(r"[0-9a-f]{40}", value) is not None
 
 
 def _ready(reason: str) -> GateResult:
