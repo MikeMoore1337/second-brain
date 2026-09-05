@@ -12,8 +12,18 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 from typing import Any
+from uuid import UUID
 
+from second_brain.application.decision_journal import (
+    DecisionJournalDraft,
+    DecisionJournalDraftError,
+    OutcomeObservationDraft,
+    OutcomeObservationDraftError,
+    validate_decision_journal_draft,
+    validate_outcome_observation_draft,
+)
 from second_brain.application.llm import NoteDraft
+from second_brain.application.ports import LlmError
 from second_brain.application.research import SourceKind, SourceProvenance
 from second_brain.domain.models import (
     EvidenceAtPrecision,
@@ -27,6 +37,9 @@ REVIEW_TOKEN_SECRET_BYTES = 32
 MAX_REVIEW_TOKEN_BYTES = 128 * 1024
 MAX_CONFIRMATION_TOKEN_BYTES = 8 * 1024
 PERSONAL_MEMORY_CONFIRMATION_VERSION = 1
+STAGE2_CONFIRMATION_VERSION = 1
+DECISION_JOURNAL_CONFIRMATION_PURPOSE = "decision-journal-save-confirmation"
+OUTCOME_OBSERVATION_CONFIRMATION_PURPOSE = "outcome-observation-save-confirmation"
 _REVIEW_CONTEXT_NONCE_BYTES = 16
 _MAX_REVIEW_PAYLOAD_BYTES = 96 * 1024
 _TOKEN_PREFIX = "v1"
@@ -54,6 +67,7 @@ _PERSONAL_MEMORY_CONFIRMATION_FIELDS = frozenset(
         "v",
     }
 )
+_STAGE2_CONFIRMATION_FIELDS = frozenset({"draft_sha256", "metadata_sha256", "purpose", "v"})
 
 
 class ReviewTokenError(ValueError):
@@ -102,6 +116,38 @@ class PersonalMemoryConfirmationTokenClaims:
     review_sha256: str
     draft_sha256: str
     personal_memory_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionJournalConfirmationTokenClaims:
+    """Verified purpose-bound Decision Journal confirmation digests."""
+
+    purpose: str
+    version: int
+    draft_sha256: str
+    metadata_sha256: str
+
+    @property
+    def note_draft_sha256(self) -> str:
+        """Use an explicit name for the bound five-field NoteDraft digest."""
+
+        return self.draft_sha256
+
+
+@dataclass(frozen=True, slots=True)
+class OutcomeObservationConfirmationTokenClaims:
+    """Verified purpose-bound Outcome Observation confirmation digests."""
+
+    purpose: str
+    version: int
+    draft_sha256: str
+    metadata_sha256: str
+
+    @property
+    def note_draft_sha256(self) -> str:
+        """Use an explicit name for the bound five-field NoteDraft digest."""
+
+        return self.draft_sha256
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -262,6 +308,74 @@ class ReviewTokenCodec:
             raise ReviewTokenError()
         return claims
 
+    def issue_decision_journal_confirmation(self, draft: DecisionJournalDraft) -> str:
+        """Issue a standalone confirmation bound to one normalized Journal draft."""
+
+        normalized = _normalized_decision_journal_draft(draft)
+        return self._issue(
+            {
+                "draft_sha256": _draft_digest(normalized.draft),
+                "metadata_sha256": _stage2_metadata_digest(normalized.metadata, decision=True),
+                "purpose": DECISION_JOURNAL_CONFIRMATION_PURPOSE,
+                "v": STAGE2_CONFIRMATION_VERSION,
+            },
+            max_token_bytes=MAX_CONFIRMATION_TOKEN_BYTES,
+        )
+
+    def verify_decision_journal_confirmation(
+        self,
+        token: str,
+        draft: DecisionJournalDraft,
+    ) -> DecisionJournalConfirmationTokenClaims:
+        """Verify exact Journal NoteDraft/body/time/domain binding and purpose."""
+
+        normalized = _normalized_decision_journal_draft(draft)
+        claims = _decision_journal_confirmation_claims_from_payload(
+            self._verify_signed_payload(token, max_token_bytes=MAX_CONFIRMATION_TOKEN_BYTES)
+        )
+        _verify_stage2_digests(
+            claims.draft_sha256,
+            claims.metadata_sha256,
+            normalized.draft,
+            normalized.metadata,
+            decision=True,
+        )
+        return claims
+
+    def issue_outcome_observation_confirmation(self, draft: OutcomeObservationDraft) -> str:
+        """Issue a standalone confirmation bound to one normalized Outcome draft."""
+
+        normalized = _normalized_outcome_observation_draft(draft)
+        return self._issue(
+            {
+                "draft_sha256": _draft_digest(normalized.draft),
+                "metadata_sha256": _stage2_metadata_digest(normalized.metadata, decision=False),
+                "purpose": OUTCOME_OBSERVATION_CONFIRMATION_PURPOSE,
+                "v": STAGE2_CONFIRMATION_VERSION,
+            },
+            max_token_bytes=MAX_CONFIRMATION_TOKEN_BYTES,
+        )
+
+    def verify_outcome_observation_confirmation(
+        self,
+        token: str,
+        draft: OutcomeObservationDraft,
+    ) -> OutcomeObservationConfirmationTokenClaims:
+        """Verify exact Outcome NoteDraft/relation/time/domain binding and purpose."""
+
+        normalized = _normalized_outcome_observation_draft(draft)
+        claims = _outcome_observation_confirmation_claims_from_payload(
+            self._verify_signed_payload(token, max_token_bytes=MAX_CONFIRMATION_TOKEN_BYTES)
+        )
+        _verify_stage2_digests(
+            claims.draft_sha256,
+            claims.metadata_sha256,
+            normalized.draft,
+            normalized.metadata,
+            decision=False,
+        )
+        return claims
+
     def _verify_signed_payload(self, token: str, *, max_token_bytes: int) -> object:
         """Verify common bounded token framing and return canonical decoded payload."""
 
@@ -398,6 +512,97 @@ def _personal_memory_digest(metadata: PersonalMemoryMetadata) -> str:
         raise ReviewTokenError() from None
 
 
+def _normalized_decision_journal_draft(draft: DecisionJournalDraft) -> DecisionJournalDraft:
+    """Normalize a Journal draft before any confirmation digest is calculated."""
+
+    try:
+        return validate_decision_journal_draft(draft)
+    except DecisionJournalDraftError, LlmError, TypeError, ValueError, UnicodeError:
+        raise ReviewTokenError() from None
+
+
+def _normalized_outcome_observation_draft(
+    draft: OutcomeObservationDraft,
+) -> OutcomeObservationDraft:
+    """Normalize an Outcome draft before any confirmation digest is calculated."""
+
+    try:
+        return validate_outcome_observation_draft(draft)
+    except OutcomeObservationDraftError, LlmError, TypeError, ValueError, UnicodeError:
+        raise ReviewTokenError() from None
+
+
+def _stage2_metadata_digest(
+    metadata: PersonalMemoryMetadata,
+    *,
+    decision: bool,
+) -> str:
+    """Hash only the application-owned temporal/relation Stage 2 metadata."""
+
+    if type(metadata) is not PersonalMemoryMetadata:
+        raise ReviewTokenError()
+    if type(metadata.evidence_at_precision) is not EvidenceAtPrecision or (
+        metadata.domain is not None and type(metadata.domain) is not str
+    ):
+        raise ReviewTokenError()
+    if type(metadata.evidence_at) is str:
+        if metadata.evidence_at != "unknown":
+            raise ReviewTokenError()
+        evidence_at = metadata.evidence_at
+    elif type(metadata.evidence_at) is datetime:
+        if metadata.evidence_at.tzinfo is None or metadata.evidence_at.utcoffset() is None:
+            raise ReviewTokenError()
+        evidence_at = metadata.evidence_at.isoformat()
+    else:
+        raise ReviewTokenError()
+
+    if decision:
+        if (
+            metadata.evidence_kind is not EvidenceKind.OBSERVED_DECISION
+            or metadata.self_kind is not SelfKind.DECISION
+            or metadata.decision_id is not None
+        ):
+            raise ReviewTokenError()
+    else:
+        if (
+            metadata.evidence_kind is not EvidenceKind.OUTCOME_LATER_OBSERVATION
+            or metadata.self_kind is not SelfKind.OUTCOME
+            or type(metadata.decision_id) is not UUID
+        ):
+            raise ReviewTokenError()
+
+    payload: dict[str, str | None] = {
+        "domain": metadata.domain,
+        "evidence_at": evidence_at,
+        "evidence_at_precision": metadata.evidence_at_precision.value,
+    }
+    if not decision:
+        assert metadata.decision_id is not None
+        payload["decision_id"] = str(metadata.decision_id)
+    try:
+        return hashlib.sha256(_canonical_json(payload)).hexdigest()
+    except TypeError, UnicodeEncodeError, ValueError:
+        raise ReviewTokenError() from None
+
+
+def _verify_stage2_digests(
+    draft_sha256: str,
+    metadata_sha256: str,
+    draft: NoteDraft,
+    metadata: PersonalMemoryMetadata,
+    *,
+    decision: bool,
+) -> None:
+    """Compare both independent semantic digests with constant-time equality."""
+
+    expected_draft_sha256 = _draft_digest(draft)
+    expected_metadata_sha256 = _stage2_metadata_digest(metadata, decision=decision)
+    if not hmac.compare_digest(draft_sha256, expected_draft_sha256):
+        raise ReviewTokenError()
+    if not hmac.compare_digest(metadata_sha256, expected_metadata_sha256):
+        raise ReviewTokenError()
+
+
 def _new_context_nonce() -> str:
     """Give each generated draft a distinct process-local review context."""
 
@@ -504,6 +709,58 @@ def _personal_memory_confirmation_claims_from_payload(
         draft_sha256,
         personal_memory_sha256,
     )
+
+
+def _decision_journal_confirmation_claims_from_payload(
+    payload: object,
+) -> DecisionJournalConfirmationTokenClaims:
+    """Decode the exact Decision Journal purpose/version contract."""
+
+    draft_sha256, metadata_sha256 = _stage2_confirmation_digests(
+        payload,
+        purpose=DECISION_JOURNAL_CONFIRMATION_PURPOSE,
+    )
+    return DecisionJournalConfirmationTokenClaims(
+        purpose=DECISION_JOURNAL_CONFIRMATION_PURPOSE,
+        version=STAGE2_CONFIRMATION_VERSION,
+        draft_sha256=draft_sha256,
+        metadata_sha256=metadata_sha256,
+    )
+
+
+def _outcome_observation_confirmation_claims_from_payload(
+    payload: object,
+) -> OutcomeObservationConfirmationTokenClaims:
+    """Decode the exact Outcome Observation purpose/version contract."""
+
+    draft_sha256, metadata_sha256 = _stage2_confirmation_digests(
+        payload,
+        purpose=OUTCOME_OBSERVATION_CONFIRMATION_PURPOSE,
+    )
+    return OutcomeObservationConfirmationTokenClaims(
+        purpose=OUTCOME_OBSERVATION_CONFIRMATION_PURPOSE,
+        version=STAGE2_CONFIRMATION_VERSION,
+        draft_sha256=draft_sha256,
+        metadata_sha256=metadata_sha256,
+    )
+
+
+def _stage2_confirmation_digests(
+    payload: object,
+    *,
+    purpose: str,
+) -> tuple[str, str]:
+    """Parse one exact signed Stage 2 digest payload without extra claims."""
+
+    if type(payload) is not dict or set(payload) != _STAGE2_CONFIRMATION_FIELDS:
+        raise ReviewTokenError()
+    if (
+        type(payload.get("v")) is not int
+        or payload.get("v") != STAGE2_CONFIRMATION_VERSION
+        or payload.get("purpose") != purpose
+    ):
+        raise ReviewTokenError()
+    return _strict_digest(payload, "draft_sha256"), _strict_digest(payload, "metadata_sha256")
 
 
 def _source_from_payload(payload: object) -> SourceProvenance:
@@ -636,13 +893,18 @@ def _decode_base64url(value: str, max_decoded_bytes: int) -> bytes:
 
 
 __all__ = [
+    "DECISION_JOURNAL_CONFIRMATION_PURPOSE",
     "MAX_CONFIRMATION_TOKEN_BYTES",
     "MAX_REVIEW_TOKEN_BYTES",
+    "OUTCOME_OBSERVATION_CONFIRMATION_PURPOSE",
     "PERSONAL_MEMORY_CONFIRMATION_PURPOSE",
     "PERSONAL_MEMORY_CONFIRMATION_VERSION",
     "REVIEW_TOKEN_SECRET_BYTES",
     "REVIEW_TOKEN_VERSION",
+    "STAGE2_CONFIRMATION_VERSION",
     "ConfirmationTokenClaims",
+    "DecisionJournalConfirmationTokenClaims",
+    "OutcomeObservationConfirmationTokenClaims",
     "PersonalMemoryConfirmationTokenClaims",
     "ReviewTokenClaims",
     "ReviewTokenCodec",

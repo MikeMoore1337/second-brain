@@ -82,6 +82,33 @@ generic Save и связывает исходный review token, пять по�
 нормализованные Personal Memory metadata. Search/Retrieval и
 `second-brain-vault` этим projection не изменяются.
 
+### Web Decision Journal v1
+
+Локальный Web GUI имеет отдельную structured surface `Decision Journal` с
+режимами `Decision` и `Outcome`. Этот flow не вызывает LLM и не переиспользует
+review token Text/Research: пользовательский payload детерминированно
+рендерится сервером в exact Stage 2 Markdown, затем проходит
+`validate_decision_journal_draft` или `validate_outcome_observation_draft`.
+
+Initial Decision DTO содержит только pre-choice поля; поздние result/reassessment
+в нём структурно отсутствуют. `Outcome` создаётся отдельной note и принимает
+только canonical UUIDv7 `decision_id`. Оба режима используют существующий
+lazy Safe Write composition с dry-run full-file diff и apply только после
+purpose-separated HMAC confirmation (`decision-journal-save-confirmation` или
+`outcome-observation-save-confirmation`). Confirmation связывает exact
+пяти-полевой `NoteDraft` и normalized Stage 2 time/domain/relation metadata;
+body не помещается в token.
+
+Новые routes остаются внутри local `draft-v1` JSON boundary с loopback
+Host/same-origin Origin, raw body cap, strict `extra="forbid"`, no-store и без
+OpenAPI. Outcome target повторно проверяется текущим vault scan и core на
+prepare/apply; Journal не изменяется. Search API не расширен: Web лишь
+показывает уже существующее безопасное поле `id` у hit/retrieved note.
+
+Decision/Outcome state хранится только в памяти страницы; persistent browser
+storage и новый frontend framework не используются. `schema_version` не меняется,
+а `second-brain-vault` остаётся отдельным и нетронутым репозиторием.
+
 ### Voice Capture v1
 
 Voice mode принимает короткую запись через browser `MediaRecorder` либо локальный

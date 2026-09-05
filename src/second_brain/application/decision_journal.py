@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -230,6 +230,60 @@ def parse_decision_journal_body(body: str) -> DecisionJournalRecord:
         reasons=sections["Reasons"].strip(),
         confidence=sections["Confidence"].strip(),
         expected_result=sections["Expected result"].strip(),
+    )
+
+
+def render_decision_journal_body(
+    *,
+    situation: str,
+    available_options: Iterable[str],
+    information_known_at_decision_time: str,
+    criteria: Iterable[str],
+    chosen_option: str,
+    reasons: str,
+    confidence: str,
+    expected_result: str,
+) -> str:
+    """Детерминированно собрать server-owned initial Journal body.
+
+    Structured Web input намеренно превращается в единственный canonical
+    Markdown shape до вызова существующего Stage 2 validator. Renderer не
+    добавляет late outcome values и не принимает произвольный Markdown body.
+    """
+
+    return "".join(
+        (
+            _render_section("Situation", situation),
+            _render_bullet_section("Available options", available_options),
+            _render_section(
+                "Information known at decision time",
+                information_known_at_decision_time,
+            ),
+            _render_bullet_section("Criteria", criteria),
+            _render_section("Chosen option", chosen_option),
+            _render_section("Reasons", reasons),
+            _render_section("Confidence", confidence),
+            _render_section("Expected result", expected_result),
+            _render_section("Actual result", ""),
+            _render_section("Reassessment", ""),
+        )
+    )
+
+
+def render_outcome_observation_body(
+    *,
+    actual_result: str,
+    reassessment: str,
+    notes: str,
+) -> str:
+    """Детерминированно собрать server-owned Outcome Observation body."""
+
+    return "".join(
+        (
+            _render_section("Actual result", actual_result),
+            _render_section("Reassessment", reassessment),
+            _render_section("Notes", notes),
+        )
     )
 
 
@@ -467,6 +521,20 @@ def _normalize_whitespace(value: str) -> str:
     return " ".join(value.split())
 
 
+def _render_section(heading: str, value: str) -> str:
+    """Render one exact H2 section without inventing content."""
+
+    if value:
+        return f"## {heading}\n\n{value}\n\n"
+    return f"## {heading}\n\n"
+
+
+def _render_bullet_section(heading: str, values: Iterable[str]) -> str:
+    """Render a bounded caller-owned sequence as Markdown bullets."""
+
+    return _render_section(heading, "\n".join(f"- {value}" for value in values))
+
+
 # Descriptive aliases keep the parser boundary discoverable for callers/tests.
 validate_decision_journal_body = parse_decision_journal_body
 validate_outcome_observation_body = parse_outcome_observation_body
@@ -490,6 +558,8 @@ __all__ = [
     "OutcomeObservationDraftError",
     "parse_decision_journal_body",
     "parse_outcome_observation_body",
+    "render_decision_journal_body",
+    "render_outcome_observation_body",
     "validate_decision_journal_body",
     "validate_decision_journal_draft",
     "validate_outcome_observation_body",

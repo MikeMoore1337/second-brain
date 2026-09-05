@@ -7,6 +7,7 @@
     <title>Second Brain — Memory + Growth</title>
     <link rel="stylesheet" href="/static/app.css" />
     <script src="/static/app.js" defer></script>
+    <script src="/static/decision-journal.js" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">К содержанию</a>
@@ -111,6 +112,203 @@
               <p class="capture-error" data-error role="alert" hidden></p>
               <div class="draft-result" data-result hidden></div>
             </div>
+          </div>
+        </section>
+
+        <section
+          class="decision-journal-surface"
+          id="decision-journal"
+          aria-labelledby="decision-journal-title"
+          data-decision-journal-surface
+        >
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Stage 2 · deliberate capture</p>
+              <h2 id="decision-journal-title">Decision Journal.</h2>
+            </div>
+            <p class="decision-journal-lede">
+              Зафиксируй выбор и поздний результат отдельно — только явным structured вводом.
+            </p>
+          </div>
+          <div class="journal-panel">
+            <div class="mode-switch" role="group" aria-label="Режим Decision Journal">
+              <button
+                class="mode-button is-active"
+                type="button"
+                data-journal-mode="decision"
+                aria-pressed="true"
+              >Decision</button>
+              <button
+                class="mode-button"
+                type="button"
+                data-journal-mode="outcome"
+                aria-pressed="false"
+              >Outcome</button>
+            </div>
+
+            <form class="journal-form" data-decision-form>
+              <p class="journal-form-intro">
+                Сначала запиши только ситуацию, варианты и ожидание. Поздние результаты
+                добавляются отдельной Outcome-записью позже.
+              </p>
+              <div class="journal-fields">
+                <label class="journal-field">
+                  <span class="draft-field-label">Название</span>
+                  <input class="review-input" type="text" name="title" data-decision-title required autocomplete="off" />
+                </label>
+                <label class="journal-field">
+                  <span class="draft-field-label">Тип заметки</span>
+                  <select class="review-input" name="note_type" data-decision-note-type required>
+                    <option value="project">project</option>
+                    <option value="area">area</option>
+                    <option value="resource">resource</option>
+                    <option value="zettel">zettel</option>
+                  </select>
+                </label>
+                <label class="journal-field">
+                  <span class="draft-field-label">Теги (один на строку)</span>
+                  <textarea class="review-input" name="tags" data-decision-tags rows="3"></textarea>
+                </label>
+                <label class="journal-field">
+                  <span class="draft-field-label">Ссылки (одна на строку)</span>
+                  <textarea class="review-input" name="links" data-decision-links rows="3"></textarea>
+                </label>
+                <div class="journal-time-grid">
+                  <label class="journal-field">
+                    <span class="draft-field-label">Время решения</span>
+                    <select class="review-input" name="evidence_at_precision" data-decision-time-mode required>
+                      <option value="exact">Точное время</option>
+                      <option value="unknown" selected>Время неизвестно</option>
+                    </select>
+                  </label>
+                  <label class="journal-field journal-evidence-field" data-decision-evidence-wrapper hidden>
+                    <span class="draft-field-label">RFC3339 время</span>
+                    <input class="review-input" type="text" name="evidence_at" data-decision-evidence-at placeholder="2026-09-05T15:30:00Z" autocomplete="off" />
+                    <button class="review-button review-button-secondary" type="button" data-decision-now>Сейчас</button>
+                  </label>
+                </div>
+                <label class="journal-field">
+                  <span class="draft-field-label">Домен (необязательно)</span>
+                  <input class="review-input" type="text" name="domain" data-decision-domain autocomplete="off" />
+                </label>
+                <label class="journal-field journal-field-wide">
+                  <span class="draft-field-label">Situation · ситуация</span>
+                  <textarea class="review-input" name="situation" data-decision-situation required rows="4"></textarea>
+                </label>
+                <label class="journal-field journal-field-wide">
+                  <span class="draft-field-label">Available options · варианты (один на строку)</span>
+                  <textarea class="review-input" name="available_options" data-decision-options required rows="5"></textarea>
+                  <span class="journal-help">От 2 до 20 вариантов.</span>
+                </label>
+                <label class="journal-field journal-field-wide">
+                  <span class="draft-field-label">Information known at decision time · известная информация</span>
+                  <textarea class="review-input" name="information_known_at_decision_time" data-decision-information required rows="4"></textarea>
+                </label>
+                <label class="journal-field journal-field-wide">
+                  <span class="draft-field-label">Criteria · критерии (один на строку)</span>
+                  <textarea class="review-input" name="criteria" data-decision-criteria required rows="4"></textarea>
+                  <span class="journal-help">Минимум один критерий.</span>
+                </label>
+                <label class="journal-field journal-field-wide">
+                  <span class="draft-field-label">Chosen option · выбранный вариант</span>
+                  <select class="review-input" name="chosen_option" data-decision-chosen required>
+                    <option value="" selected disabled>Сначала добавь варианты</option>
+                  </select>
+                </label>
+                <label class="journal-field journal-field-wide">
+                  <span class="draft-field-label">Reasons · причины</span>
+                  <textarea class="review-input" name="reasons" data-decision-reasons required rows="4"></textarea>
+                </label>
+                <label class="journal-field">
+                  <span class="draft-field-label">Confidence · уверенность</span>
+                  <textarea class="review-input" name="confidence" data-decision-confidence required rows="3"></textarea>
+                </label>
+                <label class="journal-field">
+                  <span class="draft-field-label">Expected result · ожидаемый результат</span>
+                  <textarea class="review-input" name="expected_result" data-decision-expected required rows="3"></textarea>
+                </label>
+              </div>
+              <div class="journal-actions">
+                <button class="review-button review-button-primary" type="submit" data-decision-prepare>Подготовить сохранение</button>
+                <button class="review-button review-button-primary" type="button" data-decision-confirm hidden disabled>Подтвердить сохранение</button>
+              </div>
+              <p class="review-status" data-decision-status role="status" aria-live="polite"></p>
+              <p class="capture-error" data-decision-error role="alert" hidden></p>
+              <section class="save-plan journal-plan" data-decision-plan hidden></section>
+              <section class="saved-note" data-decision-saved hidden></section>
+            </form>
+
+            <form class="journal-form is-hidden" data-outcome-form>
+              <p class="journal-form-intro">
+                Outcome — отдельная заметка, связанная с current Decision Journal по UUIDv7.
+              </p>
+              <div class="journal-fields">
+                <label class="journal-field">
+                  <span class="draft-field-label">Название</span>
+                  <input class="review-input" type="text" name="title" data-outcome-title required autocomplete="off" />
+                </label>
+                <label class="journal-field">
+                  <span class="draft-field-label">Тип заметки</span>
+                  <select class="review-input" name="note_type" data-outcome-note-type required>
+                    <option value="project">project</option>
+                    <option value="area">area</option>
+                    <option value="resource">resource</option>
+                    <option value="zettel">zettel</option>
+                  </select>
+                </label>
+                <label class="journal-field">
+                  <span class="draft-field-label">Теги (один на строку)</span>
+                  <textarea class="review-input" name="tags" data-outcome-tags rows="3"></textarea>
+                </label>
+                <label class="journal-field">
+                  <span class="draft-field-label">Ссылки (одна на строку)</span>
+                  <textarea class="review-input" name="links" data-outcome-links rows="3"></textarea>
+                </label>
+                <label class="journal-field journal-field-wide">
+                  <span class="draft-field-label">Decision UUIDv7</span>
+                  <input class="review-input" type="text" name="decision_id" data-outcome-decision-id required autocomplete="off" placeholder="0198f4c5-6a00-7000-8000-000000000002" />
+                </label>
+                <div class="journal-time-grid">
+                  <label class="journal-field">
+                    <span class="draft-field-label">Время outcome</span>
+                    <select class="review-input" name="evidence_at_precision" data-outcome-time-mode required>
+                      <option value="exact">Точное время</option>
+                      <option value="unknown" selected>Время неизвестно</option>
+                    </select>
+                  </label>
+                  <label class="journal-field journal-evidence-field" data-outcome-evidence-wrapper hidden>
+                    <span class="draft-field-label">RFC3339 время</span>
+                    <input class="review-input" type="text" name="evidence_at" data-outcome-evidence-at placeholder="2026-09-05T15:30:00Z" autocomplete="off" />
+                    <button class="review-button review-button-secondary" type="button" data-outcome-now>Сейчас</button>
+                  </label>
+                </div>
+                <label class="journal-field">
+                  <span class="draft-field-label">Домен (необязательно)</span>
+                  <input class="review-input" type="text" name="domain" data-outcome-domain autocomplete="off" />
+                </label>
+                <label class="journal-field journal-field-wide">
+                  <span class="draft-field-label">Actual result · фактический результат</span>
+                  <textarea class="review-input" name="actual_result" data-outcome-actual rows="4"></textarea>
+                </label>
+                <label class="journal-field journal-field-wide">
+                  <span class="draft-field-label">Reassessment · переоценка</span>
+                  <textarea class="review-input" name="reassessment" data-outcome-reassessment rows="4"></textarea>
+                </label>
+                <label class="journal-field journal-field-wide">
+                  <span class="draft-field-label">Notes · заметки</span>
+                  <textarea class="review-input" name="notes" data-outcome-notes rows="4"></textarea>
+                  <span class="journal-help">Заполни Actual result или Reassessment.</span>
+                </label>
+              </div>
+              <div class="journal-actions">
+                <button class="review-button review-button-primary" type="submit" data-outcome-prepare>Подготовить сохранение</button>
+                <button class="review-button review-button-primary" type="button" data-outcome-confirm hidden disabled>Подтвердить сохранение</button>
+              </div>
+              <p class="review-status" data-outcome-status role="status" aria-live="polite"></p>
+              <p class="capture-error" data-outcome-error role="alert" hidden></p>
+              <section class="save-plan journal-plan" data-outcome-plan hidden></section>
+              <section class="saved-note" data-outcome-saved hidden></section>
+            </form>
           </div>
         </section>
 

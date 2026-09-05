@@ -18,6 +18,16 @@ from starlette.concurrency import run_in_threadpool
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from second_brain.application.decision_journal import (
+    DecisionJournalDraft,
+    DecisionJournalDraftError,
+    OutcomeObservationDraft,
+    OutcomeObservationDraftError,
+    render_decision_journal_body,
+    render_outcome_observation_body,
+    validate_decision_journal_draft,
+    validate_outcome_observation_draft,
+)
 from second_brain.application.llm import MAX_CONTEXT_BYTES, NoteDraft, validate_note_draft
 from second_brain.application.personal_memory import (
     PersonalMemoryDraft,
@@ -75,6 +85,19 @@ MAX_RAW_AUDIO_BODY_BYTES: Final[int] = MAX_RAW_TRANSCRIPTION_BODY_BYTES
 MAX_RAW_SEARCH_BODY_BYTES: Final[int] = 64 * 1024
 _TRANSCRIPTION_PATH: Final[str] = "/api/transcriptions/audio"
 _SEARCH_PATHS: Final[frozenset[str]] = frozenset({"/api/search", "/api/retrieval/note"})
+_DECISION_JOURNAL_PATHS: Final[frozenset[str]] = frozenset(
+    {
+        "/api/drafts/decision-journal/save/prepare",
+        "/api/drafts/decision-journal/save/apply",
+    }
+)
+_OUTCOME_OBSERVATION_PATHS: Final[frozenset[str]] = frozenset(
+    {
+        "/api/drafts/outcome-observation/save/prepare",
+        "/api/drafts/outcome-observation/save/apply",
+    }
+)
+_STAGE2_PATHS: Final[frozenset[str]] = _DECISION_JOURNAL_PATHS | _OUTCOME_OBSERVATION_PATHS
 _DRAFT_PATHS: Final[frozenset[str]] = frozenset(
     {
         "/api/drafts/text",
@@ -84,6 +107,7 @@ _DRAFT_PATHS: Final[frozenset[str]] = frozenset(
         "/api/drafts/save/apply",
         "/api/drafts/personal-memory/save/prepare",
         "/api/drafts/personal-memory/save/apply",
+        *_STAGE2_PATHS,
     }
 )
 _REVIEW_PATHS: Final[frozenset[str]] = frozenset(
@@ -93,6 +117,7 @@ _REVIEW_PATHS: Final[frozenset[str]] = frozenset(
         "/api/drafts/save/apply",
         "/api/drafts/personal-memory/save/prepare",
         "/api/drafts/personal-memory/save/apply",
+        *_STAGE2_PATHS,
     }
 )
 _PERSONAL_MEMORY_PATHS: Final[frozenset[str]] = frozenset(
@@ -118,6 +143,9 @@ _SAVE_PREFLIGHT_CODES: Final[frozenset[str]] = frozenset(
         "CREATE_TEMPLATE_READ_FAILED",
         "CREATE_UNSUPPORTED_TYPE",
         "CREATE_TARGET_CHECK_FAILED",
+        "OUTCOME_DECISION_NOT_FOUND",
+        "OUTCOME_DECISION_IDENTITY_CONFLICT",
+        "OUTCOME_DECISION_TARGET_INVALID",
     }
 )
 _TRUSTED_LOOPBACK_HOSTS: Final[frozenset[str]] = frozenset({"127.0.0.1", "localhost"})
@@ -281,6 +309,84 @@ class ApplyPersonalMemoryRequest(BaseModel):
     personal_memory: PersonalMemoryPayload
 
 
+class DecisionJournalPayload(BaseModel):
+    """Strict structured input for an initial Decision Journal only.
+
+    Late outcome fields are deliberately absent from this HTTP DTO. The
+    server owns the application marker/kinds and renders the canonical body.
+    """
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    title: StrictStr
+    note_type: StrictStr
+    tags: list[StrictStr]
+    links: list[StrictStr]
+    evidence_at: StrictStr
+    evidence_at_precision: StrictStr
+    domain: StrictStr | None = None
+    situation: StrictStr
+    available_options: list[StrictStr]
+    information_known_at_decision_time: StrictStr
+    criteria: list[StrictStr]
+    chosen_option: StrictStr
+    reasons: StrictStr
+    confidence: StrictStr
+    expected_result: StrictStr
+
+
+class PrepareDecisionJournalRequest(BaseModel):
+    """Strict request for a structured Decision Journal dry-run."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    decision: DecisionJournalPayload
+
+
+class ApplyDecisionJournalRequest(BaseModel):
+    """Strict request for a confirmed structured Decision Journal apply."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    confirmation_token: StrictStr
+    decision: DecisionJournalPayload
+
+
+class OutcomeObservationPayload(BaseModel):
+    """Strict structured input for a separate linked Outcome Observation."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    title: StrictStr
+    note_type: StrictStr
+    tags: list[StrictStr]
+    links: list[StrictStr]
+    decision_id: StrictStr
+    evidence_at: StrictStr
+    evidence_at_precision: StrictStr
+    domain: StrictStr | None = None
+    actual_result: StrictStr
+    reassessment: StrictStr
+    notes: StrictStr
+
+
+class PrepareOutcomeObservationRequest(BaseModel):
+    """Strict request for a structured Outcome Observation dry-run."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    outcome: OutcomeObservationPayload
+
+
+class ApplyOutcomeObservationRequest(BaseModel):
+    """Strict request for a confirmed structured Outcome Observation apply."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    confirmation_token: StrictStr
+    outcome: OutcomeObservationPayload
+
+
 class PreviewResponse(BaseModel):
     """Safe server-rendered HTML for the dedicated preview container."""
 
@@ -420,6 +526,15 @@ _ERRORS: Final[dict[str, tuple[int, str]]] = {
     "SAVE_CONFIRMATION_INVALID": (400, "save confirmation is invalid or expired"),
     "PERSONAL_MEMORY_INVALID_REQUEST": (400, "personal memory request failed validation"),
     "PERSONAL_MEMORY_CONTEXT_INVALID": (400, "personal memory requires a text draft"),
+    "DECISION_JOURNAL_INVALID_REQUEST": (400, "decision journal request failed validation"),
+    "OUTCOME_OBSERVATION_INVALID_REQUEST": (
+        400,
+        "outcome observation request failed validation",
+    ),
+    "STAGE2_SAVE_CONFIRMATION_INVALID": (
+        400,
+        "stage 2 save confirmation is invalid or expired",
+    ),
     "DRAFT_SCHEMA_INVALID": (400, "edited draft failed validation"),
     "PREVIEW_FAILED": (500, "safe Markdown preview failed"),
     "VAULT_UNAVAILABLE": (503, "vault is unavailable for saving"),
@@ -851,6 +966,10 @@ def _loopback_host_port(value: str, scheme: str) -> tuple[str, int] | None:
 def _invalid_request_code(path: str) -> str:
     """Выбрать safe application code по draft route."""
 
+    if path in _DECISION_JOURNAL_PATHS:
+        return "DECISION_JOURNAL_INVALID_REQUEST"
+    if path in _OUTCOME_OBSERVATION_PATHS:
+        return "OUTCOME_OBSERVATION_INVALID_REQUEST"
     if path in _PERSONAL_MEMORY_PATHS:
         return "PERSONAL_MEMORY_INVALID_REQUEST"
     if path in _SEARCH_PATHS:
@@ -1170,6 +1289,100 @@ def create_app(
             return _error_response("SAVE_FAILED")
         return _save_response(result)
 
+    @app.post("/api/drafts/decision-journal/save/prepare", include_in_schema=False)
+    def prepare_decision_journal_save(payload: PrepareDecisionJournalRequest) -> Response:
+        """Render, validate, and dry-run one explicit Decision Journal."""
+
+        try:
+            draft = _decision_journal_from_payload(payload.decision)
+        except DecisionJournalDraftError, LlmError, ValueError, TypeError, UnicodeError:
+            return _error_response("DECISION_JOURNAL_INVALID_REQUEST")
+
+        try:
+            result = saver.prepare_decision_journal(draft)
+        except ConfigurationError, WriteSafetyError, OSError:
+            return _error_response("VAULT_UNAVAILABLE")
+        except Exception:
+            return _error_response("SAVE_FAILED")
+        return _prepare_stage2_response(
+            result,
+            draft=draft,
+            review_tokens=review_tokens,
+            decision=True,
+        )
+
+    @app.post("/api/drafts/decision-journal/save/apply", include_in_schema=False)
+    def apply_decision_journal_save(payload: ApplyDecisionJournalRequest) -> Response:
+        """Verify a purpose-bound Journal token before the existing Safe Write apply."""
+
+        try:
+            draft = _decision_journal_from_payload(payload.decision)
+        except DecisionJournalDraftError, LlmError, ValueError, TypeError, UnicodeError:
+            return _error_response("DECISION_JOURNAL_INVALID_REQUEST")
+
+        try:
+            review_tokens.verify_decision_journal_confirmation(
+                payload.confirmation_token,
+                draft,
+            )
+        except ReviewTokenError:
+            return _error_response("STAGE2_SAVE_CONFIRMATION_INVALID")
+
+        try:
+            result = saver.apply_decision_journal(draft)
+        except ConfigurationError, WriteSafetyError, OSError:
+            return _error_response("VAULT_UNAVAILABLE")
+        except Exception:
+            return _error_response("SAVE_FAILED")
+        return _save_response(result)
+
+    @app.post("/api/drafts/outcome-observation/save/prepare", include_in_schema=False)
+    def prepare_outcome_observation_save(payload: PrepareOutcomeObservationRequest) -> Response:
+        """Render, validate, current-scan, and dry-run one Outcome Observation."""
+
+        try:
+            draft = _outcome_observation_from_payload(payload.outcome)
+        except OutcomeObservationDraftError, LlmError, ValueError, TypeError, UnicodeError:
+            return _error_response("OUTCOME_OBSERVATION_INVALID_REQUEST")
+
+        try:
+            result = saver.prepare_outcome_observation(draft)
+        except ConfigurationError, WriteSafetyError, OSError:
+            return _error_response("VAULT_UNAVAILABLE")
+        except Exception:
+            return _error_response("SAVE_FAILED")
+        return _prepare_stage2_response(
+            result,
+            draft=draft,
+            review_tokens=review_tokens,
+            decision=False,
+        )
+
+    @app.post("/api/drafts/outcome-observation/save/apply", include_in_schema=False)
+    def apply_outcome_observation_save(payload: ApplyOutcomeObservationRequest) -> Response:
+        """Revalidate current Journal target before applying a linked Outcome."""
+
+        try:
+            draft = _outcome_observation_from_payload(payload.outcome)
+        except OutcomeObservationDraftError, LlmError, ValueError, TypeError, UnicodeError:
+            return _error_response("OUTCOME_OBSERVATION_INVALID_REQUEST")
+
+        try:
+            review_tokens.verify_outcome_observation_confirmation(
+                payload.confirmation_token,
+                draft,
+            )
+        except ReviewTokenError:
+            return _error_response("STAGE2_SAVE_CONFIRMATION_INVALID")
+
+        try:
+            result = saver.apply_outcome_observation(draft)
+        except ConfigurationError, WriteSafetyError, OSError:
+            return _error_response("VAULT_UNAVAILABLE")
+        except Exception:
+            return _error_response("SAVE_FAILED")
+        return _save_response(result)
+
     @app.post("/api/search", include_in_schema=False)
     def search(payload: SearchRequestPayload) -> Response:
         """Search current private vault through a fresh derived FTS5 index."""
@@ -1353,6 +1566,60 @@ def _personal_memory_from_payload(
     )
 
 
+def _decision_journal_from_payload(
+    payload: DecisionJournalPayload,
+) -> DecisionJournalDraft:
+    """Build and normalize the server-owned Journal draft from structured fields."""
+
+    draft = DecisionJournalDraft(
+        draft=NoteDraft(
+            title=payload.title,
+            note_type=NoteType(payload.note_type),
+            content=render_decision_journal_body(
+                situation=payload.situation,
+                available_options=payload.available_options,
+                information_known_at_decision_time=payload.information_known_at_decision_time,
+                criteria=payload.criteria,
+                chosen_option=payload.chosen_option,
+                reasons=payload.reasons,
+                confidence=payload.confidence,
+                expected_result=payload.expected_result,
+            ),
+            tags=tuple(payload.tags),
+            links=tuple(payload.links),
+        ),
+        evidence_at=payload.evidence_at,
+        evidence_at_precision=payload.evidence_at_precision,
+        domain=payload.domain,
+    )
+    return validate_decision_journal_draft(draft)
+
+
+def _outcome_observation_from_payload(
+    payload: OutcomeObservationPayload,
+) -> OutcomeObservationDraft:
+    """Build and normalize the server-owned Outcome draft from structured fields."""
+
+    draft = OutcomeObservationDraft(
+        draft=NoteDraft(
+            title=payload.title,
+            note_type=NoteType(payload.note_type),
+            content=render_outcome_observation_body(
+                actual_result=payload.actual_result,
+                reassessment=payload.reassessment,
+                notes=payload.notes,
+            ),
+            tags=tuple(payload.tags),
+            links=tuple(payload.links),
+        ),
+        decision_id=parse_uuid7(payload.decision_id),
+        evidence_at=payload.evidence_at,
+        evidence_at_precision=payload.evidence_at_precision,
+        domain=payload.domain,
+    )
+    return validate_outcome_observation_draft(draft)
+
+
 def _run_save_phase(
     saver: DraftSaveService,
     claims: ReviewTokenClaims,
@@ -1435,6 +1702,49 @@ def _prepare_personal_memory_response(
             draft=personal_memory.draft,
             metadata=personal_memory.metadata,
         )
+    except ReviewTokenError, TypeError, UnicodeError, ValueError:
+        return _error_response("SAVE_FAILED")
+    response = PrepareResponse(
+        status=CreateStatus.DRY_RUN.value,
+        note=DryRunNotePayload(
+            type=result.plan.note_type.value,
+            relative_path=relative_path,
+        ),
+        diff=diff,
+        confirmation_token=confirmation_token,
+    )
+    return JSONResponse(
+        content=response.model_dump(mode="json"),
+        headers=_DRAFT_ERROR_HEADERS,
+    )
+
+
+def _prepare_stage2_response(
+    result: CreateManagedNoteResult,
+    *,
+    draft: DecisionJournalDraft | OutcomeObservationDraft,
+    review_tokens: ReviewTokenCodec,
+    decision: bool,
+) -> JSONResponse:
+    """Serialize a Stage 2 dry-run and issue only its matching confirmation."""
+
+    if result.status is CreateStatus.CREATED:
+        return _error_response("SAVE_FAILED")
+    if result.status is not CreateStatus.DRY_RUN or result.plan is None:
+        return _save_response(result)
+    relative_path = _safe_relative_path(result.plan.relative_path)
+    if relative_path is None:
+        return _error_response("SAVE_FAILED")
+    try:
+        diff = _plan_diff(result.plan, relative_path)
+        if decision:
+            if not isinstance(draft, DecisionJournalDraft):
+                raise ReviewTokenError()
+            confirmation_token = review_tokens.issue_decision_journal_confirmation(draft)
+        else:
+            if not isinstance(draft, OutcomeObservationDraft):
+                raise ReviewTokenError()
+            confirmation_token = review_tokens.issue_outcome_observation_confirmation(draft)
     except ReviewTokenError, TypeError, UnicodeError, ValueError:
         return _error_response("SAVE_FAILED")
     response = PrepareResponse(
@@ -1556,15 +1866,21 @@ __all__ = [
     "SEARCH_REQUEST_HEADER_VALUE",
     "TRANSCRIPTION_REQUEST_HEADER_NAME",
     "TRANSCRIPTION_REQUEST_HEADER_VALUE",
+    "ApplyDecisionJournalRequest",
     "ApplyDraftRequest",
+    "ApplyOutcomeObservationRequest",
     "ApplyPersonalMemoryRequest",
+    "DecisionJournalPayload",
     "DraftPayload",
     "DraftRequestBoundaryMiddleware",
     "DraftResponse",
     "DryRunNotePayload",
     "ErrorResponse",
+    "OutcomeObservationPayload",
     "PersonalMemoryPayload",
+    "PrepareDecisionJournalRequest",
     "PrepareDraftRequest",
+    "PrepareOutcomeObservationRequest",
     "PreparePersonalMemoryRequest",
     "PrepareResponse",
     "PreviewDraftRequest",
