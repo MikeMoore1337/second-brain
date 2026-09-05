@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import posixpath
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from pathlib import PurePosixPath
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from second_brain.application.reports import (
@@ -15,6 +15,7 @@ from second_brain.application.reports import (
     ScanReport,
     VaultSnapshot,
 )
+from second_brain.application.research import SourceKind, SourceProvenance
 from second_brain.domain.models import (
     AttachmentRecord,
     LinkReference,
@@ -52,6 +53,7 @@ def _validate_document(
     diagnostics: list[Diagnostic],
 ) -> NoteRecord:
     data = dict(document.front_matter)
+    _validate_sources(data, document.relative_path, diagnostics)
     marker_present = bool(_MANAGED_FIELDS.intersection(data))
     managed = not document.in_inbox or marker_present
     if not managed:
@@ -172,6 +174,140 @@ def _parse_tags(data: dict[str, Any], path: str, diagnostics: list[Diagnostic]) 
         )
         return ()
     return tuple(value)
+
+
+def _validate_sources(
+    data: Mapping[str, Any],
+    path: str,
+    diagnostics: list[Diagnostic],
+) -> None:
+    """Проверить optional persisted v1 provenance без network или write capability."""
+
+    if "sources" not in data:
+        return
+    raw_sources = data["sources"]
+    if not isinstance(raw_sources, list):
+        diagnostics.append(
+            Diagnostic(
+                "NOTE_INVALID_SOURCES",
+                "sources must be a list containing exactly one source record",
+                DiagnosticSeverity.ERROR,
+                path,
+            )
+        )
+        return
+    if len(raw_sources) != 1:
+        diagnostics.append(
+            Diagnostic(
+                "NOTE_INVALID_SOURCE_COUNT",
+                "sources must contain exactly one source record in v1",
+                DiagnosticSeverity.ERROR,
+                path,
+            )
+        )
+        return
+    raw_source = raw_sources[0]
+    if not isinstance(raw_source, Mapping):
+        diagnostics.append(
+            Diagnostic(
+                "NOTE_INVALID_SOURCE_RECORD",
+                "sources[0] must be a mapping",
+                DiagnosticSeverity.ERROR,
+                path,
+            )
+        )
+        return
+    source = cast(Mapping[object, object], raw_source)
+    for field, code in (
+        ("uri", "NOTE_SOURCE_MISSING_URI"),
+        ("kind", "NOTE_SOURCE_MISSING_KIND"),
+        ("retrieved_at", "NOTE_SOURCE_MISSING_RETRIEVED_AT"),
+    ):
+        if field not in source:
+            diagnostics.append(
+                Diagnostic(
+                    code,
+                    f"sources[0] requires {field}",
+                    DiagnosticSeverity.ERROR,
+                    path,
+                )
+            )
+    if any(field not in source for field in ("uri", "kind", "retrieved_at")):
+        return
+    _validate_source_record(source, path, diagnostics)
+
+
+def _validate_source_record(
+    source: Mapping[object, object],
+    path: str,
+    diagnostics: list[Diagnostic],
+) -> None:
+    """Разобрать persisted mapping через общую SourceProvenance policy."""
+
+    try:
+        source_kind = SourceKind(cast(str, source["kind"]))
+    except TypeError, ValueError:
+        diagnostics.append(
+            Diagnostic(
+                "NOTE_SOURCE_INVALID_KIND",
+                "sources[0].kind must be one of: web, rss, youtube, github",
+                DiagnosticSeverity.ERROR,
+                path,
+            )
+        )
+        source_kind = None
+
+    retrieved_at = None
+    try:
+        retrieved_at = parse_rfc3339(source["retrieved_at"])
+    except (TypeError, ValueError, OverflowError) as exc:
+        diagnostics.append(
+            Diagnostic(
+                "NOTE_SOURCE_INVALID_RETRIEVED_AT",
+                f"sources[0].retrieved_at: {exc}",
+                DiagnosticSeverity.ERROR,
+                path,
+            )
+        )
+
+    published_at = None
+    published_at_valid = True
+    if "published_at" in source and source["published_at"] is not None:
+        try:
+            published_at = parse_rfc3339(source["published_at"])
+        except (TypeError, ValueError, OverflowError) as exc:
+            diagnostics.append(
+                Diagnostic(
+                    "NOTE_SOURCE_INVALID_PUBLISHED_AT",
+                    f"sources[0].published_at: {exc}",
+                    DiagnosticSeverity.ERROR,
+                    path,
+                )
+            )
+            published_at_valid = False
+
+    if source_kind is None or retrieved_at is None or not published_at_valid:
+        return
+
+    try:
+        SourceProvenance(
+            uri=cast(str, source["uri"]),
+            source_kind=source_kind,
+            retrieved_at=retrieved_at,
+            published_at=published_at,
+            title=cast(str | None, source.get("title")),
+            author=cast(str | None, source.get("author")),
+            upstream_id=cast(str | None, source.get("upstream_id")),
+        )
+    except ValueError as exc:
+        message = str(exc)
+        if message.startswith("uri "):
+            code = "NOTE_SOURCE_INVALID_URI"
+        elif any(message.startswith(f"{field} ") for field in ("title", "author", "upstream_id")):
+            code = "NOTE_SOURCE_INVALID_METADATA"
+        else:
+            code = "NOTE_INVALID_SOURCE"
+        diagnostics.append(Diagnostic(code, message, DiagnosticSeverity.ERROR, path))
 
 
 def _report_attachment_diagnostics(

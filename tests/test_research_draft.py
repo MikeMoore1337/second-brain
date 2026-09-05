@@ -33,10 +33,12 @@ from second_brain.application.research import (
     ResearchRequest,
     ResearchSource,
     SourceKind,
+    SourceProvenance,
 )
 from second_brain.application.research_draft import (
     ResearchDraftGateway,
     ResearchDraftRequest,
+    ReviewedResearchDraft,
 )
 from second_brain.domain.models import NoteType
 
@@ -153,7 +155,22 @@ def test_valid_request_does_one_read_and_one_draft_with_exact_boundary_mapping()
 
     result = workflow.draft_note(request, cancellation=token)
 
-    assert result is draft
+    assert result.draft is draft
+    assert result.source == SourceProvenance(
+        uri=source.uri,
+        source_kind=source.source_kind,
+        retrieved_at=source.retrieved_at,
+        title=source.title,
+        author=source.author,
+        published_at=source.published_at,
+        upstream_id=source.upstream_id,
+    )
+    assert not hasattr(result.source, "content")
+    assert not hasattr(result.source, "backend")
+    assert not hasattr(result.source, "media_type")
+    reviewed = ReviewedResearchDraft.from_result(result)
+    assert reviewed.draft is draft
+    assert reviewed.sources == (result.source,)
     assert len(research_port.calls) == 1
     assert len(llm_port.calls) == 1
     assert research_port.calls[0][0] == ResearchRequest(
@@ -171,6 +188,24 @@ def test_valid_request_does_one_read_and_one_draft_with_exact_boundary_mapping()
     assert "source-title-sentinel" not in llm_request.instruction
     assert "source-author-sentinel" not in llm_request.instruction
     assert "research-backend-sentinel" not in llm_request.instruction
+
+
+def test_source_metadata_is_not_added_to_llm_context() -> None:
+    source = make_source("content-only")
+    research_port = FakeResearchPort(source)
+    llm_port = FakeLlmPort(make_draft())
+
+    make_workflow(research_port, llm_port).draft_note(
+        make_request(),
+        cancellation=CancellationTokenSource(),
+    )
+
+    llm_request = llm_port.calls[0][0]
+    assert llm_request.context is source.content
+    assert llm_request.context == "content-only"
+    assert "source-title-sentinel" not in llm_request.context
+    assert "source-author-sentinel" not in llm_request.context
+    assert "research-backend-sentinel" not in llm_request.context
 
 
 def test_max_source_cap_is_rejected_before_both_external_ports() -> None:

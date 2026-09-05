@@ -13,6 +13,7 @@ from second_brain.domain.models import NoteType
 
 if TYPE_CHECKING:
     from second_brain.application.llm import NoteDraft
+    from second_brain.application.research_draft import ReviewedResearchDraft
 
 
 class CreateStatus(StrEnum):
@@ -48,6 +49,15 @@ class CreateManagedNoteFromDraftRequest:
     """Входные данные offline Safe Write из уже проверенного NoteDraft."""
 
     draft: NoteDraft
+    apply: bool = False
+    now: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CreateManagedNoteFromReviewedResearchDraftRequest:
+    """Входные данные Safe Write для reviewed research draft boundary."""
+
+    reviewed_draft: ReviewedResearchDraft
     apply: bool = False
     now: datetime | None = None
 

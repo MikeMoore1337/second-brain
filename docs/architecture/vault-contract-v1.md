@@ -69,6 +69,29 @@ Templates и attachments не являются notes. Неизвестные fro
 и `created` новой заметки. Для offline `note create-from-draft` поля `tags` и
 additive `links` становятся authoritative YAML lists из reviewed `NoteDraft` с
 сохранением порядка, а body template игнорируется; schema version не меняется.
+
+Research-derived note может дополнительно содержать application-managed список
+проверенной provenance одного источника:
+
+```yaml
+sources:
+  - uri: https://example.com/...
+    kind: web
+    retrieved_at: 2026-09-04T20:00:00+03:00
+    title: Example title
+    author: Example author
+    published_at: 2026-09-03T10:00:00+00:00
+    upstream_id: abc123
+```
+
+В `sources` обязательны `uri`, `kind` и `retrieved_at`; `title`, `author`,
+`published_at` и `upstream_id` optional и при отсутствии не сериализуются.
+Порядок записей deterministic, хотя v1 фактически сохраняет ровно один source.
+`sources` не является полем `NoteDraft`: его добавляет application-level
+reviewed research write path. URL не подмешивается в body или `links`, а
+построение и публикация note не выполняют network. Это additive optional поле,
+поэтому `schema_version` остаётся `1`.
+
 Корневые служебные каталоги Obsidian (`.obsidian`, `.trash`) и Git (`.git`)
 не входят в объявленные content roots и поэтому не классифицируются как notes.
 

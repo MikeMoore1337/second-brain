@@ -17,12 +17,14 @@ from second_brain.application.ports import (
     LlmCancelledError,
     ResearchCancelledError,
     ResearchInvalidRequestError,
+    ResearchMalformedResultError,
 )
 from second_brain.application.research import (
     DEFAULT_TIMEOUT_SECONDS,
     ResearchGateway,
     ResearchRequest,
     SourceKind,
+    SourceProvenance,
 )
 
 
@@ -39,6 +41,40 @@ class ResearchDraftRequest:
 
 
 @dataclass(frozen=True, slots=True)
+class ResearchDraftResult:
+    """Внутренний результат research -> LLM с provenance рядом с draft."""
+
+    draft: NoteDraft
+    source: SourceProvenance
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewedResearchDraft:
+    """Immutable application boundary для reviewed draft будущего GUI."""
+
+    draft: NoteDraft
+    sources: tuple[SourceProvenance, ...]
+
+    def __post_init__(self) -> None:
+        """Ограничить v1 одним typed source и immutable persistence shape."""
+
+        if type(self.draft) is not NoteDraft:
+            raise ValueError("draft must be a NoteDraft")
+        if type(self.sources) is not tuple or len(self.sources) != 1:
+            raise ValueError("v1 reviewed research draft requires exactly one source")
+        if any(type(source) is not SourceProvenance for source in self.sources):
+            raise ValueError("sources must contain only SourceProvenance")
+
+    @classmethod
+    def from_result(cls, result: ResearchDraftResult) -> ReviewedResearchDraft:
+        """Создать reviewed boundary из одного orchestration result."""
+
+        if type(result) is not ResearchDraftResult:
+            raise ValueError("result must be a ResearchDraftResult")
+        return cls(draft=result.draft, sources=(result.source,))
+
+
+@dataclass(frozen=True, slots=True)
 class ResearchDraftGateway:
     """Последовательно выполнить максимум один research read и один LLM draft."""
 
@@ -50,8 +86,8 @@ class ResearchDraftGateway:
         request: ResearchDraftRequest,
         *,
         cancellation: CancellationToken,
-    ) -> NoteDraft:
-        """Прочитать один source и передать его content только как LLM context."""
+    ) -> ResearchDraftResult:
+        """Прочитать один source, сохранить metadata и передать только content в LLM."""
 
         if _check_cancellation(cancellation):
             raise ResearchCancelledError()
@@ -77,7 +113,12 @@ class ResearchDraftGateway:
         if _check_cancellation(cancellation):
             raise LlmCancelledError()
 
-        return self.llm_gateway.draft_note(
+        try:
+            provenance = SourceProvenance.from_research_source(source)
+        except ValueError:
+            raise ResearchMalformedResultError() from None
+
+        draft = self.llm_gateway.draft_note(
             LlmRequest(
                 instruction=request.instruction,
                 context=source.content,
@@ -85,6 +126,7 @@ class ResearchDraftGateway:
             ),
             cancellation=cancellation,
         )
+        return ResearchDraftResult(draft=draft, source=provenance)
 
 
 def _validate_request(request: ResearchDraftRequest) -> None:
@@ -120,5 +162,8 @@ __all__ = [
     "CancellationToken",
     "ResearchDraftGateway",
     "ResearchDraftRequest",
+    "ResearchDraftResult",
+    "ReviewedResearchDraft",
     "SourceKind",
+    "SourceProvenance",
 ]

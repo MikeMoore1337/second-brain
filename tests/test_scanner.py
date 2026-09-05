@@ -26,6 +26,57 @@ def validate_vault(vault: Path) -> ScanReport:
     return ValidateVault(FileSystemVaultReader(vault)).execute()
 
 
+def persisted_source_yaml(
+    *,
+    omit: str | None = None,
+    uri: str = "https://example.com/article",
+    kind: str = "web",
+    retrieved_at: str = "2026-09-04T20:00:00+03:00",
+    title: str = "Заголовок источника",
+    author: str = "Автор на русском",
+    published_at: str = "2026-09-03T10:00:00+00:00",
+    upstream_id: str = "upstream-123",
+) -> str:
+    """Собрать deterministic persisted sources mapping для scanner tests."""
+
+    values = {
+        "uri": uri,
+        "kind": kind,
+        "retrieved_at": retrieved_at,
+        "title": title,
+        "author": author,
+        "published_at": published_at,
+        "upstream_id": upstream_id,
+    }
+    lines = ["sources:"]
+    item_started = False
+    for field, value in values.items():
+        if field == omit:
+            continue
+        indent = "    " if item_started else "  - "
+        if field in {"title", "author", "upstream_id"}:
+            lines.append(f'{indent}{field}: "{value}"')
+        else:
+            lines.append(f"{indent}{field}: {value}")
+        item_started = True
+    return "\n".join(lines)
+
+
+def report_with_front_matter(tmp_path: Path, extra: str) -> ScanReport:
+    """Проверить одну managed note с дополнительным YAML front matter."""
+
+    vault = create_vault(tmp_path / "vault")
+    note = managed_note().replace("tags: []", f"tags: []\n{extra}", 1)
+    write_note(vault, "10 Projects/Note.md", note)
+    return validate_vault(vault)
+
+
+def diagnostic_codes(report: ScanReport) -> list[str]:
+    """Вернуть codes для assertions focused validation tests."""
+
+    return [item.code for item in report.diagnostics]
+
+
 def test_valid_vault_links_and_embeds_scan_without_errors(tmp_path: Path) -> None:
     vault = create_vault(tmp_path / "vault")
     write_note(
@@ -43,6 +94,147 @@ def test_valid_vault_links_and_embeds_scan_without_errors(tmp_path: Path) -> Non
     assert len(report.notes) == 2
     assert len(report.links) == 4
     assert report.attachments[0].relative_path == "_attachments/image.png"
+
+
+def test_managed_note_without_sources_remains_valid(tmp_path: Path) -> None:
+    report = report_with_front_matter(tmp_path, "")
+
+    assert report.error_count == 0
+
+
+def test_valid_persisted_sources_scan_without_errors(tmp_path: Path) -> None:
+    report = report_with_front_matter(tmp_path, persisted_source_yaml())
+
+    assert report.error_count == 0
+
+
+@pytest.mark.parametrize(
+    ("extra", "code"),
+    [
+        ('sources: {uri: "https://example.com/article"}', "NOTE_INVALID_SOURCES"),
+        ("sources: []", "NOTE_INVALID_SOURCE_COUNT"),
+        (
+            "sources:\n  - https://example.com/article\n",
+            "NOTE_INVALID_SOURCE_RECORD",
+        ),
+        (
+            persisted_source_yaml() + "\n  - uri: https://example.com/second\n    kind: web\n"
+            "    retrieved_at: 2026-09-04T20:00:00+03:00",
+            "NOTE_INVALID_SOURCE_COUNT",
+        ),
+    ],
+)
+def test_invalid_persisted_sources_shape_is_reported_as_error(
+    tmp_path: Path,
+    extra: str,
+    code: str,
+) -> None:
+    report = report_with_front_matter(tmp_path, extra)
+
+    assert report.error_count >= 1
+    assert code in diagnostic_codes(report)
+
+
+@pytest.mark.parametrize(
+    ("field", "code"),
+    [
+        ("uri", "NOTE_SOURCE_MISSING_URI"),
+        ("kind", "NOTE_SOURCE_MISSING_KIND"),
+        ("retrieved_at", "NOTE_SOURCE_MISSING_RETRIEVED_AT"),
+    ],
+)
+def test_persisted_sources_require_v1_fields(
+    tmp_path: Path,
+    field: str,
+    code: str,
+) -> None:
+    report = report_with_front_matter(tmp_path, persisted_source_yaml(omit=field))
+
+    assert report.error_count >= 1
+    assert code in diagnostic_codes(report)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "code"),
+    [
+        ("kind", "not-a-kind", "NOTE_SOURCE_INVALID_KIND"),
+        ("uri", "relative/path", "NOTE_SOURCE_INVALID_URI"),
+        ("retrieved_at", "2026-09-04T20:00:00", "NOTE_SOURCE_INVALID_RETRIEVED_AT"),
+        ("published_at", "2026-09-03T10:00:00", "NOTE_SOURCE_INVALID_PUBLISHED_AT"),
+    ],
+)
+def test_persisted_sources_reuse_source_value_validation(
+    tmp_path: Path,
+    field: str,
+    value: str,
+    code: str,
+) -> None:
+    values = {
+        "uri": "https://example.com/article",
+        "kind": "web",
+        "retrieved_at": "2026-09-04T20:00:00+03:00",
+        "title": "Заголовок источника",
+        "author": "Автор на русском",
+        "published_at": "2026-09-03T10:00:00+00:00",
+        "upstream_id": "upstream-123",
+    }
+    values[field] = value
+    report = report_with_front_matter(tmp_path, persisted_source_yaml(**values))
+
+    assert report.error_count >= 1
+    assert code in diagnostic_codes(report)
+
+
+@pytest.mark.parametrize("field", ["title", "author", "upstream_id"])
+def test_persisted_sources_reject_control_or_newline_metadata(
+    tmp_path: Path,
+    field: str,
+) -> None:
+    values = {
+        "uri": "https://example.com/article",
+        "kind": "web",
+        "retrieved_at": "2026-09-04T20:00:00+03:00",
+        "title": "Заголовок источника",
+        "author": "Автор на русском",
+        "published_at": "2026-09-03T10:00:00+00:00",
+        "upstream_id": "upstream-123",
+    }
+    values[field] = r"bad\nheader"
+    report = report_with_front_matter(tmp_path, persisted_source_yaml(**values))
+
+    assert report.error_count >= 1
+    assert "NOTE_SOURCE_INVALID_METADATA" in diagnostic_codes(report)
+
+
+def test_persisted_sources_reject_oversized_metadata(tmp_path: Path) -> None:
+    values = {
+        "uri": "https://example.com/article",
+        "kind": "web",
+        "retrieved_at": "2026-09-04T20:00:00+03:00",
+        "title": "x" * 16_385,
+        "author": "Автор на русском",
+        "published_at": "2026-09-03T10:00:00+00:00",
+        "upstream_id": "upstream-123",
+    }
+    report = report_with_front_matter(tmp_path, persisted_source_yaml(**values))
+
+    assert report.error_count >= 1
+    assert "NOTE_SOURCE_INVALID_METADATA" in diagnostic_codes(report)
+
+
+def test_persisted_sources_keep_unicode_metadata_valid(tmp_path: Path) -> None:
+    values = {
+        "uri": "https://example.com/article",
+        "kind": "web",
+        "retrieved_at": "2026-09-04T20:00:00+03:00",
+        "title": "Заголовок — русский текст",
+        "author": "Автор / редактор",
+        "published_at": "2026-09-03T10:00:00+00:00",
+        "upstream_id": "идентификатор-42",
+    }
+    report = report_with_front_matter(tmp_path, persisted_source_yaml(**values))
+
+    assert report.error_count == 0
 
 
 def test_managed_and_unmanaged_inbox_rules_are_explicit(tmp_path: Path) -> None:

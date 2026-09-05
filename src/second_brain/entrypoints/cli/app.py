@@ -236,7 +236,7 @@ def research_draft(
 
     try:
         source_kind = _research_source_kind(source_type)
-        draft = ResearchDraftGateway(
+        research_result = ResearchDraftGateway(
             ResearchGateway(_research_adapter(source_kind)),
             LlmGateway(CloudflareWorkersAiLlmPort()),
         ).draft_note(
@@ -260,6 +260,7 @@ def research_draft(
         _echo_research_draft_runtime_error(output_format)
         raise typer.Exit(code=2) from None
 
+    draft = research_result.draft
     if output_format is OutputFormat.JSON:
         typer.echo(json.dumps(_llm_draft_as_dict(draft), ensure_ascii=False, indent=2))
     else:

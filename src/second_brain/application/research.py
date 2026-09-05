@@ -29,6 +29,8 @@ DEFAULT_TIMEOUT_SECONDS = 30
 MAX_TIMEOUT_SECONDS = 300
 DEFAULT_MAX_BYTES = 5_000_000
 MAX_MAX_BYTES = 5_000_000
+MAX_SOURCE_URI_BYTES = 8 * 1024
+MAX_PROVENANCE_FIELD_BYTES = 16 * 1024
 
 _SAFE_BACKEND = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}\Z")
 _NUMERIC_IPV4_LABEL = re.compile(r"(?:0[xX][0-9a-fA-F]+|[0-9]+)\Z")
@@ -137,6 +139,55 @@ class ResearchSource:
 
 
 @dataclass(frozen=True, slots=True)
+class SourceProvenance:
+    """Минимальная provider-neutral provenance без content и transport details."""
+
+    uri: str
+    source_kind: SourceKind
+    retrieved_at: datetime
+    published_at: datetime | None = None
+    title: str | None = None
+    author: str | None = None
+    upstream_id: str | None = None
+
+    def __post_init__(self) -> None:
+        """Проверить bounded metadata до передачи в reviewed write boundary."""
+
+        if type(self.source_kind) is not SourceKind:
+            raise ValueError("source_kind must be a supported SourceKind")
+        try:
+            _validate_public_uri(self.uri, self.source_kind)
+        except ResearchInvalidRequestError:
+            raise ValueError("uri must be a valid public source URI") from None
+        if not _has_explicit_offset(self.retrieved_at):
+            raise ValueError("retrieved_at must include an explicit UTC offset")
+        if self.published_at is not None and not _has_explicit_offset(self.published_at):
+            raise ValueError("published_at must include an explicit UTC offset")
+        for field, value in (
+            ("title", self.title),
+            ("author", self.author),
+            ("upstream_id", self.upstream_id),
+        ):
+            _validate_provenance_text(value, field)
+
+    @classmethod
+    def from_research_source(cls, source: ResearchSource) -> SourceProvenance:
+        """Извлечь только metadata из уже normalized ``ResearchSource``."""
+
+        if not isinstance(source, ResearchSource):
+            raise ValueError("source must be a ResearchSource")
+        return cls(
+            uri=source.uri,
+            source_kind=source.source_kind,
+            retrieved_at=source.retrieved_at,
+            published_at=source.published_at,
+            title=source.title,
+            author=source.author,
+            upstream_id=source.upstream_id,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class ResearchGateway:
     """Тонкий application orchestration layer без network и write capabilities."""
 
@@ -186,6 +237,11 @@ def _validate_public_uri(uri: object, source_kind: SourceKind) -> None:
 
     if not isinstance(uri, str) or not uri or _contains_control_or_space(uri):
         raise ResearchInvalidRequestError()
+    try:
+        if len(uri.encode("utf-8")) > MAX_SOURCE_URI_BYTES:
+            raise ResearchInvalidRequestError()
+    except UnicodeEncodeError:
+        raise ResearchInvalidRequestError() from None
     try:
         parsed = urlsplit(uri)
         scheme = parsed.scheme.casefold()
@@ -241,6 +297,25 @@ def _contains_control_or_space(value: str) -> bool:
     """Отклонить raw URL с ASCII или Unicode whitespace/control characters."""
 
     return any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in value)
+
+
+def _validate_provenance_text(value: object, field: str) -> None:
+    """Проверить bounded scalar metadata без YAML control/newline injection."""
+
+    if value is None:
+        return
+    if type(value) is not str:
+        raise ValueError(f"{field} must be a string")
+    if any(
+        ord(char) < 32 or 0x7F <= ord(char) <= 0x9F or char in {"\u2028", "\u2029"}
+        for char in value
+    ):
+        raise ValueError(f"{field} contains a control character")
+    try:
+        if len(value.encode("utf-8")) > MAX_PROVENANCE_FIELD_BYTES:
+            raise ValueError(f"{field} exceeds its byte limit")
+    except UnicodeEncodeError:
+        raise ValueError(f"{field} is not valid UTF-8") from None
 
 
 def _is_local_or_internal_hostname(hostname: str) -> bool:
@@ -321,6 +396,10 @@ def _validate_source(source: object, request: ResearchRequest) -> None:
         _validate_public_uri(source.uri, source.source_kind)
     except ResearchInvalidRequestError:
         raise ResearchMalformedResultError() from None
+    try:
+        SourceProvenance.from_research_source(source)
+    except ValueError:
+        raise ResearchMalformedResultError() from None
     if not _has_explicit_offset(source.retrieved_at):
         raise ResearchMalformedResultError()
     if source.published_at is not None and not _has_explicit_offset(source.published_at):
@@ -335,12 +414,7 @@ def _validate_source(source: object, request: ResearchRequest) -> None:
         raise ResearchMalformedResultError() from None
     if len(content_bytes) > request.max_bytes:
         raise ResearchContentTooLargeError()
-    for value in (
-        source.title,
-        source.author,
-        source.media_type,
-        source.upstream_id,
-    ):
+    for value in (source.media_type,):
         if value is not None and (
             not isinstance(value, str) or "\x00" in value or any(ord(char) < 32 for char in value)
         ):
@@ -384,6 +458,8 @@ __all__ = [
     "DEFAULT_MAX_BYTES",
     "DEFAULT_TIMEOUT_SECONDS",
     "MAX_MAX_BYTES",
+    "MAX_PROVENANCE_FIELD_BYTES",
+    "MAX_SOURCE_URI_BYTES",
     "MAX_TIMEOUT_SECONDS",
     "CancellationToken",
     "ExternalResearchPort",
@@ -400,4 +476,5 @@ __all__ = [
     "ResearchTimeoutError",
     "ResearchUpstreamError",
     "SourceKind",
+    "SourceProvenance",
 ]

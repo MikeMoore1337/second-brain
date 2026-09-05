@@ -225,8 +225,20 @@ backend не добавляются в LLM request; content остаётся unt
 запуск делает максимум одну research operation, затем максимум одну LLM draft
 operation. Research error не запускает LLM, LLM error не повторяет research;
 retry, fallback, tools, function execution, chunking и map-reduce отсутствуют.
-Команда возвращает только пять semantic полей `NoteDraft` и не вызывает vault,
-Git или Safe Write.
+После успешного чтения metadata источника преобразуется в provider-neutral
+`SourceProvenance` и возвращается рядом с draft во внутреннем
+`ResearchDraftResult`. В `LlmRequest` по-прежнему передаётся только
+`ResearchSource.content` exact/unmodified; provenance не входит в `NoteDraft`,
+instruction или context и не может быть изменена LLM. Команда возвращает только
+пять semantic полей `NoteDraft` и не вызывает vault, Git или Safe Write.
+
+Для будущего Web GUI reviewed boundary представлена immutable DTO
+`ReviewedResearchDraft` с `draft: NoteDraft` и tuple `sources` из
+`SourceProvenance`. В v1 принимается ровно один source, но при research-derived Safe Write
+он сохраняется как YAML list `sources`. Этот use case переиспользует существующие
+preflight, containment, dry-run/apply, no-overwrite, post-write validation и
+receipt-based rollback; URL источника не добавляется в body или `links`, а запись
+не выполняет network.
 
 ### Cloudflare Workers AI adapter v1
 
