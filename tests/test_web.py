@@ -69,6 +69,7 @@ def test_packaged_static_assets_are_cwd_independent(
     assert javascript.status_code == 200
     assert javascript.headers["content-type"].startswith("text/javascript")
     assert "fetch(" in javascript.text
+    assert '"X-Second-Brain-Request": "draft-v1"' in javascript.text
     assert "http://" not in javascript.text
     assert "https://" not in javascript.text
     assert "innerHTML" not in javascript.text

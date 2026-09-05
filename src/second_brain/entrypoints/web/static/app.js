@@ -177,6 +177,7 @@ if (panel) {
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
+          "X-Second-Brain-Request": "draft-v1",
         },
         body: JSON.stringify(body),
       });

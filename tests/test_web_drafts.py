@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.types import ASGIApp, Message, Scope
 
 from second_brain.adapters.llm import cloudflare_workers_ai
-from second_brain.application.llm import LlmGateway, LlmRequest, NoteDraft
+from second_brain.application.llm import MAX_CONTEXT_BYTES, LlmGateway, LlmRequest, NoteDraft
 from second_brain.application.ports import (
     CancellationToken,
     LlmBackendUnavailableError,
@@ -32,10 +34,82 @@ from second_brain.application.research import (
 )
 from second_brain.application.research_draft import ResearchDraftGateway, ResearchDraftResult
 from second_brain.domain.models import NoteType
-from second_brain.entrypoints.web.app import create_app
+from second_brain.entrypoints.web.app import (
+    DRAFT_REQUEST_HEADER_NAME,
+    DRAFT_REQUEST_HEADER_VALUE,
+    MAX_RAW_DRAFT_BODY_BYTES,
+    create_app,
+)
 from second_brain.entrypoints.web.drafts import CAPTURE_INSTRUCTION, GatewayDraftService
 
 LOOPBACK_BASE_URL = "http://127.0.0.1"
+DRAFT_REQUEST_HEADERS = {DRAFT_REQUEST_HEADER_NAME: DRAFT_REQUEST_HEADER_VALUE}
+
+
+def send_raw_asgi_request(
+    application: ASGIApp,
+    *,
+    path: str,
+    headers: dict[str, str],
+    body_chunks: tuple[bytes, ...],
+) -> tuple[int, dict[str, str], bytes, int]:
+    """Послать контролируемые ASGI chunks без httpx body buffering."""
+
+    encoded_headers = [
+        (name.lower().encode("ascii"), value.encode("latin-1")) for name, value in headers.items()
+    ]
+    messages: list[Message] = [
+        {
+            "type": "http.request",
+            "body": chunk,
+            "more_body": index < len(body_chunks) - 1,
+        }
+        for index, chunk in enumerate(body_chunks)
+    ]
+    receive_calls = 0
+    sent_messages: list[Message] = []
+
+    async def receive() -> Message:
+        nonlocal receive_calls
+        receive_calls += 1
+        if messages:
+            return messages.pop(0)
+        return {"type": "http.disconnect"}
+
+    async def send(message: Message) -> None:
+        sent_messages.append(message)
+
+    scope: Scope = {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.4"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": path,
+        "raw_path": path.encode("ascii"),
+        "query_string": b"",
+        "headers": encoded_headers,
+        "client": ("127.0.0.1", 12345),
+        "server": ("127.0.0.1", 80),
+    }
+
+    async def run() -> None:
+        await application(scope, receive, send)
+
+    asyncio.run(run())
+    response_start = next(
+        message for message in sent_messages if message["type"] == "http.response.start"
+    )
+    response_headers = {
+        name.decode("latin-1").lower(): value.decode("latin-1")
+        for name, value in response_start["headers"]
+    }
+    response_body = b"".join(
+        message.get("body", b"")
+        for message in sent_messages
+        if message["type"] == "http.response.body"
+    )
+    return int(response_start["status"]), response_headers, response_body, receive_calls
 
 
 class RecordingLlmPort:
@@ -161,7 +235,9 @@ def test_text_route_uses_exact_context_once_and_returns_no_sources() -> None:
     user_text = "  Русский текст\nс control-boundary смыслом.  "
 
     with TestClient(create_app(draft_service=service), base_url=LOOPBACK_BASE_URL) as client:
-        response = client.post("/api/drafts/text", json={"text": user_text})
+        response = client.post(
+            "/api/drafts/text", json={"text": user_text}, headers=DRAFT_REQUEST_HEADERS
+        )
 
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
@@ -186,7 +262,9 @@ def test_url_route_uses_web_gateway_once_and_returns_bounded_provenance() -> Non
     source = make_source()
 
     with TestClient(create_app(draft_service=service), base_url=LOOPBACK_BASE_URL) as client:
-        response = client.post("/api/drafts/url", json={"url": source.uri})
+        response = client.post(
+            "/api/drafts/url", json={"url": source.uri}, headers=DRAFT_REQUEST_HEADERS
+        )
 
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
@@ -221,6 +299,145 @@ def test_url_route_uses_web_gateway_once_and_returns_bounded_provenance() -> Non
     assert "source-author-sentinel" not in llm_port.calls[0].instruction
 
 
+def test_draft_boundary_accepts_same_origin_json_with_utf8_charset() -> None:
+    service = StubDraftService()
+    body = json.dumps({"text": "same-origin"}).encode("utf-8")
+
+    with TestClient(create_app(draft_service=service), base_url=LOOPBACK_BASE_URL) as client:
+        response = client.post(
+            "/api/drafts/text",
+            content=body,
+            headers={
+                **DRAFT_REQUEST_HEADERS,
+                "content-type": "application/json; charset=utf-8",
+                "origin": LOOPBACK_BASE_URL,
+            },
+        )
+
+    assert response.status_code == 200
+    assert service.text_calls == ["same-origin"]
+
+
+@pytest.mark.parametrize(
+    ("headers", "body"),
+    [
+        ({}, b'{"text":"missing header"}'),
+        ({DRAFT_REQUEST_HEADER_NAME: "wrong"}, b'{"text":"wrong header"}'),
+        (
+            {**DRAFT_REQUEST_HEADERS, "origin": "https://evil.example"},
+            b'{"text":"foreign origin"}',
+        ),
+        (
+            {**DRAFT_REQUEST_HEADERS, "origin": "http://127.0.0.1:9999"},
+            b'{"text":"wrong origin port"}',
+        ),
+        (DRAFT_REQUEST_HEADERS, b'{"text":"missing content type"}'),
+        (
+            {**DRAFT_REQUEST_HEADERS, "content-type": "text/plain"},
+            b'{"text":"wrong content type"}',
+        ),
+    ],
+)
+def test_draft_boundary_rejects_cross_origin_or_non_json_before_service(
+    headers: dict[str, str], body: bytes
+) -> None:
+    service = StubDraftService()
+
+    with TestClient(create_app(draft_service=service), base_url=LOOPBACK_BASE_URL) as client:
+        response = client.post("/api/drafts/text", content=body, headers=headers)
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "error": {
+            "code": "LLM_INVALID_REQUEST",
+            "message": "draft request failed validation",
+        }
+    }
+    assert response.headers["cache-control"] == "no-store"
+    assert service.text_calls == []
+    assert service.url_calls == []
+
+
+@pytest.mark.parametrize(
+    ("path", "code"),
+    [
+        ("/api/drafts/text", "LLM_CONTENT_TOO_LARGE"),
+        ("/api/drafts/url", "RESEARCH_CONTENT_TOO_LARGE"),
+    ],
+)
+def test_declared_raw_body_cap_rejects_before_receive_or_service(path: str, code: str) -> None:
+    service = StubDraftService()
+    status, headers, body, receive_calls = send_raw_asgi_request(
+        create_app(draft_service=service),
+        path=path,
+        headers={
+            **DRAFT_REQUEST_HEADERS,
+            "content-type": "application/json",
+            "content-length": str(MAX_RAW_DRAFT_BODY_BYTES + 1),
+            "host": "127.0.0.1",
+        },
+        body_chunks=(b'{"text":"not read"}',),
+    )
+
+    assert status == 413
+    assert headers["cache-control"] == "no-store"
+    assert json.loads(body) == {
+        "error": {
+            "code": code,
+            "message": (
+                "research content is too large"
+                if path.endswith("/url")
+                else "draft content is too large"
+            ),
+        }
+    }
+    assert receive_calls == 0
+    assert service.text_calls == []
+    assert service.url_calls == []
+
+
+@pytest.mark.parametrize("declared_length", [None, "1"])
+def test_actual_raw_body_cap_rejects_missing_or_misleading_content_length(
+    declared_length: str | None,
+) -> None:
+    service = StubDraftService()
+    headers = {
+        **DRAFT_REQUEST_HEADERS,
+        "content-type": "application/json",
+        "host": "127.0.0.1",
+    }
+    if declared_length is not None:
+        headers["content-length"] = declared_length
+
+    status, response_headers, body, receive_calls = send_raw_asgi_request(
+        create_app(draft_service=service),
+        path="/api/drafts/text",
+        headers=headers,
+        body_chunks=(b"{}", b"x" * MAX_RAW_DRAFT_BODY_BYTES),
+    )
+
+    assert status == 413
+    assert response_headers["cache-control"] == "no-store"
+    assert json.loads(body)["error"]["code"] == "LLM_CONTENT_TOO_LARGE"
+    assert receive_calls == 2
+    assert service.text_calls == []
+
+
+def test_raw_body_cap_allows_valid_context_near_application_limit() -> None:
+    service = StubDraftService()
+    text = "a" * (MAX_CONTEXT_BYTES - 32)
+
+    with TestClient(create_app(draft_service=service), base_url=LOOPBACK_BASE_URL) as client:
+        response = client.post(
+            "/api/drafts/text",
+            json={"text": text},
+            headers=DRAFT_REQUEST_HEADERS,
+        )
+
+    assert response.status_code == 200
+    assert service.text_calls == [text]
+
+
 @pytest.mark.parametrize(
     ("path", "payload", "expected_code"),
     [
@@ -238,7 +455,7 @@ def test_draft_requests_are_strict_json_and_reject_unknown_or_wrong_fields(
     service = StubDraftService()
 
     with TestClient(create_app(draft_service=service), base_url=LOOPBACK_BASE_URL) as client:
-        response = client.post(path, json=payload)
+        response = client.post(path, json=payload, headers=DRAFT_REQUEST_HEADERS)
 
     assert response.status_code == 400
     assert response.json() == {
@@ -260,9 +477,15 @@ def test_form_fallback_and_blank_values_are_rejected_before_service() -> None:
     service = StubDraftService()
 
     with TestClient(create_app(draft_service=service), base_url=LOOPBACK_BASE_URL) as client:
-        form_response = client.post("/api/drafts/text", data={"text": "not JSON"})
-        blank_text = client.post("/api/drafts/text", json={"text": " \n "})
-        blank_url = client.post("/api/drafts/url", json={"url": "  "})
+        form_response = client.post(
+            "/api/drafts/text", data={"text": "not JSON"}, headers=DRAFT_REQUEST_HEADERS
+        )
+        blank_text = client.post(
+            "/api/drafts/text", json={"text": " \n "}, headers=DRAFT_REQUEST_HEADERS
+        )
+        blank_url = client.post(
+            "/api/drafts/url", json={"url": "  "}, headers=DRAFT_REQUEST_HEADERS
+        )
 
     assert form_response.status_code == 400
     assert blank_text.status_code == 400
@@ -350,7 +573,7 @@ def test_application_errors_have_safe_http_mapping(
     service = StubDraftService(error=error)
 
     with TestClient(create_app(draft_service=service), base_url=LOOPBACK_BASE_URL) as client:
-        response = client.post(path, json=payload)
+        response = client.post(path, json=payload, headers=DRAFT_REQUEST_HEADERS)
 
     assert response.status_code == status
     assert response.json()["error"]["code"] == code
@@ -364,7 +587,9 @@ def test_unexpected_runtime_error_is_generic_and_does_not_leak_details() -> None
     service = StubDraftService(error=RuntimeError("provider secret and raw upstream body"))
 
     with TestClient(create_app(draft_service=service), base_url=LOOPBACK_BASE_URL) as client:
-        response = client.post("/api/drafts/text", json={"text": "text"})
+        response = client.post(
+            "/api/drafts/text", json={"text": "text"}, headers=DRAFT_REQUEST_HEADERS
+        )
 
     assert response.status_code == 500
     assert response.json() == {
@@ -393,7 +618,9 @@ def test_production_composition_defers_cloudflare_config_until_real_post(
         assert client.get("/").status_code == 200
         assert client.get("/healthz").status_code == 200
         assert load_calls == 0
-        response = client.post("/api/drafts/text", json={"text": "text"})
+        response = client.post(
+            "/api/drafts/text", json={"text": "text"}, headers=DRAFT_REQUEST_HEADERS
+        )
 
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "LLM_BACKEND_UNAVAILABLE"
@@ -407,7 +634,7 @@ def test_unexpected_host_is_rejected_before_draft_service() -> None:
         response = client.post(
             "/api/drafts/text",
             json={"text": "text"},
-            headers={"host": "unexpected.example"},
+            headers={**DRAFT_REQUEST_HEADERS, "host": "unexpected.example"},
         )
 
     assert response.status_code == 400
