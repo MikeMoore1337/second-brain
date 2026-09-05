@@ -296,6 +296,223 @@ a {
   white-space: nowrap;
 }
 
+.capture-panel {
+  max-width: 720px;
+  margin-top: 24px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(15, 23, 22, 0.28);
+}
+
+.mode-switch {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.mode-button,
+.capture-submit {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.mode-button {
+  padding: 8px 16px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mode-button:hover,
+.mode-button:focus-visible,
+.mode-button.is-active {
+  border-color: rgba(201, 242, 119, 0.55);
+  background: rgba(201, 242, 119, 0.12);
+  color: var(--lime);
+}
+
+.mode-button:disabled,
+.capture-submit:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.capture-form {
+  display: grid;
+  gap: 9px;
+  margin-top: 18px;
+}
+
+.capture-label,
+.draft-field-label {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.capture-input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  outline: none;
+  padding: 13px 14px;
+}
+
+.capture-input::placeholder {
+  color: rgba(154, 173, 163, 0.68);
+}
+
+.capture-input:focus {
+  border-color: var(--lime);
+  box-shadow: 0 0 0 3px rgba(201, 242, 119, 0.12);
+}
+
+.capture-textarea {
+  min-height: 145px;
+  resize: vertical;
+}
+
+.capture-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 5px;
+}
+
+.capture-submit {
+  padding: 11px 18px;
+  border-color: var(--lime);
+  background: var(--lime);
+  color: #142018;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.capture-submit:hover,
+.capture-submit:focus-visible {
+  background: #d9fa98;
+}
+
+.capture-status {
+  min-height: 20px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.capture-error {
+  margin: 14px 0 0;
+  padding: 11px 13px;
+  border: 1px solid rgba(255, 159, 122, 0.45);
+  border-radius: 12px;
+  background: rgba(255, 159, 122, 0.09);
+  color: var(--coral);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.draft-result {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.draft-result h3,
+.provenance-block h4 {
+  margin: 0 0 15px;
+  font-weight: 580;
+  letter-spacing: -0.035em;
+}
+
+.draft-result h3 {
+  font-size: 23px;
+}
+
+.provenance-block {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.provenance-block h4 {
+  color: var(--mint);
+  font-size: 16px;
+}
+
+.draft-fields {
+  display: grid;
+  gap: 13px;
+  margin: 0;
+}
+
+.draft-field {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.draft-field-value {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.draft-content-field {
+  margin-top: 4px;
+}
+
+.draft-content {
+  max-height: 360px;
+  margin: 0;
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.draft-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 19px;
+}
+
+.provenance-fields {
+  padding: 13px;
+  border: 1px solid rgba(157, 228, 197, 0.18);
+  border-radius: 12px;
+  background: rgba(157, 228, 197, 0.04);
+}
+
+.is-hidden {
+  display: none !important;
+}
+
 .pillars {
   padding: 112px 0 66px;
 }
@@ -471,6 +688,19 @@ a {
   .entry-point {
     align-items: flex-start;
     padding: 20px;
+  }
+
+  .capture-panel {
+    padding: 14px;
+  }
+
+  .capture-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .capture-submit {
+    width: 100%;
   }
 
   .entry-state {

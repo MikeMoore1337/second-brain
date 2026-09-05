@@ -14,6 +14,7 @@ from second_brain.entrypoints.cli.app import app
 from second_brain.entrypoints.web.app import create_app
 
 runner = CliRunner()
+LOOPBACK_BASE_URL = "http://127.0.0.1"
 
 
 def test_create_app_needs_no_vault_or_provider_configuration(
@@ -29,7 +30,7 @@ def test_create_app_needs_no_vault_or_provider_configuration(
 
 
 def test_root_is_utf8_shell_with_local_assets_only() -> None:
-    with TestClient(create_app()) as client:
+    with TestClient(create_app(), base_url=LOOPBACK_BASE_URL) as client:
         response = client.get("/")
 
     assert response.status_code == 200
@@ -45,7 +46,7 @@ def test_root_is_utf8_shell_with_local_assets_only() -> None:
 
 
 def test_healthz_returns_exact_safe_json() -> None:
-    with TestClient(create_app()) as client:
+    with TestClient(create_app(), base_url=LOOPBACK_BASE_URL) as client:
         response = client.get("/healthz")
 
     assert response.status_code == 200
@@ -58,7 +59,7 @@ def test_packaged_static_assets_are_cwd_independent(
 ) -> None:
     monkeypatch.chdir(tmp_path)
 
-    with TestClient(create_app()) as client:
+    with TestClient(create_app(), base_url=LOOPBACK_BASE_URL) as client:
         css = client.get("/static/app.css")
         javascript = client.get("/static/app.js")
 
@@ -67,12 +68,19 @@ def test_packaged_static_assets_are_cwd_independent(
     assert "--lime" in css.text
     assert javascript.status_code == 200
     assert javascript.headers["content-type"].startswith("text/javascript")
-    assert "fetch(" not in javascript.text
+    assert "fetch(" in javascript.text
+    assert '"X-Second-Brain-Request": "draft-v1"' in javascript.text
+    assert "http://" not in javascript.text
+    assert "https://" not in javascript.text
+    assert "innerHTML" not in javascript.text
     assert "localStorage" not in javascript.text
+    assert "sessionStorage" not in javascript.text
+    assert "indexedDB" not in javascript.text
+    assert "serviceWorker" not in javascript.text
 
 
 def test_static_serving_has_no_directory_listing_or_traversal() -> None:
-    with TestClient(create_app()) as client:
+    with TestClient(create_app(), base_url=LOOPBACK_BASE_URL) as client:
         directory = client.get("/static/")
         traversal = client.get("/static/%2e%2e/%2e%2e/pyproject.toml")
         unknown = client.get("/not-a-route")
@@ -84,14 +92,14 @@ def test_static_serving_has_no_directory_listing_or_traversal() -> None:
 
 @pytest.mark.parametrize("path", ["/", "/static/app.css"])
 def test_html_and_static_responses_have_security_headers(path: str) -> None:
-    with TestClient(create_app()) as client:
+    with TestClient(create_app(), base_url=LOOPBACK_BASE_URL) as client:
         response = client.get(path)
 
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["referrer-policy"] == "no-referrer"
     assert response.headers["x-frame-options"] == "DENY"
     assert response.headers["content-security-policy"] == (
-        "default-src 'self'; base-uri 'none'; connect-src 'none'; font-src 'self'; "
+        "default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; "
         "form-action 'none'; frame-ancestors 'none'; img-src 'self'; object-src 'none'; "
         "script-src 'self'; style-src 'self'"
     )

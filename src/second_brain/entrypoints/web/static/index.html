@@ -48,11 +48,46 @@
         <section class="entry-point" aria-labelledby="entry-title">
           <div class="entry-icon" aria-hidden="true">+</div>
           <div class="entry-copy">
-            <p class="entry-kicker">Следующая точка входа</p>
+            <p class="entry-kicker">Новая заметка</p>
             <h2 id="entry-title">Добавить знание</h2>
-            <p>URL, текст и другие способы захвата появятся здесь в следующем шаге.</p>
+            <p id="add-description">Получи структурированный черновик из текста или публичной страницы.</p>
+            <div class="capture-panel" data-capture-panel>
+              <div class="mode-switch" role="group" aria-label="Режим добавления">
+                <button class="mode-button is-active" type="button" data-mode="url" aria-pressed="true">URL</button>
+                <button class="mode-button" type="button" data-mode="text" aria-pressed="false">Text</button>
+              </div>
+              <form class="capture-form" data-draft-form>
+                <label class="capture-label" for="source-input" data-url-label>Публичный URL</label>
+                <input
+                  class="capture-input"
+                  id="source-input"
+                  name="url"
+                  type="url"
+                  placeholder="example.com/article"
+                  autocomplete="off"
+                  required
+                  data-url-input
+                />
+                <label class="capture-label is-hidden" for="text-input" data-text-label>Текст материала</label>
+                <textarea
+                  class="capture-input capture-textarea is-hidden"
+                  id="text-input"
+                  name="text"
+                  rows="7"
+                  placeholder="Вставь текст, который нужно превратить в заметку"
+                  autocomplete="off"
+                  data-text-input
+                  disabled
+                ></textarea>
+                <div class="capture-actions">
+                  <button class="capture-submit" type="submit" data-submit>Создать черновик</button>
+                  <span class="capture-status" data-status role="status" aria-live="polite"></span>
+                </div>
+              </form>
+              <p class="capture-error" data-error role="alert" hidden></p>
+              <div class="draft-result" data-result hidden></div>
+            </div>
           </div>
-          <span class="entry-state">Foundation v1</span>
         </section>
 
         <section class="pillars" aria-labelledby="pillars-title">
