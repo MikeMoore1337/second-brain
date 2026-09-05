@@ -60,6 +60,14 @@ binary запрос на transcription и возвращает только plai
 review state в persistent browser storage. Authentication, public bind, deploy
 и PWA в этот этап не входят.
 
+В shell доступна отдельная Search-поверхность: она ищет только managed notes со
+стабильным UUID, показывает ranked lexical hits и открывает read-only текущую
+версию заметки. Search/Retrieval лениво загружают vault configuration только при
+соответствующем запросе; index каждый раз пересобирается в disposable SQLite
+FTS5 `:memory:` и не является source of truth. Полное содержимое заметки для
+`Открыть` повторно читается через существующий vault scan. Search не вызывает
+network, LLM или Safe Write и не использует browser storage.
+
 API surface:
 
 ```text
@@ -69,7 +77,25 @@ POST /api/transcriptions/audio <raw audio bytes>
 POST /api/drafts/preview {"content":"..."}
 POST /api/drafts/save/prepare {"review_token":"...", "draft": {"title", "note_type", "content", "tags", "links"}}
 POST /api/drafts/save/apply {"review_token":"...", "confirmation_token":"...", "draft": {"title", "note_type", "content", "tags", "links"}}
+POST /api/search {"query":"fastapi testing", "limit":20}
+POST /api/retrieval/note {"id":"UUIDv7"}
 ```
+
+CLI Search доступен без network и записи в vault:
+
+```powershell
+uv run second-brain --env-file .env search "fastapi testing" --limit 20
+uv run second-brain --env-file .env search "тестирование" --format json
+```
+
+Private Search/Retrieval API принимает только same-origin loopback `POST` с
+`X-Second-Brain-Request: search-v1` и `Content-Type: application/json`; для
+успешных и ошибочных ответов используется `Cache-Control: no-store`. Query —
+обычный bounded literal text с deterministic `AND` semantics, а не raw FTS5
+syntax. SQLite FTS5 использует `unicode61 remove_diacritics 2` и BM25 с
+приоритетом `title > tags > relative_path > body`; Russian morphology и
+lemmatization не обещаются, поэтому разные падежные формы могут не совпасть.
+Persistent SQLite/cache, embeddings, vector search и RAG отложены.
 
 Ответы генерации имеют форму `{"draft": {"title", "note_type", "content", "tags", "links"},
 "sources": [...], "review_token":"..."}`. Preview возвращает

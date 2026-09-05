@@ -13,13 +13,21 @@ from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict, StrictStr
+from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from second_brain.application.llm import MAX_CONTEXT_BYTES, NoteDraft, validate_note_draft
-from second_brain.application.ports import LlmError, ResearchError, TranscriptionError
+from second_brain.application.ports import (
+    LlmError,
+    ResearchError,
+    RetrievedNote,
+    SearchError,
+    SearchHit,
+    SearchRequest,
+    TranscriptionError,
+)
 from second_brain.application.research import SourceProvenance
 from second_brain.application.transcription import (
     MAX_TRANSCRIPTION_AUDIO_BYTES,
@@ -34,7 +42,7 @@ from second_brain.application.writes import (
     WriteSafetyError,
 )
 from second_brain.config import ConfigurationError
-from second_brain.domain.models import NoteType
+from second_brain.domain.models import NoteType, parse_uuid7
 
 from .drafts import DraftService, build_production_draft_service
 from .preview import (
@@ -45,6 +53,7 @@ from .preview import (
 )
 from .review import ReviewTokenClaims, ReviewTokenCodec, ReviewTokenError, ReviewTokenMode
 from .saves import DraftSaveService, build_production_save_service
+from .search import SearchService, build_production_search_service
 from .transcriptions import TranscriptionService, build_production_transcription_service
 
 STATIC_DIR: Final[Path] = Path(__file__).resolve().parent / "static"
@@ -53,10 +62,14 @@ DRAFT_REQUEST_HEADER_NAME: Final[str] = "X-Second-Brain-Request"
 DRAFT_REQUEST_HEADER_VALUE: Final[str] = "draft-v1"
 TRANSCRIPTION_REQUEST_HEADER_NAME: Final[str] = DRAFT_REQUEST_HEADER_NAME
 TRANSCRIPTION_REQUEST_HEADER_VALUE: Final[str] = "voice-v1"
+SEARCH_REQUEST_HEADER_NAME: Final[str] = DRAFT_REQUEST_HEADER_NAME
+SEARCH_REQUEST_HEADER_VALUE: Final[str] = "search-v1"
 MAX_RAW_DRAFT_BODY_BYTES: Final[int] = 512 * 1024
 MAX_RAW_TRANSCRIPTION_BODY_BYTES: Final[int] = MAX_TRANSCRIPTION_AUDIO_BYTES
 MAX_RAW_AUDIO_BODY_BYTES: Final[int] = MAX_RAW_TRANSCRIPTION_BODY_BYTES
+MAX_RAW_SEARCH_BODY_BYTES: Final[int] = 64 * 1024
 _TRANSCRIPTION_PATH: Final[str] = "/api/transcriptions/audio"
+_SEARCH_PATHS: Final[frozenset[str]] = frozenset({"/api/search", "/api/retrieval/note"})
 _DRAFT_PATHS: Final[frozenset[str]] = frozenset(
     {
         "/api/drafts/text",
@@ -122,6 +135,23 @@ class UrlDraftRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     url: StrictStr
+
+
+class SearchRequestPayload(BaseModel):
+    """Strict JSON request for one local Search operation."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    query: StrictStr
+    limit: StrictInt = 20
+
+
+class RetrievalRequestPayload(BaseModel):
+    """Strict JSON request for canonical UUID retrieval."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    id: StrictStr
 
 
 class TranscriptPayload(BaseModel):
@@ -268,6 +298,52 @@ class ErrorResponse(BaseModel):
     error: ErrorPayload
 
 
+class SearchHitPayload(BaseModel):
+    """Safe public SearchHit projection without indexed body content."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    id: StrictStr
+    type: StrictStr
+    title: StrictStr
+    relative_path: StrictStr
+    tags: list[StrictStr]
+    created: datetime
+    updated: datetime | None
+    snippet: StrictStr
+
+
+class SearchResponse(BaseModel):
+    """Ranked Search response containing bounded snippets only."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    hits: list[SearchHitPayload]
+
+
+class RetrievedNotePayload(BaseModel):
+    """Safe current-note projection with exact body under ``content``."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    id: StrictStr
+    type: StrictStr
+    title: StrictStr
+    relative_path: StrictStr
+    tags: list[StrictStr]
+    created: datetime
+    updated: datetime | None
+    content: StrictStr
+
+
+class RetrievalResponse(BaseModel):
+    """Canonical read-only retrieval response."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    note: RetrievedNotePayload
+
+
 _ERRORS: Final[dict[str, tuple[int, str]]] = {
     "LLM_INVALID_REQUEST": (400, "draft request failed validation"),
     "LLM_CANCELLED": (504, "draft operation was cancelled"),
@@ -302,6 +378,13 @@ _ERRORS: Final[dict[str, tuple[int, str]]] = {
     "SAVE_ROLLED_BACK": (500, "save was rolled back; no note was published"),
     "SAVE_RECOVERY_REQUIRED": (500, "save recovery requires manual vault verification"),
     "SAVE_FAILED": (500, "save failed"),
+    "SEARCH_INVALID_REQUEST": (400, "search request failed validation"),
+    "SEARCH_CONTENT_TOO_LARGE": (413, "search request is too large"),
+    "SEARCH_BACKEND_UNAVAILABLE": (503, "search backend is unavailable"),
+    "SEARCH_INDEX_FAILED": (500, "search index could not be rebuilt"),
+    "SEARCH_QUERY_FAILED": (500, "search query could not be completed"),
+    "SEARCH_NOT_FOUND": (404, "the requested note was not found"),
+    "SEARCH_IDENTITY_CONFLICT": (409, "the requested note identity is conflicted"),
 }
 _GENERIC_ERROR: Final[tuple[int, str, str]] = (
     500,
@@ -361,6 +444,101 @@ class DraftRequestBoundaryMiddleware:
                 return
             if declared_length < 0:
                 await _send_boundary_error(scope, receive, send, invalid_code)
+                return
+            if declared_length > self.max_body_bytes:
+                await _send_boundary_error(
+                    scope,
+                    receive,
+                    send,
+                    _content_too_large_code(path),
+                )
+                return
+
+        received_bytes = 0
+        body_messages: list[Message] = []
+        while True:
+            message = await receive()
+            if message["type"] != "http.request":
+                body_messages.append(message)
+                break
+            body = message.get("body", b"")
+            if not isinstance(body, bytes):
+                await _send_boundary_error(
+                    scope,
+                    receive,
+                    send,
+                    _content_too_large_code(path),
+                )
+                return
+            received_bytes += len(body)
+            if received_bytes > self.max_body_bytes:
+                await _send_boundary_error(
+                    scope,
+                    receive,
+                    send,
+                    _content_too_large_code(path),
+                )
+                return
+            body_messages.append(message)
+            if not message.get("more_body", False):
+                break
+
+        async def replay_receive() -> Message:
+            if body_messages:
+                return body_messages.pop(0)
+            return {"type": "http.disconnect"}
+
+        await self.app(scope, replay_receive, send)
+
+
+class SearchRequestBoundaryMiddleware:
+    """Scoped ASGI boundary for private Search/Retrieval JSON requests."""
+
+    def __init__(self, app: ASGIApp, *, max_body_bytes: int) -> None:
+        """Store the raw-body cap before FastAPI JSON parsing."""
+
+        self.app = app
+        self.max_body_bytes = max_body_bytes
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Require search-v1, loopback same-origin metadata and bounded JSON."""
+
+        if (
+            scope["type"] != "http"
+            or scope.get("method") != "POST"
+            or scope.get("path") not in _SEARCH_PATHS
+        ):
+            await self.app(scope, receive, send)
+            return
+
+        path = str(scope["path"])
+        content_type_present, content_type = _single_header(scope, "content-type")
+        request_header_present, request_header = _single_header(scope, SEARCH_REQUEST_HEADER_NAME)
+        origin_present, origin = _single_header(scope, "origin")
+        content_length_present, content_length = _single_header(scope, "content-length")
+        if (
+            not content_type_present
+            or content_type is None
+            or not _is_json_content_type(content_type)
+            or not request_header_present
+            or request_header != SEARCH_REQUEST_HEADER_VALUE
+            or not _trusted_request_host(scope)
+            or (origin_present and (origin is None or not _origin_matches(scope, origin)))
+        ):
+            await _send_boundary_error(scope, receive, send, _invalid_request_code(path))
+            return
+
+        if content_length_present:
+            if content_length is None:
+                await _send_boundary_error(scope, receive, send, _invalid_request_code(path))
+                return
+            try:
+                declared_length = int(content_length.strip())
+            except ValueError:
+                await _send_boundary_error(scope, receive, send, _invalid_request_code(path))
+                return
+            if declared_length < 0:
+                await _send_boundary_error(scope, receive, send, _invalid_request_code(path))
                 return
             if declared_length > self.max_body_bytes:
                 await _send_boundary_error(
@@ -623,6 +801,8 @@ def _loopback_host_port(value: str, scheme: str) -> tuple[str, int] | None:
 def _invalid_request_code(path: str) -> str:
     """Выбрать safe application code по draft route."""
 
+    if path in _SEARCH_PATHS:
+        return "SEARCH_INVALID_REQUEST"
     if path.endswith("/url"):
         return "RESEARCH_INVALID_REQUEST"
     if path == _TRANSCRIPTION_PATH:
@@ -635,6 +815,8 @@ def _invalid_request_code(path: str) -> str:
 def _content_too_large_code(path: str) -> str:
     """Выбрать bounded content-too-large code по draft route."""
 
+    if path in _SEARCH_PATHS:
+        return "SEARCH_CONTENT_TOO_LARGE"
     if path.endswith("/url"):
         return "RESEARCH_CONTENT_TOO_LARGE"
     if path == _TRANSCRIPTION_PATH:
@@ -649,10 +831,11 @@ def create_app(
     draft_service: DraftService | None = None,
     transcription_service: TranscriptionService | None = None,
     save_service: DraftSaveService | None = None,
+    search_service: SearchService | None = None,
     env_file: Path | None = None,
     vault_path_override: str | None = None,
 ) -> FastAPI:
-    """Создать Web GUI без config/vault side effects до explicit Save."""
+    """Создать Web GUI без config/vault side effects до Search/Retrieval/Save."""
 
     service = draft_service if draft_service is not None else build_production_draft_service()
     transcriber = (
@@ -664,6 +847,14 @@ def create_app(
         save_service
         if save_service is not None
         else build_production_save_service(
+            env_file=env_file,
+            vault_path_override=vault_path_override,
+        )
+    )
+    searcher = (
+        search_service
+        if search_service is not None
+        else build_production_search_service(
             env_file=env_file,
             vault_path_override=vault_path_override,
         )
@@ -684,6 +875,10 @@ def create_app(
         max_body_bytes=MAX_RAW_DRAFT_BODY_BYTES,
     )
     app.add_middleware(
+        SearchRequestBoundaryMiddleware,
+        max_body_bytes=MAX_RAW_SEARCH_BODY_BYTES,
+    )
+    app.add_middleware(
         TranscriptionRequestBoundaryMiddleware,
         max_body_bytes=MAX_RAW_TRANSCRIPTION_BODY_BYTES,
     )
@@ -699,7 +894,9 @@ def create_app(
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-Frame-Options"] = "DENY"
-        if request.url.path.startswith(("/api/drafts/", "/api/transcriptions/")):
+        if request.url.path.startswith(
+            ("/api/drafts/", "/api/transcriptions/", "/api/search", "/api/retrieval/")
+        ):
             response.headers["Cache-Control"] = "no-store"
         response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
         return response
@@ -858,6 +1055,46 @@ def create_app(
             return _error_response("SAVE_FAILED")
         return _save_response(result)
 
+    @app.post("/api/search", include_in_schema=False)
+    def search(payload: SearchRequestPayload) -> Response:
+        """Search current private vault through a fresh derived FTS5 index."""
+
+        try:
+            hits = searcher.search(SearchRequest(query=payload.query, limit=payload.limit))
+            response = SearchResponse(hits=[_search_hit_payload(hit) for hit in hits])
+        except SearchError as error:
+            return _error_response(error.code)
+        except ConfigurationError, OSError:
+            return _error_response("SEARCH_BACKEND_UNAVAILABLE")
+        except Exception:
+            return _error_response("SEARCH_QUERY_FAILED")
+        return JSONResponse(
+            content=response.model_dump(mode="json"),
+            headers=_DRAFT_ERROR_HEADERS,
+        )
+
+    @app.post("/api/retrieval/note", include_in_schema=False)
+    def retrieve_note(payload: RetrievalRequestPayload) -> Response:
+        """Return one read-only current note after canonical vault re-scan."""
+
+        try:
+            note_id = parse_uuid7(payload.id)
+        except ValueError:
+            return _error_response("SEARCH_INVALID_REQUEST")
+        try:
+            note = searcher.retrieve(note_id)
+            response = RetrievalResponse(note=_retrieved_note_payload(note))
+        except SearchError as error:
+            return _error_response(error.code)
+        except ConfigurationError, OSError:
+            return _error_response("SEARCH_BACKEND_UNAVAILABLE")
+        except Exception:
+            return _error_response("SEARCH_QUERY_FAILED")
+        return JSONResponse(
+            content=response.model_dump(mode="json"),
+            headers=_DRAFT_ERROR_HEADERS,
+        )
+
     @app.get("/", include_in_schema=False)
     def index() -> FileResponse:
         return FileResponse(INDEX_FILE, media_type="text/html")
@@ -872,6 +1109,42 @@ def create_app(
         name="static",
     )
     return app
+
+
+def _search_hit_payload(hit: SearchHit) -> SearchHitPayload:
+    """Сериализовать SearchHit без absolute path, score или full body."""
+
+    relative_path = _safe_relative_path(hit.relative_path)
+    if relative_path is None:
+        raise ValueError("search hit path is not a safe relative path")
+    return SearchHitPayload(
+        id=str(hit.note_id),
+        type=hit.note_type.value,
+        title=hit.title,
+        relative_path=relative_path,
+        tags=list(hit.tags),
+        created=hit.created,
+        updated=hit.updated,
+        snippet=hit.snippet,
+    )
+
+
+def _retrieved_note_payload(note: RetrievedNote) -> RetrievedNotePayload:
+    """Сериализовать current canonical note без arbitrary front matter."""
+
+    relative_path = _safe_relative_path(note.relative_path)
+    if relative_path is None:
+        raise ValueError("retrieved note path is not a safe relative path")
+    return RetrievedNotePayload(
+        id=str(note.note_id),
+        type=note.note_type.value,
+        title=note.title,
+        relative_path=relative_path,
+        tags=list(note.tags),
+        created=note.created,
+        updated=note.updated,
+        content=note.body,
+    )
 
 
 def _text_is_too_large(value: str) -> bool:
@@ -1092,7 +1365,7 @@ def _error_response(code: str) -> JSONResponse:
 def _error_response_for_exception(error: Exception) -> JSONResponse:
     """Сопоставить application taxonomy с HTTP без provider/upstream details."""
 
-    if isinstance(error, (LlmError, ResearchError, TranscriptionError)):
+    if isinstance(error, (LlmError, ResearchError, TranscriptionError, SearchError)):
         return _error_response(error.code)
     return _error_response(_GENERIC_ERROR[1])
 
@@ -1103,7 +1376,10 @@ __all__ = [
     "DRAFT_REQUEST_HEADER_VALUE",
     "MAX_RAW_AUDIO_BODY_BYTES",
     "MAX_RAW_DRAFT_BODY_BYTES",
+    "MAX_RAW_SEARCH_BODY_BYTES",
     "MAX_RAW_TRANSCRIPTION_BODY_BYTES",
+    "SEARCH_REQUEST_HEADER_NAME",
+    "SEARCH_REQUEST_HEADER_VALUE",
     "TRANSCRIPTION_REQUEST_HEADER_NAME",
     "TRANSCRIPTION_REQUEST_HEADER_VALUE",
     "ApplyDraftRequest",
@@ -1116,8 +1392,15 @@ __all__ = [
     "PrepareResponse",
     "PreviewDraftRequest",
     "PreviewResponse",
+    "RetrievalRequestPayload",
+    "RetrievalResponse",
+    "RetrievedNotePayload",
     "SaveResponse",
     "SavedNotePayload",
+    "SearchHitPayload",
+    "SearchRequestBoundaryMiddleware",
+    "SearchRequestPayload",
+    "SearchResponse",
     "SourceProvenancePayload",
     "TextDraftRequest",
     "TranscriptPayload",

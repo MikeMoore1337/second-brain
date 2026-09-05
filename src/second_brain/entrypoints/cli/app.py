@@ -19,6 +19,7 @@ from second_brain.adapters.research.github import PublicGitHubAdapter
 from second_brain.adapters.research.jina_reader import JinaReaderWebAdapter
 from second_brain.adapters.research.rss import PublicRssAdapter
 from second_brain.adapters.research.youtube import PublicYouTubeAdapter
+from second_brain.adapters.search import SqliteFts5SearchIndex
 from second_brain.adapters.vault import FileSystemVaultReader, FileSystemVaultWriter
 from second_brain.application.draft_files import DraftFileError, read_note_draft_file
 from second_brain.application.llm import (
@@ -34,6 +35,9 @@ from second_brain.application.ports import (
     LlmErrorCode,
     ProposalPortError,
     ResearchError,
+    SearchBackendUnavailableError,
+    SearchError,
+    SearchHit,
 )
 from second_brain.application.proposals import (
     CreateNoteProposal,
@@ -52,6 +56,7 @@ from second_brain.application.research import (
     SourceKind,
 )
 from second_brain.application.research_draft import ResearchDraftGateway, ResearchDraftRequest
+from second_brain.application.search import DEFAULT_SEARCH_LIMIT, SearchRequest, SearchVault
 from second_brain.application.services import (
     CreateManagedNote,
     CreateManagedNoteFromDraft,
@@ -171,6 +176,52 @@ def doctor(
     """Проверить конфигурацию и весь внешний vault."""
 
     _run(ctx, output_format, use_doctor=True)
+
+
+@app.command()
+def search(
+    ctx: typer.Context,
+    query: Annotated[str, typer.Argument(help="Обычный текстовый запрос по заметкам.")],
+    limit: Annotated[
+        int,
+        typer.Option("--limit", help="Максимальное число результатов (1-50)."),
+    ] = DEFAULT_SEARCH_LIMIT,
+    output_format: Annotated[
+        OutputFormat,
+        typer.Option("--format", help="Формат результатов: text или json."),
+    ] = OutputFormat.TEXT,
+) -> None:
+    """Найти managed notes в текущем vault без записи, Git, LLM или сети."""
+
+    try:
+        options = _root_options(ctx)
+        config = load_config(env_file=options.env_file, vault_path_override=options.vault_path)
+        index = SqliteFts5SearchIndex()
+        try:
+            hits = SearchVault(FileSystemVaultReader(config.vault_path), index).execute(
+                SearchRequest(query=query, limit=limit)
+            )
+        finally:
+            index.close()
+    except ConfigurationError:
+        _echo_search_error(SearchBackendUnavailableError(), output_format)
+        raise typer.Exit(code=2) from None
+    except SearchError as exc:
+        _echo_search_error(exc, output_format)
+        raise typer.Exit(code=1) from None
+    except OSError:
+        _echo_search_error(SearchBackendUnavailableError(), output_format)
+        raise typer.Exit(code=2) from None
+
+    if output_format is OutputFormat.JSON:
+        typer.echo(
+            json.dumps(
+                {"hits": [_search_hit_as_dict(hit) for hit in hits]}, ensure_ascii=False, indent=2
+            )
+        )
+    else:
+        typer.echo(_render_search_text(hits))
+    raise typer.Exit(code=0)
 
 
 @vault_app.command("validate")
@@ -558,6 +609,77 @@ def _echo_research_error(error: ResearchError, output_format: OutputFormat) -> N
         )
     else:
         typer.echo(f"Ошибка research: {error.code} — {message}", err=True)
+
+
+def _echo_search_error(error: SearchError, output_format: OutputFormat) -> None:
+    """Вывести safe Search diagnostic без absolute path или SQLite details."""
+
+    code = error.code if error.code in _SEARCH_ERROR_MESSAGES else "SEARCH_QUERY_FAILED"
+    message = _search_error_message(code)
+    if output_format is OutputFormat.JSON:
+        typer.echo(
+            json.dumps(
+                {"error": {"code": code, "message": message}},
+                ensure_ascii=False,
+                indent=2,
+            ),
+            err=True,
+        )
+    else:
+        typer.echo(f"Ошибка поиска: {code} — {message}", err=True)
+
+
+_SEARCH_ERROR_MESSAGES = {
+    "SEARCH_INVALID_REQUEST": "запрос не прошёл проверку",
+    "SEARCH_CONTENT_TOO_LARGE": "запрос слишком большой",
+    "SEARCH_BACKEND_UNAVAILABLE": "vault или локальный search backend недоступен",
+    "SEARCH_INDEX_FAILED": "не удалось пересобрать локальный search index",
+    "SEARCH_QUERY_FAILED": "не удалось выполнить search query",
+    "SEARCH_NOT_FOUND": "заметка не найдена в текущем vault",
+    "SEARCH_IDENTITY_CONFLICT": "identity заметки конфликтует в текущем vault",
+}
+
+
+def _search_error_message(code: str) -> str:
+    """Вернуть короткое русское сообщение закрытой Search taxonomy."""
+
+    return _SEARCH_ERROR_MESSAGES.get(code, "операция поиска завершилась ошибкой")
+
+
+def _search_hit_as_dict(hit: SearchHit) -> dict[str, object]:
+    """Сериализовать только stable metadata и bounded snippet."""
+
+    return {
+        "id": str(hit.note_id),
+        "type": hit.note_type.value,
+        "title": hit.title,
+        "relative_path": hit.relative_path,
+        "tags": list(hit.tags),
+        "created": hit.created.isoformat(),
+        "updated": hit.updated.isoformat() if hit.updated is not None else None,
+        "snippet": hit.snippet,
+    }
+
+
+def _render_search_text(hits: tuple[SearchHit, ...]) -> str:
+    """Показать ranked SearchHit без full body и absolute vault path."""
+
+    if not hits:
+        return "Ничего не найдено."
+    blocks: list[str] = []
+    for hit in hits:
+        blocks.append(
+            "\n".join(
+                [
+                    f"Title: {hit.title}",
+                    f"Type: {hit.note_type.value}",
+                    f"Path: {hit.relative_path}",
+                    f"Tags: {', '.join(hit.tags) or '-'}",
+                    f"Snippet: {hit.snippet or '-'}",
+                ]
+            )
+        )
+    return "\n\n".join(blocks)
 
 
 def _echo_llm_error(error: LlmError, output_format: OutputFormat) -> None:
