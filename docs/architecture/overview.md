@@ -357,9 +357,53 @@ production deployment workflow. Обычные vault/research read commands не
 orchestration передаёт source content в `LlmRequest.context`, а framing
 остаётся внутри Cloudflare adapter.
 
-## Поиск
+## Search / Retrieval v1
 
-SQLite FTS5 планируется как будущий search v1. Его базовый `unicode61` не решает
-русскую морфологию, а Porter stemmer предназначен для английского языка. Сравнение
-нормализации, лемматизации, trigram и embeddings выполняется позднее на русском
-query corpus.
+Search является отдельным read-only слоем над уже существующей границей vault:
+
+```text
+FileSystemVaultReader.scan()
+        -> VaultSnapshot
+        -> build_report()
+        -> ScanReport.notes
+        -> SearchDocument projection
+        -> SearchIndexPort
+        -> ranked SearchHit
+        -> RetrieveManagedNote(note_id)
+        -> новый FileSystemVaultReader.scan()
+        -> current RetrievedNote
+```
+
+`SearchIndexPort` принимает только provider-neutral `SearchDocument` и возвращает
+`SearchHit` с stable `note_id`, note metadata и bounded plain-text `snippet`.
+Search adapter не читает Markdown-файлы и не парсит их самостоятельно. В v1
+`SqliteFts5SearchIndex` каждый раз создаёт только disposable SQLite `:memory:`
+database: FTS5 table содержит searchable `title`, `tags`, `relative_path` и
+`body`, а отдельная internal metadata table связывается по transient rowid.
+Tokenizer — `unicode61 remove_diacritics 2`; ranking — BM25 с фиксированным
+приоритетом `title > tags > relative_path > body` и Unicode-aware deterministic
+tie-break. Raw BM25 score не входит в public DTO.
+
+В projection попадают только `managed=True` notes с непустой стабильной
+identity: `note_id`, `note_type` и `created`. Unmanaged Inbox без этой identity
+пропускается. Duplicate UUID среди searchable notes даёт fail-closed
+`SEARCH_IDENTITY_CONFLICT`; unrelated diagnostics вроде broken wikilink не
+отключают поиск valid notes. Title выводится из basename relative Markdown path
+без `.md`; arbitrary неизвестные front matter fields не индексируются.
+
+User query ограничен по UTF-8 bytes и числу Unicode terms, не является raw FTS5
+языком: операторные слова, кавычки, `*`, `NEAR`, `OR` и column-looking input
+превращаются в безопасные quoted literals с deterministic `AND` semantics и
+SQL parameters. `unicode61` поддерживает Unicode tokenization и case handling,
+но не выполняет полноценную русскую морфологию или лемматизацию; разные
+падежные/словообразовательные формы могут не совпасть.
+
+`RetrieveManagedNote` никогда не читает body из SQLite. Он повторно запускает
+canonical `VaultReader -> build_report` и возвращает ровно одну current
+validated note по UUID; отсутствующий UUID даёт safe not-found, duplicate —
+identity conflict. Web использует scoped same-origin `POST /api/search` и
+`POST /api/retrieval/note` с `X-Second-Brain-Request: search-v1`, strict JSON,
+loopback Host/Origin checks, raw body cap и `Cache-Control: no-store`. CLI
+`second-brain search` остаётся read-only. Persistent DB/cache, file watcher,
+incremental index, embeddings, vector search, RAG и Cognitive Twin здесь не
+реализуются.

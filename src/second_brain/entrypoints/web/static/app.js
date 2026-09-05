@@ -838,3 +838,215 @@ if (panel) {
 
   setMode("url");
 }
+
+const searchSurface = document.querySelector("[data-search-surface]");
+
+if (searchSurface) {
+  const searchForm = searchSurface.querySelector("[data-search-form]");
+  const searchInput = searchSurface.querySelector("[data-search-input]");
+  const searchSubmit = searchSurface.querySelector("[data-search-submit]");
+  const searchStatus = searchSurface.querySelector("[data-search-status]");
+  const searchError = searchSurface.querySelector("[data-search-error]");
+  const searchEmpty = searchSurface.querySelector("[data-search-empty]");
+  const searchResults = searchSurface.querySelector("[data-search-results]");
+  const retrievedNote = searchSurface.querySelector("[data-retrieved-note]");
+  const searchHeaders = {
+    Accept: "application/json",
+    "Content-Type": "application/json",
+    "X-Second-Brain-Request": "search-v1",
+  };
+  let searchBusy = false;
+
+  const searchTextValue = (value, fallback = "—") =>
+    typeof value === "string" && value.length > 0 ? value : fallback;
+
+  const setSearchError = (message) => {
+    searchError.textContent = searchTextValue(message, "Не удалось выполнить поиск.");
+    searchError.hidden = false;
+    searchStatus.textContent = "";
+  };
+
+  const clearSearchFeedback = () => {
+    searchError.textContent = "";
+    searchError.hidden = true;
+    searchStatus.textContent = "";
+  };
+
+  const setSearchBusy = (busy) => {
+    searchBusy = busy;
+    searchInput.disabled = busy;
+    searchSubmit.disabled = busy;
+    searchSubmit.setAttribute("aria-busy", String(busy));
+    if (busy) {
+      searchStatus.textContent = "Ищу в памяти…";
+    }
+  };
+
+  const readSearchPayload = async (response) => {
+    try {
+      return await response.json();
+    } catch (_error) {
+      return null;
+    }
+  };
+
+  const addSearchField = (parent, label, value) => {
+    const item = document.createElement("div");
+    item.className = "search-field";
+    const name = document.createElement("dt");
+    name.className = "draft-field-label";
+    name.textContent = label;
+    const content = document.createElement("dd");
+    content.className = "search-field-value";
+    content.textContent = searchTextValue(value);
+    item.append(name, content);
+    parent.append(item);
+  };
+
+  const appendSearchTags = (parent, tags) => {
+    const list = document.createElement("div");
+    list.className = "search-tags";
+    if (Array.isArray(tags) && tags.length > 0) {
+      tags.forEach((tag) => {
+        if (typeof tag === "string") {
+          const item = document.createElement("span");
+          item.className = "search-tag";
+          item.textContent = tag;
+          list.append(item);
+        }
+      });
+    }
+    if (!list.children.length) {
+      const empty = document.createElement("span");
+      empty.className = "search-tag search-tag-empty";
+      empty.textContent = "без тегов";
+      list.append(empty);
+    }
+    parent.append(list);
+  };
+
+  const renderRetrievedNote = (note) => {
+    if (!note || typeof note !== "object") {
+      throw new Error("invalid retrieved note");
+    }
+    retrievedNote.replaceChildren();
+    const heading = document.createElement("h3");
+    heading.id = "retrieved-note-title";
+    heading.textContent = searchTextValue(note.title, "Заметка");
+    retrievedNote.append(heading);
+    const fields = document.createElement("dl");
+    fields.className = "search-fields";
+    addSearchField(fields, "Тип", note.type);
+    addSearchField(fields, "Путь", note.relative_path);
+    addSearchField(fields, "Создано", note.created);
+    addSearchField(fields, "Обновлено", note.updated);
+    appendSearchTags(retrievedNote, note.tags);
+    retrievedNote.append(fields);
+    const bodyLabel = document.createElement("h4");
+    bodyLabel.textContent = "Содержание (только чтение)";
+    const body = document.createElement("pre");
+    body.className = "retrieved-note-body";
+    body.textContent = searchTextValue(note.content, "");
+    retrievedNote.append(bodyLabel, body);
+    retrievedNote.hidden = false;
+  };
+
+  const openNote = async (noteId) => {
+    if (searchBusy || typeof noteId !== "string" || !noteId) {
+      return;
+    }
+    setSearchBusy(true);
+    searchStatus.textContent = "Открываю текущую заметку…";
+    try {
+      const response = await fetch("/api/retrieval/note", {
+        method: "POST",
+        headers: searchHeaders,
+        body: JSON.stringify({ id: noteId }),
+      });
+      const payload = await readSearchPayload(response);
+      if (!response.ok) {
+        const message = payload && payload.error && payload.error.message;
+        setSearchError(typeof message === "string" ? message : "Не удалось открыть заметку.");
+        return;
+      }
+      renderRetrievedNote(payload && payload.note);
+      searchStatus.textContent = "Показана текущая версия заметки.";
+    } catch (_error) {
+      setSearchError("Сервис retrieval недоступен.");
+    } finally {
+      setSearchBusy(false);
+    }
+  };
+
+  const renderSearchHit = (hit) => {
+    if (!hit || typeof hit !== "object" || typeof hit.id !== "string") {
+      throw new Error("invalid search hit");
+    }
+    const article = document.createElement("article");
+    article.className = "search-hit";
+    const heading = document.createElement("h3");
+    heading.className = "search-hit-title";
+    heading.textContent = searchTextValue(hit.title, "Без названия");
+    article.append(heading);
+    const fields = document.createElement("dl");
+    fields.className = "search-fields";
+    addSearchField(fields, "Тип", hit.type);
+    addSearchField(fields, "Путь", hit.relative_path);
+    addSearchField(fields, "Фрагмент", hit.snippet);
+    article.append(fields);
+    appendSearchTags(article, hit.tags);
+    const actions = document.createElement("div");
+    actions.className = "search-hit-actions";
+    const openButton = document.createElement("button");
+    openButton.className = "review-button review-button-secondary";
+    openButton.type = "button";
+    openButton.textContent = "Открыть";
+    openButton.addEventListener("click", () => openNote(hit.id));
+    actions.append(openButton);
+    article.append(actions);
+    return article;
+  };
+
+  searchForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (searchBusy) {
+      return;
+    }
+    const query = searchInput.value;
+    if (!query.trim()) {
+      setSearchError("Введи поисковый запрос.");
+      return;
+    }
+    clearSearchFeedback();
+    searchResults.replaceChildren();
+    searchEmpty.hidden = true;
+    retrievedNote.replaceChildren();
+    retrievedNote.hidden = true;
+    setSearchBusy(true);
+    try {
+      const response = await fetch("/api/search", {
+        method: "POST",
+        headers: searchHeaders,
+        body: JSON.stringify({ query, limit: 20 }),
+      });
+      const payload = await readSearchPayload(response);
+      if (!response.ok) {
+        const message = payload && payload.error && payload.error.message;
+        setSearchError(typeof message === "string" ? message : "Не удалось выполнить поиск.");
+        return;
+      }
+      if (!payload || !Array.isArray(payload.hits)) {
+        throw new Error("invalid search response");
+      }
+      payload.hits.forEach((hit) => searchResults.append(renderSearchHit(hit)));
+      searchEmpty.hidden = payload.hits.length !== 0;
+      searchStatus.textContent = payload.hits.length
+        ? `Найдено результатов: ${payload.hits.length}`
+        : "Поиск завершён";
+    } catch (_error) {
+      setSearchError("Сервис поиска недоступен.");
+    } finally {
+      setSearchBusy(false);
+    }
+  });
+}

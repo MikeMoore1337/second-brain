@@ -32,6 +32,66 @@ class VaultReader(Protocol):
         """Прочитать vault без его изменения и вернуть raw DTO."""
 
 
+@dataclass(frozen=True, slots=True)
+class SearchDocument:
+    """Provider-neutral projection searchable managed note."""
+
+    note_id: UUID
+    note_type: NoteType
+    relative_path: str
+    title: str
+    body: str
+    tags: tuple[str, ...]
+    created: datetime
+    updated: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SearchRequest:
+    """Обычный bounded text query, не raw FTS5 expression."""
+
+    query: str
+    limit: int = 20
+
+
+@dataclass(frozen=True, slots=True)
+class SearchHit:
+    """Ranked search result without full note body or index implementation data."""
+
+    note_id: UUID
+    note_type: NoteType
+    relative_path: str
+    title: str
+    tags: tuple[str, ...]
+    created: datetime
+    updated: datetime | None
+    snippet: str
+
+
+@dataclass(frozen=True, slots=True)
+class RetrievedNote:
+    """Current canonical note read again from the vault by stable UUID."""
+
+    note_id: UUID
+    note_type: NoteType
+    relative_path: str
+    title: str
+    body: str
+    tags: tuple[str, ...]
+    created: datetime
+    updated: datetime | None
+
+
+class SearchIndexPort(Protocol):
+    """Provider-neutral rebuildable search index boundary."""
+
+    def rebuild(self, documents: tuple[SearchDocument, ...]) -> None:
+        """Replace derived index state with the supplied current projection."""
+
+    def search(self, request: SearchRequest) -> tuple[SearchHit, ...]:
+        """Return bounded ranked hits for one validated user query."""
+
+
 class ManagedNoteWriter(Protocol):
     """Граница единственной filesystem write-операции v1."""
 
@@ -428,6 +488,96 @@ class LlmPort(Protocol):
         """Сгенерировать один semantic draft без write/network authority."""
 
 
+class SearchErrorCode(StrEnum):
+    """Стабильные application-коды ошибок Search/Retrieval boundary."""
+
+    INVALID_REQUEST = "SEARCH_INVALID_REQUEST"
+    BACKEND_UNAVAILABLE = "SEARCH_BACKEND_UNAVAILABLE"
+    INDEX_FAILED = "SEARCH_INDEX_FAILED"
+    QUERY_FAILED = "SEARCH_QUERY_FAILED"
+    NOT_FOUND = "SEARCH_NOT_FOUND"
+    IDENTITY_CONFLICT = "SEARCH_IDENTITY_CONFLICT"
+    CONTENT_TOO_LARGE = "SEARCH_CONTENT_TOO_LARGE"
+
+
+_SEARCH_ERROR_MESSAGES = {
+    SearchErrorCode.INVALID_REQUEST: "search request failed validation",
+    SearchErrorCode.BACKEND_UNAVAILABLE: "search backend is unavailable",
+    SearchErrorCode.INDEX_FAILED: "search index could not be rebuilt",
+    SearchErrorCode.QUERY_FAILED: "search query could not be completed",
+    SearchErrorCode.NOT_FOUND: "the requested note was not found",
+    SearchErrorCode.IDENTITY_CONFLICT: "the requested note identity is conflicted",
+    SearchErrorCode.CONTENT_TOO_LARGE: "search request is too large",
+}
+
+
+class SearchError(RuntimeError):
+    """Безопасная Search/Retrieval error boundary без vault/SQLite details."""
+
+    def __init__(self, code: SearchErrorCode | str, message: str | None = None) -> None:
+        """Создать ошибку с фиксированным сообщением закрытой taxonomy."""
+
+        del message
+        normalized = _normalize_search_error_code(code)
+        self.code = normalized.value
+        self.message = _SEARCH_ERROR_MESSAGES[normalized]
+        super().__init__(self.message)
+
+    def as_dict(self) -> dict[str, str]:
+        """Вернуть только стабильные safe fields."""
+
+        return {"code": self.code, "message": self.message}
+
+
+class SearchInvalidRequestError(SearchError):
+    """Запрос не соответствует bounded literal-query policy."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(SearchErrorCode.INVALID_REQUEST, message)
+
+
+class SearchBackendUnavailableError(SearchError):
+    """Vault или локальный FTS5 runtime недоступен."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(SearchErrorCode.BACKEND_UNAVAILABLE, message)
+
+
+class SearchIndexFailedError(SearchError):
+    """Derived index не удалось атомарно пересоздать."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(SearchErrorCode.INDEX_FAILED, message)
+
+
+class SearchQueryFailedError(SearchError):
+    """FTS query не удалось безопасно выполнить."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(SearchErrorCode.QUERY_FAILED, message)
+
+
+class SearchNotFoundError(SearchError):
+    """Canonical note UUID отсутствует в текущем vault."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(SearchErrorCode.NOT_FOUND, message)
+
+
+class SearchIdentityConflictError(SearchError):
+    """Несколько searchable notes используют один stable UUID."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(SearchErrorCode.IDENTITY_CONFLICT, message)
+
+
+class SearchContentTooLargeError(SearchError):
+    """Raw JSON body превышает scoped Web search cap."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(SearchErrorCode.CONTENT_TOO_LARGE, message)
+
+
 def _normalize_research_error_code(code: ResearchErrorCode | str) -> ResearchErrorCode:
     """Свести enum или известную строку к закрытой taxonomy."""
 
@@ -448,6 +598,17 @@ def _normalize_llm_error_code(code: LlmErrorCode | str) -> LlmErrorCode:
         return LlmErrorCode(code)
     except TypeError, ValueError:
         return LlmErrorCode.UPSTREAM_FAILURE
+
+
+def _normalize_search_error_code(code: SearchErrorCode | str) -> SearchErrorCode:
+    """Свести enum или неизвестную строку к закрытой Search taxonomy."""
+
+    if isinstance(code, SearchErrorCode):
+        return code
+    try:
+        return SearchErrorCode(code)
+    except TypeError, ValueError:
+        return SearchErrorCode.QUERY_FAILED
 
 
 class ProposalPortError(RuntimeError):

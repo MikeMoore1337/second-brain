@@ -20,6 +20,7 @@
           </span>
         </a>
         <nav class="topnav" aria-label="Основные разделы">
+          <a href="#search">Search</a>
           <a href="#memory">Memory</a>
           <a href="#growth">Growth</a>
         </nav>
@@ -111,6 +112,34 @@
               <div class="draft-result" data-result hidden></div>
             </div>
           </div>
+        </section>
+
+        <section class="search-surface" id="search" aria-labelledby="search-title" data-search-surface>
+          <div class="section-heading">
+            <p class="eyebrow">Private retrieval</p>
+            <h2 id="search-title">Найти в памяти.</h2>
+          </div>
+          <form class="search-form" data-search-form>
+            <label class="capture-label" for="search-input">Поисковый запрос</label>
+            <div class="search-form-row">
+              <input
+                class="capture-input"
+                id="search-input"
+                name="query"
+                type="search"
+                placeholder="Например, fastapi testing"
+                autocomplete="off"
+                required
+                data-search-input
+              />
+              <button class="capture-submit" type="submit" data-search-submit>Найти</button>
+            </div>
+            <p class="search-status" data-search-status role="status" aria-live="polite"></p>
+          </form>
+          <p class="capture-error search-error" data-search-error role="alert" hidden></p>
+          <p class="search-empty" data-search-empty hidden>По этому запросу ничего не найдено.</p>
+          <div class="search-results" data-search-results aria-live="polite"></div>
+          <section class="retrieved-note" data-retrieved-note aria-labelledby="retrieved-note-title" hidden></section>
         </section>
 
         <section class="pillars" aria-labelledby="pillars-title">
