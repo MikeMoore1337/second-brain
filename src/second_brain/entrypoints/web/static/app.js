@@ -28,6 +28,20 @@ if (panel) {
     "X-Second-Brain-Request": "draft-v1",
   };
   const noteTypes = ["project", "area", "resource", "zettel"];
+  const personalMemoryEvidenceKinds = [
+    ["explicit_user_fact", "Факт обо мне / моей ситуации"],
+    ["user_statement", "Моё утверждение, мнение, цель или самоописание"],
+  ];
+  const personalMemorySelfKinds = [
+    ["memory", "Память"],
+    ["preference", "Предпочтение"],
+    ["belief", "Убеждение"],
+    ["goal", "Цель"],
+  ];
+  const personalMemoryTimeModes = [
+    ["exact", "Точное время"],
+    ["unknown", "Время неизвестно"],
+  ];
   const audioMediaTypes = [
     "audio/webm",
     "audio/ogg",
@@ -175,6 +189,9 @@ if (panel) {
     ].forEach((control) => {
       control.disabled = loading || reviewState.saved;
     });
+    reviewState.personalMemoryControls.forEach((control) => {
+      control.disabled = loading || reviewState.saved;
+    });
     reviewState.addButton.disabled = loading;
     reviewState.prepareButton.setAttribute("aria-busy", String(loading));
     reviewState.confirmButton.setAttribute("aria-busy", String(loading));
@@ -288,7 +305,7 @@ if (panel) {
     return control;
   };
 
-  const createEditor = (draft) => {
+  const createEditor = (draft, allowPersonalMemory) => {
     const section = document.createElement("section");
     section.className = "review-editor";
     const heading = document.createElement("h4");
@@ -323,6 +340,204 @@ if (panel) {
     content.rows = 12;
     content.value = typeof draft.content === "string" ? draft.content : "";
     section.append(fields);
+
+    let personalMemoryToggle = null;
+    let personalMemoryEvidenceKind = null;
+    let personalMemorySelfKind = null;
+    let personalMemoryTimeMode = null;
+    let personalMemoryEvidenceAt = null;
+    let personalMemoryDomain = null;
+    let personalMemoryNowButton = null;
+    const personalMemoryControls = [];
+
+    if (allowPersonalMemory) {
+      const personalMemoryPanel = document.createElement("section");
+      personalMemoryPanel.className = "personal-memory-panel";
+      const personalMemoryHeading = document.createElement("h5");
+      personalMemoryHeading.textContent = "Личная память";
+      const personalMemoryDescription = document.createElement("p");
+      personalMemoryDescription.className = "personal-memory-description";
+      personalMemoryDescription.textContent =
+        "Включи режим только после проверки draft и явно укажи Stage 1 metadata.";
+      const toggleLabel = document.createElement("label");
+      toggleLabel.className = "personal-memory-toggle";
+      personalMemoryToggle = document.createElement("input");
+      personalMemoryToggle.type = "checkbox";
+      personalMemoryToggle.id = "personal-memory-toggle";
+      personalMemoryToggle.dataset.personalMemoryToggle = "";
+      personalMemoryToggle.setAttribute("aria-controls", "personal-memory-fields");
+      const toggleText = document.createElement("span");
+      toggleText.textContent = "Сохранить как Personal Memory";
+      toggleLabel.append(personalMemoryToggle, toggleText);
+
+      const metadataFields = document.createElement("div");
+      metadataFields.className = "personal-memory-fields";
+      metadataFields.id = "personal-memory-fields";
+      metadataFields.dataset.personalMemoryFields = "";
+      metadataFields.hidden = true;
+
+      const addOptions = (select, options, placeholder) => {
+        if (placeholder) {
+          const emptyOption = document.createElement("option");
+          emptyOption.value = "";
+          emptyOption.textContent = placeholder;
+          emptyOption.disabled = true;
+          emptyOption.selected = true;
+          select.append(emptyOption);
+        }
+        options.forEach(([value, label]) => {
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = label;
+          select.append(option);
+        });
+      };
+
+      personalMemoryEvidenceKind = editorField(
+        metadataFields,
+        "Основание",
+        "personal-memory-evidence-kind",
+        "select",
+      );
+      addOptions(
+        personalMemoryEvidenceKind,
+        personalMemoryEvidenceKinds,
+        "Выбери тип основания",
+      );
+
+      personalMemorySelfKind = editorField(
+        metadataFields,
+        "Что сохраняем о себе",
+        "personal-memory-self-kind",
+        "select",
+      );
+      addOptions(personalMemorySelfKind, personalMemorySelfKinds, "Выбери тип памяти");
+
+      personalMemoryDomain = editorField(
+        metadataFields,
+        "Домен (необязательно)",
+        "personal-memory-domain",
+      );
+      personalMemoryDomain.type = "text";
+      personalMemoryDomain.autocomplete = "off";
+
+      personalMemoryTimeMode = editorField(
+        metadataFields,
+        "Время факта",
+        "personal-memory-time-mode",
+        "select",
+      );
+      addOptions(personalMemoryTimeMode, personalMemoryTimeModes);
+      personalMemoryTimeMode.value = "unknown";
+
+      const evidenceAtWrapper = document.createElement("div");
+      evidenceAtWrapper.className = "personal-memory-time-field";
+      metadataFields.append(evidenceAtWrapper);
+      const evidenceAtLabel = document.createElement("label");
+      evidenceAtLabel.className = "draft-field-label";
+      evidenceAtLabel.htmlFor = "personal-memory-evidence-at";
+      evidenceAtLabel.textContent = "RFC3339 время факта";
+      personalMemoryEvidenceAt = document.createElement("input");
+      personalMemoryEvidenceAt.className = "review-input";
+      personalMemoryEvidenceAt.id = "personal-memory-evidence-at";
+      personalMemoryEvidenceAt.type = "text";
+      personalMemoryEvidenceAt.autocomplete = "off";
+      personalMemoryEvidenceAt.placeholder = "2026-09-05T15:30:00Z";
+      personalMemoryEvidenceAt.value = "unknown";
+      personalMemoryNowButton = document.createElement("button");
+      personalMemoryNowButton.className = "review-button review-button-secondary";
+      personalMemoryNowButton.type = "button";
+      personalMemoryNowButton.textContent = "Сейчас";
+      evidenceAtWrapper.append(
+        evidenceAtLabel,
+        personalMemoryEvidenceAt,
+        personalMemoryNowButton,
+      );
+
+      personalMemoryPanel.append(
+        personalMemoryHeading,
+        personalMemoryDescription,
+        toggleLabel,
+        metadataFields,
+      );
+      section.append(personalMemoryPanel);
+
+      const syncPersonalMemoryTime = () => {
+        const exact = personalMemoryTimeMode.value === "exact";
+        evidenceAtWrapper.hidden = !exact;
+        personalMemoryEvidenceAt.required = exact && personalMemoryToggle.checked;
+        personalMemoryNowButton.hidden = !exact;
+        if (!exact) {
+          personalMemoryEvidenceAt.value = "unknown";
+        } else if (personalMemoryEvidenceAt.value === "unknown") {
+          personalMemoryEvidenceAt.value = "";
+        }
+      };
+
+      const syncPersonalMemoryVisibility = () => {
+        const enabled = personalMemoryToggle.checked;
+        metadataFields.hidden = !enabled;
+        personalMemoryEvidenceKind.required = enabled;
+        personalMemorySelfKind.required = enabled;
+        personalMemoryTimeMode.required = enabled;
+        syncPersonalMemoryTime();
+      };
+
+      personalMemoryToggle.addEventListener("change", () => {
+        syncPersonalMemoryVisibility();
+        invalidatePreparedPlan();
+      });
+      personalMemoryTimeMode.addEventListener("change", () => {
+        syncPersonalMemoryTime();
+        invalidatePreparedPlan();
+      });
+      personalMemoryNowButton.addEventListener("click", () => {
+        personalMemoryEvidenceAt.value = new Date().toISOString();
+        invalidatePreparedPlan();
+      });
+      [
+        personalMemoryEvidenceKind,
+        personalMemorySelfKind,
+        personalMemoryEvidenceAt,
+        personalMemoryDomain,
+      ].forEach((control) => {
+        control.addEventListener("input", invalidatePreparedPlan);
+        control.addEventListener("change", invalidatePreparedPlan);
+      });
+      personalMemoryControls.push(
+        personalMemoryToggle,
+        personalMemoryEvidenceKind,
+        personalMemorySelfKind,
+        personalMemoryTimeMode,
+        personalMemoryEvidenceAt,
+        personalMemoryDomain,
+        personalMemoryNowButton,
+      );
+      syncPersonalMemoryVisibility();
+    }
+
+    const personalMemoryEnabled = () =>
+      personalMemoryToggle !== null && personalMemoryToggle.checked;
+    const personalMemoryPayload = () => {
+      if (
+        !personalMemoryEnabled() ||
+        personalMemoryEvidenceKind === null ||
+        personalMemorySelfKind === null ||
+        personalMemoryTimeMode === null ||
+        personalMemoryEvidenceAt === null ||
+        personalMemoryDomain === null
+      ) {
+        return null;
+      }
+      const unknownTime = personalMemoryTimeMode.value === "unknown";
+      return {
+        evidence_kind: personalMemoryEvidenceKind.value,
+        self_kind: personalMemorySelfKind.value,
+        evidence_at: unknownTime ? "unknown" : personalMemoryEvidenceAt.value,
+        evidence_at_precision: unknownTime ? "unknown" : "exact",
+        domain: personalMemoryDomain.value === "" ? null : personalMemoryDomain.value,
+      };
+    };
 
     const actions = document.createElement("div");
     actions.className = "review-actions";
@@ -374,6 +589,10 @@ if (panel) {
       previewStatus,
       preview,
       plan,
+      personalMemoryControls,
+      personalMemoryEnabled,
+      personalMemoryPayload,
+      preparedPersonalMemory: false,
       saved: false,
     };
 
@@ -390,6 +609,7 @@ if (panel) {
 
     const invalidatePreparedPlan = () => {
       confirmationToken = null;
+      reviewState.preparedPersonalMemory = false;
       confirmButton.hidden = true;
       confirmButton.disabled = true;
       plan.replaceChildren();
@@ -415,7 +635,9 @@ if (panel) {
       }
       plan.replaceChildren();
       const planHeading = document.createElement("h4");
-      planHeading.textContent = "План Safe Write (dry-run)";
+      planHeading.textContent = reviewState.preparedPersonalMemory
+        ? "План Personal Memory Safe Write (dry-run)"
+        : "План Safe Write (dry-run)";
       const planFields = document.createElement("dl");
       planFields.className = "draft-fields";
       addField(planFields, "Тип", payload.note.type);
@@ -471,13 +693,30 @@ if (panel) {
       }
       invalidatePreparedPlan();
       const originalReviewToken = reviewToken;
+      const personalMemoryMode = reviewState.personalMemoryEnabled();
+      const body = { review_token: originalReviewToken, draft: editedDraft() };
+      let endpoint = "/api/drafts/save/prepare";
+      if (personalMemoryMode) {
+        const metadata = reviewState.personalMemoryPayload();
+        if (
+          metadata === null ||
+          !metadata.evidence_kind ||
+          !metadata.self_kind ||
+          (metadata.evidence_at_precision === "exact" && !metadata.evidence_at)
+        ) {
+          setError("Укажи все обязательные Personal Memory metadata.");
+          return;
+        }
+        endpoint = "/api/drafts/personal-memory/save/prepare";
+        body.personal_memory = metadata;
+      }
       setLoading(true);
       previewStatus.textContent = "Готовлю Safe Write dry-run…";
       try {
-        const response = await fetch("/api/drafts/save/prepare", {
+        const response = await fetch(endpoint, {
           method: "POST",
           headers: requestHeaders,
-          body: JSON.stringify({ review_token: originalReviewToken, draft: editedDraft() }),
+          body: JSON.stringify(body),
         });
         const payload = await response.json();
         if (!response.ok) {
@@ -485,6 +724,7 @@ if (panel) {
           setError(typeof message === "string" ? message : "Не удалось подготовить сохранение.");
           return;
         }
+        reviewState.preparedPersonalMemory = personalMemoryMode;
         renderPlan(payload);
         confirmationToken = payload.confirmation_token;
         confirmButton.hidden = false;
@@ -509,17 +749,28 @@ if (panel) {
       }
       const originalReviewToken = reviewToken;
       const preparedConfirmationToken = confirmationToken;
+      const savedAsPersonalMemory = reviewState.preparedPersonalMemory;
+      const body = {
+        review_token: originalReviewToken,
+        confirmation_token: preparedConfirmationToken,
+        draft: editedDraft(),
+      };
+      let endpoint = "/api/drafts/save/apply";
+      if (savedAsPersonalMemory) {
+        const metadata = reviewState.personalMemoryPayload();
+        if (metadata === null) {
+          return;
+        }
+        endpoint = "/api/drafts/personal-memory/save/apply";
+        body.personal_memory = metadata;
+      }
       setLoading(true);
       status.textContent = "Сохраняю в vault…";
       try {
-        const response = await fetch("/api/drafts/save/apply", {
+        const response = await fetch(endpoint, {
           method: "POST",
           headers: requestHeaders,
-          body: JSON.stringify({
-            review_token: originalReviewToken,
-            confirmation_token: preparedConfirmationToken,
-            draft: editedDraft(),
-          }),
+          body: JSON.stringify(body),
         });
         const payload = await response.json();
         if (!response.ok) {
@@ -539,12 +790,19 @@ if (panel) {
         reviewToken = null;
         confirmationToken = null;
         reviewState.saved = true;
+        reviewState.preparedPersonalMemory = false;
         confirmButton.hidden = true;
         const saved = document.createElement("section");
         saved.className = "saved-note";
         const savedHeading = document.createElement("h4");
         savedHeading.textContent = "Сохранено";
         saved.append(savedHeading);
+        if (savedAsPersonalMemory) {
+          const savedMode = document.createElement("p");
+          savedMode.className = "saved-note-mode";
+          savedMode.textContent = "Сохранено как Personal Memory";
+          saved.append(savedMode);
+        }
         const savedFields = document.createElement("dl");
         savedFields.className = "draft-fields";
         addField(savedFields, "Путь", payload.note.relative_path);
@@ -552,7 +810,9 @@ if (panel) {
         addField(savedFields, "Создано", payload.note.created);
         saved.append(savedFields);
         section.append(saved);
-        status.textContent = "Заметка сохранена";
+        status.textContent = savedAsPersonalMemory
+          ? "Personal Memory сохранена"
+          : "Заметка сохранена";
       } catch (_error) {
         setError("Сервис сохранения недоступен.");
       } finally {
@@ -585,7 +845,8 @@ if (panel) {
     reviewToken = payload.review_token;
     const heading = document.createElement("h3");
     heading.textContent = "Черновик готов";
-    result.append(heading, createEditor(draft));
+    const sourceFreeText = Array.isArray(payload.sources) && payload.sources.length === 0;
+    result.append(heading, createEditor(draft, sourceFreeText));
     if (Array.isArray(payload.sources) && payload.sources.length > 0) {
       payload.sources.forEach((source) => {
         if (source && typeof source === "object") {

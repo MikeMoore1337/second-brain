@@ -631,6 +631,70 @@ a {
   border-top: 1px solid var(--line);
 }
 
+.personal-memory-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(201, 242, 119, 0.28);
+  border-radius: 12px;
+  background: rgba(201, 242, 119, 0.055);
+}
+
+.personal-memory-panel h5 {
+  margin: 0;
+  color: var(--lime);
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.personal-memory-description {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.personal-memory-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  width: fit-content;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.personal-memory-toggle input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--lime);
+}
+
+.personal-memory-fields {
+  display: grid;
+  gap: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(201, 242, 119, 0.18);
+}
+
+.personal-memory-time-field {
+  display: grid;
+  gap: 6px;
+}
+
+.personal-memory-time-field .review-button {
+  justify-self: start;
+}
+
+.saved-note-mode {
+  margin: 0;
+  color: var(--lime);
+  font-size: 13px;
+  font-weight: 750;
+}
+
 .review-editor h4,
 .saved-note h4 {
   margin: 0;

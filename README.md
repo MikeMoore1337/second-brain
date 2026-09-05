@@ -58,7 +58,13 @@ binary запрос на transcription и возвращает только plai
 явного Save. Browser не
 выбирает path, identity, timestamp, apply или Git metadata и не сохраняет
 review state в persistent browser storage. Authentication, public bind, deploy
-и PWA в этот этап не входят.
+и PWA в этот этап не входят. Для source-free Text draft (включая уже
+проверенный Voice transcript) доступен отдельный явный режим `Сохранить как
+Personal Memory`, выключенный по умолчанию. Пользователь вручную выбирает
+только Stage 1 `evidence_kind`/`self_kind`, optional `domain` и `exact` либо
+`unknown` время; LLM не классифицирует эти поля. Research/URL draft этот режим
+не получает. Personal Memory проходит отдельные prepare/apply endpoints,
+полный diff и отдельное подтверждение перед существующим Safe Write.
 
 В shell доступна отдельная Search-поверхность: она ищет только managed notes со
 стабильным UUID, показывает ranked lexical hits и открывает read-only текущую
@@ -77,6 +83,8 @@ POST /api/transcriptions/audio <raw audio bytes>
 POST /api/drafts/preview {"content":"..."}
 POST /api/drafts/save/prepare {"review_token":"...", "draft": {"title", "note_type", "content", "tags", "links"}}
 POST /api/drafts/save/apply {"review_token":"...", "confirmation_token":"...", "draft": {"title", "note_type", "content", "tags", "links"}}
+POST /api/drafts/personal-memory/save/prepare {"review_token":"...", "draft": {"title", "note_type", "content", "tags", "links"}, "personal_memory": {"evidence_kind", "self_kind", "evidence_at", "evidence_at_precision", "domain"}}
+POST /api/drafts/personal-memory/save/apply {"review_token":"...", "confirmation_token":"...", "draft": {"title", "note_type", "content", "tags", "links"}, "personal_memory": {"evidence_kind", "self_kind", "evidence_at", "evidence_at_precision", "domain"}}
 POST /api/search {"query":"fastapi testing", "limit":20}
 POST /api/retrieval/note {"id":"UUIDv7"}
 ```
@@ -111,6 +119,16 @@ research sources появляются только внутри signed full-file
 строгий JSON, все draft routes помечены
 `Cache-Control: no-store`, а browser общается только с same-origin `/api/...`.
 Ошибки не раскрывают provider/upstream или filesystem details.
+
+Personal Memory endpoints принимают additive `personal_memory` только из пяти
+строгих полей Stage 1 и никогда не принимают marker
+`second_brain_personal_memory`, front matter, path, UUID, `created` или произвольную
+metadata mapping. Сервер принимает только `ReviewTokenMode.TEXT`, поэтому
+research token отклоняется до вызова vault composition. Personal Memory
+confirmation token имеет отдельные purpose/version и связывает digest исходного
+review token, всех пяти полей `NoteDraft` и нормализованных Personal Memory
+metadata; generic confirmation token для него не подходит. Prepare не пишет,
+а diff включает application-owned marker и проверенные metadata.
 
 ## Public web, RSS, YouTube и GitHub research
 

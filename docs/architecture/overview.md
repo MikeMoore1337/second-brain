@@ -68,6 +68,20 @@ Apply снова получает только signed provenance, не вызы�
 и возвращает только безопасные note fields; Prepare/Apply errors не раскрывают
 absolute paths, receipts или raw diagnostics.
 
+Для source-free Text review доступен отдельный Web projection Stage 1 Personal
+Memory. Явный opt-in `Сохранить как Personal Memory` выключен по умолчанию;
+Research/URL review token не проходит этот boundary. HTTP передаёт только
+strict additive `personal_memory` с `evidence_kind`, `self_kind`, `evidence_at`,
+`evidence_at_precision` и optional `domain`. Сервер сначала проверяет
+`ReviewTokenMode.TEXT`, собирает `PersonalMemoryDraft` и вызывает существующую
+Stage 1 validation, затем lazy composition
+`CreateManagedNoteFromPersonalMemoryDraft` с `apply=False` или `apply=True`.
+Prepare возвращает полный diff с application-owned marker и отдельный
+Personal-Memory confirmation token. Этот token purpose/version отдельно от
+generic Save и связывает исходный review token, пять полей `NoteDraft` и
+нормализованные Personal Memory metadata. Search/Retrieval и
+`second-brain-vault` этим projection не изменяются.
+
 ### Voice Capture v1
 
 Voice mode принимает короткую запись через browser `MediaRecorder` либо локальный

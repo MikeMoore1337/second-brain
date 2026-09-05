@@ -8,14 +8,17 @@ from typing import Protocol
 
 from second_brain.adapters.vault import FileSystemVaultReader, FileSystemVaultWriter
 from second_brain.application.llm import NoteDraft
+from second_brain.application.personal_memory import PersonalMemoryDraft
 from second_brain.application.research import SourceProvenance
 from second_brain.application.research_draft import ReviewedResearchDraft
 from second_brain.application.services import (
     CreateManagedNoteFromDraft,
+    CreateManagedNoteFromPersonalMemoryDraft,
     CreateManagedNoteFromReviewedResearchDraft,
 )
 from second_brain.application.writes import (
     CreateManagedNoteFromDraftRequest,
+    CreateManagedNoteFromPersonalMemoryDraftRequest,
     CreateManagedNoteFromReviewedResearchDraftRequest,
     CreateManagedNoteResult,
 )
@@ -37,6 +40,12 @@ class DraftSaveService(Protocol):
 
     def apply_text(self, draft: NoteDraft) -> CreateManagedNoteResult:
         """Apply one previously prepared text draft through Safe Write."""
+
+    def prepare_personal_memory(self, draft: PersonalMemoryDraft) -> CreateManagedNoteResult:
+        """Prepare one reviewed Personal Memory draft without publishing it."""
+
+    def apply_personal_memory(self, draft: PersonalMemoryDraft) -> CreateManagedNoteResult:
+        """Apply one reviewed Personal Memory draft through Safe Write."""
 
     def apply_research(
         self,
@@ -62,6 +71,16 @@ class LazyVaultDraftSaveService:
         """Execute text Safe Write apply after server-side confirmation."""
 
         return self._execute_text(draft, apply=True)
+
+    def prepare_personal_memory(self, draft: PersonalMemoryDraft) -> CreateManagedNoteResult:
+        """Execute Personal Memory Safe Write dry-run with server-owned apply=False."""
+
+        return self._execute_personal_memory(draft, apply=False)
+
+    def apply_personal_memory(self, draft: PersonalMemoryDraft) -> CreateManagedNoteResult:
+        """Execute Personal Memory Safe Write apply after server-side confirmation."""
+
+        return self._execute_personal_memory(draft, apply=True)
 
     def prepare_research(
         self,
@@ -103,6 +122,22 @@ class LazyVaultDraftSaveService:
         return CreateManagedNoteFromReviewedResearchDraft(reader, writer).execute(
             CreateManagedNoteFromReviewedResearchDraftRequest(
                 reviewed_draft=reviewed,
+                apply=apply,
+            )
+        )
+
+    def _execute_personal_memory(
+        self,
+        draft: PersonalMemoryDraft,
+        *,
+        apply: bool,
+    ) -> CreateManagedNoteResult:
+        """Run the existing Personal Memory Safe Write composition boundary."""
+
+        reader, writer = self._vault_adapters()
+        return CreateManagedNoteFromPersonalMemoryDraft(reader, writer).execute(
+            CreateManagedNoteFromPersonalMemoryDraftRequest(
+                draft=draft,
                 apply=apply,
             )
         )

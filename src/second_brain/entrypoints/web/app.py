@@ -19,6 +19,11 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from second_brain.application.llm import MAX_CONTEXT_BYTES, NoteDraft, validate_note_draft
+from second_brain.application.personal_memory import (
+    PersonalMemoryDraft,
+    PersonalMemoryDraftError,
+    validate_personal_memory_draft,
+)
 from second_brain.application.ports import (
     LlmError,
     ResearchError,
@@ -77,6 +82,8 @@ _DRAFT_PATHS: Final[frozenset[str]] = frozenset(
         "/api/drafts/preview",
         "/api/drafts/save/prepare",
         "/api/drafts/save/apply",
+        "/api/drafts/personal-memory/save/prepare",
+        "/api/drafts/personal-memory/save/apply",
     }
 )
 _REVIEW_PATHS: Final[frozenset[str]] = frozenset(
@@ -84,6 +91,14 @@ _REVIEW_PATHS: Final[frozenset[str]] = frozenset(
         "/api/drafts/preview",
         "/api/drafts/save/prepare",
         "/api/drafts/save/apply",
+        "/api/drafts/personal-memory/save/prepare",
+        "/api/drafts/personal-memory/save/apply",
+    }
+)
+_PERSONAL_MEMORY_PATHS: Final[frozenset[str]] = frozenset(
+    {
+        "/api/drafts/personal-memory/save/prepare",
+        "/api/drafts/personal-memory/save/apply",
     }
 )
 _TRANSCRIPTION_PATHS: Final[frozenset[str]] = frozenset({_TRANSCRIPTION_PATH})
@@ -233,6 +248,39 @@ class ApplyDraftRequest(BaseModel):
     draft: DraftPayload
 
 
+class PersonalMemoryPayload(BaseModel):
+    """Strict HTTP projection of the controlled Personal Memory Stage 1 fields."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    evidence_kind: StrictStr
+    self_kind: StrictStr
+    evidence_at: StrictStr
+    evidence_at_precision: StrictStr
+    domain: StrictStr | None = None
+
+
+class PreparePersonalMemoryRequest(BaseModel):
+    """Strict request for a source-free Text Personal Memory dry-run."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    review_token: StrictStr
+    draft: DraftPayload
+    personal_memory: PersonalMemoryPayload
+
+
+class ApplyPersonalMemoryRequest(BaseModel):
+    """Strict request for a confirmed Personal Memory Safe Write apply."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    review_token: StrictStr
+    confirmation_token: StrictStr
+    draft: DraftPayload
+    personal_memory: PersonalMemoryPayload
+
+
 class PreviewResponse(BaseModel):
     """Safe server-rendered HTML for the dedicated preview container."""
 
@@ -370,6 +418,8 @@ _ERRORS: Final[dict[str, tuple[int, str]]] = {
     "DRAFT_CONTENT_TOO_LARGE": (413, "draft content is too large"),
     "REVIEW_TOKEN_INVALID": (400, "review token is invalid or expired"),
     "SAVE_CONFIRMATION_INVALID": (400, "save confirmation is invalid or expired"),
+    "PERSONAL_MEMORY_INVALID_REQUEST": (400, "personal memory request failed validation"),
+    "PERSONAL_MEMORY_CONTEXT_INVALID": (400, "personal memory requires a text draft"),
     "DRAFT_SCHEMA_INVALID": (400, "edited draft failed validation"),
     "PREVIEW_FAILED": (500, "safe Markdown preview failed"),
     "VAULT_UNAVAILABLE": (503, "vault is unavailable for saving"),
@@ -801,6 +851,8 @@ def _loopback_host_port(value: str, scheme: str) -> tuple[str, int] | None:
 def _invalid_request_code(path: str) -> str:
     """Выбрать safe application code по draft route."""
 
+    if path in _PERSONAL_MEMORY_PATHS:
+        return "PERSONAL_MEMORY_INVALID_REQUEST"
     if path in _SEARCH_PATHS:
         return "SEARCH_INVALID_REQUEST"
     if path.endswith("/url"):
@@ -1055,6 +1107,69 @@ def create_app(
             return _error_response("SAVE_FAILED")
         return _save_response(result)
 
+    @app.post("/api/drafts/personal-memory/save/prepare", include_in_schema=False)
+    def prepare_personal_memory_save(payload: PreparePersonalMemoryRequest) -> Response:
+        """Prepare an explicit source-free Text Personal Memory dry-run."""
+
+        try:
+            claims = review_tokens.verify(payload.review_token)
+        except ReviewTokenError:
+            return _error_response("REVIEW_TOKEN_INVALID")
+        if claims.mode is not ReviewTokenMode.TEXT:
+            return _error_response("PERSONAL_MEMORY_CONTEXT_INVALID")
+
+        try:
+            personal_memory = _personal_memory_from_payload(payload.draft, payload.personal_memory)
+        except LlmError, PersonalMemoryDraftError, ValueError:
+            return _error_response("PERSONAL_MEMORY_INVALID_REQUEST")
+
+        try:
+            result = saver.prepare_personal_memory(personal_memory)
+        except ConfigurationError, WriteSafetyError, OSError:
+            return _error_response("VAULT_UNAVAILABLE")
+        except Exception:
+            return _error_response("SAVE_FAILED")
+        return _prepare_personal_memory_response(
+            result,
+            review_token=payload.review_token,
+            personal_memory=personal_memory,
+            review_tokens=review_tokens,
+        )
+
+    @app.post("/api/drafts/personal-memory/save/apply", include_in_schema=False)
+    def apply_personal_memory_save(payload: ApplyPersonalMemoryRequest) -> Response:
+        """Apply only an exact Personal Memory confirmation-bound Safe Write plan."""
+
+        try:
+            claims = review_tokens.verify(payload.review_token)
+        except ReviewTokenError:
+            return _error_response("REVIEW_TOKEN_INVALID")
+        if claims.mode is not ReviewTokenMode.TEXT:
+            return _error_response("PERSONAL_MEMORY_CONTEXT_INVALID")
+
+        try:
+            personal_memory = _personal_memory_from_payload(payload.draft, payload.personal_memory)
+        except LlmError, PersonalMemoryDraftError, ValueError:
+            return _error_response("PERSONAL_MEMORY_INVALID_REQUEST")
+
+        try:
+            review_tokens.verify_personal_memory_confirmation(
+                payload.confirmation_token,
+                review_token=payload.review_token,
+                draft=personal_memory.draft,
+                metadata=personal_memory.metadata,
+            )
+        except ReviewTokenError:
+            return _error_response("SAVE_CONFIRMATION_INVALID")
+
+        try:
+            result = saver.apply_personal_memory(personal_memory)
+        except ConfigurationError, WriteSafetyError, OSError:
+            return _error_response("VAULT_UNAVAILABLE")
+        except Exception:
+            return _error_response("SAVE_FAILED")
+        return _save_response(result)
+
     @app.post("/api/search", include_in_schema=False)
     def search(payload: SearchRequestPayload) -> Response:
         """Search current private vault through a fresh derived FTS5 index."""
@@ -1219,6 +1334,25 @@ def _note_draft_from_payload(payload: DraftPayload) -> NoteDraft:
     return validate_note_draft(draft)
 
 
+def _personal_memory_from_payload(
+    draft_payload: DraftPayload,
+    personal_memory_payload: PersonalMemoryPayload,
+) -> PersonalMemoryDraft:
+    """Reconstruct and validate the existing Stage 1 wrapper from controlled HTTP fields."""
+
+    draft = _note_draft_from_payload(draft_payload)
+    return validate_personal_memory_draft(
+        PersonalMemoryDraft(
+            draft=draft,
+            evidence_kind=personal_memory_payload.evidence_kind,
+            self_kind=personal_memory_payload.self_kind,
+            evidence_at=personal_memory_payload.evidence_at,
+            evidence_at_precision=personal_memory_payload.evidence_at_precision,
+            domain=personal_memory_payload.domain,
+        )
+    )
+
+
 def _run_save_phase(
     saver: DraftSaveService,
     claims: ReviewTokenClaims,
@@ -1260,6 +1394,46 @@ def _prepare_response(
             review_token=review_token,
             draft=draft,
             mode=mode,
+        )
+    except ReviewTokenError, TypeError, UnicodeError, ValueError:
+        return _error_response("SAVE_FAILED")
+    response = PrepareResponse(
+        status=CreateStatus.DRY_RUN.value,
+        note=DryRunNotePayload(
+            type=result.plan.note_type.value,
+            relative_path=relative_path,
+        ),
+        diff=diff,
+        confirmation_token=confirmation_token,
+    )
+    return JSONResponse(
+        content=response.model_dump(mode="json"),
+        headers=_DRAFT_ERROR_HEADERS,
+    )
+
+
+def _prepare_personal_memory_response(
+    result: CreateManagedNoteResult,
+    *,
+    review_token: str,
+    personal_memory: PersonalMemoryDraft,
+    review_tokens: ReviewTokenCodec,
+) -> JSONResponse:
+    """Serialize a PM dry-run with its purpose-separated confirmation token."""
+
+    if result.status is CreateStatus.CREATED:
+        return _error_response("SAVE_FAILED")
+    if result.status is not CreateStatus.DRY_RUN or result.plan is None:
+        return _save_response(result)
+    relative_path = _safe_relative_path(result.plan.relative_path)
+    if relative_path is None:
+        return _error_response("SAVE_FAILED")
+    try:
+        diff = _plan_diff(result.plan, relative_path)
+        confirmation_token = review_tokens.issue_personal_memory_confirmation(
+            review_token=review_token,
+            draft=personal_memory.draft,
+            metadata=personal_memory.metadata,
         )
     except ReviewTokenError, TypeError, UnicodeError, ValueError:
         return _error_response("SAVE_FAILED")
@@ -1383,12 +1557,15 @@ __all__ = [
     "TRANSCRIPTION_REQUEST_HEADER_NAME",
     "TRANSCRIPTION_REQUEST_HEADER_VALUE",
     "ApplyDraftRequest",
+    "ApplyPersonalMemoryRequest",
     "DraftPayload",
     "DraftRequestBoundaryMiddleware",
     "DraftResponse",
     "DryRunNotePayload",
     "ErrorResponse",
+    "PersonalMemoryPayload",
     "PrepareDraftRequest",
+    "PreparePersonalMemoryRequest",
     "PrepareResponse",
     "PreviewDraftRequest",
     "PreviewResponse",
