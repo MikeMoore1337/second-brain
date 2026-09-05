@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="/static/app.css" />
     <script src="/static/app.js" defer></script>
     <script src="/static/decision-journal.js" defer></script>
+    <script src="/static/timeline.js" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">К содержанию</a>
@@ -21,6 +22,7 @@
           </span>
         </a>
         <nav class="topnav" aria-label="Основные разделы">
+          <a href="#timeline">Timeline</a>
           <a href="#search">Search</a>
           <a href="#memory">Memory</a>
           <a href="#growth">Growth</a>
@@ -309,6 +311,63 @@
               <section class="save-plan journal-plan" data-outcome-plan hidden></section>
               <section class="saved-note" data-outcome-saved hidden></section>
             </form>
+          </div>
+        </section>
+
+        <section
+          class="timeline-surface"
+          id="timeline"
+          aria-labelledby="timeline-title"
+          data-timeline-surface
+        >
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Stage 3 · current evidence</p>
+              <h2 id="timeline-title">Personal Timeline.</h2>
+            </div>
+            <p class="timeline-lede">
+              Текущая chronology из canonical evidence — с честным разделением события и времени хранения.
+            </p>
+          </div>
+          <div class="timeline-panel">
+            <div class="timeline-controls">
+              <label class="timeline-order-control">
+                <span class="draft-field-label">Порядок</span>
+                <select class="review-input" data-timeline-order>
+                  <option value="desc">Сначала новые</option>
+                  <option value="asc">Сначала старые</option>
+                </select>
+              </label>
+              <button class="review-button review-button-secondary" type="button" data-timeline-refresh>
+                Обновить
+              </button>
+              <p class="timeline-status" data-timeline-status role="status" aria-live="polite"></p>
+            </div>
+            <p class="capture-error timeline-error" data-timeline-error role="alert" hidden></p>
+
+            <section class="timeline-group" aria-labelledby="timeline-known-title">
+              <div class="timeline-group-heading">
+                <div>
+                  <p class="eyebrow">Known event time</p>
+                  <h3 id="timeline-known-title">События с известным временем</h3>
+                </div>
+                <p class="timeline-total" data-timeline-known-total></p>
+              </div>
+              <ol class="timeline-list" data-timeline-known-list></ol>
+              <p class="timeline-empty" data-timeline-known-empty hidden>Пока нет событий с известным временем.</p>
+            </section>
+
+            <section class="timeline-group timeline-group-unknown" aria-labelledby="timeline-unknown-title">
+              <div class="timeline-group-heading">
+                <div>
+                  <p class="eyebrow">Unknown event time</p>
+                  <h3 id="timeline-unknown-title">Время неизвестно</h3>
+                </div>
+                <p class="timeline-total" data-timeline-unknown-total></p>
+              </div>
+              <div class="timeline-list" data-timeline-unknown-list></div>
+              <p class="timeline-empty" data-timeline-unknown-empty hidden>Пока нет событий без известного времени.</p>
+            </section>
           </div>
         </section>
 

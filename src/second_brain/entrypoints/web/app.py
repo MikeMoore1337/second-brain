@@ -6,7 +6,7 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime
 from difflib import unified_diff
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from typing import Final
+from typing import Final, cast
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request, Response
@@ -44,6 +44,12 @@ from second_brain.application.ports import (
     TranscriptionError,
 )
 from second_brain.application.research import SourceProvenance
+from second_brain.application.timeline import (
+    PersonalTimelineRequest,
+    TimelineError,
+    TimelineOrder,
+    validate_personal_timeline_request,
+)
 from second_brain.application.transcription import (
     MAX_TRANSCRIPTION_AUDIO_BYTES,
     TranscriptionInvalidRequestError,
@@ -69,6 +75,13 @@ from .preview import (
 from .review import ReviewTokenClaims, ReviewTokenCodec, ReviewTokenError, ReviewTokenMode
 from .saves import DraftSaveService, build_production_save_service
 from .search import SearchService, build_production_search_service
+from .timeline import (
+    TimelineRequestPayload,
+    TimelineResponse,
+    TimelineService,
+    build_production_timeline_service,
+    timeline_response,
+)
 from .transcriptions import TranscriptionService, build_production_transcription_service
 
 STATIC_DIR: Final[Path] = Path(__file__).resolve().parent / "static"
@@ -79,12 +92,16 @@ TRANSCRIPTION_REQUEST_HEADER_NAME: Final[str] = DRAFT_REQUEST_HEADER_NAME
 TRANSCRIPTION_REQUEST_HEADER_VALUE: Final[str] = "voice-v1"
 SEARCH_REQUEST_HEADER_NAME: Final[str] = DRAFT_REQUEST_HEADER_NAME
 SEARCH_REQUEST_HEADER_VALUE: Final[str] = "search-v1"
+TIMELINE_REQUEST_HEADER_NAME: Final[str] = DRAFT_REQUEST_HEADER_NAME
+TIMELINE_REQUEST_HEADER_VALUE: Final[str] = "timeline-v1"
 MAX_RAW_DRAFT_BODY_BYTES: Final[int] = 512 * 1024
 MAX_RAW_TRANSCRIPTION_BODY_BYTES: Final[int] = MAX_TRANSCRIPTION_AUDIO_BYTES
 MAX_RAW_AUDIO_BODY_BYTES: Final[int] = MAX_RAW_TRANSCRIPTION_BODY_BYTES
 MAX_RAW_SEARCH_BODY_BYTES: Final[int] = 64 * 1024
+MAX_RAW_TIMELINE_BODY_BYTES: Final[int] = 16 * 1024
 _TRANSCRIPTION_PATH: Final[str] = "/api/transcriptions/audio"
 _SEARCH_PATHS: Final[frozenset[str]] = frozenset({"/api/search", "/api/retrieval/note"})
+_TIMELINE_PATHS: Final[frozenset[str]] = frozenset({"/api/timeline"})
 _DECISION_JOURNAL_PATHS: Final[frozenset[str]] = frozenset(
     {
         "/api/drafts/decision-journal/save/prepare",
@@ -551,6 +568,12 @@ _ERRORS: Final[dict[str, tuple[int, str]]] = {
     "SEARCH_QUERY_FAILED": (500, "search query could not be completed"),
     "SEARCH_NOT_FOUND": (404, "the requested note was not found"),
     "SEARCH_IDENTITY_CONFLICT": (409, "the requested note identity is conflicted"),
+    "TIMELINE_INVALID_REQUEST": (400, "timeline request failed validation"),
+    "TIMELINE_CONTENT_TOO_LARGE": (413, "timeline request is too large"),
+    "TIMELINE_EVIDENCE_INVALID": (409, "timeline evidence is invalid"),
+    "TIMELINE_VAULT_UNAVAILABLE": (503, "timeline vault is unavailable"),
+    "TIMELINE_INVALID_CLOCK": (500, "timeline server clock is invalid"),
+    "TIMELINE_INTERNAL_ERROR": (500, "timeline could not be built"),
 }
 _GENERIC_ERROR: Final[tuple[int, str, str]] = (
     500,
@@ -688,6 +711,101 @@ class SearchRequestBoundaryMiddleware:
             or not _is_json_content_type(content_type)
             or not request_header_present
             or request_header != SEARCH_REQUEST_HEADER_VALUE
+            or not _trusted_request_host(scope)
+            or (origin_present and (origin is None or not _origin_matches(scope, origin)))
+        ):
+            await _send_boundary_error(scope, receive, send, _invalid_request_code(path))
+            return
+
+        if content_length_present:
+            if content_length is None:
+                await _send_boundary_error(scope, receive, send, _invalid_request_code(path))
+                return
+            try:
+                declared_length = int(content_length.strip())
+            except ValueError:
+                await _send_boundary_error(scope, receive, send, _invalid_request_code(path))
+                return
+            if declared_length < 0:
+                await _send_boundary_error(scope, receive, send, _invalid_request_code(path))
+                return
+            if declared_length > self.max_body_bytes:
+                await _send_boundary_error(
+                    scope,
+                    receive,
+                    send,
+                    _content_too_large_code(path),
+                )
+                return
+
+        received_bytes = 0
+        body_messages: list[Message] = []
+        while True:
+            message = await receive()
+            if message["type"] != "http.request":
+                body_messages.append(message)
+                break
+            body = message.get("body", b"")
+            if not isinstance(body, bytes):
+                await _send_boundary_error(
+                    scope,
+                    receive,
+                    send,
+                    _content_too_large_code(path),
+                )
+                return
+            received_bytes += len(body)
+            if received_bytes > self.max_body_bytes:
+                await _send_boundary_error(
+                    scope,
+                    receive,
+                    send,
+                    _content_too_large_code(path),
+                )
+                return
+            body_messages.append(message)
+            if not message.get("more_body", False):
+                break
+
+        async def replay_receive() -> Message:
+            if body_messages:
+                return body_messages.pop(0)
+            return {"type": "http.disconnect"}
+
+        await self.app(scope, replay_receive, send)
+
+
+class TimelineRequestBoundaryMiddleware:
+    """Scoped ASGI boundary for private Timeline JSON requests."""
+
+    def __init__(self, app: ASGIApp, *, max_body_bytes: int) -> None:
+        """Store the small raw-body cap before FastAPI JSON parsing."""
+
+        self.app = app
+        self.max_body_bytes = max_body_bytes
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Require timeline-v1, loopback same-origin metadata and bounded JSON."""
+
+        if (
+            scope["type"] != "http"
+            or scope.get("method") != "POST"
+            or scope.get("path") not in _TIMELINE_PATHS
+        ):
+            await self.app(scope, receive, send)
+            return
+
+        path = str(scope["path"])
+        content_type_present, content_type = _single_header(scope, "content-type")
+        request_header_present, request_header = _single_header(scope, TIMELINE_REQUEST_HEADER_NAME)
+        origin_present, origin = _single_header(scope, "origin")
+        content_length_present, content_length = _single_header(scope, "content-length")
+        if (
+            not content_type_present
+            or content_type is None
+            or not _is_json_content_type(content_type)
+            or not request_header_present
+            or request_header != TIMELINE_REQUEST_HEADER_VALUE
             or not _trusted_request_host(scope)
             or (origin_present and (origin is None or not _origin_matches(scope, origin)))
         ):
@@ -967,6 +1085,8 @@ def _loopback_host_port(value: str, scheme: str) -> tuple[str, int] | None:
 def _invalid_request_code(path: str) -> str:
     """Выбрать safe application code по draft route."""
 
+    if path in _TIMELINE_PATHS:
+        return "TIMELINE_INVALID_REQUEST"
     if path in _DECISION_JOURNAL_PATHS:
         return "DECISION_JOURNAL_INVALID_REQUEST"
     if path in _OUTCOME_OBSERVATION_PATHS:
@@ -987,6 +1107,8 @@ def _invalid_request_code(path: str) -> str:
 def _content_too_large_code(path: str) -> str:
     """Выбрать bounded content-too-large code по draft route."""
 
+    if path in _TIMELINE_PATHS:
+        return "TIMELINE_CONTENT_TOO_LARGE"
     if path in _SEARCH_PATHS:
         return "SEARCH_CONTENT_TOO_LARGE"
     if path.endswith("/url"):
@@ -1004,10 +1126,11 @@ def create_app(
     transcription_service: TranscriptionService | None = None,
     save_service: DraftSaveService | None = None,
     search_service: SearchService | None = None,
+    timeline_service: TimelineService | None = None,
     env_file: Path | None = None,
     vault_path_override: str | None = None,
 ) -> FastAPI:
-    """Создать Web GUI без config/vault side effects до Search/Retrieval/Save."""
+    """Создать Web GUI без config/vault side effects до Timeline/Search/Retrieval/Save."""
 
     service = draft_service if draft_service is not None else build_production_draft_service()
     transcriber = (
@@ -1027,6 +1150,14 @@ def create_app(
         search_service
         if search_service is not None
         else build_production_search_service(
+            env_file=env_file,
+            vault_path_override=vault_path_override,
+        )
+    )
+    timeliner = (
+        timeline_service
+        if timeline_service is not None
+        else build_production_timeline_service(
             env_file=env_file,
             vault_path_override=vault_path_override,
         )
@@ -1054,6 +1185,10 @@ def create_app(
         TranscriptionRequestBoundaryMiddleware,
         max_body_bytes=MAX_RAW_TRANSCRIPTION_BODY_BYTES,
     )
+    app.add_middleware(
+        TimelineRequestBoundaryMiddleware,
+        max_body_bytes=MAX_RAW_TIMELINE_BODY_BYTES,
+    )
 
     @app.middleware("http")
     async def add_security_headers(
@@ -1067,7 +1202,13 @@ def create_app(
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-Frame-Options"] = "DENY"
         if request.url.path.startswith(
-            ("/api/drafts/", "/api/transcriptions/", "/api/search", "/api/retrieval/")
+            (
+                "/api/drafts/",
+                "/api/transcriptions/",
+                "/api/search",
+                "/api/retrieval/",
+                "/api/timeline",
+            )
         ):
             response.headers["Cache-Control"] = "no-store"
         response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
@@ -1383,6 +1524,29 @@ def create_app(
         except Exception:
             return _error_response("SAVE_FAILED")
         return _save_response(result)
+
+    @app.post("/api/timeline", include_in_schema=False)
+    def timeline(payload: TimelineRequestPayload) -> Response:
+        """Return one fresh bounded projection of the canonical Timeline result."""
+
+        request = PersonalTimelineRequest(
+            order=cast(TimelineOrder, payload.order),
+            known_limit=payload.known_limit,
+            unknown_limit=payload.unknown_limit,
+        )
+        try:
+            validate_personal_timeline_request(request)
+            response = timeline_response(timeliner.build(request))
+        except TimelineError as error:
+            return _error_response(error.code)
+        except ConfigurationError, OSError:
+            return _error_response("TIMELINE_VAULT_UNAVAILABLE")
+        except Exception:
+            return _error_response("TIMELINE_INTERNAL_ERROR")
+        return JSONResponse(
+            content=response.model_dump(mode="json"),
+            headers=_DRAFT_ERROR_HEADERS,
+        )
 
     @app.post("/api/search", include_in_schema=False)
     def search(payload: SearchRequestPayload) -> Response:
@@ -1871,9 +2035,12 @@ __all__ = [
     "MAX_RAW_AUDIO_BODY_BYTES",
     "MAX_RAW_DRAFT_BODY_BYTES",
     "MAX_RAW_SEARCH_BODY_BYTES",
+    "MAX_RAW_TIMELINE_BODY_BYTES",
     "MAX_RAW_TRANSCRIPTION_BODY_BYTES",
     "SEARCH_REQUEST_HEADER_NAME",
     "SEARCH_REQUEST_HEADER_VALUE",
+    "TIMELINE_REQUEST_HEADER_NAME",
+    "TIMELINE_REQUEST_HEADER_VALUE",
     "TRANSCRIPTION_REQUEST_HEADER_NAME",
     "TRANSCRIPTION_REQUEST_HEADER_VALUE",
     "ApplyDecisionJournalRequest",
@@ -1906,6 +2073,9 @@ __all__ = [
     "SearchResponse",
     "SourceProvenancePayload",
     "TextDraftRequest",
+    "TimelineRequestBoundaryMiddleware",
+    "TimelineRequestPayload",
+    "TimelineResponse",
     "TranscriptPayload",
     "TranscriptionRequestBoundaryMiddleware",
     "TranscriptionResponse",
