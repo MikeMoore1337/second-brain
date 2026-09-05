@@ -918,6 +918,124 @@ textarea#review-content {
   display: none !important;
 }
 
+.decision-journal-surface {
+  margin-top: 96px;
+  padding: 30px;
+  border: 1px solid rgba(201, 242, 119, 0.26);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(145deg, rgba(201, 242, 119, 0.08), var(--surface) 58%);
+}
+
+.decision-journal-lede {
+  max-width: 360px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.journal-panel {
+  display: grid;
+  gap: 22px;
+  margin-top: 22px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(15, 23, 22, 0.28);
+}
+
+.journal-form {
+  display: grid;
+  gap: 18px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.journal-form[hidden] {
+  display: none !important;
+}
+
+.journal-form-intro,
+.journal-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.journal-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+}
+
+.journal-field {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.journal-field-wide,
+.journal-time-grid {
+  grid-column: 1 / -1;
+}
+
+.journal-field-wide {
+  max-width: none;
+}
+
+.journal-field .review-button {
+  justify-self: start;
+}
+
+.journal-time-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+}
+
+.journal-evidence-field {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.journal-evidence-field[hidden],
+.journal-evidence-field [hidden] {
+  display: none !important;
+}
+
+.journal-evidence-field .draft-field-label,
+.journal-evidence-field input {
+  grid-column: 1 / -1;
+}
+
+.journal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+}
+
+.journal-plan {
+  margin-top: 0;
+}
+
+.journal-plan h4,
+.journal-plan h5 {
+  margin: 0;
+  color: var(--mint);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.journal-plan h4 {
+  font-size: 16px;
+}
+
+.journal-plan h5 {
+  font-size: 13px;
+}
+
 .search-surface {
   margin-top: 96px;
   padding: 30px;
@@ -1249,6 +1367,21 @@ textarea#review-content {
   .search-surface {
     margin-top: 70px;
     padding: 20px;
+  }
+
+  .decision-journal-surface {
+    margin-top: 70px;
+    padding: 20px;
+  }
+
+  .journal-fields,
+  .journal-time-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .journal-field-wide,
+  .journal-time-grid {
+    grid-column: auto;
   }
 
   .search-form-row {

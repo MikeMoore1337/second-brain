@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import uuid
-from collections.abc import Callable, MutableMapping
+from collections.abc import Callable, Mapping, MutableMapping
 from contextlib import suppress
-from datetime import datetime
+from datetime import date, datetime
 from io import StringIO
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
@@ -201,6 +202,7 @@ class FileSystemVaultWriter:
                 note_id,
                 created,
             ),
+            include_precondition=True,
         )
 
     def prepare_from_outcome_observation_draft(
@@ -225,6 +227,7 @@ class FileSystemVaultWriter:
                 note_id,
                 created,
             ),
+            include_precondition=True,
         )
 
     def _prepare(
@@ -235,6 +238,7 @@ class FileSystemVaultWriter:
         note_id: UUID,
         created: datetime,
         render: Callable[[str], str],
+        include_precondition: bool = False,
     ) -> CreateNotePlan:
         """Общий read-only planning boundary для обоих create flows."""
 
@@ -284,6 +288,20 @@ class FileSystemVaultWriter:
         self._ensure_target_absent(target_path, target_root)
         relative_path = _relative(self.root, target_path)
         content = render(template_text)
+        plan_sha256 = (
+            _stage2_plan_digest(
+                manifest=manifest,
+                note_type=note_type,
+                title=title,
+                relative_path=relative_path,
+                target_root_relative=_relative(self.root, target_root),
+                template_relative_path=_relative(self.root, template_resolved),
+                template_text=template_text,
+                rendered_content=content,
+            )
+            if include_precondition
+            else None
+        )
         return CreateNotePlan(
             note_type,
             title,
@@ -292,6 +310,7 @@ class FileSystemVaultWriter:
             relative_path,
             content,
             _relative(self.root, target_root),
+            plan_sha256,
         )
 
     def write(self, plan: CreateNotePlan) -> WriteReceipt:
@@ -872,6 +891,83 @@ def _file_identity(path: Path) -> tuple[int, int] | None:
 
 def _sha256(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
+
+
+def _stage2_plan_digest(
+    *,
+    manifest: VaultManifest,
+    note_type: NoteType,
+    title: str,
+    relative_path: str,
+    target_root_relative: str,
+    template_relative_path: str,
+    template_text: str,
+    rendered_content: str,
+) -> str:
+    """Fingerprint only the stable inputs of a Stage 2 prepared plan.
+
+    The generated note UUID and ``created`` timestamp are deliberately absent from
+    this projection.  They remain part of the ordinary plan and post-write
+    validation, while this digest binds the inputs that must not drift between
+    Stage 2 prepare and apply.
+    """
+
+    parsed = parse_front_matter(rendered_content)
+    if parsed.error is not None:
+        raise WriteSafetyError(
+            "CREATE_PLAN_FAILED",
+            "rendered Stage 2 plan front matter could not be validated",
+        )
+    rendered_front_matter = dict(parsed.data)
+    rendered_front_matter.pop("id", None)
+    rendered_front_matter.pop("created", None)
+    payload = {
+        "manifest": {
+            "schema_version": manifest.schema_version,
+            "vault_id": str(manifest.vault_id),
+            "default_language": manifest.default_language,
+            "paths": manifest.paths.as_dict(),
+            "attachments": {
+                "warning_size_bytes": manifest.attachments.warning_size_bytes,
+                "max_size_bytes": manifest.attachments.max_size_bytes,
+            },
+        },
+        "note_type": note_type.value,
+        "title": title,
+        "relative_path": relative_path,
+        "target_root_relative": target_root_relative,
+        "template_relative_path": template_relative_path,
+        "template_sha256": _sha256(template_text.encode("utf-8")),
+        "rendered_plan_basis": {
+            "front_matter": _digest_value(rendered_front_matter),
+            "body": parsed.body,
+        },
+    }
+    try:
+        canonical = json.dumps(
+            _digest_value(payload),
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+            allow_nan=False,
+        ).encode("utf-8")
+    except (TypeError, UnicodeEncodeError, ValueError) as exc:
+        raise WriteSafetyError("CREATE_PLAN_FAILED", "Stage 2 plan fingerprint failed") from exc
+    return _sha256(canonical)
+
+
+def _digest_value(value: object) -> object:
+    """Convert validated YAML/domain values into deterministic JSON values."""
+
+    if value is None or type(value) in {bool, int, float, str}:
+        return value
+    if isinstance(value, (datetime, date, UUID)):
+        return value.isoformat() if not isinstance(value, UUID) else str(value)
+    if isinstance(value, Mapping):
+        return {str(key): _digest_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_digest_value(item) for item in value]
+    raise TypeError(f"unsupported fingerprint value: {type(value).__name__}")
 
 
 def _relative(root: Path, path: Path) -> str:

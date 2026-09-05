@@ -1197,6 +1197,7 @@ if (searchSurface) {
     retrievedNote.append(heading);
     const fields = document.createElement("dl");
     fields.className = "search-fields";
+    addSearchField(fields, "ID", note.id);
     addSearchField(fields, "Тип", note.type);
     addSearchField(fields, "Путь", note.relative_path);
     addSearchField(fields, "Создано", note.created);
@@ -1251,6 +1252,7 @@ if (searchSurface) {
     article.append(heading);
     const fields = document.createElement("dl");
     fields.className = "search-fields";
+    addSearchField(fields, "ID", hit.id);
     addSearchField(fields, "Тип", hit.type);
     addSearchField(fields, "Путь", hit.relative_path);
     addSearchField(fields, "Фрагмент", hit.snippet);

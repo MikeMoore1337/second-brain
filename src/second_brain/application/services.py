@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -277,6 +278,7 @@ class CreateManagedNoteFromDecisionJournalDraft:
             now=request.now,
             prepare=prepare,
             post_write_check=validate_created_note,
+            expected_plan_sha256=request.expected_plan_sha256,
         )
 
     def rollback(self, receipt: WriteReceipt) -> bool:
@@ -360,6 +362,7 @@ class CreateManagedNoteFromOutcomeObservationDraft:
             prepare=prepare,
             post_write_check=validate_created_note,
             preflight_check=check_target,
+            expected_plan_sha256=request.expected_plan_sha256,
         )
 
     def rollback(self, receipt: WriteReceipt) -> bool:
@@ -459,6 +462,7 @@ def _execute_create(
     prepare: Callable[[VaultManifest, NoteType, str, UUID, datetime], CreateNotePlan],
     post_write_check: Callable[[NoteRecord, CreateNotePlan], bool] | None = None,
     preflight_check: Callable[[ScanReport], tuple[Diagnostic, ...]] | None = None,
+    expected_plan_sha256: str | None = None,
 ) -> CreateManagedNoteResult:
     """Общий Safe Write pipeline для обычного и draft-based создания."""
 
@@ -545,6 +549,26 @@ def _execute_create(
 
     if not apply:
         return CreateManagedNoteResult(CreateStatus.DRY_RUN, plan=plan, apply_requested=False)
+
+    if expected_plan_sha256 is not None and (
+        type(expected_plan_sha256) is not str
+        or len(expected_plan_sha256) != 64
+        or any(character not in "0123456789abcdef" for character in expected_plan_sha256)
+        or plan.plan_sha256 is None
+        or not hmac.compare_digest(plan.plan_sha256, expected_plan_sha256)
+    ):
+        return CreateManagedNoteResult(
+            CreateStatus.REJECTED,
+            plan=plan,
+            diagnostics=(
+                _diagnostic(
+                    "CREATE_PLAN_STALE",
+                    "prepared Stage 2 Safe Write plan no longer matches current vault inputs",
+                    plan.relative_path,
+                ),
+            ),
+            apply_requested=True,
+        )
 
     try:
         receipt = writer.write(plan)
