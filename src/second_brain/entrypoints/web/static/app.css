@@ -688,6 +688,11 @@ a {
   justify-self: start;
 }
 
+.personal-memory-fields[hidden],
+.personal-memory-time-field[hidden] {
+  display: none !important;
+}
+
 .saved-note-mode {
   margin: 0;
   color: var(--lime);

@@ -570,6 +570,11 @@ def test_personal_memory_ui_is_explicit_source_free_and_storage_free() -> None:
     """Static GUI wiring keeps PM opt-in and page-memory-only state visible in code."""
 
     app_js = Path("src/second_brain/entrypoints/web/static/app.js").read_text(encoding="utf-8")
+    app_css = (
+        Path("src/second_brain/entrypoints/web/static/app.css")
+        .read_text(encoding="utf-8")
+        .replace("\r\n", "\n")
+    )
     assert "/api/drafts/personal-memory/save/prepare" in app_js
     assert "/api/drafts/personal-memory/save/apply" in app_js
     assert 'personalMemoryToggle.type = "checkbox"' in app_js
@@ -592,3 +597,11 @@ def test_personal_memory_ui_is_explicit_source_free_and_storage_free() -> None:
     assert "localStorage" not in app_js
     assert "sessionStorage" not in app_js
     assert app_js.count("innerHTML") == 1
+    assert ".personal-memory-fields {\n  display: grid;" in app_css
+    assert ".personal-memory-time-field {\n  display: grid;" in app_css
+    assert (
+        ".personal-memory-fields[hidden],\n"
+        ".personal-memory-time-field[hidden] {\n"
+        "  display: none !important;\n"
+        "}"
+    ) in app_css
