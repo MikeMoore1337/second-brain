@@ -10,7 +10,6 @@ from typing import Any, cast
 from uuid import UUID
 
 from second_brain.application.personal_memory import (
-    is_personal_memory_enrolled,
     personal_memory_diagnostic_message,
     validate_personal_memory_fields,
 )
@@ -106,10 +105,8 @@ def _parse_personal_memory(
     path: str,
     diagnostics: list[Diagnostic],
 ) -> PersonalMemoryMetadata | None:
-    """Запустить closed Personal Memory validator только после exact enrollment gate."""
+    """Запустить marker-gated Personal Memory validator."""
 
-    if not is_personal_memory_enrolled(data):
-        return None
     metadata, issues = validate_personal_memory_fields(data)
     for issue in issues:
         diagnostics.append(

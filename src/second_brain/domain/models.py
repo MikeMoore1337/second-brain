@@ -197,10 +197,11 @@ def parse_rfc3339(value: object) -> datetime:
     """Разобрать RFC 3339 timestamp и потребовать явный UTC offset."""
 
     if isinstance(value, datetime):
-        result = value
+        value = value.isoformat()
     elif isinstance(value, date):
         raise ValueError("timestamp must include time")
-    elif isinstance(value, str):
+
+    if isinstance(value, str):
         if not _RFC3339_PATTERN.fullmatch(value):
             if _RFC3339_WITHOUT_OFFSET_PATTERN.fullmatch(value):
                 raise ValueError("timestamp must include an explicit UTC offset")

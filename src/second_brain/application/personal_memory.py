@@ -127,8 +127,10 @@ def is_personal_memory_enrolled(front_matter: Mapping[str, object] | object) -> 
 def validate_personal_memory_fields(
     front_matter: Mapping[str, object] | object,
 ) -> tuple[PersonalMemoryMetadata | None, tuple[PersonalMemoryValidationIssue, ...]]:
-    """Проверить только enrolled metadata, не меняя переданный unknown front matter."""
+    """Проверить только marker-enrolled metadata, не меняя unknown front matter."""
 
+    if not is_personal_memory_enrolled(front_matter):
+        return None, ()
     if not isinstance(front_matter, Mapping):
         return None, (PersonalMemoryValidationIssue("PERSONAL_MEMORY_INVALID_RECORD"),)
     data = front_matter

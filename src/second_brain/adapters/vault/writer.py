@@ -6,6 +6,7 @@ import hashlib
 import os
 import uuid
 from collections.abc import Callable, MutableMapping
+from contextlib import suppress
 from datetime import datetime
 from io import StringIO
 from pathlib import Path, PurePosixPath
@@ -46,6 +47,17 @@ _WINDOWS_RESERVED_NAMES = frozenset(
         "nul",
         *(f"com{index}" for index in range(1, 10)),
         *(f"lpt{index}" for index in range(1, 10)),
+    }
+)
+_PERSONAL_MEMORY_MARKER_FIELDS = frozenset((PERSONAL_MEMORY_MARKER,))
+_PERSONAL_MEMORY_CONTROLLED_FIELDS = frozenset(
+    {
+        PERSONAL_MEMORY_MARKER,
+        "evidence_kind",
+        "self_kind",
+        "evidence_at",
+        "evidence_at_precision",
+        "domain",
     }
 )
 
@@ -429,8 +441,8 @@ def _render_template(
     parsed, data = _load_template_data(template_text)
     if data is not None:
         _set_managed_metadata(data, note_type, note_id, created)
-        data.pop(PERSONAL_MEMORY_MARKER, None)
-        return _dump_front_matter(data) + parsed.body
+        _sanitize_template_mapping(data, _PERSONAL_MEMORY_MARKER_FIELDS)
+        return _dump_without_personal_memory_marker(data, parsed.body)
     front_matter = (
         "---\n"
         f"id: {note_id}\n"
@@ -452,10 +464,10 @@ def _render_draft_template(
     _, data = _load_template_data(template_text)
     if data is not None:
         _set_managed_metadata(data, draft.note_type, note_id, created)
-        data.pop(PERSONAL_MEMORY_MARKER, None)
+        _sanitize_template_mapping(data, _PERSONAL_MEMORY_MARKER_FIELDS)
         data["tags"] = list(draft.tags)
         data["links"] = list(draft.links)
-        return _dump_front_matter(data) + draft.content
+        return _dump_without_personal_memory_marker(data, draft.content)
 
     data = {
         "id": str(note_id),
@@ -479,13 +491,13 @@ def _render_reviewed_research_draft_template(
     _, data = _load_template_data(template_text)
     if data is not None:
         _set_managed_metadata(data, draft.note_type, note_id, created)
-        data.pop(PERSONAL_MEMORY_MARKER, None)
+        _sanitize_template_mapping(data, _PERSONAL_MEMORY_MARKER_FIELDS)
         data["tags"] = list(draft.tags)
         data["links"] = list(draft.links)
         data["sources"] = [
             _source_provenance_to_mapping(source) for source in reviewed_draft.sources
         ]
-        return _dump_front_matter(data) + draft.content
+        return _dump_without_personal_memory_marker(data, draft.content)
 
     data = {
         "id": str(note_id),
@@ -511,6 +523,7 @@ def _render_personal_memory_draft_template(
     _, data = _load_template_data(template_text)
     if data is None:
         data = {}
+    _sanitize_template_mapping(data, _PERSONAL_MEMORY_CONTROLLED_FIELDS)
     _set_managed_metadata(data, draft.note_type, note_id, created)
     data["second_brain_personal_memory"] = 1
     data["evidence_kind"] = metadata.evidence_kind.value
@@ -587,6 +600,50 @@ def _set_managed_metadata(
     data["id"] = str(note_id)
     data["type"] = note_type.value
     data["created"] = created.isoformat(timespec="seconds")
+
+
+def _sanitize_template_mapping(
+    data: MutableMapping[str, object],
+    fields: frozenset[str],
+    seen: set[int] | None = None,
+) -> None:
+    """Удалить controlled keys из root и всех сохранённых YAML merge sources."""
+
+    visited = set() if seen is None else seen
+    identity = id(data)
+    if identity in visited:
+        return
+    visited.add(identity)
+    for field in fields:
+        if field not in data:
+            continue
+        with suppress(KeyError):
+            del data[field]
+    merge = getattr(data, "merge", ())
+    for source in merge or ():
+        if isinstance(source, MutableMapping):
+            _sanitize_template_mapping(source, fields, visited)
+
+
+def _dump_without_personal_memory_marker(
+    data: MutableMapping[str, object],
+    body: str,
+) -> str:
+    """Проверить post-render, что generic path не выпускает root-level marker."""
+
+    content = _dump_front_matter(data) + body
+    parsed = parse_front_matter(content)
+    if parsed.error is not None:
+        raise WriteSafetyError(
+            "CREATE_TEMPLATE_INVALID",
+            "rendered template front matter could not be validated",
+        )
+    if PERSONAL_MEMORY_MARKER in parsed.data:
+        raise WriteSafetyError(
+            "CREATE_TEMPLATE_INVALID",
+            "generic writer cannot emit the Personal Memory marker",
+        )
+    return content
 
 
 def _dump_front_matter(data: MutableMapping[str, object]) -> str:

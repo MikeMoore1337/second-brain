@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -16,17 +16,24 @@ from second_brain.application.personal_memory import (
     PERSONAL_MEMORY_MARKER,
     PersonalMemoryDraft,
     is_personal_memory_enrolled,
+    validate_personal_memory_fields,
 )
 from second_brain.application.reports import ScanReport
+from second_brain.application.research import SourceKind, SourceProvenance
+from second_brain.application.research_draft import ReviewedResearchDraft
 from second_brain.application.search import SearchRequest, SearchVault
 from second_brain.application.services import (
+    CreateManagedNote,
     CreateManagedNoteFromDraft,
     CreateManagedNoteFromPersonalMemoryDraft,
+    CreateManagedNoteFromReviewedResearchDraft,
     ValidateVault,
 )
 from second_brain.application.writes import (
     CreateManagedNoteFromDraftRequest,
     CreateManagedNoteFromPersonalMemoryDraftRequest,
+    CreateManagedNoteFromReviewedResearchDraftRequest,
+    CreateManagedNoteRequest,
     CreateStatus,
 )
 from second_brain.domain.models import (
@@ -94,6 +101,68 @@ def install_templates(vault: Path, project_template: str = "# Template body\n") 
         (vault / "_templates" / filename).write_text(content, encoding="utf-8")
 
 
+def merged_marker_template() -> str:
+    """Шаблон с valid marker/companion defaults, унаследованными через merge."""
+
+    return (
+        "---\n"
+        "defaults: &defaults\n"
+        "  second_brain_personal_memory: 1\n"
+        "  evidence_kind: user_statement\n"
+        "  self_kind: preference\n"
+        '  evidence_at: "2026-09-05T16:55:00+03:00"\n'
+        "  evidence_at_precision: exact\n"
+        "  domain: career\n"
+        "<<: *defaults\n"
+        "custom_field: retained\n"
+        "---\n"
+        "# Template body is ignored\n"
+    )
+
+
+def nested_multiple_merge_marker_template() -> str:
+    """Шаблон с nested и multiple YAML merge sources для sanitizer regression."""
+
+    return (
+        "---\n"
+        "base: &base\n"
+        "  second_brain_personal_memory: 1\n"
+        "  evidence_kind: user_statement\n"
+        "  self_kind: preference\n"
+        '  evidence_at: "2026-09-05T16:55:00+03:00"\n'
+        "  evidence_at_precision: exact\n"
+        "domain_defaults: &domain_defaults\n"
+        "  domain: career\n"
+        "nested: &nested\n"
+        "  <<: [*base, *domain_defaults]\n"
+        "<<: [*nested, *domain_defaults]\n"
+        "custom_field: retained\n"
+        "---\n"
+        "# Template body is ignored\n"
+    )
+
+
+def make_reviewed_research_draft() -> ReviewedResearchDraft:
+    """Собрать минимальный reviewed research record без network."""
+
+    return ReviewedResearchDraft(
+        draft=NoteDraft(
+            title="Research-derived note",
+            note_type=NoteType.PROJECT,
+            content="# Reviewed research body\n",
+            tags=("research",),
+            links=(),
+        ),
+        sources=(
+            SourceProvenance(
+                uri="https://example.com/research",
+                source_kind=SourceKind.WEB,
+                retrieved_at=FIXED_NOW,
+            ),
+        ),
+    )
+
+
 def make_personal_memory_draft(
     *,
     content: str = "## Assertion\n\nЯ предпочитаю ясные границы.\n",
@@ -138,6 +207,31 @@ def test_marker_gate_is_type_strict_and_bool_cannot_pass_as_integer() -> None:
     assert is_personal_memory_enrolled({PERSONAL_MEMORY_MARKER: 1.0}) is False
     assert is_personal_memory_enrolled({PERSONAL_MEMORY_MARKER: 2}) is False
     assert is_personal_memory_enrolled({}) is False
+
+
+def test_public_read_validator_has_only_marker_gated_semantics() -> None:
+    fields = {
+        "evidence_kind": "user_statement",
+        "self_kind": "preference",
+        "evidence_at": FIXED_EVIDENCE_AT,
+        "evidence_at_precision": "exact",
+        "domain": "career",
+    }
+
+    for marker in (None, True, "1", 1.0):
+        front_matter = dict(fields)
+        if marker is not None:
+            front_matter[PERSONAL_MEMORY_MARKER] = marker
+        metadata, issues = validate_personal_memory_fields(front_matter)
+        assert metadata is None
+        assert issues == ()
+
+    front_matter = dict(fields)
+    front_matter[PERSONAL_MEMORY_MARKER] = 1
+    metadata, issues = validate_personal_memory_fields(front_matter)
+    assert metadata is not None
+    assert metadata.evidence_kind is EvidenceKind.USER_STATEMENT
+    assert issues == ()
 
 
 @pytest.mark.parametrize("marker", ["true", '"1"', "1.0", "2"])
@@ -204,6 +298,81 @@ def test_valid_exact_personal_memory_projection_and_unicode_body(tmp_path: Path)
     assert note.personal_memory.evidence_at_precision is EvidenceAtPrecision.EXACT
     assert note.personal_memory.domain == "career"
     assert note.body == body
+
+
+@pytest.mark.parametrize(
+    "evidence_at",
+    [
+        datetime(2026, 9, 5, 13, 55, tzinfo=UTC),
+        datetime(
+            2026,
+            9,
+            5,
+            12,
+            55,
+            0,
+            123456,
+            tzinfo=timezone(timedelta(hours=-4)),
+        ),
+    ],
+)
+def test_accepted_datetime_evidence_round_trips_through_write_and_scan(
+    tmp_path: Path,
+    evidence_at: datetime,
+) -> None:
+    vault = create_vault(tmp_path / "vault")
+    install_templates(vault)
+    draft = make_personal_memory_draft(evidence_at=evidence_at)
+
+    result = create_service(vault).execute(
+        CreateManagedNoteFromPersonalMemoryDraftRequest(
+            draft=draft,
+            apply=True,
+            now=FIXED_NOW,
+        )
+    )
+
+    assert result.status is CreateStatus.CREATED
+    report = validate_vault(vault)
+    assert report.error_count == 0
+    metadata = report.notes[0].personal_memory
+    assert metadata is not None
+    assert metadata.evidence_at == evidence_at
+
+
+@pytest.mark.parametrize(
+    "evidence_at",
+    [
+        datetime(2026, 9, 5, 16, 55),
+        datetime(
+            2026,
+            9,
+            5,
+            16,
+            55,
+            tzinfo=timezone(timedelta(hours=1, seconds=30)),
+        ),
+    ],
+)
+def test_invalid_datetime_evidence_is_rejected_before_plan(
+    tmp_path: Path,
+    evidence_at: datetime,
+) -> None:
+    vault = create_vault(tmp_path / "vault")
+    install_templates(vault)
+    before = snapshot_tree(vault)
+
+    result = create_service(vault).execute(
+        CreateManagedNoteFromPersonalMemoryDraftRequest(
+            draft=make_personal_memory_draft(evidence_at=evidence_at),
+            now=FIXED_NOW,
+        )
+    )
+
+    assert result.status is CreateStatus.REJECTED
+    assert result.plan is None
+    assert result.diagnostics[0].code == "PERSONAL_MEMORY_INVALID_EVIDENCE_AT"
+    assert snapshot_tree(vault) == before
 
 
 def test_valid_unknown_evidence_time_has_no_created_fallback(tmp_path: Path) -> None:
@@ -372,6 +541,64 @@ def test_personal_memory_dry_run_is_lossless_and_marker_is_not_client_input(tmp_
     assert snapshot_tree(vault) == before
 
 
+def test_personal_memory_controlled_fields_cannot_be_resurrected_by_merge(
+    tmp_path: Path,
+) -> None:
+    vault = create_vault(tmp_path / "vault")
+    install_templates(
+        vault,
+        "---\n"
+        "defaults: &defaults\n"
+        "  second_brain_personal_memory: 1\n"
+        "  evidence_kind: explicit_user_fact\n"
+        "  self_kind: memory\n"
+        '  evidence_at: "2020-01-01T00:00:00+00:00"\n'
+        "  evidence_at_precision: exact\n"
+        "  domain: career\n"
+        "<<: *defaults\n"
+        "custom_field: retained\n"
+        "---\n"
+        "# Template body is ignored\n",
+    )
+    draft = make_personal_memory_draft(
+        evidence_at="unknown",
+        evidence_at_precision=EvidenceAtPrecision.UNKNOWN,
+        domain=None,
+    )
+
+    dry_run = create_service(vault).execute(
+        CreateManagedNoteFromPersonalMemoryDraftRequest(draft=draft, now=FIXED_NOW)
+    )
+
+    assert dry_run.status is CreateStatus.DRY_RUN
+    assert dry_run.plan is not None
+    parsed = parse_front_matter(dry_run.plan.content)
+    assert parsed.data[PERSONAL_MEMORY_MARKER] == 1
+    assert parsed.data["evidence_kind"] == "user_statement"
+    assert parsed.data["self_kind"] == "preference"
+    assert parsed.data["evidence_at"] == "unknown"
+    assert parsed.data["evidence_at_precision"] == "unknown"
+    assert "domain" not in parsed.data
+    assert parsed.data["custom_field"] == "retained"
+
+    applied = create_service(vault).execute(
+        CreateManagedNoteFromPersonalMemoryDraftRequest(
+            draft=draft,
+            apply=True,
+            now=FIXED_NOW,
+        )
+    )
+
+    assert applied.status is CreateStatus.CREATED
+    report = validate_vault(vault)
+    assert report.error_count == 0
+    metadata = report.notes[0].personal_memory
+    assert metadata is not None
+    assert metadata.evidence_at == "unknown"
+    assert metadata.evidence_at_precision is EvidenceAtPrecision.UNKNOWN
+    assert metadata.domain is None
+
+
 def test_generic_draft_writer_cannot_emit_reserved_personal_memory_marker(
     tmp_path: Path,
 ) -> None:
@@ -392,6 +619,74 @@ def test_generic_draft_writer_cannot_emit_reserved_personal_memory_marker(
     parsed = parse_front_matter(result.plan.content)
     assert PERSONAL_MEMORY_MARKER not in parsed.data
     assert parsed.data["custom_field"] == "retained"
+
+
+def test_generic_create_writer_cannot_emit_merge_inherited_marker(tmp_path: Path) -> None:
+    vault = create_vault(tmp_path / "vault")
+    install_templates(vault, merged_marker_template())
+
+    result = CreateManagedNote(
+        FileSystemVaultReader(vault),
+        FileSystemVaultWriter(vault),
+    ).execute(
+        CreateManagedNoteRequest(
+            note_type=NoteType.PROJECT,
+            title="Generic marker merge",
+            apply=True,
+            now=FIXED_NOW,
+        )
+    )
+
+    assert result.status is CreateStatus.CREATED
+    report = validate_vault(vault)
+    assert report.error_count == 0
+    assert report.notes[0].personal_memory is None
+    assert PERSONAL_MEMORY_MARKER not in report.notes[0].front_matter
+
+
+def test_draft_writer_cannot_emit_nested_multiple_merge_marker(tmp_path: Path) -> None:
+    vault = create_vault(tmp_path / "vault")
+    install_templates(vault, nested_multiple_merge_marker_template())
+
+    result = CreateManagedNoteFromDraft(
+        FileSystemVaultReader(vault),
+        FileSystemVaultWriter(vault),
+    ).execute(
+        CreateManagedNoteFromDraftRequest(
+            draft=make_personal_memory_draft().draft,
+            apply=True,
+            now=FIXED_NOW,
+        )
+    )
+
+    assert result.status is CreateStatus.CREATED
+    report = validate_vault(vault)
+    assert report.error_count == 0
+    assert report.notes[0].personal_memory is None
+    assert PERSONAL_MEMORY_MARKER not in report.notes[0].front_matter
+    assert report.notes[0].front_matter["custom_field"] == "retained"
+
+
+def test_reviewed_research_writer_cannot_emit_merge_inherited_marker(tmp_path: Path) -> None:
+    vault = create_vault(tmp_path / "vault")
+    install_templates(vault, merged_marker_template())
+
+    result = CreateManagedNoteFromReviewedResearchDraft(
+        FileSystemVaultReader(vault),
+        FileSystemVaultWriter(vault),
+    ).execute(
+        CreateManagedNoteFromReviewedResearchDraftRequest(
+            reviewed_draft=make_reviewed_research_draft(),
+            apply=True,
+            now=FIXED_NOW,
+        )
+    )
+
+    assert result.status is CreateStatus.CREATED
+    report = validate_vault(vault)
+    assert report.error_count == 0
+    assert report.notes[0].personal_memory is None
+    assert PERSONAL_MEMORY_MARKER not in report.notes[0].front_matter
 
 
 def test_personal_memory_apply_creates_one_typed_note_and_post_validates(tmp_path: Path) -> None:
