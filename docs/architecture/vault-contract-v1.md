@@ -131,6 +131,87 @@ validation и rollback остаются обязательными.
 проверяет managed metadata и весь vault. При ошибке проверки выполняется
 безопасный rollback только файла, чьи identity и SHA-256 совпадают с receipt.
 
+### Decision Journal v1 core (Stage 2)
+
+Stage 2 — additive contract поверх того же managed note и того же exact
+enrollment marker. Новый `NoteType`, отдельная база и новый global
+`schema_version` не вводятся: `schema_version` остаётся `1`. Stage 1 input
+остаётся ограниченным `explicit_user_fact`/`user_statement` и
+`memory`/`preference`/`belief`/`goal`; Stage 2 значения нельзя записать через
+Stage 1 `PersonalMemoryDraft`.
+
+Каноническая Decision Journal note имеет только согласованную Stage 2 пару:
+
+```yaml
+second_brain_personal_memory: 1
+evidence_kind: observed_decision
+self_kind: decision
+evidence_at: "2026-09-05T16:55:00+03:00"
+evidence_at_precision: exact
+domain: career
+```
+
+Её reviewed Markdown body обязан содержать ровно эти уникальные H2-секции в
+этом порядке:
+
+```text
+## Situation
+## Available options
+## Information known at decision time
+## Criteria
+## Chosen option
+## Reasons
+## Confidence
+## Expected result
+## Actual result
+## Reassessment
+```
+
+На момент создания непустыми должны быть первые восемь pre-choice секций;
+`Actual result` и `Reassessment` должны оставаться пустыми. `Available options`
+— от 2 до 20 непустых bounded Markdown bullets без дублей после минимальной
+нормализации whitespace. `Criteria` — от 1 до 20 таких bullets. `Chosen
+option` — одна plain-text строка, совпадающая с одной из options после той же
+нормализации. Эти правила не позволяют подмешать в исходный выбор поздний
+результат; confidence остаётся body-секцией и не становится YAML metadata.
+
+Позднее наблюдение — отдельная canonical managed note, а не silent mutation
+Journal:
+
+```yaml
+second_brain_personal_memory: 1
+evidence_kind: outcome_later_observation
+self_kind: outcome
+evidence_at: "2026-09-12T18:20:00+03:00"
+evidence_at_precision: exact
+decision_id: "0198f4c5-6a00-7000-8000-000000000002"
+domain: career
+```
+
+`decision_id` — strict lowercase UUIDv7 ровно одной текущей Decision Journal
+note. Outcome body обязан содержать ровно `## Actual result`,
+`## Reassessment`, `## Notes` в этом порядке; хотя бы `Actual result` или
+`Reassessment` должна быть непустой. `evidence_at`/`evidence_at_precision`
+используют ту же пару explicit RFC3339 offset + `exact` или `unknown` +
+`unknown`; `created` не является fallback.
+
+Application-level reviewed DTOs отдельно принимают Journal и Outcome
+`NoteDraft`, а application владеет marker, evidence/self kind, временем,
+domain и outcome relation. Dedicated writers переиспользуют существующий Safe
+Write pipeline и санитизируют controlled YAML fields, включая поля из merge,
+поэтому template не может переопределить эти значения. Dry-run, explicit apply,
+containment, no-overwrite, post-write full-vault validation, receipt и
+rollback остаются обязательными.
+
+Scanner распознаёт эти semantics только при exact marker. Он строит typed
+read projections из canonical Markdown и проверяет outcome relation по
+текущему scan: target должен существовать ровно один раз, быть managed,
+enrolled `observed_decision`/`decision` note с валидным Journal body. Missing,
+duplicate, ordinary, Stage 1, outcome или malformed Journal target дают
+bounded diagnostics. Search/Retrieval не являются authority для relation и их
+DTO/semantics не меняются. Notes без exact marker и unknown front matter
+остаются обычными notes с прежним round-trip поведением.
+
 ## Wikilinks
 
 Read-only parser v1 распознаёт:

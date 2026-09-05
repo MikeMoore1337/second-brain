@@ -19,6 +19,10 @@ from second_brain.application.writes import (
 from second_brain.domain.models import NoteType, VaultManifest
 
 if TYPE_CHECKING:
+    from second_brain.application.decision_journal import (
+        DecisionJournalDraft,
+        OutcomeObservationDraft,
+    )
     from second_brain.application.llm import LlmRequest, NoteDraft
     from second_brain.application.personal_memory import PersonalMemoryDraft
     from second_brain.application.research import ResearchRequest, ResearchSource
@@ -123,6 +127,24 @@ class ManagedNoteWriter(Protocol):
         created: datetime,
     ) -> CreateNotePlan:
         """Подготовить reviewed Personal Memory plan без изменения vault."""
+
+    def prepare_from_decision_journal_draft(
+        self,
+        manifest: VaultManifest,
+        draft: DecisionJournalDraft,
+        note_id: UUID,
+        created: datetime,
+    ) -> CreateNotePlan:
+        """Подготовить reviewed Decision Journal plan без изменения vault."""
+
+    def prepare_from_outcome_observation_draft(
+        self,
+        manifest: VaultManifest,
+        draft: OutcomeObservationDraft,
+        note_id: UUID,
+        created: datetime,
+    ) -> CreateNotePlan:
+        """Подготовить reviewed Outcome Observation plan без изменения vault."""
 
     def prepare_from_reviewed_research_draft(
         self,

@@ -12,6 +12,10 @@ from second_brain.application.reports import Diagnostic, ScanReport
 from second_brain.domain.models import NoteType
 
 if TYPE_CHECKING:
+    from second_brain.application.decision_journal import (
+        DecisionJournalDraft,
+        OutcomeObservationDraft,
+    )
     from second_brain.application.llm import NoteDraft
     from second_brain.application.personal_memory import PersonalMemoryDraft
     from second_brain.application.research_draft import ReviewedResearchDraft
@@ -67,6 +71,24 @@ class CreateManagedNoteFromPersonalMemoryDraftRequest:
         """Вернуть draft под явным именем для application callers."""
 
         return self.draft
+
+
+@dataclass(frozen=True, slots=True)
+class CreateManagedNoteFromDecisionJournalDraftRequest:
+    """Входные данные Safe Write из reviewed DecisionJournalDraft."""
+
+    draft: DecisionJournalDraft
+    apply: bool = False
+    now: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CreateManagedNoteFromOutcomeObservationDraftRequest:
+    """Входные данные Safe Write из reviewed OutcomeObservationDraft."""
+
+    draft: OutcomeObservationDraft
+    apply: bool = False
+    now: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)

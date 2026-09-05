@@ -29,19 +29,23 @@ class NoteType(StrEnum):
 
 
 class EvidenceKind(StrEnum):
-    """Закрытые provenance-классы Personal Memory Contract v1."""
+    """Закрытые provenance-классы canonical Personal Memory v1."""
 
     EXPLICIT_USER_FACT = "explicit_user_fact"
     USER_STATEMENT = "user_statement"
+    OBSERVED_DECISION = "observed_decision"
+    OUTCOME_LATER_OBSERVATION = "outcome_later_observation"
 
 
 class SelfKind(StrEnum):
-    """Закрытые semantic subjects Personal Memory Contract v1."""
+    """Закрытые semantic subjects canonical Personal Memory v1."""
 
     MEMORY = "memory"
     PREFERENCE = "preference"
     BELIEF = "belief"
     GOAL = "goal"
+    DECISION = "decision"
+    OUTCOME = "outcome"
 
 
 class EvidenceAtPrecision(StrEnum):
@@ -135,6 +139,8 @@ class NoteRecord:
     updated: datetime | None = None
     tags: tuple[str, ...] = ()
     personal_memory: PersonalMemoryMetadata | None = None
+    decision_journal: DecisionJournalRecord | None = None
+    outcome_observation: OutcomeObservationRecord | None = None
 
     @property
     def personal_memory_metadata(self) -> PersonalMemoryMetadata | None:
@@ -152,6 +158,31 @@ class PersonalMemoryMetadata:
     evidence_at: EvidenceAt
     evidence_at_precision: EvidenceAtPrecision
     domain: str | None = None
+    decision_id: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionJournalRecord:
+    """Минимальная typed projection валидного Decision Journal body."""
+
+    situation: str
+    available_options: tuple[str, ...]
+    information_known_at_decision_time: str
+    criteria: tuple[str, ...]
+    chosen_option: str
+    reasons: str
+    confidence: str
+    expected_result: str
+
+
+@dataclass(frozen=True, slots=True)
+class OutcomeObservationRecord:
+    """Минимальная typed projection валидного Outcome Observation body."""
+
+    decision_id: UUID
+    actual_result: str
+    reassessment: str
+    notes: str
 
 
 @dataclass(frozen=True, slots=True)

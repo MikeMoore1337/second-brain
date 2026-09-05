@@ -9,9 +9,15 @@ from pathlib import PurePosixPath
 from typing import Any, cast
 from uuid import UUID
 
+from second_brain.application.decision_journal import (
+    DecisionJournalBodyError,
+    OutcomeObservationBodyError,
+    parse_decision_journal_body,
+    parse_outcome_observation_body,
+)
 from second_brain.application.personal_memory import (
     personal_memory_diagnostic_message,
-    validate_personal_memory_fields,
+    validate_canonical_personal_memory_fields,
 )
 from second_brain.application.reports import (
     Diagnostic,
@@ -22,10 +28,12 @@ from second_brain.application.reports import (
 from second_brain.application.research import SourceKind, SourceProvenance
 from second_brain.domain.models import (
     AttachmentRecord,
+    DecisionJournalRecord,
     LinkReference,
     MarkdownDocument,
     NoteRecord,
     NoteType,
+    OutcomeObservationRecord,
     PersonalMemoryMetadata,
     VaultManifest,
     parse_rfc3339,
@@ -42,6 +50,7 @@ def build_report(snapshot: VaultSnapshot) -> ScanReport:
     notes = [_validate_document(document, diagnostics) for document in snapshot.documents]
     _report_attachment_diagnostics(snapshot.attachments, snapshot.manifest, diagnostics)
     _report_duplicate_ids(notes, diagnostics)
+    _report_stage2_relations(notes, diagnostics)
     _report_link_diagnostics(notes, snapshot.attachments, snapshot.links, diagnostics)
     return ScanReport(
         vault_path=snapshot.vault_path,
@@ -81,8 +90,9 @@ def _validate_document(
         data, "updated", document.relative_path, diagnostics, required=False
     )
     tags = _parse_tags(data, document.relative_path, diagnostics)
-    personal_memory = _parse_personal_memory(
+    personal_memory, decision_journal, outcome_observation = _parse_personal_memory(
         data,
+        document.body,
         document.relative_path,
         diagnostics,
     )
@@ -97,17 +107,24 @@ def _validate_document(
         updated=updated,
         tags=tags,
         personal_memory=personal_memory,
+        decision_journal=decision_journal,
+        outcome_observation=outcome_observation,
     )
 
 
 def _parse_personal_memory(
     data: Mapping[str, Any],
+    body: str,
     path: str,
     diagnostics: list[Diagnostic],
-) -> PersonalMemoryMetadata | None:
-    """Запустить marker-gated Personal Memory validator."""
+) -> tuple[
+    PersonalMemoryMetadata | None,
+    DecisionJournalRecord | None,
+    OutcomeObservationRecord | None,
+]:
+    """Запустить marker-gated canonical Stage 1/Stage 2 validator."""
 
-    metadata, issues = validate_personal_memory_fields(data)
+    metadata, issues = validate_canonical_personal_memory_fields(data)
     for issue in issues:
         diagnostics.append(
             Diagnostic(
@@ -117,7 +134,38 @@ def _parse_personal_memory(
                 path,
             )
         )
-    return metadata
+    if metadata is None or issues:
+        return metadata, None, None
+    decision_journal: DecisionJournalRecord | None = None
+    outcome_observation: OutcomeObservationRecord | None = None
+    if metadata.evidence_kind.value == "observed_decision":
+        try:
+            decision_journal = parse_decision_journal_body(body)
+        except DecisionJournalBodyError:
+            diagnostics.append(
+                Diagnostic(
+                    "DECISION_JOURNAL_INVALID_BODY",
+                    "Decision Journal body does not satisfy the deterministic Stage 2 contract",
+                    DiagnosticSeverity.ERROR,
+                    path,
+                )
+            )
+    elif (
+        metadata.evidence_kind.value == "outcome_later_observation"
+        and metadata.decision_id is not None
+    ):
+        try:
+            outcome_observation = parse_outcome_observation_body(body, metadata.decision_id)
+        except OutcomeObservationBodyError:
+            diagnostics.append(
+                Diagnostic(
+                    "OUTCOME_OBSERVATION_INVALID_BODY",
+                    "Outcome Observation body does not satisfy the deterministic Stage 2 contract",
+                    DiagnosticSeverity.ERROR,
+                    path,
+                )
+            )
+    return metadata, decision_journal, outcome_observation
 
 
 def _parse_note_id(data: dict[str, Any], path: str, diagnostics: list[Diagnostic]) -> UUID | None:
@@ -383,6 +431,57 @@ def _report_duplicate_ids(notes: Iterable[NoteRecord], diagnostics: list[Diagnos
                     "DUPLICATE_NOTE_ID",
                     f"note id {note_id} is used by: {', '.join(sorted(paths))}",
                     DiagnosticSeverity.ERROR,
+                )
+            )
+
+
+def _report_stage2_relations(
+    notes: Iterable[NoteRecord],
+    diagnostics: list[Diagnostic],
+) -> None:
+    """Проверить Outcome relation по current canonical scan, не по Search index."""
+
+    current_notes = tuple(notes)
+    for outcome_note in current_notes:
+        outcome = outcome_note.outcome_observation
+        if outcome is None:
+            continue
+        matches = [note for note in current_notes if note.note_id == outcome.decision_id]
+        if not matches:
+            diagnostics.append(
+                Diagnostic(
+                    "OUTCOME_DECISION_NOT_FOUND",
+                    "Outcome Observation decision target was not found in the current vault",
+                    DiagnosticSeverity.ERROR,
+                    outcome_note.relative_path,
+                )
+            )
+            continue
+        if len(matches) > 1:
+            diagnostics.append(
+                Diagnostic(
+                    "OUTCOME_DECISION_IDENTITY_CONFLICT",
+                    "Outcome Observation decision target has conflicting canonical identities",
+                    DiagnosticSeverity.ERROR,
+                    outcome_note.relative_path,
+                )
+            )
+            continue
+        target = matches[0]
+        metadata = target.personal_memory
+        if (
+            not target.managed
+            or metadata is None
+            or metadata.evidence_kind.value != "observed_decision"
+            or metadata.self_kind.value != "decision"
+            or target.decision_journal is None
+        ):
+            diagnostics.append(
+                Diagnostic(
+                    "OUTCOME_DECISION_TARGET_INVALID",
+                    "Outcome Observation decision target is not a valid Decision Journal",
+                    DiagnosticSeverity.ERROR,
+                    outcome_note.relative_path,
                 )
             )
 

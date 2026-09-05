@@ -1,8 +1,10 @@
 # Personal Cognitive Twin — design & roadmap v1
 
-Статус этого документа: **DESIGN / ROADMAP ONLY**. Production Cognitive Twin,
-Personal Memory Contract, Decision Journal, Self Model, RAG, embeddings и
-prediction runtime в рамках этой задачи не реализуются.
+Статус этого документа: **DESIGN / ROADMAP**. Personal Memory Contract v1 и
+Stage 2 Decision Journal v1 core реализованы в текущем репозитории; см.
+[issue #72](https://github.com/MikeMoore1337/second-brain/issues/72).
+Production Self Model, RAG, embeddings и prediction runtime остаются
+будущими slices.
 
 Базовая точка design — merged `main`:
 `5936482b8a2903cf8cecbe5c412393a1eccdfab3`.

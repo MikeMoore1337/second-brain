@@ -8,9 +8,11 @@ from typing import Any
 
 from second_brain.domain.models import (
     AttachmentRecord,
+    DecisionJournalRecord,
     LinkReference,
     MarkdownDocument,
     NoteRecord,
+    OutcomeObservationRecord,
     VaultManifest,
 )
 
@@ -88,6 +90,22 @@ class ScanReport:
         """Вернуть общий размер просканированных attachments."""
 
         return sum(item.size_bytes for item in self.attachments)
+
+    @property
+    def decision_journals(self) -> tuple[DecisionJournalRecord, ...]:
+        """Вернуть valid typed Decision Journal projections текущего scan."""
+
+        return tuple(
+            note.decision_journal for note in self.notes if note.decision_journal is not None
+        )
+
+    @property
+    def outcome_observations(self) -> tuple[OutcomeObservationRecord, ...]:
+        """Вернуть valid typed Outcome Observation projections текущего scan."""
+
+        return tuple(
+            note.outcome_observation for note in self.notes if note.outcome_observation is not None
+        )
 
     def as_dict(self) -> dict[str, Any]:
         """Вернуть JSON-совместимый application report."""

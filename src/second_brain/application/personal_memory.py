@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import StrEnum
 from typing import Literal
+from uuid import UUID
 
 from second_brain.application.llm import NoteDraft, validate_note_draft
 from second_brain.application.ports import LlmError
@@ -18,6 +19,7 @@ from second_brain.domain.models import (
     PersonalMemoryMetadata,
     SelfKind,
     parse_rfc3339,
+    parse_uuid7,
 )
 
 PERSONAL_MEMORY_MARKER = "second_brain_personal_memory"
@@ -33,6 +35,18 @@ _REQUIRED_FIELDS = (
     "evidence_at",
     "evidence_at_precision",
 )
+_STAGE1_EVIDENCE_KINDS = frozenset({EvidenceKind.EXPLICIT_USER_FACT, EvidenceKind.USER_STATEMENT})
+_STAGE1_SELF_KINDS = frozenset(
+    {SelfKind.MEMORY, SelfKind.PREFERENCE, SelfKind.BELIEF, SelfKind.GOAL}
+)
+_CANONICAL_EVIDENCE_KINDS = frozenset(EvidenceKind)
+_CANONICAL_SELF_KINDS = frozenset(SelfKind)
+_CANONICAL_KIND_PAIRS = {
+    EvidenceKind.EXPLICIT_USER_FACT: _STAGE1_SELF_KINDS,
+    EvidenceKind.USER_STATEMENT: _STAGE1_SELF_KINDS,
+    EvidenceKind.OBSERVED_DECISION: frozenset({SelfKind.DECISION}),
+    EvidenceKind.OUTCOME_LATER_OBSERVATION: frozenset({SelfKind.OUTCOME}),
+}
 
 _PERSONAL_MEMORY_MESSAGES = {
     "PERSONAL_MEMORY_INVALID_RECORD": "Personal Memory metadata must be a mapping",
@@ -51,7 +65,12 @@ _PERSONAL_MEMORY_MESSAGES = {
     "PERSONAL_MEMORY_INVALID_EVIDENCE_AT_PAIR": (
         "Personal Memory evidence_at and evidence_at_precision must agree"
     ),
+    "PERSONAL_MEMORY_INVALID_KIND_PAIR": (
+        "Personal Memory evidence_kind and self_kind are not a supported pair"
+    ),
     "PERSONAL_MEMORY_INVALID_DOMAIN": "Personal Memory domain must be one lowercase ASCII slug",
+    "OUTCOME_DECISION_ID_MISSING": "Outcome Observation requires decision_id",
+    "OUTCOME_DECISION_ID_INVALID": "Outcome Observation decision_id is invalid",
     "PERSONAL_MEMORY_DRAFT_INVALID": "Personal Memory draft does not satisfy its reviewed contract",
 }
 
@@ -127,7 +146,7 @@ def is_personal_memory_enrolled(front_matter: Mapping[str, object] | object) -> 
 def validate_personal_memory_fields(
     front_matter: Mapping[str, object] | object,
 ) -> tuple[PersonalMemoryMetadata | None, tuple[PersonalMemoryValidationIssue, ...]]:
-    """Проверить только marker-enrolled metadata, не меняя unknown front matter."""
+    """Проверить marker-enrolled Stage 1 metadata без Stage 2 write semantics."""
 
     if not is_personal_memory_enrolled(front_matter):
         return None, ()
@@ -142,7 +161,77 @@ def validate_personal_memory_fields(
         evidence_at_precision=data.get("evidence_at_precision"),
         domain=data.get("domain"),
         missing=missing,
+        allowed_evidence_kinds=_STAGE1_EVIDENCE_KINDS,
+        allowed_self_kinds=_STAGE1_SELF_KINDS,
     )
+
+
+def validate_canonical_personal_memory_fields(
+    front_matter: Mapping[str, object] | object,
+) -> tuple[PersonalMemoryMetadata | None, tuple[PersonalMemoryValidationIssue, ...]]:
+    """Проверить все enrolled canonical pairs, включая Stage 2 relations."""
+
+    if not is_personal_memory_enrolled(front_matter):
+        return None, ()
+    if not isinstance(front_matter, Mapping):
+        return None, (PersonalMemoryValidationIssue("PERSONAL_MEMORY_INVALID_RECORD"),)
+    data = front_matter
+    missing = frozenset(field for field in _REQUIRED_FIELDS if field not in data)
+    metadata, issues = _validate_values(
+        evidence_kind=data.get("evidence_kind"),
+        self_kind=data.get("self_kind"),
+        evidence_at=data.get("evidence_at"),
+        evidence_at_precision=data.get("evidence_at_precision"),
+        domain=data.get("domain"),
+        missing=missing,
+        allowed_evidence_kinds=_CANONICAL_EVIDENCE_KINDS,
+        allowed_self_kinds=_CANONICAL_SELF_KINDS,
+    )
+    if issues or metadata is None:
+        return None, issues
+
+    pair_issue = _kind_pair_issue(metadata.evidence_kind, metadata.self_kind)
+    if pair_issue is not None:
+        return None, (pair_issue,)
+
+    if metadata.evidence_kind is EvidenceKind.OUTCOME_LATER_OBSERVATION:
+        if "decision_id" not in data:
+            return None, (PersonalMemoryValidationIssue("OUTCOME_DECISION_ID_MISSING"),)
+        try:
+            decision_id = parse_uuid7(data["decision_id"])
+        except TypeError, ValueError, OverflowError:
+            return None, (PersonalMemoryValidationIssue("OUTCOME_DECISION_ID_INVALID"),)
+        metadata = replace(metadata, decision_id=decision_id)
+    return metadata, ()
+
+
+def validate_stage2_metadata(
+    *,
+    evidence_kind: EvidenceKind,
+    self_kind: SelfKind,
+    evidence_at: EvidenceAt | str,
+    evidence_at_precision: EvidenceAtPrecision | str,
+    domain: str | None,
+    decision_id: UUID | None = None,
+) -> PersonalMemoryMetadata:
+    """Проверить application-owned metadata для dedicated Stage 2 path."""
+
+    values: dict[str, object] = {
+        PERSONAL_MEMORY_MARKER: PERSONAL_MEMORY_MARKER_VALUE,
+        "evidence_kind": evidence_kind,
+        "self_kind": self_kind,
+        "evidence_at": evidence_at,
+        "evidence_at_precision": evidence_at_precision,
+        "domain": domain,
+    }
+    if evidence_kind is EvidenceKind.OUTCOME_LATER_OBSERVATION:
+        values["decision_id"] = decision_id
+    metadata, issues = validate_canonical_personal_memory_fields(values)
+    if issues or metadata is None:
+        raise PersonalMemoryDraftError(
+            issues[0].code if issues else "PERSONAL_MEMORY_DRAFT_INVALID"
+        )
+    return metadata
 
 
 def validate_personal_memory_draft(draft: object) -> PersonalMemoryDraft:
@@ -191,6 +280,8 @@ def _validate_values(
     evidence_at_precision: object,
     domain: object,
     missing: frozenset[str],
+    allowed_evidence_kinds: frozenset[EvidenceKind] = _STAGE1_EVIDENCE_KINDS,
+    allowed_self_kinds: frozenset[SelfKind] = _STAGE1_SELF_KINDS,
 ) -> tuple[PersonalMemoryMetadata | None, tuple[PersonalMemoryValidationIssue, ...]]:
     issues: list[PersonalMemoryValidationIssue] = []
 
@@ -199,7 +290,7 @@ def _validate_values(
         issues.append(PersonalMemoryValidationIssue("PERSONAL_MEMORY_MISSING_EVIDENCE_KIND"))
     else:
         parsed_evidence_kind = _parse_enum(evidence_kind, EvidenceKind)
-        if parsed_evidence_kind is None:
+        if parsed_evidence_kind is None or parsed_evidence_kind not in allowed_evidence_kinds:
             issues.append(PersonalMemoryValidationIssue("PERSONAL_MEMORY_INVALID_EVIDENCE_KIND"))
 
     parsed_self_kind: SelfKind | None = None
@@ -207,7 +298,7 @@ def _validate_values(
         issues.append(PersonalMemoryValidationIssue("PERSONAL_MEMORY_MISSING_SELF_KIND"))
     else:
         parsed_self_kind = _parse_enum(self_kind, SelfKind)
-        if parsed_self_kind is None:
+        if parsed_self_kind is None or parsed_self_kind not in allowed_self_kinds:
             issues.append(PersonalMemoryValidationIssue("PERSONAL_MEMORY_INVALID_SELF_KIND"))
 
     parsed_evidence_at: EvidenceAt | None = None
@@ -258,6 +349,19 @@ def _validate_values(
         ),
         (),
     )
+
+
+def _kind_pair_issue(
+    evidence_kind: EvidenceKind,
+    self_kind: SelfKind,
+) -> PersonalMemoryValidationIssue | None:
+    if self_kind in _CANONICAL_KIND_PAIRS[evidence_kind]:
+        return None
+    if evidence_kind in _STAGE1_EVIDENCE_KINDS and self_kind not in _STAGE1_SELF_KINDS:
+        return PersonalMemoryValidationIssue("PERSONAL_MEMORY_INVALID_SELF_KIND")
+    if evidence_kind not in _STAGE1_EVIDENCE_KINDS and self_kind in _STAGE1_SELF_KINDS:
+        return PersonalMemoryValidationIssue("PERSONAL_MEMORY_INVALID_EVIDENCE_KIND")
+    return PersonalMemoryValidationIssue("PERSONAL_MEMORY_INVALID_KIND_PAIR")
 
 
 class _InvalidDomain:
@@ -331,6 +435,8 @@ __all__ = [
     "SelfKind",
     "is_personal_memory_enrolled",
     "personal_memory_diagnostic_message",
+    "validate_canonical_personal_memory_fields",
     "validate_personal_memory_draft",
     "validate_personal_memory_fields",
+    "validate_stage2_metadata",
 ]

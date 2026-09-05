@@ -21,6 +21,10 @@ from second_brain.application.writes import CreateNotePlan, WriteReceipt, WriteS
 from second_brain.domain.models import NoteType, VaultManifest
 
 if TYPE_CHECKING:
+    from second_brain.application.decision_journal import (
+        DecisionJournalDraft,
+        OutcomeObservationDraft,
+    )
     from second_brain.application.llm import NoteDraft
     from second_brain.application.personal_memory import PersonalMemoryDraft
     from second_brain.application.research import SourceProvenance
@@ -58,6 +62,17 @@ _PERSONAL_MEMORY_CONTROLLED_FIELDS = frozenset(
         "evidence_at",
         "evidence_at_precision",
         "domain",
+    }
+)
+_STAGE2_CONTROLLED_FIELDS = frozenset(
+    {
+        PERSONAL_MEMORY_MARKER,
+        "evidence_kind",
+        "self_kind",
+        "evidence_at",
+        "evidence_at_precision",
+        "domain",
+        "decision_id",
     }
 )
 
@@ -159,6 +174,54 @@ class FileSystemVaultWriter:
             lambda template_text: _render_personal_memory_draft_template(
                 template_text,
                 personal_memory_draft,
+                note_id,
+                created,
+            ),
+        )
+
+    def prepare_from_decision_journal_draft(
+        self,
+        manifest: VaultManifest,
+        decision_journal_draft: DecisionJournalDraft,
+        note_id: UUID,
+        created: datetime,
+    ) -> CreateNotePlan:
+        """Собрать plan с application-owned Decision Journal metadata."""
+
+        draft = decision_journal_draft.draft
+        return self._prepare(
+            manifest,
+            draft.note_type,
+            draft.title,
+            note_id,
+            created,
+            lambda template_text: _render_decision_journal_template(
+                template_text,
+                decision_journal_draft,
+                note_id,
+                created,
+            ),
+        )
+
+    def prepare_from_outcome_observation_draft(
+        self,
+        manifest: VaultManifest,
+        outcome_observation_draft: OutcomeObservationDraft,
+        note_id: UUID,
+        created: datetime,
+    ) -> CreateNotePlan:
+        """Собрать plan с application-owned Outcome relation metadata."""
+
+        draft = outcome_observation_draft.draft
+        return self._prepare(
+            manifest,
+            draft.note_type,
+            draft.title,
+            note_id,
+            created,
+            lambda template_text: _render_outcome_observation_template(
+                template_text,
+                outcome_observation_draft,
                 note_id,
                 created,
             ),
@@ -541,6 +604,74 @@ def _render_personal_memory_draft_template(
     data["tags"] = list(draft.tags)
     data["links"] = list(draft.links)
     return _dump_front_matter(data) + draft.content
+
+
+def _render_decision_journal_template(
+    template_text: str,
+    decision_journal_draft: DecisionJournalDraft,
+    note_id: UUID,
+    created: datetime,
+) -> str:
+    """Сериализовать только fixed reviewed Decision Journal metadata."""
+
+    draft = decision_journal_draft.draft
+    metadata = decision_journal_draft.metadata
+    _, data = _load_template_data(template_text)
+    if data is None:
+        data = {}
+    _sanitize_template_mapping(data, _STAGE2_CONTROLLED_FIELDS)
+    _set_managed_metadata(data, draft.note_type, note_id, created)
+    data[PERSONAL_MEMORY_MARKER] = 1
+    data["evidence_kind"] = "observed_decision"
+    data["self_kind"] = "decision"
+    data["evidence_at"] = _serialize_evidence_at(metadata.evidence_at)
+    data["evidence_at_precision"] = metadata.evidence_at_precision.value
+    if metadata.domain is None:
+        data.pop("domain", None)
+    else:
+        data["domain"] = metadata.domain
+    data["tags"] = list(draft.tags)
+    data["links"] = list(draft.links)
+    return _dump_front_matter(data) + draft.content
+
+
+def _render_outcome_observation_template(
+    template_text: str,
+    outcome_observation_draft: OutcomeObservationDraft,
+    note_id: UUID,
+    created: datetime,
+) -> str:
+    """Сериализовать fixed Outcome metadata и exact UUIDv7 relation."""
+
+    draft = outcome_observation_draft.draft
+    metadata = outcome_observation_draft.metadata
+    assert metadata.decision_id is not None
+    _, data = _load_template_data(template_text)
+    if data is None:
+        data = {}
+    _sanitize_template_mapping(data, _STAGE2_CONTROLLED_FIELDS)
+    _set_managed_metadata(data, draft.note_type, note_id, created)
+    data[PERSONAL_MEMORY_MARKER] = 1
+    data["evidence_kind"] = "outcome_later_observation"
+    data["self_kind"] = "outcome"
+    data["evidence_at"] = _serialize_evidence_at(metadata.evidence_at)
+    data["evidence_at_precision"] = metadata.evidence_at_precision.value
+    data["decision_id"] = str(metadata.decision_id)
+    if metadata.domain is None:
+        data.pop("domain", None)
+    else:
+        data["domain"] = metadata.domain
+    data["tags"] = list(draft.tags)
+    data["links"] = list(draft.links)
+    return _dump_front_matter(data) + draft.content
+
+
+def _serialize_evidence_at(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, datetime):
+        return value.isoformat()
+    raise WriteSafetyError("CREATE_INVALID_PLAN", "evidence_at is not normalized")
 
 
 def _source_provenance_to_mapping(source: SourceProvenance) -> dict[str, str]:
