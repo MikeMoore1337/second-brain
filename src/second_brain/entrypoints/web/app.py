@@ -44,7 +44,12 @@ from second_brain.application.ports import (
     TranscriptionError,
 )
 from second_brain.application.research import SourceProvenance
-from second_brain.application.timeline import PersonalTimelineRequest, TimelineError, TimelineOrder
+from second_brain.application.timeline import (
+    PersonalTimelineRequest,
+    TimelineError,
+    TimelineOrder,
+    validate_personal_timeline_request,
+)
 from second_brain.application.transcription import (
     MAX_TRANSCRIPTION_AUDIO_BYTES,
     TranscriptionInvalidRequestError,
@@ -1530,6 +1535,7 @@ def create_app(
             unknown_limit=payload.unknown_limit,
         )
         try:
+            validate_personal_timeline_request(request)
             response = timeline_response(timeliner.build(request))
         except TimelineError as error:
             return _error_response(error.code)

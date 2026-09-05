@@ -198,6 +198,27 @@ def test_timeline_invalid_request_is_400_and_never_partial(
     assert "known_items" not in response.text
 
 
+@pytest.mark.parametrize("payload", [{"order": "sideways"}, {"known_limit": 201}])
+def test_timeline_invalid_payload_precedes_missing_vault_config(
+    tmp_path: Path,
+    payload: dict[str, object],
+) -> None:
+    missing_vault = tmp_path / "missing-vault"
+    with TestClient(
+        create_app(vault_path_override=str(missing_vault)),
+        base_url=LOOPBACK_BASE_URL,
+    ) as client:
+        response = client.post("/api/timeline", headers=TIMELINE_HEADERS, json=payload)
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "error": {
+            "code": "TIMELINE_INVALID_REQUEST",
+            "message": "timeline request failed validation",
+        }
+    }
+
+
 @pytest.mark.parametrize(
     ("error", "status", "code"),
     [
