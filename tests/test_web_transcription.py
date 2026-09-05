@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from starlette.types import ASGIApp, Message, Scope
 
+import second_brain.entrypoints.web.app as web_app
 from second_brain.application.ports import (
     TranscriptionBackendUnavailableError,
     TranscriptionTimeoutError,
@@ -37,8 +39,10 @@ class RecordingTranscriptionService:
         self.result = result if result is not None else Transcript("Распознанный русский текст")
         self.error = error
         self.calls: list[tuple[bytes, str]] = []
+        self.thread_ids: list[int] = []
 
     def transcribe(self, audio: bytes, media_type: str) -> Transcript:
+        self.thread_ids.append(threading.get_ident())
         self.calls.append((audio, media_type))
         if self.error is not None:
             raise self.error
@@ -125,6 +129,33 @@ def test_audio_endpoint_returns_only_transcript_and_never_calls_draft_flow() -> 
     assert "access-control-allow-origin" not in response.headers
     assert response.json() == {"transcript": {"text": "Распознанный русский текст"}}
     assert service.calls == [(audio, "audio/wav")]
+
+
+def test_sync_transcription_is_dispatched_through_threadpool_seam(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = RecordingTranscriptionService()
+    event_loop_thread_ids: list[int] = []
+    threadpool_calls = 0
+
+    async def recording_run_in_threadpool(function: object, *args: object) -> object:
+        nonlocal threadpool_calls
+        threadpool_calls += 1
+        event_loop_thread_ids.append(threading.get_ident())
+        return await asyncio.to_thread(function, *args)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(web_app, "run_in_threadpool", recording_run_in_threadpool)
+
+    with TestClient(
+        create_app(transcription_service=service), base_url=LOOPBACK_BASE_URL
+    ) as client:
+        response = client.post("/api/transcriptions/audio", content=b"audio", headers=VOICE_HEADERS)
+
+    assert response.status_code == 200
+    assert threadpool_calls == 1
+    assert len(event_loop_thread_ids) == 1
+    assert service.thread_ids[0] != event_loop_thread_ids[0]
+    assert len(service.calls) == 1
 
 
 def test_audio_endpoint_accepts_browser_codec_parameter_and_preserves_header_for_adapter() -> None:
@@ -283,6 +314,23 @@ def test_voice_static_ui_has_native_capture_and_in_memory_review_boundary() -> N
     assert "getUserMedia({ audio: true })" in javascript
     assert "MediaRecorder" in javascript
     assert "MediaRecorder.isTypeSupported" in javascript
+    assert "microphoneRequestGeneration" in javascript
+    await_index = javascript.index("const acquiredStream = await")
+    stale_guard_index = javascript.index(
+        "if (!isCurrentMicrophoneRequest(requestGeneration))", await_index
+    )
+    stale_stop_index = javascript.index("stopAudioTracks(acquiredStream)", stale_guard_index)
+    assert await_index < stale_guard_index < stale_stop_index
+    guard_definition = javascript[
+        javascript.index("isCurrentMicrophoneRequest") : stale_guard_index
+    ]
+    assert 'mode === "voice"' in guard_definition
+    assert "const RECORDING_TIMESLICE_MS = 1000;" in javascript
+    assert "recorder.start(RECORDING_TIMESLICE_MS)" in javascript
+    assert "recordingBytes + event.data.size" in javascript
+    assert "recordingTooLarge = true" in javascript
+    assert "stopRecordingStream();" in javascript[stale_stop_index:]
+    assert "audioBlob = null" in javascript[stale_stop_index:]
     assert 'fetch("/api/transcriptions/audio"' in javascript
     assert '"X-Second-Brain-Request": "voice-v1"' in javascript
     assert "textInput.value = transcript" in javascript

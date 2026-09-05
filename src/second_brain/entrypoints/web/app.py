@@ -14,6 +14,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, StrictStr
+from starlette.concurrency import run_in_threadpool
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -762,7 +763,9 @@ def create_app(
         if len(body) > MAX_RAW_TRANSCRIPTION_BODY_BYTES:
             return _error_response("TRANSCRIPTION_CONTENT_TOO_LARGE")
         try:
-            transcript = validate_transcript(transcriber.transcribe(body, content_type))
+            transcript = validate_transcript(
+                await run_in_threadpool(transcriber.transcribe, body, content_type)
+            )
         except TranscriptionError as error:
             return _error_response(error.code)
         except Exception:

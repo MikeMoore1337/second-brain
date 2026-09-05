@@ -38,6 +38,7 @@ if (panel) {
     "audio/x-m4a",
   ];
   const maxAudioBytes = 15 * 1024 * 1024;
+  const RECORDING_TIMESLICE_MS = 1000;
   let mode = "url";
   let reviewToken = null;
   let confirmationToken = null;
@@ -50,6 +51,7 @@ if (panel) {
   let audioMediaType = null;
   let recording = false;
   let microphonePending = false;
+  let microphoneRequestGeneration = 0;
   let recordingBytes = 0;
   let recordingTooLarge = false;
 
@@ -94,18 +96,24 @@ if (panel) {
     result.hidden = true;
   };
 
-  const stopRecordingStream = () => {
-    if (recordingStream && typeof recordingStream.getTracks === "function") {
-      recordingStream.getTracks().forEach((track) => {
+  const stopAudioTracks = (stream) => {
+    if (stream && typeof stream.getTracks === "function") {
+      stream.getTracks().forEach((track) => {
         if (track && typeof track.stop === "function") {
           track.stop();
         }
       });
     }
+  };
+
+  const stopRecordingStream = () => {
+    stopAudioTracks(recordingStream);
     recordingStream = null;
   };
 
   const clearAudioState = () => {
+    microphoneRequestGeneration += 1;
+    microphonePending = false;
     if (recording && recorder) {
       recorder.onstop = null;
       recorder.stop();
@@ -126,6 +134,9 @@ if (panel) {
     }
   };
 
+  const isCurrentMicrophoneRequest = (requestGeneration) =>
+    requestGeneration === microphoneRequestGeneration && mode === "voice" && microphonePending;
+
   const updateVoiceControls = () => {
     if (!voicePanel) {
       return;
@@ -133,7 +144,7 @@ if (panel) {
     recordButton.disabled = busy || recording || microphonePending || !canRecord;
     stopButton.disabled = busy || !recording;
     stopButton.hidden = !recording;
-    audioFileInput.disabled = busy || recording;
+    audioFileInput.disabled = busy || recording || microphonePending;
     transcribeButton.disabled = busy || recording || !audioBlob;
   };
 
@@ -628,11 +639,17 @@ if (panel) {
     clearReviewState();
     clearFeedback();
     clearAudioState();
+    const requestGeneration = microphoneRequestGeneration;
     microphonePending = true;
     updateVoiceControls();
     setVoiceReadyStatus("Запрашиваю доступ к микрофону…");
     try {
-      recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const acquiredStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!isCurrentMicrophoneRequest(requestGeneration)) {
+        stopAudioTracks(acquiredStream);
+        return;
+      }
+      recordingStream = acquiredStream;
       const mimeType = chooseRecordingMimeType();
       recorder = mimeType
         ? new window.MediaRecorder(recordingStream, { mimeType })
@@ -653,6 +670,7 @@ if (panel) {
             if (recorder && recorder.state === "recording") {
               recorder.stop();
             }
+            stopRecordingStream();
             return;
           }
           recordingBytes = nextBytes;
@@ -672,18 +690,28 @@ if (panel) {
         setVoiceReadyStatus("Не удалось записать audio.");
         updateVoiceControls();
       };
-      recorder.start();
+      recorder.start(RECORDING_TIMESLICE_MS);
       recording = true;
       setVoiceReadyStatus("Идёт запись. Нажми «Остановить», когда закончишь.");
     } catch (_error) {
+      if (!isCurrentMicrophoneRequest(requestGeneration)) {
+        return;
+      }
       stopRecordingStream();
       recorder = null;
+      audioChunks = [];
+      audioBlob = null;
+      audioMediaType = null;
       recording = false;
+      recordingBytes = 0;
+      recordingTooLarge = false;
       setVoiceReadyStatus("");
       setError("Не удалось получить доступ к микрофону.");
     } finally {
-      microphonePending = false;
-      updateVoiceControls();
+      if (requestGeneration === microphoneRequestGeneration) {
+        microphonePending = false;
+        updateVoiceControls();
+      }
     }
   });
 
@@ -694,7 +722,7 @@ if (panel) {
   });
 
   audioFileInput.addEventListener("change", () => {
-    if (busy || recording) {
+    if (busy || recording || microphonePending) {
       return;
     }
     const file = audioFileInput.files && audioFileInput.files[0];
