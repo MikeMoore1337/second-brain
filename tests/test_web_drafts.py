@@ -241,7 +241,9 @@ def test_text_route_uses_exact_context_once_and_returns_no_sources() -> None:
 
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
-    assert response.json() == {
+    payload = response.json()
+    assert payload["review_token"].startswith("v1.")
+    assert {key: value for key, value in payload.items() if key != "review_token"} == {
         "draft": {
             "title": "Черновик из Web",
             "note_type": "resource",
@@ -269,7 +271,8 @@ def test_url_route_uses_web_gateway_once_and_returns_bounded_provenance() -> Non
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
     payload = response.json()
-    assert set(payload) == {"draft", "sources"}
+    assert set(payload) == {"draft", "sources", "review_token"}
+    assert payload["review_token"].startswith("v1.")
     assert set(payload["draft"]) == {"title", "note_type", "content", "tags", "links"}
     assert payload["draft"]["content"] == "Содержимое без автоматического source URL."
     assert payload["draft"]["links"] == ["[[Knowledge]]"]

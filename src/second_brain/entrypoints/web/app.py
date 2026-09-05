@@ -1,10 +1,11 @@
-"""Local-only FastAPI application for the read-only Web GUI."""
+"""Local-only FastAPI application for Web draft review and explicit Save."""
 
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from datetime import datetime
-from pathlib import Path
+from difflib import unified_diff
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Final
 from urllib.parse import urlsplit
 
@@ -16,18 +17,67 @@ from pydantic import BaseModel, ConfigDict, StrictStr
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from second_brain.application.llm import MAX_CONTEXT_BYTES, NoteDraft
+from second_brain.application.llm import MAX_CONTEXT_BYTES, NoteDraft, validate_note_draft
 from second_brain.application.ports import LlmError, ResearchError
 from second_brain.application.research import SourceProvenance
+from second_brain.application.writes import (
+    CreateManagedNoteResult,
+    CreateNotePlan,
+    CreateStatus,
+    WriteSafetyError,
+)
+from second_brain.config import ConfigurationError
+from second_brain.domain.models import NoteType
 
 from .drafts import DraftService, build_production_draft_service
+from .preview import (
+    PreviewContentTooLargeError,
+    PreviewInputError,
+    PreviewRenderError,
+    render_safe_markdown,
+)
+from .review import ReviewTokenClaims, ReviewTokenCodec, ReviewTokenError, ReviewTokenMode
+from .saves import DraftSaveService, build_production_save_service
 
 STATIC_DIR: Final[Path] = Path(__file__).resolve().parent / "static"
 INDEX_FILE: Final[Path] = STATIC_DIR / "index.html"
 DRAFT_REQUEST_HEADER_NAME: Final[str] = "X-Second-Brain-Request"
 DRAFT_REQUEST_HEADER_VALUE: Final[str] = "draft-v1"
 MAX_RAW_DRAFT_BODY_BYTES: Final[int] = 512 * 1024
-_DRAFT_PATHS: Final[frozenset[str]] = frozenset({"/api/drafts/text", "/api/drafts/url"})
+_DRAFT_PATHS: Final[frozenset[str]] = frozenset(
+    {
+        "/api/drafts/text",
+        "/api/drafts/url",
+        "/api/drafts/preview",
+        "/api/drafts/save/prepare",
+        "/api/drafts/save/apply",
+    }
+)
+_REVIEW_PATHS: Final[frozenset[str]] = frozenset(
+    {
+        "/api/drafts/preview",
+        "/api/drafts/save/prepare",
+        "/api/drafts/save/apply",
+    }
+)
+_SAVE_PREFLIGHT_CODES: Final[frozenset[str]] = frozenset(
+    {
+        "CREATE_INVALID_PLAN",
+        "CREATE_INVALID_TIMESTAMP",
+        "CREATE_INVALID_TITLE",
+        "CREATE_LINKED_PATH",
+        "CREATE_PATH_ESCAPE",
+        "CREATE_PLAN_FAILED",
+        "CREATE_PREFLIGHT_FAILED",
+        "CREATE_ROOT_MISSING",
+        "CREATE_ROOT_NOT_DIRECTORY",
+        "CREATE_TEMPLATE_INVALID",
+        "CREATE_TEMPLATE_MISSING",
+        "CREATE_TEMPLATE_READ_FAILED",
+        "CREATE_UNSUPPORTED_TYPE",
+        "CREATE_TARGET_CHECK_FAILED",
+    }
+)
 _TRUSTED_LOOPBACK_HOSTS: Final[frozenset[str]] = frozenset({"127.0.0.1", "localhost"})
 CONTENT_SECURITY_POLICY: Final[str] = (
     "default-src 'self'; "
@@ -87,12 +137,88 @@ class SourceProvenancePayload(BaseModel):
 
 
 class DraftResponse(BaseModel):
-    """Common read-only API response for both Add modes."""
+    """API response carrying a draft and a server-issued review token."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
     draft: DraftPayload
     sources: list[SourceProvenancePayload]
+    review_token: StrictStr
+
+
+class PreviewDraftRequest(BaseModel):
+    """Strict JSON request for safe Markdown preview."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    content: StrictStr
+
+
+class PrepareDraftRequest(BaseModel):
+    """Strict JSON request for the first, dry-run-only Save phase."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    review_token: StrictStr
+    draft: DraftPayload
+
+
+class ApplyDraftRequest(BaseModel):
+    """Strict JSON request for the confirmed Safe Write apply phase."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    review_token: StrictStr
+    confirmation_token: StrictStr
+    draft: DraftPayload
+
+
+class PreviewResponse(BaseModel):
+    """Safe server-rendered HTML for the dedicated preview container."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    html: StrictStr
+
+
+class DryRunNotePayload(BaseModel):
+    """Safe application-owned note fields exposed by the dry-run plan."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    type: StrictStr
+    relative_path: StrictStr
+
+
+class PrepareResponse(BaseModel):
+    """Safe full-file dry-run diff and stateless apply confirmation."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    status: StrictStr
+    note: DryRunNotePayload
+    diff: StrictStr
+    confirmation_token: StrictStr
+
+
+class SavedNotePayload(BaseModel):
+    """Safe relative result of one successful managed note creation."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    id: StrictStr
+    type: StrictStr
+    created: datetime
+    relative_path: StrictStr
+
+
+class SaveResponse(BaseModel):
+    """Minimal success envelope with no receipt, absolute path, or content."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    status: StrictStr
+    note: SavedNotePayload
 
 
 class ErrorPayload(BaseModel):
@@ -127,6 +253,18 @@ _ERRORS: Final[dict[str, tuple[int, str]]] = {
     "RESEARCH_UPSTREAM_FAILURE": (502, "research backend failed"),
     "RESEARCH_MALFORMED_RESULT": (502, "research backend returned an invalid result"),
     "RESEARCH_CONTENT_TOO_LARGE": (413, "research content is too large"),
+    "DRAFT_INVALID_REQUEST": (400, "draft request failed validation"),
+    "DRAFT_CONTENT_TOO_LARGE": (413, "draft content is too large"),
+    "REVIEW_TOKEN_INVALID": (400, "review token is invalid or expired"),
+    "SAVE_CONFIRMATION_INVALID": (400, "save confirmation is invalid or expired"),
+    "DRAFT_SCHEMA_INVALID": (400, "edited draft failed validation"),
+    "PREVIEW_FAILED": (500, "safe Markdown preview failed"),
+    "VAULT_UNAVAILABLE": (503, "vault is unavailable for saving"),
+    "CREATE_TARGET_EXISTS": (409, "note target already exists"),
+    "SAVE_PREFLIGHT_CONFLICT": (409, "vault preflight rejected the save"),
+    "SAVE_ROLLED_BACK": (500, "save was rolled back; no note was published"),
+    "SAVE_RECOVERY_REQUIRED": (500, "save recovery requires manual vault verification"),
+    "SAVE_FAILED": (500, "save failed"),
 }
 _GENERIC_ERROR: Final[tuple[int, str, str]] = (
     500,
@@ -344,21 +482,44 @@ def _loopback_host_port(value: str, scheme: str) -> tuple[str, int] | None:
 
 
 def _invalid_request_code(path: str) -> str:
-    """Выбрать существующий safe application code по draft route."""
+    """Выбрать safe application code по draft route."""
 
-    return "RESEARCH_INVALID_REQUEST" if path.endswith("/url") else "LLM_INVALID_REQUEST"
+    if path.endswith("/url"):
+        return "RESEARCH_INVALID_REQUEST"
+    if path in _REVIEW_PATHS:
+        return "DRAFT_INVALID_REQUEST"
+    return "LLM_INVALID_REQUEST"
 
 
 def _content_too_large_code(path: str) -> str:
-    """Выбрать существующий bounded content-too-large code по draft route."""
+    """Выбрать bounded content-too-large code по draft route."""
 
-    return "RESEARCH_CONTENT_TOO_LARGE" if path.endswith("/url") else "LLM_CONTENT_TOO_LARGE"
+    if path.endswith("/url"):
+        return "RESEARCH_CONTENT_TOO_LARGE"
+    if path in _REVIEW_PATHS:
+        return "DRAFT_CONTENT_TOO_LARGE"
+    return "LLM_CONTENT_TOO_LARGE"
 
 
-def create_app(*, draft_service: DraftService | None = None) -> FastAPI:
-    """Создать Web GUI без config/network side effects до draft POST."""
+def create_app(
+    *,
+    draft_service: DraftService | None = None,
+    save_service: DraftSaveService | None = None,
+    env_file: Path | None = None,
+    vault_path_override: str | None = None,
+) -> FastAPI:
+    """Создать Web GUI без config/vault side effects до explicit Save."""
 
     service = draft_service if draft_service is not None else build_production_draft_service()
+    saver = (
+        save_service
+        if save_service is not None
+        else build_production_save_service(
+            env_file=env_file,
+            vault_path_override=vault_path_override,
+        )
+    )
+    review_tokens = ReviewTokenCodec()
     app = FastAPI(
         title="Second Brain",
         docs_url=None,
@@ -398,12 +559,7 @@ def create_app(*, draft_service: DraftService | None = None) -> FastAPI:
         """Скрыть Pydantic details и использовать API error contract."""
 
         del exc
-        code = (
-            "RESEARCH_INVALID_REQUEST"
-            if request.url.path == "/api/drafts/url"
-            else "LLM_INVALID_REQUEST"
-        )
-        return _error_response(code)
+        return _error_response(_invalid_request_code(request.url.path))
 
     @app.post("/api/drafts/text", include_in_schema=False)
     def text_draft(payload: TextDraftRequest) -> Response:
@@ -415,7 +571,7 @@ def create_app(*, draft_service: DraftService | None = None) -> FastAPI:
             return _error_response("LLM_CONTENT_TOO_LARGE")
         try:
             draft = service.draft_text(payload.text)
-            return _draft_response(draft=draft, source=None)
+            return _draft_response(draft=draft, source=None, review_tokens=review_tokens)
         except Exception as error:
             return _error_response_for_exception(error)
 
@@ -427,9 +583,93 @@ def create_app(*, draft_service: DraftService | None = None) -> FastAPI:
             return _error_response("RESEARCH_INVALID_REQUEST")
         try:
             result = service.draft_url(payload.url)
-            return _draft_response(draft=result.draft, source=result.source)
+            return _draft_response(
+                draft=result.draft,
+                source=result.source,
+                review_tokens=review_tokens,
+            )
         except Exception as error:
             return _error_response_for_exception(error)
+
+    @app.post("/api/drafts/preview", include_in_schema=False)
+    def preview_draft(payload: PreviewDraftRequest) -> Response:
+        """Render only the edited Markdown body without network, vault, or Git."""
+
+        try:
+            html = render_safe_markdown(payload.content)
+        except PreviewContentTooLargeError:
+            return _error_response("DRAFT_CONTENT_TOO_LARGE")
+        except PreviewInputError:
+            return _error_response("DRAFT_INVALID_REQUEST")
+        except PreviewRenderError:
+            return _error_response("PREVIEW_FAILED")
+        except Exception:
+            return _error_response("PREVIEW_FAILED")
+        response = PreviewResponse(html=html)
+        return JSONResponse(
+            content=response.model_dump(mode="json"),
+            headers=_DRAFT_ERROR_HEADERS,
+        )
+
+    @app.post("/api/drafts/save/prepare", include_in_schema=False)
+    def prepare_save(payload: PrepareDraftRequest) -> Response:
+        """Run Safe Write dry-run and return a reviewable full-file plan."""
+
+        try:
+            claims = review_tokens.verify(payload.review_token)
+        except ReviewTokenError:
+            return _error_response("REVIEW_TOKEN_INVALID")
+
+        try:
+            draft = _note_draft_from_payload(payload.draft)
+        except LlmError, ValueError:
+            return _error_response("DRAFT_SCHEMA_INVALID")
+
+        try:
+            result = _run_save_phase(saver, claims, draft, apply=False)
+        except ConfigurationError, WriteSafetyError, OSError:
+            return _error_response("VAULT_UNAVAILABLE")
+        except Exception:
+            return _error_response("SAVE_FAILED")
+        return _prepare_response(
+            result,
+            review_token=payload.review_token,
+            draft=draft,
+            review_tokens=review_tokens,
+            mode=claims.mode,
+        )
+
+    @app.post("/api/drafts/save/apply", include_in_schema=False)
+    def apply_save(payload: ApplyDraftRequest) -> Response:
+        """Require a matching dry-run confirmation before Safe Write apply."""
+
+        try:
+            claims = review_tokens.verify(payload.review_token)
+        except ReviewTokenError:
+            return _error_response("REVIEW_TOKEN_INVALID")
+
+        try:
+            draft = _note_draft_from_payload(payload.draft)
+        except LlmError, ValueError:
+            return _error_response("DRAFT_SCHEMA_INVALID")
+
+        try:
+            review_tokens.verify_confirmation(
+                payload.confirmation_token,
+                review_token=payload.review_token,
+                draft=draft,
+                mode=claims.mode,
+            )
+        except ReviewTokenError:
+            return _error_response("SAVE_CONFIRMATION_INVALID")
+
+        try:
+            result = _run_save_phase(saver, claims, draft, apply=True)
+        except ConfigurationError, WriteSafetyError, OSError:
+            return _error_response("VAULT_UNAVAILABLE")
+        except Exception:
+            return _error_response("SAVE_FAILED")
+        return _save_response(result)
 
     @app.get("/", include_in_schema=False)
     def index() -> FileResponse:
@@ -460,11 +700,19 @@ def _draft_response(
     *,
     draft: NoteDraft,
     source: SourceProvenance | None,
+    review_tokens: ReviewTokenCodec,
 ) -> JSONResponse:
-    """Сериализовать только validated NoteDraft и optional public provenance."""
+    """Serialize only semantic draft/provenance and issue a review token."""
 
     sources = [] if source is None else [_source_payload(source)]
-    response = DraftResponse(draft=_draft_payload(draft), sources=sources)
+    review_token = (
+        review_tokens.issue_text() if source is None else review_tokens.issue_research(source)
+    )
+    response = DraftResponse(
+        draft=_draft_payload(draft),
+        sources=sources,
+        review_token=review_token,
+    )
     return JSONResponse(
         content=response.model_dump(mode="json", exclude_none=True),
         headers=_DRAFT_ERROR_HEADERS,
@@ -497,6 +745,146 @@ def _source_payload(source: SourceProvenance) -> SourceProvenancePayload:
     )
 
 
+def _note_draft_from_payload(payload: DraftPayload) -> NoteDraft:
+    """Convert exactly five editable fields into the existing semantic NoteDraft."""
+
+    note_type = NoteType(payload.note_type)
+    draft = NoteDraft(
+        title=payload.title,
+        note_type=note_type,
+        content=payload.content,
+        tags=tuple(payload.tags),
+        links=tuple(payload.links),
+    )
+    return validate_note_draft(draft)
+
+
+def _run_save_phase(
+    saver: DraftSaveService,
+    claims: ReviewTokenClaims,
+    draft: NoteDraft,
+    *,
+    apply: bool,
+) -> CreateManagedNoteResult:
+    """Dispatch one server-selected phase without exposing an apply flag to HTTP."""
+
+    mode = claims.mode
+    if mode is ReviewTokenMode.TEXT:
+        return saver.apply_text(draft) if apply else saver.prepare_text(draft)
+    source = claims.source
+    if source is None:
+        raise ReviewTokenError()
+    return saver.apply_research(draft, source) if apply else saver.prepare_research(draft, source)
+
+
+def _prepare_response(
+    result: CreateManagedNoteResult,
+    *,
+    review_token: str,
+    draft: NoteDraft,
+    review_tokens: ReviewTokenCodec,
+    mode: ReviewTokenMode,
+) -> JSONResponse:
+    """Serialize only a successful dry-run plan and its stateless confirmation."""
+
+    if result.status is CreateStatus.CREATED:
+        return _error_response("SAVE_FAILED")
+    if result.status is not CreateStatus.DRY_RUN or result.plan is None:
+        return _save_response(result)
+    relative_path = _safe_relative_path(result.plan.relative_path)
+    if relative_path is None:
+        return _error_response("SAVE_FAILED")
+    try:
+        diff = _plan_diff(result.plan, relative_path)
+        confirmation_token = review_tokens.issue_confirmation(
+            review_token=review_token,
+            draft=draft,
+            mode=mode,
+        )
+    except ReviewTokenError, TypeError, UnicodeError, ValueError:
+        return _error_response("SAVE_FAILED")
+    response = PrepareResponse(
+        status=CreateStatus.DRY_RUN.value,
+        note=DryRunNotePayload(
+            type=result.plan.note_type.value,
+            relative_path=relative_path,
+        ),
+        diff=diff,
+        confirmation_token=confirmation_token,
+    )
+    return JSONResponse(
+        content=response.model_dump(mode="json"),
+        headers=_DRAFT_ERROR_HEADERS,
+    )
+
+
+def _plan_diff(plan: CreateNotePlan, relative_path: str) -> str:
+    """Build a full proposed-file diff with no absolute filesystem identity."""
+
+    if type(plan.content) is not str:
+        raise TypeError("plan content must be text")
+    return "".join(
+        unified_diff(
+            (),
+            plan.content.splitlines(keepends=True),
+            fromfile="/dev/null",
+            tofile=relative_path,
+            lineterm="\n",
+        )
+    )
+
+
+def _safe_relative_path(value: str) -> str | None:
+    """Allow only the application-owned normalized relative POSIX path projection."""
+
+    if type(value) is not str or not value or "\\" in value:
+        return None
+    posix_path = PurePosixPath(value)
+    windows_path = PureWindowsPath(value)
+    if (
+        posix_path.is_absolute()
+        or windows_path.is_absolute()
+        or windows_path.drive
+        or posix_path.as_posix() != value
+        or any(part in {"", ".", ".."} for part in posix_path.parts)
+    ):
+        return None
+    return value
+
+
+def _save_response(result: CreateManagedNoteResult) -> JSONResponse:
+    """Expose only safe success fields or a deterministic non-diagnostic error."""
+
+    if result.status is CreateStatus.CREATED and result.plan is not None:
+        relative_path = _safe_relative_path(result.plan.relative_path)
+        if relative_path is None:
+            return _error_response("SAVE_FAILED")
+        response = SaveResponse(
+            status=CreateStatus.CREATED.value,
+            note=SavedNotePayload(
+                id=str(result.plan.note_id),
+                type=result.plan.note_type.value,
+                created=result.plan.created,
+                relative_path=relative_path,
+            ),
+        )
+        return JSONResponse(
+            content=response.model_dump(mode="json"),
+            headers=_DRAFT_ERROR_HEADERS,
+        )
+    if result.status is CreateStatus.ROLLED_BACK:
+        code = "SAVE_ROLLED_BACK" if result.rollback_succeeded is True else "SAVE_RECOVERY_REQUIRED"
+        return _error_response(code)
+    diagnostic_codes = {diagnostic.code for diagnostic in result.diagnostics}
+    if "CREATE_TARGET_EXISTS" in diagnostic_codes:
+        return _error_response("CREATE_TARGET_EXISTS")
+    if "CREATE_VAULT_ROOT_INVALID" in diagnostic_codes:
+        return _error_response("VAULT_UNAVAILABLE")
+    if diagnostic_codes.intersection(_SAVE_PREFLIGHT_CODES):
+        return _error_response("SAVE_PREFLIGHT_CONFLICT")
+    return _error_response("SAVE_FAILED")
+
+
 def _error_response(code: str) -> JSONResponse:
     """Собрать deterministic safe error без переданного exception message."""
 
@@ -527,10 +915,18 @@ __all__ = [
     "DRAFT_REQUEST_HEADER_NAME",
     "DRAFT_REQUEST_HEADER_VALUE",
     "MAX_RAW_DRAFT_BODY_BYTES",
+    "ApplyDraftRequest",
     "DraftPayload",
     "DraftRequestBoundaryMiddleware",
     "DraftResponse",
+    "DryRunNotePayload",
     "ErrorResponse",
+    "PrepareDraftRequest",
+    "PrepareResponse",
+    "PreviewDraftRequest",
+    "PreviewResponse",
+    "SaveResponse",
+    "SavedNotePayload",
     "SourceProvenancePayload",
     "TextDraftRequest",
     "UrlDraftRequest",

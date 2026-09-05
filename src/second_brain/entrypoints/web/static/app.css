@@ -509,6 +509,228 @@ a {
   background: rgba(157, 228, 197, 0.04);
 }
 
+.review-editor {
+  display: grid;
+  gap: 17px;
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.review-editor h4,
+.saved-note h4 {
+  margin: 0;
+  color: var(--mint);
+  font-size: 16px;
+  font-weight: 580;
+  letter-spacing: -0.035em;
+}
+
+.review-fields {
+  display: grid;
+  gap: 14px;
+}
+
+.review-field {
+  display: grid;
+  gap: 6px;
+}
+
+.review-input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  outline: none;
+  padding: 12px 13px;
+}
+
+select.review-input {
+  text-transform: lowercase;
+}
+
+.review-input:focus {
+  border-color: var(--lime);
+  box-shadow: 0 0 0 3px rgba(201, 242, 119, 0.12);
+}
+
+textarea.review-input {
+  min-height: 76px;
+  resize: vertical;
+}
+
+textarea#review-content {
+  min-height: 210px;
+}
+
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+}
+
+.review-button {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.review-button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.review-button-primary {
+  border-color: var(--lime);
+  background: var(--lime);
+  color: #142018;
+}
+
+.review-button-primary:hover,
+.review-button-primary:focus-visible {
+  background: #d9fa98;
+}
+
+.review-button-secondary {
+  border-color: rgba(157, 228, 197, 0.55);
+  background: rgba(157, 228, 197, 0.1);
+  color: var(--mint);
+}
+
+.review-button-secondary:hover,
+.review-button-secondary:focus-visible {
+  background: rgba(157, 228, 197, 0.18);
+}
+
+.review-button-quiet {
+  border-color: var(--line);
+  background: transparent;
+  color: var(--muted);
+}
+
+.review-button-quiet:hover,
+.review-button-quiet:focus-visible {
+  border-color: var(--muted);
+  color: var(--text);
+}
+
+.review-status {
+  min-height: 20px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.markdown-preview {
+  max-height: 460px;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid rgba(157, 228, 197, 0.22);
+  border-radius: 12px;
+  background: rgba(15, 23, 22, 0.55);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.markdown-preview p:first-child {
+  margin-top: 0;
+}
+
+.markdown-preview p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-preview pre {
+  overflow: auto;
+  padding: 12px;
+  border-radius: 9px;
+  background: var(--surface);
+  white-space: pre-wrap;
+}
+
+.markdown-preview code {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.markdown-preview .preview-link {
+  border-bottom: 1px dashed rgba(157, 228, 197, 0.6);
+  color: var(--mint);
+}
+
+.markdown-preview .preview-image {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.save-plan {
+  display: grid;
+  gap: 13px;
+  margin-top: 20px;
+  padding: 17px;
+  border: 1px solid rgba(157, 228, 197, 0.3);
+  border-radius: 12px;
+  background: rgba(157, 228, 197, 0.06);
+}
+
+.save-plan h4,
+.save-plan h5 {
+  margin: 0;
+  color: var(--mint);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.save-plan h4 {
+  font-size: 16px;
+}
+
+.save-plan h5 {
+  font-size: 13px;
+}
+
+.save-plan-explanation {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.save-diff {
+  max-height: 480px;
+  margin: 0;
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text);
+  font: 12px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.saved-note {
+  display: grid;
+  gap: 13px;
+  margin-top: 20px;
+  padding: 17px;
+  border: 1px solid rgba(201, 242, 119, 0.36);
+  border-radius: 12px;
+  background: rgba(201, 242, 119, 0.08);
+}
+
 .is-hidden {
   display: none !important;
 }

@@ -40,24 +40,42 @@ uv run second-brain web serve --port 8123
 
 Команда слушает только `127.0.0.1`; `--port` принимает значение от `1` до
 `65535`, а default — `8000`. В GUI есть Add modes `URL` и `Text`, которые через
-same-origin API создают read-only `NoteDraft`; URL дополнительно показывает
-bounded `SourceProvenance` рядом с draft. Для реальной операции draft нужны
-`CLOUDFLARE_ACCOUNT_ID` и `CLOUDFLARE_API_TOKEN`, но они читаются только при
-POST draft operation. Browser не пишет в vault или Git и не сохраняет draft.
-Authentication, public bind, deploy, PWA, Markdown Preview, Edit и Save в этот
-этап не входят.
+same-origin API создают `NoteDraft`; URL дополнительно показывает bounded
+`SourceProvenance` рядом с draft. После генерации пользователь редактирует
+только пять semantic fields, может запросить безопасный Markdown preview и
+отдельно подготовить Safe Write dry-run, проверить полный diff и подтвердить
+сохранение в vault. `CLOUDFLARE_ACCOUNT_ID` и
+`CLOUDFLARE_API_TOKEN` нужны только для генерации draft; vault-конфигурация
+(`--env-file`/`--vault-path`) загружается только при подготовке или применении
+явного Save. Browser не
+выбирает path, identity, timestamp, apply или Git metadata и не сохраняет
+review state в persistent browser storage. Authentication, public bind, deploy
+и PWA в этот этап не входят.
 
 API surface:
 
 ```text
 POST /api/drafts/text {"text":"..."}
 POST /api/drafts/url  {"url":"https://example.com/article"}
+POST /api/drafts/preview {"content":"..."}
+POST /api/drafts/save/prepare {"review_token":"...", "draft": {"title", "note_type", "content", "tags", "links"}}
+POST /api/drafts/save/apply {"review_token":"...", "confirmation_token":"...", "draft": {"title", "note_type", "content", "tags", "links"}}
 ```
 
-Оба ответа имеют форму `{"draft": {"title", "note_type", "content", "tags",
-"links"}, "sources": [...]}`. API принимает только строгий JSON, ответы
-`draft` и ошибки помечены `Cache-Control: no-store`, а browser общается только
-с same-origin `/api/...`. Ошибки не раскрывают provider/upstream details.
+Ответы генерации имеют форму `{"draft": {"title", "note_type", "content", "tags", "links"},
+"sources": [...], "review_token":"..."}`. Preview возвращает
+только server-rendered safe HTML для одного dedicated container. Prepare
+возвращает только `status: "dry-run"`, тип/relative path, полный unified diff
+предлагаемого Markdown-файла и короткий process-local HMAC confirmation token;
+этот этап не пишет в vault. Apply принимает тот же review token, confirmation
+token и ровно пять полей draft и только затем запускает существующий Safe Write
+с `apply=True`. ID и `created` из dry-run могут быть сгенерированы заново при
+apply. У Save нет отдельного top-level `sources` или client-supplied provenance;
+research sources появляются только внутри signed full-file diff. Абсолютные
+пути, receipt и Git metadata в request/response запрещены. API принимает только
+строгий JSON, все draft routes помечены
+`Cache-Control: no-store`, а browser общается только с same-origin `/api/...`.
+Ошибки не раскрывают provider/upstream или filesystem details.
 
 ## Public web, RSS, YouTube и GitHub research
 
