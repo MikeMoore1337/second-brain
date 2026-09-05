@@ -134,8 +134,8 @@ context как будто они всё ещё canonical.
 | Представление | Статус | Где живёт | Можно пересоздать/удалить | Правило |
 | --- | --- | --- | --- | --- |
 | Managed Markdown note: UUIDv7, `type`, `created`, optional `updated`, `tags`, `links`, body | Canonical | `second-brain-vault` | Нет без потери user data | Единственная пользовательская запись знания |
-| Enrolled reviewed evidence record: `evidence_kind` + `self_kind` + optional `domain` + reviewed body | Canonical | Existing YAML metadata и Markdown body | Нет | Evidence class и semantic subject фиксируются пользователем, а не выводятся моделью |
-| Existing note without the new metadata | Canonical note, но не typed Cognitive Twin evidence | `second-brain-vault` | Нет | Старые notes valid для vault/Search/Retrieval, но не получают evidence class задним числом |
+| Enrolled reviewed evidence record: exact `second_brain_personal_memory: 1` + `evidence_kind` + `self_kind` + temporal fields + optional `domain` + reviewed body | Canonical | Existing YAML metadata и Markdown body | Нет | Evidence class и semantic subject фиксируются пользователем, а не выводятся моделью |
+| Any managed note without the exact Personal Memory marker, включая coincidentally named fields | Canonical note, но не typed Cognitive Twin evidence | `second-brain-vault` | Нет | Старые notes valid для vault/Search/Retrieval; Personal Memory validator не запускается, classification и semantics не добавляются задним числом |
 | Persisted source provenance | Canonical, если пользователь её принял в Safe Write | Existing YAML `sources` | Нет | Источник относится к note, а не является Cognitive Twin state |
 | Decision Journal record | Canonical | Одна reviewed managed note и при необходимости связанные notes | Нет | История выбора и outcome принадлежат пользователю |
 | Transcript до review, `NoteDraft`, preview, review token, confirmation token, Safe Write receipt | Ephemeral candidate/process state | Память процесса/UI | Да | Не evidence до review и публикации |
@@ -155,7 +155,7 @@ context как будто они всё ещё canonical.
 
 ## 5. Evidence model
 
-У canonical reviewed record есть две независимые axes:
+У enrolled canonical reviewed record есть две независимые axes:
 
 - `evidence_kind` — provenance/class: что именно было зафиксировано и как мы
   это знаем;
@@ -165,6 +165,14 @@ context как будто они всё ещё canonical.
 вопрос «насколько это истинно», а `self_kind` не отвечает на вопрос «было ли
 это реально сделано». Универсальной шкалы, в которой observed decision всегда
 сильнее explicit statement, нет: сила зависит от claim, контекста и времени.
+
+Эти axes и temporal companion fields получают Cognitive Twin semantics только
+после exact per-note opt-in: `second_brain_personal_memory: 1`. Enrollment не
+выводится из наличия, имени, shape или значения любого companion field. Без
+exact marker note остаётся обычной managed note, а совпадающие
+`evidence_kind`, `self_kind`, `domain`, `evidence_at` и
+`evidence_at_precision` остаются ordinary unknown front matter без Personal
+Memory validation, diagnostics или typed evidence semantics.
 
 Canonical `evidence_kind` v1 имеет ровно четыре значения:
 
@@ -204,10 +212,11 @@ inference остаётся отдельным derived артефактом ил�
 «пользователь обычно выбирает X», это `model_inference` с отдельными supporting
 references.
 
-Если старой note не хватает `evidence_kind`, это не разрешение приложению
-угадывать класс по body. Такая note остаётся canonical для vault и обычного
-Search/Retrieval, но не является enrolled typed Cognitive Twin evidence, пока
-пользователь явно не пройдёт reviewed capture.
+Если у старой note отсутствует exact marker, это не разрешение приложению
+угадывать enrollment по body или metadata. Такая note остаётся canonical для
+vault и обычного Search/Retrieval, даже если в ней случайно уже есть одно или
+несколько совпадающих имён полей; typed Cognitive Twin evidence появляется
+только через reviewed capture, который явно пишет marker.
 
 ## 6. Каноническая taxonomy и metadata verdict
 
@@ -226,22 +235,31 @@ Search/Retrieval, но не является enrolled typed Cognitive Twin evide
   evidence subtypes и автоматическую классификацию оставляем будущим стадиям.
 
 Итог: отдельную canonical taxonomy ради taxonomy не создаём. На первом этапе
-достаточно двух bounded axes и optional `domain`; evidence kind больше не
-живёт только в derived interpretation body.
+достаточно exact per-note enrollment marker, двух bounded axes и optional
+`domain`; evidence kind больше не живёт только в derived interpretation body.
 
-### 6.2. Verdict по `evidence_kind`, `self_kind` и `domain`
+### 6.2. Verdict по enrollment marker, `evidence_kind`, `self_kind` и `domain`
 
 Предлагаемые additive fields:
 
 ```yaml
+second_brain_personal_memory: 1
 evidence_kind: user_statement
 self_kind: preference
 domain: career
 ```
 
+`second_brain_personal_memory: 1` — exact project-namespaced scalar marker
+enrollment для Personal Memory Contract v1. Это per-note opt-in, а не global
+`schema_version`; его эмитит только будущий reviewed Personal Memory Safe Write
+path. Exact marker означает YAML scalar numeric `1`; отсутствие marker, строка
+`"1"`, `true`, `1.0` и любое другое значение не включают Personal Memory
+validation.
+
 `evidence_kind` — ровно четыре значения, перечисленные в разделе 5. Оно
-обязательно для нового enrolled Personal Memory record; отсутствие поля у
-старой note не классифицируется автоматически.
+обязательно для нового enrolled Personal Memory record. `self_kind`, temporal
+fields и optional `domain` имеют смысл Personal Memory только в той же exact
+enrollment boundary; отсутствие marker не классифицируется автоматически.
 
 `self_kind` — один из минимального полного набора:
 `memory`, `preference`, `belief`, `goal`, `decision`, `outcome`. Это label
@@ -256,11 +274,13 @@ outcome contract. Так Stage 1 не создаёт records, которые Sta
 но не начало обязательного domain registry. Значения вроде `career/backend`
 или массивы доменов в v1 не принимаются.
 
-Verdict: все три fields — additive metadata; старые notes не переклассифицируются
-и остаются valid. Для нового Stage 1 Personal Memory draft обязательны
-`evidence_kind` и Stage 1-совместимый `self_kind`, а `domain` optional. Stage 2
-добавляет event evidence/self kinds и stricter body contract без превращения их
-в inference.
+Verdict: marker и companion fields — additive per-note metadata; старые notes
+не переклассифицируются и остаются valid. Только exact marker включает closed
+Personal Memory validator и делает обязательными Stage 1 `evidence_kind`,
+совместимый `self_kind`, `evidence_at` и согласованную precision; `domain`
+остаётся optional. Stage 2 добавляет event evidence/self kinds и stricter body
+contract также только для явно enrolled reviewed records, без превращения их в
+inference.
 
 Не добавляем в canonical front matter `confidence`, `supporting_evidence`,
 `contradicting_evidence`, `generated_at`, `embedding`, `model_version`,
@@ -270,12 +290,13 @@ Verdict: все три fields — additive metadata; старые notes не п�
 
 ### 6.3. Schema version verdict
 
-`schema_version` bump не нужен, если fields остаются optional для старых notes,
-scalar и additive. Текущая policy уже сохраняет unknown front matter fields при
-round-trip write; следующая implementation-задача добавит явную валидацию
-`evidence_kind`, `self_kind`, `domain`, `evidence_at` и
-`evidence_at_precision`, не делая остальные unknown fields частью Personal
-Memory Contract.
+`schema_version` bump не нужен: marker и companion fields — additive scalar
+metadata, а global `schema_version` остаётся `1`. Текущая policy уже сохраняет
+unknown front matter fields при round-trip write; следующая
+implementation-задача сначала проверяет exact marker и только затем применяет
+явную валидацию `evidence_kind`, `self_kind`, `domain`, `evidence_at` и
+`evidence_at_precision`. Без marker эти имена не становятся частью Personal
+Memory Contract и не дают новых diagnostics.
 
 Schema bump потребовался бы только при изменении обязательных полей, смысла
 существующих полей, shape существующего `sources`/`tags`/`links` или при
@@ -323,6 +344,11 @@ Validator требует согласованную пару: RFC 3339 с явн
 а `created` никогда не используется как fallback. Более богатая precision и
 validity interval остаются будущим additive extension.
 
+Эти temporal fields интерпретируются и валидируются как Cognitive Twin state
+только для note с exact `second_brain_personal_memory: 1`. В legacy note без
+marker даже совпадающие `evidence_at`/`evidence_at_precision` остаются unknown
+front matter и не превращают storage note в timeline evidence.
+
 В будущем temporal context должен различать:
 
 - **asserted at** — когда пользователь сообщил assertion;
@@ -363,13 +389,16 @@ ontology для всех будущих claims.
 ### Семантика
 
 1. Canonical memory — это существующая managed Markdown note со stable UUIDv7.
-2. Note становится typed evidence только после пользовательского review и Safe
-   Write.
+2. Note становится enrolled typed evidence только при exact
+   `second_brain_personal_memory: 1`, пользовательском review и Safe Write.
+   Marker эмитит только этот future reviewed write path; приложение не
+   угадывает enrollment по body или companion fields.
 3. `evidence_kind` отвечает за provenance/class, `self_kind` — за semantic
    subject, `domain` — за optional context; они не добавляют truth/confidence
-   semantics.
+   semantics и не интерпретируются без marker.
 4. `evidence_at` и `evidence_at_precision` — единственный Stage 1 machine
-   source для времени evidence; narrative dates в body не заменяют их.
+   source для времени evidence enrolled record; narrative dates в body не
+   заменяют их.
 5. Human-readable meaning, context, reasons и uncertainty остаются в body, где
    пользователь может их прочитать и исправить.
 6. Derived evidence refs всегда ссылаются на UUID canonical note; они не
@@ -387,6 +416,7 @@ id: 019...
 type: zettel
 created: 2026-09-05T12:00:00+03:00
 updated: 2026-09-05T12:00:00+03:00
+second_brain_personal_memory: 1
 self_kind: preference
 evidence_kind: user_statement
 evidence_at: "2026-09-05T12:00:00+03:00"
@@ -397,10 +427,13 @@ links: []
 ---
 ```
 
-`evidence_kind`, `self_kind`, `evidence_at` и `evidence_at_precision` обязательны
-для нового enrolled Stage 1 Personal Memory record; `domain` optional. Старые
-notes без них остаются valid. `type` остаётся существующим `NoteType`, а не
-`personal_memory`.
+Exact `second_brain_personal_memory: 1`, `evidence_kind`, `self_kind`,
+`evidence_at` и `evidence_at_precision` обязательны для нового enrolled Stage 1
+Personal Memory record; `domain` optional. Note без exact marker, включая note с
+coincidentally named fields, остаётся valid ordinary managed note: fields не
+валидируются как Personal Memory, не получают Cognitive Twin semantics и не
+создают diagnostics только из-за shape/value. `type` остаётся существующим
+`NoteType`, а не `personal_memory`.
 
 Минимальный body должен быть читаемым без приложения. В зависимости от
 `self_kind` достаточно следующих смысловых секций:
@@ -434,10 +467,11 @@ human-readable и проходит тот же review.
 | Смысл | YAML metadata | Structured Markdown body |
 | --- | --- | --- |
 | Stable UUID, existing note type, storage timestamps | Да | Нет |
-| Provenance class `evidence_kind` | Да, bounded scalar | Не выводится из body |
-| Узкий semantic label `self_kind` | Да, bounded scalar | Можно повторить словами, но не нужно |
-| Один bounded `domain` | Да, optional | Можно описать контекст подробнее |
-| Evidence timestamp и precision | Да, `evidence_at` + `evidence_at_precision` | Можно дать human explanation |
+| Personal Memory enrollment | Да, exact `second_brain_personal_memory: 1` | Не выводится из body |
+| Provenance class `evidence_kind` | Да, bounded scalar только после enrollment | Не выводится из body |
+| Узкий semantic label `self_kind` | Да, bounded scalar только после enrollment | Можно повторить словами, но не нужно |
+| Один bounded `domain` | Да, optional только после enrollment | Можно описать контекст подробнее |
+| Evidence timestamp и precision | Да, `evidence_at` + `evidence_at_precision` только после enrollment | Можно дать human explanation |
 | Ситуация, варианты, причины, criteria, expected/actual result | Нет | Да |
 | Human wording assertion и uncertainty | Нет | Да |
 | Дополнительные temporal contexts одной decision | Нет в Stage 1 | Да, narrative only; typed extensions — позже |
@@ -450,7 +484,8 @@ human-readable и проходит тот же review.
 
 Decision Journal — canonical human-readable record одной существенной decision,
 а не лог всех кликов и не inferred personality profile. В Stage 2 это
-существующая managed note с `evidence_kind: observed_decision`,
+явно enrolled существующая managed note с
+`second_brain_personal_memory: 1`, `evidence_kind: observed_decision`,
 `self_kind: decision`, обязательным `evidence_at` (точное время decision либо
 явный `unknown`), optional `domain` и stricter structured Markdown body.
 
@@ -537,8 +572,10 @@ implementation boundary, не часть #66.
 
 ## 10. Personal Timeline v1 — derived/read model
 
-Personal Timeline — это read model текущих typed canonical notes, а не новый
-event store. Он собирает события и assertions через deterministic mapping
+Personal Timeline — это read model текущих enrolled typed canonical notes, а не
+новый event store. Legacy notes без exact Personal Memory marker не становятся
+Timeline evidence только из-за совпадающих front matter names. Timeline
+собирает события и assertions через deterministic mapping
 `evidence_kind -> evidence_at`, без LLM date extraction:
 
 ```text
@@ -839,9 +876,10 @@ context и derived explanation divergence.
 
 | Тема | ACCEPT | CHANGE | RISK | DEFER |
 | --- | --- | --- | --- | --- |
-| Отдельная canonical taxonomy | Минимальные routing labels полезны | `self_kind` сделать узким и optional | Большая ontology станет миграционным контрактом | Nested taxonomy, facets и domain registry |
-| `self_kind` | `memory/preference/belief/goal/decision/outcome` достаточно для первой маршрутизации | Не трактовать label как truth или evidence kind | Один label может не описать смешанную note | Multi-label и custom kinds |
-| `domain` | Один bounded slug помогает фильтрации | Не вводить обязательный vocabulary | Свободные значения могут расползтись | Taxonomy/aliases/registry |
+| Personal Memory enrollment | Exact per-note `second_brain_personal_memory: 1` даёт явную authority boundary | Не выводить enrollment из coincidental field names или body | Legacy unknown metadata может выглядеть знакомо | Migration/classification без reviewed opt-in |
+| Отдельная canonical taxonomy | Минимальный marker и routing labels полезны | `evidence_kind`/`self_kind` сделать bounded scalar только внутри enrollment | Большая ontology станет миграционным контрактом | Nested taxonomy, facets и domain registry |
+| `self_kind` | `memory/preference/belief/goal/decision/outcome` достаточно для первой маршрутизации enrolled notes | Не трактовать label как truth или evidence kind; Stage 1 ограничить allowlist | Один label может не описать смешанную note | Multi-label и custom kinds |
+| `domain` | Один bounded slug помогает фильтрации enrolled notes | Не вводить обязательный vocabulary и не валидировать legacy arrays | Свободные значения могут расползтись | Taxonomy/aliases/registry |
 | Timestamps | Existing storage times сохраняем | Не использовать `created` как event time | Ложная точность разрушит timeline | Общие `valid_from/until` metadata до доказанной потребности |
 | Outcome/reassessment | Хранить рядом с Decision Journal для audit | Для длинных историй разрешить linked observation notes | Mutation semantics Safe Write ещё не определена | Отдельный outcome event store |
 | Superseded preferences | Сохранять старые assertions и derived relation | Ограничивать relation контекстом и временем | Автоматический supersede может стереть nuance | Global identity merge |
@@ -858,16 +896,18 @@ context и derived explanation divergence.
 
 ### Stage 1 — Personal Memory Contract v1
 
-- **Цель:** добавить минимальный reviewed contract с двумя независимыми axes:
-  provenance (`evidence_kind`) и semantic subject (`self_kind`), не создавая
-  новую persistence model.
+- **Цель:** добавить минимальный reviewed contract с exact per-note enrollment
+  marker и двумя независимыми axes: provenance (`evidence_kind`) и semantic
+  subject (`self_kind`), не создавая новую persistence model.
 - **Входные зависимости:** UUIDv7 `NoteRecord`, front matter round-trip,
-  `FileSystemVaultReader -> build_report`, Safe Write и текущие bounded draft
-  boundaries.
-- **Canonical changes:** optional `evidence_kind`, `self_kind`, `domain`,
-  `evidence_at` и `evidence_at_precision`; старые notes валидны без них. Новый
-  Stage 1 Personal Memory draft обязан иметь `evidence_kind`, Stage 1-compatible
-  `self_kind` и explicit exact/unknown evidence time.
+  `FileSystemVaultReader -> build_report` с marker gating, Safe Write и текущие
+  bounded draft boundaries.
+- **Canonical changes:** exact `second_brain_personal_memory: 1` плюс
+  `evidence_kind`, `self_kind`, `domain`, `evidence_at` и
+  `evidence_at_precision`; старые notes валидны без marker и companion fields.
+  Новый Stage 1 Personal Memory draft обязан иметь exact marker,
+  `evidence_kind`, Stage 1-compatible `self_kind` и explicit exact/unknown
+  evidence time.
 - **Stage 1 allowlist:** `evidence_kind` — только `explicit_user_fact` или
   `user_statement`; `self_kind` — только `memory`, `preference`, `belief` или
   `goal`. `observed_decision`, `outcome_later_observation`, `decision` и
@@ -878,12 +918,13 @@ context и derived explanation divergence.
   поверх существующего `NoteDraft` допустим в следующей implementation task;
   `NoteDraft`, Search, LLM и transcription contracts не переопределяются.
 - **Risks:** преждевременная taxonomy, arbitrary YAML, implicit evidence
-  classification и accidental inference write-back.
+  classification/enrollment и accidental inference write-back.
 - **Explicit out-of-scope:** `decision/outcome` self semantics, Decision Journal
   runtime, Journal outcome links, validity intervals, timeline, Self Model,
   retrieval modes, updates existing notes.
-- **Acceptance boundary:** новые records имеют explicit reviewed evidence class
-  и exact/unknown `evidence_at`; старые notes остаются valid; Stage 1 не может
+- **Acceptance boundary:** новые records имеют exact reviewed enrollment,
+  explicit evidence class и exact/unknown `evidence_at`; старые notes остаются
+  valid ordinary notes независимо от coincidental field names; Stage 1 не может
   создать record, который выглядит как полноценный Decision Journal.
 
 ### Stage 2 — Decision Journal v1
@@ -892,9 +933,10 @@ context и derived explanation divergence.
   later outcome.
 - **Входные зависимости:** Stage 1 typed evidence metadata, existing Safe Write,
   reviewed Text/URL/Voice capture и deterministic `evidence_at` foundation.
-- **Canonical changes:** Decision Journal note с `evidence_kind:
-  observed_decision`, `self_kind: decision`, `evidence_at` как decision time и
-  stricter body. Поздний результат — отдельная linked note с
+- **Canonical changes:** explicitly enrolled Decision Journal note с
+  `second_brain_personal_memory: 1`, `evidence_kind: observed_decision`,
+  `self_kind: decision`, `evidence_at` как decision time и stricter body.
+  Поздний результат — отдельная linked note с
   `evidence_kind: outcome_later_observation`, `self_kind: outcome` и своим
   `evidence_at` как outcome time; Journal может содержать reviewed summary/link.
 - **Derived state:** optional extraction candidates, не canonical; никакой
@@ -914,8 +956,8 @@ context и derived explanation divergence.
 
 - **Цель:** derived chronological view canonical assertions, decisions и
   outcomes.
-- **Входные зависимости:** Stage 1 `evidence_at` для facts/statements, Stage 2
-  deterministic decision/outcome records, current scan/report.
+- **Входные зависимости:** enrolled Stage 1 `evidence_at` для facts/statements,
+  Stage 2 deterministic decision/outcome records, current scan/report.
 - **Canonical changes:** нет; только reviewed notes из предыдущих стадий.
 - **Derived state:** `TimelineItem` через deterministic
   `event_at = evidence_at` и `precision = evidence_at_precision`, UUID refs,
@@ -1038,9 +1080,10 @@ context и derived explanation divergence.
 
 1. Ввести понятие reviewed Personal Memory note поверх уже существующей managed
    note.
-2. Разрешить пять additive scalar fields: `evidence_kind`, `self_kind`,
-   optional `domain`, `evidence_at` и `evidence_at_precision`.
-3. Для нового Stage 1 Personal Memory input требовать
+2. Разрешить exact per-note marker `second_brain_personal_memory: 1` и пять
+   companion scalar fields: `evidence_kind`, `self_kind`, optional `domain`,
+   `evidence_at` и `evidence_at_precision`.
+3. Для нового Stage 1 Personal Memory input требовать exact marker,
    `evidence_kind: explicit_user_fact | user_statement`,
    `self_kind: memory | preference | belief | goal` и
    `evidence_at: <RFC3339 with offset> | unknown` с согласованной precision.
@@ -1060,15 +1103,17 @@ context и derived explanation divergence.
 - `src/second_brain/domain/models.py` — маленькие typed values/enums для
   Stage 1 `EvidenceKind`, `SelfKind` и bounded temporal precision, если они
   нужны для общего domain validation; новый `NoteType` не добавлять.
-- `src/second_brain/application/validation.py` — распознавать и проверять
-  additive fields и согласованную RFC3339/`unknown` temporal pair при
-  `build_report`, сохраняя существующее поведение для notes без них.
+- `src/second_brain/application/validation.py` — в `build_report` сначала
+  проверять exact enrollment marker; только для enrolled notes проверять
+  companion fields и согласованную RFC3339/`unknown` temporal pair, сохраняя
+  существующее поведение для notes без marker.
 - `src/second_brain/application/personal_memory.py` — новый reviewed DTO и
   bounded use case/wrapper, не меняющий смысл `NoteDraft` и не создающий
   Decision Journal records.
 - `src/second_brain/application/ports.py`, `writes.py` и
   `src/second_brain/adapters/vault/writer.py` — только additive dedicated path
-  для Personal Memory plan, который переиспользует существующие manifest,
+  для reviewed Personal Memory plan, который единственным scoped path пишет
+  exact enrollment marker и переиспользует существующие manifest,
   dry-run, diff, no-overwrite, post-write validation, receipt и rollback. Не
   превращать generic Safe Write в произвольный metadata map.
 - `tests/test_scanner.py`, `tests/test_writes.py` и узкий Search regression
@@ -1084,17 +1129,41 @@ metadata. Stage 2 Decision Journal и outcome records в этот slice не в�
 
 ### Backward compatibility и schema
 
-- `schema_version` остаётся `1`.
-- Notes без новых fields не мигрируются и продолжают проходить scan, Search и
-  Retrieval, но не получают typed Cognitive Twin evidence автоматически.
-- Unknown front matter fields по-прежнему сохраняются round-trip; только пять
-  согласованных fields получают explicit validation в Stage 1.
-- Неправильный type/shape нового поля даёт bounded diagnostic и не должен
-  превращаться в silent coercion.
+- `schema_version` остаётся `1`; `second_brain_personal_memory` — не global
+  schema/contract version, а project-namespaced per-note enrollment marker.
+- Notes без exact marker не мигрируются и продолжают проходить scan, Search и
+  Retrieval как раньше, даже если в них уже есть поля с именами
+  `evidence_kind`, `self_kind`, `domain`, `evidence_at` или
+  `evidence_at_precision`.
+- Unknown front matter fields по-прежнему сохраняются round-trip. Без exact
+  marker совпадающие fields остаются ordinary unknown metadata: они не
+  валидируются Personal Memory validator, не создают diagnostics из-за shape или
+  value и не получают Cognitive Twin semantics.
+- Только exact scalar `second_brain_personal_memory: 1` включает closed
+  Personal Memory validation. Для такой note missing/malformed companion field
+  даёт bounded diagnostic и не превращается в silent coercion.
 - `evidence_at` принимает только RFC3339 с явным offset или literal `unknown`;
   `evidence_at_precision` согласованно принимает только `exact` или `unknown`.
 - Новый path не меняет существующие note roots и не создаёт
   `NoteType.PERSONAL_MEMORY`.
+
+#### `build_report` gating
+
+Будущая реализация должна сохранять deterministic порядок:
+
+1. Прочитать existing front matter и body текущим способом.
+2. Проверить, равен ли `second_brain_personal_memory` exact YAML scalar `1`.
+3. Если marker отсутствует или имеет любое другое type/value, не запускать
+   Personal Memory field validation: note остаётся обычной managed note, все
+   совпадающие names сохраняются как unknown metadata, а new diagnostics из-за
+   их shape/value не создаются.
+4. Если marker exact `1`, применить closed Personal Memory v1 validation и
+   потребовать companion fields; missing/malformed fields дают bounded
+   diagnostics.
+
+Никакой эвристики по наличию `self_kind`, знакомому `evidence_kind`, body или
+domain не допускается. Exact marker и reviewed Safe Write — единственная
+   authority boundary enrollment.
 
 ### Safe Write interaction
 
@@ -1119,39 +1188,56 @@ implementation task; сначала реализуется безопасное 
 На следующем slice `SearchDocument`, `SearchHit`, `SearchIndexPort` и текущая
 candidate semantics не меняются. `evidence_kind`/`self_kind`/`domain`/temporal
 fields не добавляются в Search DTO и не становятся hidden filter. Existing
-Search продолжает находить terms в title/body/tags; Self Retrieval и evidence
-filtering — отдельные Stage 5.
+Search продолжает находить terms в title/body/tags. Для legacy notes без exact
+marker Search/Retrieval semantics остаются полностью прежними; Self Retrieval и
+evidence filtering — отдельные Stage 5.
 
 ### Validation и tests
 
-Обязательные проверки будущего slice:
+Обязательные regression cases будущего slice:
 
-- accepted Stage 1 `evidence_kind` и `self_kind` allowlists, canonical lowercase
-  `domain`;
-- valid exact/unknown `evidence_at` + `evidence_at_precision` pairs;
-- missing fields на старых notes без автоматической классификации;
-- reject Stage 1 `decision/outcome` evidence/self kinds;
-- reject list/map/bool/empty/oversized/control-character values;
-- reject uppercase or path-like domain values;
-- YAML round-trip с unknown fields, comments и existing wikilinks;
-- dry-run не меняет vault, apply создаёт ровно одну managed note, post-write
-  scan видит поля;
-- no-overwrite, containment, symlink и rollback regressions не ослаблены;
-- existing Search projection и Retrieval не меняют DTO/результат для notes без
-  новых fields;
-- LLM/transcription/web paths не получают implicit personal-memory write
-  capability;
-- targeted tests during implementation, затем один финальный Python 3.14
-  `ruff format --check`, `ruff check`, `mypy src tests` и `pytest` согласно
-  `AGENTS.md`.
+1. **LEGACY:** note без marker с `domain: [work, home]` остаётся valid ordinary
+   unknown front matter.
+2. **LEGACY:** note без marker с `self_kind: memory` не становится Cognitive
+   Twin evidence.
+3. **LEGACY:** note без marker с `evidence_kind: user_statement` не становится
+   enrolled evidence.
+4. **LEGACY:** note без exact marker (включая absent/wrong-type/wrong-value
+   marker) со всеми coincidentally named companion fields не получает Personal
+   Memory semantics и не получает diagnostics из-за их shape/value.
+5. **ENROLLED:** exact `second_brain_personal_memory: 1` с валидными required
+   fields проходит Personal Memory v1 validation.
+6. **ENROLLED:** exact marker без `evidence_kind` даёт bounded diagnostic.
+7. **ENROLLED:** exact marker с invalid `self_kind` даёт bounded diagnostic.
+8. **ENROLLED:** exact marker с invalid temporal pair даёт bounded diagnostic.
+9. **ENROLLED:** exact marker с valid optional lowercase `domain` принимается.
+10. **ENROLLED:** exact marker с invalid `domain` даёт bounded diagnostic.
+11. **ROUND-TRIP:** legacy unknown fields сохраняются unchanged.
+12. **ROUND-TRIP:** Personal Memory marker и companion fields сохраняются
+    unchanged.
+13. **SEARCH:** existing Search/Retrieval не меняют semantics для legacy notes.
+
+Также сохраняются проверки allowlists, reject list/map/bool/empty/oversized и
+control-character values внутри enrolled contract, reject uppercase/path-like
+domain values, YAML round-trip с comments и existing wikilinks, dry-run/no-overwrite,
+containment/symlink/rollback invariants, а также отсутствие implicit write
+capability у LLM/transcription/Web paths. Во время implementation — targeted
+tests, затем один финальный Python 3.14 `ruff format --check`, `ruff check`,
+`mypy src tests` и `pytest` согласно `AGENTS.md`.
 
 ### Security
 
-- allowlist только для согласованных scalar fields; никаких arbitrary front
-  matter mappings;
+- exact `second_brain_personal_memory: 1` — единственный opt-in; marker
+  project-namespaced, scalar, user-reviewable и эмитится только reviewed Safe
+  Write path;
+- сначала проверять enrollment, затем allowlist companion scalar fields; без
+  exact marker никаких arbitrary legacy shapes не валидировать как Personal
+  Memory mappings;
 - bounded UTF-8/ASCII sizes и отказ от control characters;
 - `evidence_at` не принимается как непроверенная дата, а `unknown` не заменяется
   storage `created`;
+- отсутствие marker не запускает body scan, field-name heuristic, migration или
+  retroactive classification;
 - никакого network, LLM, credential или background inference в validator/write
   path;
 - user review остаётся authority boundary, а inference и transcript считаются
