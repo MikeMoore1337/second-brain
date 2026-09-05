@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+import uvicorn
 
 from second_brain.adapters.git import GitVersionControlAdapter
 from second_brain.adapters.github import GitHubPullRequestAdapter
@@ -93,12 +94,27 @@ proposal_app = typer.Typer(help="Git proposal workflow для новой managed
 proposal_note_app = typer.Typer(help="Proposal-команды для managed note.")
 research_app = typer.Typer(help="Read-only чтение внешних research sources.")
 llm_app = typer.Typer(help="Networked read-only команды для LLM note drafts.")
+web_app = typer.Typer(help="Локальный Web GUI shell.")
 app.add_typer(vault_app, name="vault")
 app.add_typer(note_app, name="note")
 app.add_typer(proposal_app, name="proposal")
 app.add_typer(research_app, name="research")
 app.add_typer(llm_app, name="llm")
+app.add_typer(web_app, name="web")
 proposal_app.add_typer(proposal_note_app, name="note")
+
+WEB_HOST = "127.0.0.1"
+DEFAULT_WEB_PORT = 8000
+MIN_WEB_PORT = 1
+MAX_WEB_PORT = 65535
+
+
+def _validate_web_port(value: int) -> int:
+    """Проверить безопасный диапазон TCP-порта для local-only Web GUI."""
+
+    if not MIN_WEB_PORT <= value <= MAX_WEB_PORT:
+        raise typer.BadParameter(f"порт должен быть от {MIN_WEB_PORT} до {MAX_WEB_PORT}")
+    return value
 
 
 @app.callback()
@@ -116,6 +132,26 @@ def callback(
     """Настроить источник конфигурации до выполнения команды."""
 
     ctx.obj = CliOptions(env_file=env_file, vault_path=vault_path)
+
+
+@web_app.command("serve")
+def web_serve(
+    port: Annotated[
+        int,
+        typer.Option(
+            help=f"Loopback-порт Web GUI ({MIN_WEB_PORT}-{MAX_WEB_PORT}).",
+            callback=_validate_web_port,
+        ),
+    ] = DEFAULT_WEB_PORT,
+) -> None:
+    """Запустить локальный Web GUI только на 127.0.0.1."""
+
+    uvicorn.run(
+        "second_brain.entrypoints.web.app:create_app",
+        factory=True,
+        host=WEB_HOST,
+        port=port,
+    )
 
 
 @app.command()
