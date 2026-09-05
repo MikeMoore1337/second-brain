@@ -449,4 +449,29 @@ loopback Host/Origin checks, raw body cap и `Cache-Control: no-store`. CLI
 incremental index, embeddings, vector search, RAG и Cognitive Twin здесь не
 реализуются.
 
+## Personal Timeline v1 core
+
+Stage 3 Personal Timeline реализован как application read model в
+`application/timeline.py`. Каждый запрос заново проходит
+`FileSystemVaultReader.scan() -> build_report()` и проектирует только текущие
+валидные enrolled Personal Memory, Decision Journal и Outcome Observation
+records. Legacy notes без exact marker, совпадающие по именам поля, Search hits,
+LLM output и любые inferred claims в Timeline не входят.
+
+Результат имеет отдельные группы `known_items` и `unknown_items`. Для known
+`event_at` всегда равен canonical `evidence_at`, а для unknown сохраняется
+literal `unknown`; `created` и `updated` возвращаются только как отдельное
+storage/audit context и никогда не используются как event-time fallback. Known
+сортируется по instant с deterministic path/UUID tie-break, unknown — только по
+relative path и UUID, без использования UUIDv7 или storage timestamps.
+
+Timeline fail-closed при ошибках целостности enrolled evidence и при
+incompleteness canonical content scan; он не возвращает частичный personal
+history. Read/root/directory/resolve failures блокируют только по typed
+manifest content roots, тогда как template/attachment-only root failures и
+unrelated diagnostics не блокируют projection. Timeline не имеет `status`,
+persistence, cache, watcher, cursor или write capability: `generated_at` —
+только injectable application clock в in-memory result. `schema_version` не
+меняется, а `second-brain-vault` остаётся отдельным нетронутым репозиторием.
+
 Design-only roadmap будущего Personal Cognitive Twin: [design-roadmap-v1.md](../cognitive-twin/design-roadmap-v1.md).
