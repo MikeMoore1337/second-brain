@@ -9,6 +9,11 @@ from pathlib import PurePosixPath
 from typing import Any, cast
 from uuid import UUID
 
+from second_brain.application.personal_memory import (
+    is_personal_memory_enrolled,
+    personal_memory_diagnostic_message,
+    validate_personal_memory_fields,
+)
 from second_brain.application.reports import (
     Diagnostic,
     DiagnosticSeverity,
@@ -22,6 +27,7 @@ from second_brain.domain.models import (
     MarkdownDocument,
     NoteRecord,
     NoteType,
+    PersonalMemoryMetadata,
     VaultManifest,
     parse_rfc3339,
     parse_uuid7,
@@ -76,6 +82,11 @@ def _validate_document(
         data, "updated", document.relative_path, diagnostics, required=False
     )
     tags = _parse_tags(data, document.relative_path, diagnostics)
+    personal_memory = _parse_personal_memory(
+        data,
+        document.relative_path,
+        diagnostics,
+    )
     return NoteRecord(
         relative_path=document.relative_path,
         front_matter=data,
@@ -86,7 +97,30 @@ def _validate_document(
         created=created,
         updated=updated,
         tags=tags,
+        personal_memory=personal_memory,
     )
+
+
+def _parse_personal_memory(
+    data: Mapping[str, Any],
+    path: str,
+    diagnostics: list[Diagnostic],
+) -> PersonalMemoryMetadata | None:
+    """Запустить closed Personal Memory validator только после exact enrollment gate."""
+
+    if not is_personal_memory_enrolled(data):
+        return None
+    metadata, issues = validate_personal_memory_fields(data)
+    for issue in issues:
+        diagnostics.append(
+            Diagnostic(
+                issue.code,
+                personal_memory_diagnostic_message(issue.code),
+                DiagnosticSeverity.ERROR,
+                path,
+            )
+        )
+    return metadata
 
 
 def _parse_note_id(data: dict[str, Any], path: str, diagnostics: list[Diagnostic]) -> UUID | None:

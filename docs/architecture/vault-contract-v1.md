@@ -92,6 +92,36 @@ reviewed research write path. URL не подмешивается в body или
 построение и публикация note не выполняют network. Это additive optional поле,
 поэтому `schema_version` остаётся `1`.
 
+### Personal Memory Contract v1
+
+Reviewed Personal Memory — это additive semantics существующей managed note, а
+не новый `NoteType` или отдельное хранилище. Единственный enrollment marker —
+строго YAML scalar integer `1`:
+
+```yaml
+second_brain_personal_memory: 1
+evidence_kind: user_statement
+self_kind: preference
+evidence_at: "2026-09-05T16:55:00+03:00"
+evidence_at_precision: exact
+domain: career
+```
+
+После marker обязательны `evidence_kind` (`explicit_user_fact` или
+`user_statement`), `self_kind` (`memory`, `preference`, `belief` или `goal`),
+`evidence_at` и `evidence_at_precision`. Время — RFC3339 с явным UTC offset и
+`exact`, либо literal `unknown` с precision `unknown`. `domain` optional и
+принимает только один lowercase ASCII slug до 64 UTF-8 bytes. `created` не
+используется как fallback.
+
+Значения `true`, `"1"`, `1.0` и другие значения marker enrollment не включают.
+Без exact marker совпадающие имена полей остаются неизвестным front matter и не
+получают Personal Memory validation или Cognitive Twin semantics. Unknown fields
+по-прежнему сохраняются round-trip. Новый reviewed Personal Memory Safe Write
+добавляет marker и закрытые поля application-owned кодом поверх обычного
+`NoteDraft`; dry-run, explicit apply, containment, no-overwrite, post-write
+validation и rollback остаются обязательными.
+
 Корневые служебные каталоги Obsidian (`.obsidian`, `.trash`) и Git (`.git`)
 не входят в объявленные content roots и поэтому не классифицируются как notes.
 

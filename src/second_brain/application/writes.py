@@ -13,6 +13,7 @@ from second_brain.domain.models import NoteType
 
 if TYPE_CHECKING:
     from second_brain.application.llm import NoteDraft
+    from second_brain.application.personal_memory import PersonalMemoryDraft
     from second_brain.application.research_draft import ReviewedResearchDraft
 
 
@@ -51,6 +52,21 @@ class CreateManagedNoteFromDraftRequest:
     draft: NoteDraft
     apply: bool = False
     now: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CreateManagedNoteFromPersonalMemoryDraftRequest:
+    """Входные данные Safe Write из reviewed PersonalMemoryDraft."""
+
+    draft: PersonalMemoryDraft
+    apply: bool = False
+    now: datetime | None = None
+
+    @property
+    def personal_memory_draft(self) -> PersonalMemoryDraft:
+        """Вернуть draft под явным именем для application callers."""
+
+        return self.draft
 
 
 @dataclass(frozen=True, slots=True)

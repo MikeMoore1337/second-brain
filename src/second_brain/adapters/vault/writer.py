@@ -15,11 +15,13 @@ from uuid import UUID
 from ruamel.yaml import YAML
 
 from second_brain.adapters.vault.frontmatter import FrontMatterResult, parse_front_matter
+from second_brain.application.personal_memory import PERSONAL_MEMORY_MARKER
 from second_brain.application.writes import CreateNotePlan, WriteReceipt, WriteSafetyError
 from second_brain.domain.models import NoteType, VaultManifest
 
 if TYPE_CHECKING:
     from second_brain.application.llm import NoteDraft
+    from second_brain.application.personal_memory import PersonalMemoryDraft
     from second_brain.application.research import SourceProvenance
     from second_brain.application.research_draft import ReviewedResearchDraft
 
@@ -121,6 +123,30 @@ class FileSystemVaultWriter:
             lambda template_text: _render_reviewed_research_draft_template(
                 template_text,
                 reviewed_draft,
+                note_id,
+                created,
+            ),
+        )
+
+    def prepare_from_personal_memory_draft(
+        self,
+        manifest: VaultManifest,
+        personal_memory_draft: PersonalMemoryDraft,
+        note_id: UUID,
+        created: datetime,
+    ) -> CreateNotePlan:
+        """Собрать plan с application-owned Personal Memory metadata и marker."""
+
+        draft = personal_memory_draft.draft
+        return self._prepare(
+            manifest,
+            draft.note_type,
+            draft.title,
+            note_id,
+            created,
+            lambda template_text: _render_personal_memory_draft_template(
+                template_text,
+                personal_memory_draft,
                 note_id,
                 created,
             ),
@@ -403,6 +429,7 @@ def _render_template(
     parsed, data = _load_template_data(template_text)
     if data is not None:
         _set_managed_metadata(data, note_type, note_id, created)
+        data.pop(PERSONAL_MEMORY_MARKER, None)
         return _dump_front_matter(data) + parsed.body
     front_matter = (
         "---\n"
@@ -425,6 +452,7 @@ def _render_draft_template(
     _, data = _load_template_data(template_text)
     if data is not None:
         _set_managed_metadata(data, draft.note_type, note_id, created)
+        data.pop(PERSONAL_MEMORY_MARKER, None)
         data["tags"] = list(draft.tags)
         data["links"] = list(draft.links)
         return _dump_front_matter(data) + draft.content
@@ -451,6 +479,7 @@ def _render_reviewed_research_draft_template(
     _, data = _load_template_data(template_text)
     if data is not None:
         _set_managed_metadata(data, draft.note_type, note_id, created)
+        data.pop(PERSONAL_MEMORY_MARKER, None)
         data["tags"] = list(draft.tags)
         data["links"] = list(draft.links)
         data["sources"] = [
@@ -466,6 +495,38 @@ def _render_reviewed_research_draft_template(
         "links": list(draft.links),
         "sources": [_source_provenance_to_mapping(source) for source in reviewed_draft.sources],
     }
+    return _dump_front_matter(data) + draft.content
+
+
+def _render_personal_memory_draft_template(
+    template_text: str,
+    personal_memory_draft: PersonalMemoryDraft,
+    note_id: UUID,
+    created: datetime,
+) -> str:
+    """Сериализовать только reviewed Stage 1 fields поверх обычного NoteDraft."""
+
+    draft = personal_memory_draft.draft
+    metadata = personal_memory_draft.metadata
+    _, data = _load_template_data(template_text)
+    if data is None:
+        data = {}
+    _set_managed_metadata(data, draft.note_type, note_id, created)
+    data["second_brain_personal_memory"] = 1
+    data["evidence_kind"] = metadata.evidence_kind.value
+    data["self_kind"] = metadata.self_kind.value
+    data["evidence_at"] = (
+        metadata.evidence_at
+        if isinstance(metadata.evidence_at, str)
+        else metadata.evidence_at.isoformat()
+    )
+    data["evidence_at_precision"] = metadata.evidence_at_precision.value
+    if metadata.domain is None:
+        data.pop("domain", None)
+    else:
+        data["domain"] = metadata.domain
+    data["tags"] = list(draft.tags)
+    data["links"] = list(draft.links)
     return _dump_front_matter(data) + draft.content
 
 

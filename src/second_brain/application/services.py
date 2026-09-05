@@ -9,12 +9,17 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from second_brain.application.llm import MAX_MAX_OUTPUT_BYTES, validate_note_draft
+from second_brain.application.personal_memory import (
+    PersonalMemoryDraftError,
+    validate_personal_memory_draft,
+)
 from second_brain.application.ports import LlmError, ManagedNoteWriter, VaultReader
 from second_brain.application.reports import Diagnostic, DiagnosticSeverity, ScanReport
 from second_brain.application.research_draft import ReviewedResearchDraft
 from second_brain.application.validation import build_report
 from second_brain.application.writes import (
     CreateManagedNoteFromDraftRequest,
+    CreateManagedNoteFromPersonalMemoryDraftRequest,
     CreateManagedNoteFromReviewedResearchDraftRequest,
     CreateManagedNoteRequest,
     CreateManagedNoteResult,
@@ -23,7 +28,7 @@ from second_brain.application.writes import (
     WriteReceipt,
     WriteSafetyError,
 )
-from second_brain.domain.models import NoteType, VaultManifest
+from second_brain.domain.models import NoteRecord, NoteType, VaultManifest
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,6 +132,76 @@ class CreateManagedNoteFromDraft:
 
 
 @dataclass(frozen=True, slots=True)
+class CreateManagedNoteFromPersonalMemoryDraft:
+    """Safe Write для одного reviewed Personal Memory Stage 1 record."""
+
+    reader: VaultReader
+    writer: ManagedNoteWriter
+
+    def execute(
+        self,
+        request: CreateManagedNoteFromPersonalMemoryDraftRequest,
+    ) -> CreateManagedNoteResult:
+        """Проверить typed wrapper и переиспользовать общий Safe Write pipeline."""
+
+        if type(request) is not CreateManagedNoteFromPersonalMemoryDraftRequest:
+            return CreateManagedNoteResult(
+                CreateStatus.REJECTED,
+                diagnostics=(
+                    _diagnostic(
+                        "PERSONAL_MEMORY_DRAFT_INVALID",
+                        "request does not satisfy the Personal Memory draft contract",
+                    ),
+                ),
+            )
+        try:
+            reviewed_draft = validate_personal_memory_draft(request.draft)
+        except PersonalMemoryDraftError as exc:
+            return CreateManagedNoteResult(
+                CreateStatus.REJECTED,
+                diagnostics=(_diagnostic(exc.code, exc.message),),
+                apply_requested=request.apply,
+            )
+
+        expected_metadata = reviewed_draft.metadata
+
+        def prepare(
+            manifest: VaultManifest,
+            note_type: NoteType,
+            title: str,
+            note_id: UUID,
+            created: datetime,
+        ) -> CreateNotePlan:
+            del note_type, title
+            return self.writer.prepare_from_personal_memory_draft(
+                manifest,
+                reviewed_draft,
+                note_id,
+                created,
+            )
+
+        def validate_created_note(note: NoteRecord, plan: CreateNotePlan) -> bool:
+            del plan
+            return note.personal_memory == expected_metadata
+
+        return _execute_create(
+            self.reader,
+            self.writer,
+            note_type=reviewed_draft.draft.note_type,
+            title=reviewed_draft.draft.title,
+            apply=request.apply,
+            now=request.now,
+            prepare=prepare,
+            post_write_check=validate_created_note,
+        )
+
+    def rollback(self, receipt: WriteReceipt) -> bool:
+        """Безопасно откатить Personal Memory note через receipt writer-а."""
+
+        return _safe_rollback(self.writer, receipt)
+
+
+@dataclass(frozen=True, slots=True)
 class CreateManagedNoteFromReviewedResearchDraft:
     """Safe Write для reviewed research draft с одним source в v1."""
 
@@ -215,6 +290,7 @@ def _execute_create(
     apply: bool,
     now: datetime | None,
     prepare: Callable[[VaultManifest, NoteType, str, UUID, datetime], CreateNotePlan],
+    post_write_check: Callable[[NoteRecord, CreateNotePlan], bool] | None = None,
 ) -> CreateManagedNoteResult:
     """Общий Safe Write pipeline для обычного и draft-based создания."""
 
@@ -330,7 +406,7 @@ def _execute_create(
             rollback_succeeded=rollback_succeeded,
             apply_requested=True,
         )
-    if not _post_write_is_valid(post_report, plan):
+    if not _post_write_is_valid(post_report, plan, post_write_check):
         diagnostics = list(post_report.diagnostics)
         diagnostics.append(
             _diagnostic(
@@ -367,7 +443,11 @@ def _execute_create(
     )
 
 
-def _post_write_is_valid(report: ScanReport, plan: CreateNotePlan) -> bool:
+def _post_write_is_valid(
+    report: ScanReport,
+    plan: CreateNotePlan,
+    extra_check: Callable[[NoteRecord, CreateNotePlan], bool] | None = None,
+) -> bool:
     """Проверить именно созданную note и отсутствие новых validation errors."""
 
     if report.error_count:
@@ -376,12 +456,13 @@ def _post_write_is_valid(report: ScanReport, plan: CreateNotePlan) -> bool:
     if len(matches) != 1:
         return False
     note = matches[0]
-    return (
+    base_valid = (
         note.managed
         and note.note_id == plan.note_id
         and note.note_type is plan.note_type
         and note.created == plan.created
     )
+    return base_valid and (extra_check is None or extra_check(note, plan))
 
 
 def _diagnostic(code: str, message: str, path: str | None = None) -> Diagnostic:
