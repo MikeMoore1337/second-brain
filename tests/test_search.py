@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import unicodedata
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
@@ -15,6 +16,7 @@ from second_brain.adapters.search import (
     MAX_SNIPPET_CHARS,
     SqliteFts5SearchIndex,
 )
+from second_brain.adapters.search.sqlite_fts5 import _bounded_plain_text
 from second_brain.adapters.vault import FileSystemVaultReader
 from second_brain.application.ports import (
     RetrievedNote,
@@ -108,6 +110,84 @@ def test_projection_indexes_only_stable_managed_notes_and_keeps_exact_fields(
         index.close()
     assert [hit.note_id for hit in fastapi_hits] == [VALID_UUID]
     assert secret_hits == ()
+
+
+def test_nfkc_index_normalization_is_symmetric_but_metadata_and_retrieval_stay_exact(
+    tmp_path: Path,
+) -> None:
+    vault = create_vault(tmp_path / "vault")
+    fullwidth_path = write_note(
+        vault,
+        "30 Resources/ＦａｓｔＡＰＩ.md",
+        managed_note()
+        .replace("tags: []", "tags: [ｐｙｔｈｏｎ]")
+        .replace("Текст заметки.", "Канонический ＦａｓｔＡＰＩ body. Русский поиск."),
+    )
+    write_note(
+        vault,
+        "30 Resources/FastAPI.md",
+        managed_note(SECOND_NOTE_ID, "resource").replace(
+            "Текст заметки.", "Обычный FastAPI body. Русский поиск."
+        ),
+    )
+    reader = FileSystemVaultReader(vault)
+    index = SqliteFts5SearchIndex()
+    try:
+        ascii_query_hits = SearchVault(reader, index).execute(SearchRequest("FastAPI"))
+        fullwidth_query_hits = SearchVault(reader, index).execute(SearchRequest("ＦａｓｔＡＰＩ"))
+        russian_hits = SearchVault(reader, index).execute(SearchRequest("Русский"))
+    finally:
+        index.close()
+
+    ascii_ids = {hit.note_id for hit in ascii_query_hits}
+    fullwidth_ids = {hit.note_id for hit in fullwidth_query_hits}
+    assert ascii_ids == {VALID_UUID, SECOND_UUID}
+    assert fullwidth_ids == {VALID_UUID, SECOND_UUID}
+    assert {hit.note_id for hit in russian_hits} == {VALID_UUID, SECOND_UUID}
+
+    fullwidth_hit = next(hit for hit in ascii_query_hits if hit.note_id == VALID_UUID)
+    assert fullwidth_hit.title == "ＦａｓｔＡＰＩ"
+    assert fullwidth_hit.relative_path == "30 Resources/ＦａｓｔＡＰＩ.md"
+    assert fullwidth_hit.tags == ("ｐｙｔｈｏｎ",)
+    ascii_hit = next(hit for hit in ascii_query_hits if hit.note_id == SECOND_UUID)
+    assert ascii_hit.title == "FastAPI"
+    assert ascii_hit.relative_path == "30 Resources/FastAPI.md"
+    assert ascii_hit.tags == ()
+
+    retrieved = RetrieveManagedNote(reader).execute(VALID_UUID)
+    assert retrieved.body == (
+        "# Тестовая заметка\n\nКанонический ＦａｓｔＡＰＩ body. Русский поиск.\n"
+    )
+    assert "ＦａｓｔＡＰＩ" in fullwidth_path.read_text(encoding="utf-8")
+
+
+def test_search_hit_snippet_replaces_terminal_controls_after_html_cleanup() -> None:
+    raw_snippet = (
+        "Русский\n\t"
+        "\x1b[31mANSI\x1b[0m "
+        "\x1b]8;;https://evil.example\x07safe\x1b]8;;\x07 "
+        "BEL\x85C1\u202eCf <mark>HTML</mark> " + ("long " * 100)
+    )
+    cleaned = _bounded_plain_text(raw_snippet)
+    assert "Русский" in cleaned
+    assert "ANSI" in cleaned
+    assert "HTML" in cleaned
+    assert "<" not in cleaned
+    assert "\n" not in cleaned
+    assert "\t" not in cleaned
+    assert len(cleaned) <= MAX_SNIPPET_CHARS
+    assert all(unicodedata.category(character) not in {"Cc", "Cf"} for character in cleaned)
+
+    index = SqliteFts5SearchIndex()
+    try:
+        index.rebuild(
+            (_document(VALID_UUID, title="Safe", path="10 Projects/Safe.md", body=raw_snippet),)
+        )
+        hit = index.search(SearchRequest("safe"))[0]
+    finally:
+        index.close()
+    assert "safe" in hit.snippet
+    assert all(unicodedata.category(character) not in {"Cc", "Cf"} for character in hit.snippet)
 
 
 @pytest.mark.parametrize(

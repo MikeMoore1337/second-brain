@@ -232,10 +232,10 @@ class SqliteFts5SearchIndex:
             """,
             (
                 rowid,
-                document.title,
-                " ".join(document.tags),
-                document.relative_path,
-                document.body,
+                _normalize_index_text(document.title),
+                _normalize_index_text(" ".join(document.tags)),
+                _normalize_index_text(document.relative_path),
+                _normalize_index_text(document.body),
             ),
         )
 
@@ -317,6 +317,12 @@ def _sort_key(value: str) -> str:
     return unicodedata.normalize("NFKC", value).casefold()
 
 
+def _normalize_index_text(value: str) -> str:
+    """Нормализовать только derived searchable text перед INSERT в FTS5."""
+
+    return unicodedata.normalize("NFKC", value)
+
+
 class _PlainTextParser(HTMLParser):
     """Собрать text nodes без переноса HTML tags в SearchHit."""
 
@@ -338,10 +344,19 @@ def _bounded_plain_text(value: str) -> str:
         text = "".join(parser.parts)
     except Exception:
         text = re.sub(r"<[^>]*>", "", value)
+    text = _replace_terminal_controls(text)
     text = re.sub(r"\s+", " ", text).strip()
     if len(text) <= MAX_SNIPPET_CHARS:
         return text
     return text[: MAX_SNIPPET_CHARS - 1].rstrip() + "…"
+
+
+def _replace_terminal_controls(value: str) -> str:
+    """Заменить C0/C1/DEL и Unicode format controls пробелами."""
+
+    return "".join(
+        " " if unicodedata.category(character) in {"Cc", "Cf"} else character for character in value
+    )
 
 
 # Public aliases accommodate both common spellings while keeping one adapter.
