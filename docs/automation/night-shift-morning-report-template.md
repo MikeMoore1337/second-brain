@@ -1,45 +1,45 @@
-# Night Shift morning report
+# Утренний отчёт Night Shift
 
 ```text
-Night run window:
-Start main SHA:
-End main SHA:
+Окно ночного запуска:
+Начальный SHA main:
+Конечный SHA main:
 
-Completed:
+Завершено:
 -
 
-Merged PRs:
+Объединённые PR:
 -
 
-Closed issues:
+Закрытые issue:
 -
 
-Waiting / Yellow:
+Ожидает / Yellow:
 -
 
-Blocked / Red:
+Заблокировано / Red:
 -
 
-Decision memos:
+Мемо решений:
 -
 
-Review findings:
-- Fixed automatically:
-- Rejected false positives:
+Результаты review:
+- Исправлено автоматически:
+- Отклонено как false positive:
 
-CI failures:
+Ошибки CI:
 -
 
-Retries:
-- Flaky retries with evidence:
+Повторные запуски:
+- Flaky retries с evidence:
 - Code-changing CI-fix cycles:
 
-Failure-budget usage:
-- Tasks:
-- Review-fix cycles:
-- CI-fix cycles:
-- Scope expansions:
+Использование failure budget:
+- Задачи:
+- Циклы исправлений review:
+- Циклы исправлений CI:
+- Расширения scope:
 
-Recommended morning actions:
+Рекомендуемые утренние действия:
 -
 ```

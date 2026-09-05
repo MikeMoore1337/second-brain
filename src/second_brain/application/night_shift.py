@@ -185,6 +185,7 @@ class FailureBudgetUsage:
     scope_expansions: int = 0
     flaky_ci_retries: int = 0
     flaky_ci_retry_has_evidence: bool = False
+    flaky_ci_retry_code_changed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -272,6 +273,7 @@ def select_next_task(
     if not night_mode_enabled:
         return None, _human("night_mode_not_explicitly_enabled")
 
+    deferred_human: GateResult | None = None
     for source in policy.task_selection_order:
         if source is TaskSelectionSource.ROADMAP_NEXT and not policy.allow_roadmap_next_task:
             continue
@@ -283,9 +285,10 @@ def select_next_task(
                 return candidate, result
             if result.status is GateStatus.HUMAN_REQUIRED:
                 if result.reasons[0].startswith("dependency_"):
+                    deferred_human = deferred_human or result
                     continue
                 return None, result
-    return None, _blocked("no_executable_task")
+    return None, deferred_human or _blocked("no_executable_task")
 
 
 def evaluate_failure_budget(
@@ -314,6 +317,12 @@ def evaluate_failure_budget(
         return _human("negative_failure_budget_counter:flaky_ci_retries")
     if usage.flaky_ci_retries and not usage.flaky_ci_retry_has_evidence:
         return _human("flaky_ci_retry_has_no_evidence")
+    if (
+        usage.flaky_ci_retries
+        and limits.flaky_ci_retry_requires_no_code_change
+        and usage.flaky_ci_retry_code_changed
+    ):
+        return _human("flaky_ci_retry_changed_code")
     return _ready("failure_budget_within_bounds")
 
 

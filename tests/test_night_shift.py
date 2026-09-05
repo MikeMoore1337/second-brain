@@ -42,6 +42,7 @@ def test_repository_policy_is_disabled_by_default_and_has_bounded_contract() -> 
     assert loaded.failure_budget.max_review_fix_cycles_per_task == 3
     assert loaded.failure_budget.max_ci_fix_cycles_per_task == 3
     assert loaded.failure_budget.max_scope_expansion == 0
+    assert loaded.failure_budget.flaky_ci_retry_requires_no_code_change is True
     assert loaded.required_checks == ("quality", "windows-ssl-regression")
     assert loaded.merge_method == "squash"
     assert loaded.allow_roadmap_next_task is False
@@ -144,6 +145,22 @@ def test_selection_skips_blocked_independent_candidate_and_never_invents_roadmap
     assert result.status is GateStatus.READY
 
 
+def test_selection_preserves_human_dependency_gate_when_no_independent_task_is_ready() -> None:
+    candidate = TaskCandidate(
+        issue_number=82,
+        state=TaskState.QUEUED,
+        risk_lane=RiskLane.YELLOW,
+        source=TaskSelectionSource.OVERNIGHT_QUEUED,
+        dependencies=(81,),
+        dependency_states={81: TaskState.HUMAN_REQUIRED},
+    )
+
+    selected, result = select_next_task(policy(), (candidate,), night_mode_enabled=True)
+
+    assert selected is None
+    assert result.status is GateStatus.HUMAN_REQUIRED
+
+
 def test_failure_budget_stops_review_loops_but_evidence_bound_flaky_retry_is_free() -> None:
     loaded = policy()
 
@@ -165,6 +182,16 @@ def test_failure_budget_stops_review_loops_but_evidence_bound_flaky_retry_is_fre
         FailureBudgetUsage(flaky_ci_retries=1),
     )
     assert no_evidence.status is GateStatus.HUMAN_REQUIRED
+
+    code_changed = evaluate_failure_budget(
+        loaded,
+        FailureBudgetUsage(
+            flaky_ci_retries=1,
+            flaky_ci_retry_has_evidence=True,
+            flaky_ci_retry_code_changed=True,
+        ),
+    )
+    assert code_changed.status is GateStatus.HUMAN_REQUIRED
 
 
 def _green_merge_evidence(
