@@ -16,17 +16,57 @@ if (panel) {
   const error = panel.querySelector("[data-error]");
   const result = panel.querySelector("[data-result]");
   const modeButtons = Array.from(panel.querySelectorAll("[data-mode]"));
+  const voicePanel = panel.querySelector("[data-voice-panel]");
+  const recordButton = panel.querySelector("[data-record]");
+  const stopButton = panel.querySelector("[data-stop]");
+  const audioFileInput = panel.querySelector("[data-audio-file]");
+  const transcribeButton = panel.querySelector("[data-transcribe]");
+  const voiceStatus = panel.querySelector("[data-voice-status]");
   const requestHeaders = {
     Accept: "application/json",
     "Content-Type": "application/json",
     "X-Second-Brain-Request": "draft-v1",
   };
   const noteTypes = ["project", "area", "resource", "zettel"];
+  const audioMediaTypes = [
+    "audio/webm",
+    "audio/ogg",
+    "audio/wav",
+    "audio/x-wav",
+    "audio/mpeg",
+    "audio/mp4",
+    "audio/x-m4a",
+  ];
+  const maxAudioBytes = 15 * 1024 * 1024;
   let mode = "url";
   let reviewToken = null;
   let confirmationToken = null;
   let reviewState = null;
   let busy = false;
+  let recorder = null;
+  let recordingStream = null;
+  let audioChunks = [];
+  let audioBlob = null;
+  let audioMediaType = null;
+  let recording = false;
+  let microphonePending = false;
+  let recordingBytes = 0;
+  let recordingTooLarge = false;
+
+  const canRecord = Boolean(
+    typeof navigator !== "undefined" &&
+    navigator.mediaDevices &&
+    typeof navigator.mediaDevices.getUserMedia === "function" &&
+    typeof window !== "undefined" &&
+    typeof window.MediaRecorder === "function",
+  );
+
+  const recordingMimeCandidates = [
+    "audio/webm;codecs=opus",
+    "audio/ogg;codecs=opus",
+    "audio/webm",
+    "audio/ogg",
+  ];
 
   const textValue = (value, fallback = "—") =>
     typeof value === "string" && value.length > 0 ? value : fallback;
@@ -54,6 +94,49 @@ if (panel) {
     result.hidden = true;
   };
 
+  const stopRecordingStream = () => {
+    if (recordingStream && typeof recordingStream.getTracks === "function") {
+      recordingStream.getTracks().forEach((track) => {
+        if (track && typeof track.stop === "function") {
+          track.stop();
+        }
+      });
+    }
+    recordingStream = null;
+  };
+
+  const clearAudioState = () => {
+    if (recording && recorder) {
+      recorder.onstop = null;
+      recorder.stop();
+    }
+    stopRecordingStream();
+    recorder = null;
+    audioChunks = [];
+    audioBlob = null;
+    audioMediaType = null;
+    recording = false;
+    recordingBytes = 0;
+    recordingTooLarge = false;
+    if (audioFileInput) {
+      audioFileInput.value = "";
+    }
+    if (voiceStatus) {
+      voiceStatus.textContent = "";
+    }
+  };
+
+  const updateVoiceControls = () => {
+    if (!voicePanel) {
+      return;
+    }
+    recordButton.disabled = busy || recording || microphonePending || !canRecord;
+    stopButton.disabled = busy || !recording;
+    stopButton.hidden = !recording;
+    audioFileInput.disabled = busy || recording;
+    transcribeButton.disabled = busy || recording || !audioBlob;
+  };
+
   const setCaptureLoading = (loading) => {
     submit.disabled = loading;
     urlInput.disabled = loading || mode !== "url";
@@ -62,6 +145,7 @@ if (panel) {
       button.disabled = loading;
     });
     submit.setAttribute("aria-busy", String(loading));
+    updateVoiceControls();
   };
 
   const setReviewLoading = (loading) => {
@@ -93,6 +177,57 @@ if (panel) {
     if (loading) {
       status.textContent = "Выполняю операцию…";
     }
+  };
+
+  const chooseRecordingMimeType = () => {
+    if (!canRecord || typeof window.MediaRecorder.isTypeSupported !== "function") {
+      return "";
+    }
+    return recordingMimeCandidates.find((value) => window.MediaRecorder.isTypeSupported(value)) || "";
+  };
+
+  const normalizedAudioType = (value) => {
+    if (typeof value !== "string") {
+      return "";
+    }
+    return value.split(";", 1)[0].trim().toLowerCase();
+  };
+
+  const audioTypeAllowed = (value) => audioMediaTypes.includes(normalizedAudioType(value));
+
+  const setVoiceReadyStatus = (message) => {
+    if (voiceStatus) {
+      voiceStatus.textContent = message;
+    }
+  };
+
+  const finishRecording = (completedRecorder) => {
+    stopRecordingStream();
+    recording = false;
+    recorder = null;
+    const exceededLimit = recordingTooLarge;
+    recordingBytes = 0;
+    recordingTooLarge = false;
+    const type =
+      (completedRecorder && typeof completedRecorder.mimeType === "string" && completedRecorder.mimeType) ||
+      audioMediaType ||
+      "audio/webm";
+    if (exceededLimit) {
+      audioChunks = [];
+      audioBlob = null;
+      audioMediaType = null;
+      setVoiceReadyStatus("Запись превысила лимит 15 MiB.");
+    } else if (audioChunks.length === 0) {
+      audioBlob = null;
+      audioMediaType = null;
+      setVoiceReadyStatus("Запись не содержит audio-данных.");
+    } else {
+      audioBlob = new Blob(audioChunks, { type });
+      audioMediaType = normalizedAudioType(type) || "audio/webm";
+      audioChunks = [];
+      setVoiceReadyStatus("Аудио готово к распознаванию.");
+    }
+    updateVoiceControls();
   };
 
   const addField = (parent, label, value, className = "") => {
@@ -415,6 +550,7 @@ if (panel) {
     });
 
     addButton.addEventListener("click", () => {
+      clearAudioState();
       clearReviewState();
       urlInput.value = "";
       textInput.value = "";
@@ -450,16 +586,23 @@ if (panel) {
   };
 
   const setMode = (nextMode) => {
-    mode = nextMode === "text" ? "text" : "url";
+    const normalizedMode = ["url", "text", "voice"].includes(nextMode) ? nextMode : "url";
+    if (mode === "voice" && normalizedMode !== "voice") {
+      clearAudioState();
+    }
+    mode = normalizedMode;
     const isUrl = mode === "url";
+    const isVoice = mode === "voice";
     urlInput.classList.toggle("is-hidden", !isUrl);
     urlLabel.classList.toggle("is-hidden", !isUrl);
-    textInput.classList.toggle("is-hidden", isUrl);
-    textLabel.classList.toggle("is-hidden", isUrl);
+    textInput.classList.toggle("is-hidden", isUrl || isVoice);
+    textLabel.classList.toggle("is-hidden", isUrl || isVoice);
+    form.classList.toggle("is-hidden", isVoice);
+    voicePanel.classList.toggle("is-hidden", !isVoice);
     urlInput.disabled = !isUrl || busy;
-    textInput.disabled = isUrl || busy;
+    textInput.disabled = isUrl || isVoice || busy;
     urlInput.required = isUrl;
-    textInput.required = !isUrl;
+    textInput.required = !isUrl && !isVoice;
     modeButtons.forEach((button) => {
       const active = button.dataset.mode === mode;
       button.classList.toggle("is-active", active);
@@ -467,6 +610,7 @@ if (panel) {
     });
     clearReviewState();
     clearFeedback();
+    updateVoiceControls();
   };
 
   modeButtons.forEach((button) => {
@@ -475,6 +619,156 @@ if (panel) {
         setMode(button.dataset.mode);
       }
     });
+  });
+
+  recordButton.addEventListener("click", async () => {
+    if (busy || recording || microphonePending || !canRecord) {
+      return;
+    }
+    clearReviewState();
+    clearFeedback();
+    clearAudioState();
+    microphonePending = true;
+    updateVoiceControls();
+    setVoiceReadyStatus("Запрашиваю доступ к микрофону…");
+    try {
+      recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = chooseRecordingMimeType();
+      recorder = mimeType
+        ? new window.MediaRecorder(recordingStream, { mimeType })
+        : new window.MediaRecorder(recordingStream);
+      audioChunks = [];
+      recordingBytes = 0;
+      recordingTooLarge = false;
+      audioMediaType = recorder.mimeType || mimeType || "audio/webm";
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          if (recordingTooLarge) {
+            return;
+          }
+          const nextBytes = recordingBytes + event.data.size;
+          if (nextBytes > maxAudioBytes) {
+            recordingTooLarge = true;
+            setVoiceReadyStatus("Запись превысила лимит 15 MiB; останавливаю запись…");
+            if (recorder && recorder.state === "recording") {
+              recorder.stop();
+            }
+            return;
+          }
+          recordingBytes = nextBytes;
+          audioChunks.push(event.data);
+        }
+      };
+      recorder.onstop = () => finishRecording(recorder);
+      recorder.onerror = () => {
+        stopRecordingStream();
+        recorder = null;
+        audioChunks = [];
+        audioBlob = null;
+        audioMediaType = null;
+        recording = false;
+        recordingBytes = 0;
+        recordingTooLarge = false;
+        setVoiceReadyStatus("Не удалось записать audio.");
+        updateVoiceControls();
+      };
+      recorder.start();
+      recording = true;
+      setVoiceReadyStatus("Идёт запись. Нажми «Остановить», когда закончишь.");
+    } catch (_error) {
+      stopRecordingStream();
+      recorder = null;
+      recording = false;
+      setVoiceReadyStatus("");
+      setError("Не удалось получить доступ к микрофону.");
+    } finally {
+      microphonePending = false;
+      updateVoiceControls();
+    }
+  });
+
+  stopButton.addEventListener("click", () => {
+    if (!busy && recording && recorder) {
+      recorder.stop();
+    }
+  });
+
+  audioFileInput.addEventListener("change", () => {
+    if (busy || recording) {
+      return;
+    }
+    const file = audioFileInput.files && audioFileInput.files[0];
+    if (!file) {
+      return;
+    }
+    clearReviewState();
+    clearFeedback();
+    if (file.size <= 0) {
+      clearAudioState();
+      setError("Выбери непустой audio-файл.");
+      return;
+    }
+    if (file.size > maxAudioBytes) {
+      clearAudioState();
+      setError("Audio-файл превышает лимит 15 MiB.");
+      return;
+    }
+    if (!audioTypeAllowed(file.type)) {
+      clearAudioState();
+      setError("Этот MIME-тип audio не поддерживается.");
+      return;
+    }
+    audioBlob = file;
+    audioMediaType = normalizedAudioType(file.type);
+    setVoiceReadyStatus("Файл готов к распознаванию.");
+    updateVoiceControls();
+  });
+
+  transcribeButton.addEventListener("click", async () => {
+    if (busy || recording || !audioBlob || !audioTypeAllowed(audioMediaType)) {
+      return;
+    }
+    const selectedAudio = audioBlob;
+    const selectedMediaType = audioMediaType;
+    setLoading(true);
+    setVoiceReadyStatus("Распознаю audio…");
+    try {
+      const response = await fetch("/api/transcriptions/audio", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": selectedMediaType,
+          "X-Second-Brain-Request": "voice-v1",
+        },
+        body: selectedAudio,
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        const message = payload && payload.error && payload.error.message;
+        setError(typeof message === "string" ? message : "Не удалось распознать audio.");
+        setVoiceReadyStatus("");
+        return;
+      }
+      const transcript =
+        payload && payload.transcript && typeof payload.transcript.text === "string"
+          ? payload.transcript.text
+          : "";
+      if (!transcript.trim()) {
+        setError("Сервис распознавания вернул пустой transcript.");
+        setVoiceReadyStatus("");
+        return;
+      }
+      clearAudioState();
+      setMode("text");
+      textInput.value = transcript;
+      status.textContent = "Проверь расшифровку и затем создай черновик";
+      textInput.focus();
+    } catch (_error) {
+      setError("Сервис распознавания недоступен.");
+      setVoiceReadyStatus("");
+    } finally {
+      setLoading(false);
+    }
   });
 
   form.addEventListener("submit", async (event) => {

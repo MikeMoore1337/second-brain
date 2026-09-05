@@ -50,11 +50,12 @@
           <div class="entry-copy">
             <p class="entry-kicker">Новая заметка</p>
             <h2 id="entry-title">Добавить знание</h2>
-            <p id="add-description">Получи структурированный черновик из текста или публичной страницы.</p>
+            <p id="add-description">Получи структурированный черновик из текста, голоса или публичной страницы.</p>
             <div class="capture-panel" data-capture-panel>
               <div class="mode-switch" role="group" aria-label="Режим добавления">
                 <button class="mode-button is-active" type="button" data-mode="url" aria-pressed="true">URL</button>
                 <button class="mode-button" type="button" data-mode="text" aria-pressed="false">Text</button>
+                <button class="mode-button" type="button" data-mode="voice" aria-pressed="false">Voice</button>
               </div>
               <form class="capture-form" data-draft-form>
                 <label class="capture-label" for="source-input" data-url-label>Публичный URL</label>
@@ -84,6 +85,28 @@
                   <span class="capture-status" data-status role="status" aria-live="polite"></span>
                 </div>
               </form>
+              <section class="voice-panel is-hidden" data-voice-panel aria-labelledby="voice-title">
+                <div>
+                  <p class="voice-kicker">Голосовой вход</p>
+                  <h3 id="voice-title">Скажи, что хочешь сохранить</h3>
+                  <p class="voice-description">Запиши короткую заметку или выбери audio-файл. После распознавания проверь текст перед созданием черновика.</p>
+                </div>
+                <div class="voice-actions">
+                  <button class="voice-button voice-button-primary" type="button" data-record>Записать голос</button>
+                  <button class="voice-button voice-button-secondary" type="button" data-stop disabled hidden>Остановить</button>
+                  <label class="voice-file-label">
+                    Выбрать audio-файл
+                    <input
+                      class="voice-file-input"
+                      type="file"
+                      accept="audio/webm,audio/ogg,audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a"
+                      data-audio-file
+                    />
+                  </label>
+                  <button class="voice-button voice-button-primary" type="button" data-transcribe disabled>Распознать</button>
+                </div>
+                <p class="voice-status" data-voice-status role="status" aria-live="polite"></p>
+              </section>
               <p class="capture-error" data-error role="alert" hidden></p>
               <div class="draft-result" data-result hidden></div>
             </div>

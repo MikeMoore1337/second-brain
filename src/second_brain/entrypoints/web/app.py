@@ -18,8 +18,14 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from second_brain.application.llm import MAX_CONTEXT_BYTES, NoteDraft, validate_note_draft
-from second_brain.application.ports import LlmError, ResearchError
+from second_brain.application.ports import LlmError, ResearchError, TranscriptionError
 from second_brain.application.research import SourceProvenance
+from second_brain.application.transcription import (
+    MAX_TRANSCRIPTION_AUDIO_BYTES,
+    TranscriptionInvalidRequestError,
+    normalize_audio_media_type,
+    validate_transcript,
+)
 from second_brain.application.writes import (
     CreateManagedNoteResult,
     CreateNotePlan,
@@ -38,12 +44,18 @@ from .preview import (
 )
 from .review import ReviewTokenClaims, ReviewTokenCodec, ReviewTokenError, ReviewTokenMode
 from .saves import DraftSaveService, build_production_save_service
+from .transcriptions import TranscriptionService, build_production_transcription_service
 
 STATIC_DIR: Final[Path] = Path(__file__).resolve().parent / "static"
 INDEX_FILE: Final[Path] = STATIC_DIR / "index.html"
 DRAFT_REQUEST_HEADER_NAME: Final[str] = "X-Second-Brain-Request"
 DRAFT_REQUEST_HEADER_VALUE: Final[str] = "draft-v1"
+TRANSCRIPTION_REQUEST_HEADER_NAME: Final[str] = DRAFT_REQUEST_HEADER_NAME
+TRANSCRIPTION_REQUEST_HEADER_VALUE: Final[str] = "voice-v1"
 MAX_RAW_DRAFT_BODY_BYTES: Final[int] = 512 * 1024
+MAX_RAW_TRANSCRIPTION_BODY_BYTES: Final[int] = MAX_TRANSCRIPTION_AUDIO_BYTES
+MAX_RAW_AUDIO_BODY_BYTES: Final[int] = MAX_RAW_TRANSCRIPTION_BODY_BYTES
+_TRANSCRIPTION_PATH: Final[str] = "/api/transcriptions/audio"
 _DRAFT_PATHS: Final[frozenset[str]] = frozenset(
     {
         "/api/drafts/text",
@@ -60,6 +72,7 @@ _REVIEW_PATHS: Final[frozenset[str]] = frozenset(
         "/api/drafts/save/apply",
     }
 )
+_TRANSCRIPTION_PATHS: Final[frozenset[str]] = frozenset({_TRANSCRIPTION_PATH})
 _SAVE_PREFLIGHT_CODES: Final[frozenset[str]] = frozenset(
     {
         "CREATE_INVALID_PLAN",
@@ -108,6 +121,22 @@ class UrlDraftRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     url: StrictStr
+
+
+class TranscriptPayload(BaseModel):
+    """Минимальная HTTP projection of provider-neutral ``Transcript``."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    text: StrictStr
+
+
+class TranscriptionResponse(BaseModel):
+    """Safe response containing only the reviewed-flow transcript text."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    transcript: TranscriptPayload
 
 
 class DraftPayload(BaseModel):
@@ -253,6 +282,13 @@ _ERRORS: Final[dict[str, tuple[int, str]]] = {
     "RESEARCH_UPSTREAM_FAILURE": (502, "research backend failed"),
     "RESEARCH_MALFORMED_RESULT": (502, "research backend returned an invalid result"),
     "RESEARCH_CONTENT_TOO_LARGE": (413, "research content is too large"),
+    "TRANSCRIPTION_INVALID_REQUEST": (400, "transcription request failed validation"),
+    "TRANSCRIPTION_CANCELLED": (504, "transcription operation was cancelled"),
+    "TRANSCRIPTION_TIMEOUT": (504, "transcription operation timed out"),
+    "TRANSCRIPTION_BACKEND_UNAVAILABLE": (503, "transcription backend is unavailable"),
+    "TRANSCRIPTION_UPSTREAM_FAILURE": (502, "transcription backend failed"),
+    "TRANSCRIPTION_MALFORMED_RESULT": (502, "transcription backend returned an invalid result"),
+    "TRANSCRIPTION_CONTENT_TOO_LARGE": (413, "transcription content is too large"),
     "DRAFT_INVALID_REQUEST": (400, "draft request failed validation"),
     "DRAFT_CONTENT_TOO_LARGE": (413, "draft content is too large"),
     "REVIEW_TOKEN_INVALID": (400, "review token is invalid or expired"),
@@ -357,6 +393,108 @@ class DraftRequestBoundaryMiddleware:
                     receive,
                     send,
                     _content_too_large_code(path),
+                )
+                return
+            body_messages.append(message)
+            if not message.get("more_body", False):
+                break
+
+        async def replay_receive() -> Message:
+            if body_messages:
+                return body_messages.pop(0)
+            return {"type": "http.disconnect"}
+
+        await self.app(scope, replay_receive, send)
+
+
+class TranscriptionRequestBoundaryMiddleware:
+    """Scoped ASGI boundary для raw audio, voice headers, Origin и byte cap."""
+
+    def __init__(self, app: ASGIApp, *, max_body_bytes: int) -> None:
+        """Сохранить единственный bounded raw-audio cap."""
+
+        self.app = app
+        self.max_body_bytes = max_body_bytes
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Проверить voice request до FastAPI endpoint body handling."""
+
+        if (
+            scope["type"] != "http"
+            or scope.get("method") != "POST"
+            or scope.get("path") not in _TRANSCRIPTION_PATHS
+        ):
+            await self.app(scope, receive, send)
+            return
+
+        content_type_present, content_type = _single_header(scope, "content-type")
+        request_header_present, request_header = _single_header(
+            scope, TRANSCRIPTION_REQUEST_HEADER_NAME
+        )
+        origin_present, origin = _single_header(scope, "origin")
+        content_length_present, content_length = _single_header(scope, "content-length")
+        valid_content_type = False
+        if content_type_present and content_type is not None:
+            try:
+                normalize_audio_media_type(content_type)
+                valid_content_type = True
+            except TranscriptionInvalidRequestError:
+                pass
+
+        if (
+            not valid_content_type
+            or not request_header_present
+            or request_header != TRANSCRIPTION_REQUEST_HEADER_VALUE
+            or not _trusted_request_host(scope)
+            or (origin_present and (origin is None or not _origin_matches(scope, origin)))
+        ):
+            await _send_boundary_error(scope, receive, send, "TRANSCRIPTION_INVALID_REQUEST")
+            return
+
+        if content_length_present:
+            if content_length is None:
+                await _send_boundary_error(scope, receive, send, "TRANSCRIPTION_INVALID_REQUEST")
+                return
+            try:
+                declared_length = int(content_length.strip())
+            except ValueError:
+                await _send_boundary_error(scope, receive, send, "TRANSCRIPTION_INVALID_REQUEST")
+                return
+            if declared_length < 0:
+                await _send_boundary_error(scope, receive, send, "TRANSCRIPTION_INVALID_REQUEST")
+                return
+            if declared_length > self.max_body_bytes:
+                await _send_boundary_error(
+                    scope,
+                    receive,
+                    send,
+                    "TRANSCRIPTION_CONTENT_TOO_LARGE",
+                )
+                return
+
+        received_bytes = 0
+        body_messages: list[Message] = []
+        while True:
+            message = await receive()
+            if message["type"] != "http.request":
+                body_messages.append(message)
+                break
+            body = message.get("body", b"")
+            if not isinstance(body, bytes):
+                await _send_boundary_error(
+                    scope,
+                    receive,
+                    send,
+                    "TRANSCRIPTION_CONTENT_TOO_LARGE",
+                )
+                return
+            received_bytes += len(body)
+            if received_bytes > self.max_body_bytes:
+                await _send_boundary_error(
+                    scope,
+                    receive,
+                    send,
+                    "TRANSCRIPTION_CONTENT_TOO_LARGE",
                 )
                 return
             body_messages.append(message)
@@ -486,6 +624,8 @@ def _invalid_request_code(path: str) -> str:
 
     if path.endswith("/url"):
         return "RESEARCH_INVALID_REQUEST"
+    if path == _TRANSCRIPTION_PATH:
+        return "TRANSCRIPTION_INVALID_REQUEST"
     if path in _REVIEW_PATHS:
         return "DRAFT_INVALID_REQUEST"
     return "LLM_INVALID_REQUEST"
@@ -496,6 +636,8 @@ def _content_too_large_code(path: str) -> str:
 
     if path.endswith("/url"):
         return "RESEARCH_CONTENT_TOO_LARGE"
+    if path == _TRANSCRIPTION_PATH:
+        return "TRANSCRIPTION_CONTENT_TOO_LARGE"
     if path in _REVIEW_PATHS:
         return "DRAFT_CONTENT_TOO_LARGE"
     return "LLM_CONTENT_TOO_LARGE"
@@ -504,6 +646,7 @@ def _content_too_large_code(path: str) -> str:
 def create_app(
     *,
     draft_service: DraftService | None = None,
+    transcription_service: TranscriptionService | None = None,
     save_service: DraftSaveService | None = None,
     env_file: Path | None = None,
     vault_path_override: str | None = None,
@@ -511,6 +654,11 @@ def create_app(
     """Создать Web GUI без config/vault side effects до explicit Save."""
 
     service = draft_service if draft_service is not None else build_production_draft_service()
+    transcriber = (
+        transcription_service
+        if transcription_service is not None
+        else build_production_transcription_service()
+    )
     saver = (
         save_service
         if save_service is not None
@@ -534,6 +682,10 @@ def create_app(
         DraftRequestBoundaryMiddleware,
         max_body_bytes=MAX_RAW_DRAFT_BODY_BYTES,
     )
+    app.add_middleware(
+        TranscriptionRequestBoundaryMiddleware,
+        max_body_bytes=MAX_RAW_TRANSCRIPTION_BODY_BYTES,
+    )
 
     @app.middleware("http")
     async def add_security_headers(
@@ -546,7 +698,7 @@ def create_app(
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-Frame-Options"] = "DENY"
-        if request.url.path.startswith("/api/drafts/"):
+        if request.url.path.startswith(("/api/drafts/", "/api/transcriptions/")):
             response.headers["Cache-Control"] = "no-store"
         response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
         return response
@@ -590,6 +742,38 @@ def create_app(
             )
         except Exception as error:
             return _error_response_for_exception(error)
+
+    @app.post(_TRANSCRIPTION_PATH, include_in_schema=False)
+    async def transcribe_audio(request: Request) -> Response:
+        """Распознать raw audio и вернуть только editable-flow transcript."""
+
+        content_type = request.headers.get("content-type")
+        if content_type is None:
+            return _error_response("TRANSCRIPTION_INVALID_REQUEST")
+        try:
+            normalize_audio_media_type(content_type)
+            body = await request.body()
+        except TranscriptionInvalidRequestError:
+            return _error_response("TRANSCRIPTION_INVALID_REQUEST")
+        except Exception:
+            return _error_response("TRANSCRIPTION_INVALID_REQUEST")
+        if not body:
+            return _error_response("TRANSCRIPTION_INVALID_REQUEST")
+        if len(body) > MAX_RAW_TRANSCRIPTION_BODY_BYTES:
+            return _error_response("TRANSCRIPTION_CONTENT_TOO_LARGE")
+        try:
+            transcript = validate_transcript(transcriber.transcribe(body, content_type))
+        except TranscriptionError as error:
+            return _error_response(error.code)
+        except Exception:
+            return _error_response("TRANSCRIPTION_UPSTREAM_FAILURE")
+        response = TranscriptionResponse(
+            transcript=TranscriptPayload(text=transcript.text),
+        )
+        return JSONResponse(
+            content=response.model_dump(mode="json"),
+            headers=_DRAFT_ERROR_HEADERS,
+        )
 
     @app.post("/api/drafts/preview", include_in_schema=False)
     def preview_draft(payload: PreviewDraftRequest) -> Response:
@@ -905,7 +1089,7 @@ def _error_response(code: str) -> JSONResponse:
 def _error_response_for_exception(error: Exception) -> JSONResponse:
     """Сопоставить application taxonomy с HTTP без provider/upstream details."""
 
-    if isinstance(error, (LlmError, ResearchError)):
+    if isinstance(error, (LlmError, ResearchError, TranscriptionError)):
         return _error_response(error.code)
     return _error_response(_GENERIC_ERROR[1])
 
@@ -914,7 +1098,11 @@ __all__ = [
     "CONTENT_SECURITY_POLICY",
     "DRAFT_REQUEST_HEADER_NAME",
     "DRAFT_REQUEST_HEADER_VALUE",
+    "MAX_RAW_AUDIO_BODY_BYTES",
     "MAX_RAW_DRAFT_BODY_BYTES",
+    "MAX_RAW_TRANSCRIPTION_BODY_BYTES",
+    "TRANSCRIPTION_REQUEST_HEADER_NAME",
+    "TRANSCRIPTION_REQUEST_HEADER_VALUE",
     "ApplyDraftRequest",
     "DraftPayload",
     "DraftRequestBoundaryMiddleware",
@@ -929,6 +1117,9 @@ __all__ = [
     "SavedNotePayload",
     "SourceProvenancePayload",
     "TextDraftRequest",
+    "TranscriptPayload",
+    "TranscriptionRequestBoundaryMiddleware",
+    "TranscriptionResponse",
     "UrlDraftRequest",
     "create_app",
 ]

@@ -19,6 +19,7 @@ FastAPI web entrypoint
    |\
    | +-- Text -> LlmGateway -> NoteDraft + text review_token
    | +-- URL -> ResearchDraftGateway -> NoteDraft + SourceProvenance + research review_token
+   | +-- Voice -> TranscriptionGateway -> TranscriptionPort -> Transcript
    | +-- Preview -> safe markdown-it-py renderer -> inert HTML
    `-- Save -> Prepare(dry-run diff) -> confirmation -> Apply -> existing Safe Write
 ```
@@ -66,6 +67,30 @@ confirmation token; этот этап не пишет. Только `POST /api/d
 Apply снова получает только signed provenance, не вызывает Research/LLM/network/Git
 и возвращает только безопасные note fields; Prepare/Apply errors не раскрывают
 absolute paths, receipts или raw diagnostics.
+
+### Voice Capture v1
+
+Voice mode принимает короткую запись через browser `MediaRecorder` либо локальный
+audio file. Browser держит Blob/File только в памяти страницы и делает один
+same-origin `POST /api/transcriptions/audio` с raw binary body, одним фиксированным
+`X-Second-Brain-Request: voice-v1` header и allowlist media type:
+`audio/webm`, `audio/ogg`, `audio/wav`, `audio/x-wav`, `audio/mpeg`, `audio/mp4`
+или `audio/x-m4a`. Общий cap body — `15 MiB`; extra MIME parameters не
+передаются, кроме optional `codecs=opus` для WebM/Ogg.
+
+Application видит только provider-neutral `TranscriptionRequest(audio, media_type)`
+и `Transcript(text)` через `TranscriptionGateway` и `TranscriptionPort`. Production
+adapter делает ровно один binary `POST` на
+`/client/v4/accounts/{account_id}/ai/run/@cf/openai/whisper`; provider metadata
+не покидает adapter boundary, а credentials читаются только во время реальной
+операции. Gateway и HTTP boundary используют bounded transcript validation и
+стабильную safe error taxonomy.
+
+Успешная расшифровка возвращается как `{"transcript": {"text": "..."}}` и
+заполняет editable Text mode. Пользователь обязан проверить текст и отдельно
+нажать `Создать черновик`; transcription не запускает LLM, review/save и не
+пишет audio или transcript в vault. Cognitive Twin и Decision Journal в этот
+вертикальный срез не входят.
 
 Vault является каноническим источником истины. Индексы, SQLite, embeddings и
 кэш относятся к производному состоянию и могут быть пересозданы из vault.

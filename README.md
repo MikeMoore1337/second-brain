@@ -39,13 +39,21 @@ uv run second-brain web serve --port 8123
 ```
 
 Команда слушает только `127.0.0.1`; `--port` принимает значение от `1` до
-`65535`, а default — `8000`. В GUI есть Add modes `URL` и `Text`, которые через
-same-origin API создают `NoteDraft`; URL дополнительно показывает bounded
-`SourceProvenance` рядом с draft. После генерации пользователь редактирует
+`65535`, а default — `8000`. В GUI есть Add modes `URL`, `Text` и `Voice`.
+`URL` и `Text` через same-origin API создают `NoteDraft`; URL дополнительно
+показывает bounded `SourceProvenance` рядом с draft. Voice принимает запись
+через native `MediaRecorder` или локальный audio file, отправляет один raw
+binary запрос на transcription и возвращает только plain transcript. После
+генерации пользователь редактирует
 только пять semantic fields, может запросить безопасный Markdown preview и
 отдельно подготовить Safe Write dry-run, проверить полный diff и подтвердить
 сохранение в vault. `CLOUDFLARE_ACCOUNT_ID` и
-`CLOUDFLARE_API_TOKEN` нужны только для генерации draft; vault-конфигурация
+`CLOUDFLARE_API_TOKEN` нужны только для transcription и генерации draft;
+аудио поддерживает `audio/webm`, `audio/ogg`, `audio/wav`, `audio/x-wav`,
+`audio/mpeg`, `audio/mp4` и `audio/x-m4a`, максимум `15 MiB`. Audio Blob/File
+живёт только в памяти страницы. После transcription текст попадает в
+редактируемый Text mode с обязательным сообщением о проверке; LLM вызывается
+только после отдельного нажатия `Создать черновик`. Vault-конфигурация
 (`--env-file`/`--vault-path`) загружается только при подготовке или применении
 явного Save. Browser не
 выбирает path, identity, timestamp, apply или Git metadata и не сохраняет
@@ -57,6 +65,7 @@ API surface:
 ```text
 POST /api/drafts/text {"text":"..."}
 POST /api/drafts/url  {"url":"https://example.com/article"}
+POST /api/transcriptions/audio <raw audio bytes>
 POST /api/drafts/preview {"content":"..."}
 POST /api/drafts/save/prepare {"review_token":"...", "draft": {"title", "note_type", "content", "tags", "links"}}
 POST /api/drafts/save/apply {"review_token":"...", "confirmation_token":"...", "draft": {"title", "note_type", "content", "tags", "links"}}
