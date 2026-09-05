@@ -395,6 +395,120 @@ a {
   margin-top: 5px;
 }
 
+.voice-panel {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid rgba(157, 228, 197, 0.25);
+  border-radius: 14px;
+  background: rgba(157, 228, 197, 0.06);
+}
+
+.voice-panel h3 {
+  margin: 3px 0 7px;
+  font-size: 20px;
+  font-weight: 580;
+  letter-spacing: -0.035em;
+}
+
+.voice-kicker {
+  margin: 0;
+  color: var(--lime);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.voice-description {
+  max-width: 58ch;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.voice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+}
+
+.voice-button,
+.voice-file-label {
+  min-height: 42px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.voice-button {
+  padding: 10px 15px;
+  cursor: pointer;
+}
+
+.voice-button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.voice-button-primary {
+  border-color: var(--lime);
+  background: var(--lime);
+  color: #142018;
+}
+
+.voice-button-primary:hover,
+.voice-button-primary:focus-visible {
+  background: #d9fa98;
+}
+
+.voice-button-secondary {
+  border-color: rgba(255, 159, 122, 0.55);
+  background: rgba(255, 159, 122, 0.1);
+  color: #ffb08f;
+}
+
+.voice-button-secondary:hover,
+.voice-button-secondary:focus-visible {
+  background: rgba(255, 159, 122, 0.18);
+}
+
+.voice-file-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  border-color: rgba(157, 228, 197, 0.55);
+  background: rgba(157, 228, 197, 0.1);
+  color: var(--mint);
+  cursor: pointer;
+}
+
+.voice-file-label:focus-within {
+  box-shadow: 0 0 0 3px rgba(201, 242, 119, 0.12);
+}
+
+.voice-file-input {
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.voice-status {
+  min-height: 20px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .capture-submit {
   padding: 11px 18px;
   border-color: var(--lime);
@@ -921,7 +1035,18 @@ textarea#review-content {
     flex-direction: column;
   }
 
+  .voice-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .capture-submit {
+    width: 100%;
+  }
+
+  .voice-button,
+  .voice-file-label {
+    justify-content: center;
     width: 100%;
   }
 

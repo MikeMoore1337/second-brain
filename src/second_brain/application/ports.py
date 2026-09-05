@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from second_brain.application.llm import LlmRequest, NoteDraft
     from second_brain.application.research import ResearchRequest, ResearchSource
     from second_brain.application.research_draft import ReviewedResearchDraft
+    from second_brain.application.transcription import Transcript, TranscriptionRequest
 
 
 class VaultReader(Protocol):
@@ -86,6 +87,18 @@ class CancellationToken(Protocol):
         """Вернуть, была ли операция отменена владельцем запроса."""
 
 
+class TranscriptionPort(Protocol):
+    """Единственная provider-neutral операция speech-to-text."""
+
+    def transcribe(
+        self,
+        request: TranscriptionRequest,
+        *,
+        cancellation: CancellationToken,
+    ) -> Transcript:
+        """Распознать один bounded audio request без write/network authority."""
+
+
 @dataclass(slots=True)
 class CancellationTokenSource:
     """Потокобезопасный источник минимального cancellation token."""
@@ -107,6 +120,109 @@ class CancellationTokenSource:
         """Вернуть этот же объект через read-only protocol boundary."""
 
         return self
+
+
+class TranscriptionErrorCode(StrEnum):
+    """Стабильные application-коды ошибок transcription boundary."""
+
+    INVALID_REQUEST = "TRANSCRIPTION_INVALID_REQUEST"
+    CANCELLED = "TRANSCRIPTION_CANCELLED"
+    TIMEOUT = "TRANSCRIPTION_TIMEOUT"
+    BACKEND_UNAVAILABLE = "TRANSCRIPTION_BACKEND_UNAVAILABLE"
+    UPSTREAM_FAILURE = "TRANSCRIPTION_UPSTREAM_FAILURE"
+    MALFORMED_RESULT = "TRANSCRIPTION_MALFORMED_RESULT"
+    CONTENT_TOO_LARGE = "TRANSCRIPTION_CONTENT_TOO_LARGE"
+
+
+_TRANSCRIPTION_ERROR_MESSAGES = {
+    TranscriptionErrorCode.INVALID_REQUEST: "transcription request failed validation",
+    TranscriptionErrorCode.CANCELLED: "transcription request was cancelled",
+    TranscriptionErrorCode.TIMEOUT: "transcription backend timed out",
+    TranscriptionErrorCode.BACKEND_UNAVAILABLE: "transcription backend is unavailable",
+    TranscriptionErrorCode.UPSTREAM_FAILURE: "transcription backend failed",
+    TranscriptionErrorCode.MALFORMED_RESULT: "transcription backend returned an invalid result",
+    TranscriptionErrorCode.CONTENT_TOO_LARGE: "transcription content exceeds the request limit",
+}
+
+
+class TranscriptionError(RuntimeError):
+    """Безопасная application error boundary без provider details."""
+
+    def __init__(self, code: TranscriptionErrorCode | str, message: str | None = None) -> None:
+        """Создать ошибку только с фиксированным сообщением taxonomy."""
+
+        del message
+        normalized = _normalize_transcription_error_code(code)
+        self.code = normalized.value
+        self.message = _TRANSCRIPTION_ERROR_MESSAGES[normalized]
+        super().__init__(self.message)
+
+    def as_dict(self) -> dict[str, str]:
+        """Вернуть safe machine-readable представление без upstream details."""
+
+        return {"code": self.code, "message": self.message}
+
+
+class TranscriptionInvalidRequestError(TranscriptionError):
+    """Запрос нарушает bounded audio/media policy."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(TranscriptionErrorCode.INVALID_REQUEST, message)
+
+
+class TranscriptionCancelledError(TranscriptionError):
+    """Операция отменена до или после вызова transcription port."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(TranscriptionErrorCode.CANCELLED, message)
+
+
+class TranscriptionTimeoutError(TranscriptionError):
+    """Adapter сообщил bounded operation timeout."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(TranscriptionErrorCode.TIMEOUT, message)
+
+
+class TranscriptionBackendUnavailableError(TranscriptionError):
+    """Backend или его runtime недоступен для speech-to-text."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(TranscriptionErrorCode.BACKEND_UNAVAILABLE, message)
+
+
+class TranscriptionUpstreamError(TranscriptionError):
+    """Upstream failure без раскрытия provider diagnostics."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(TranscriptionErrorCode.UPSTREAM_FAILURE, message)
+
+
+class TranscriptionMalformedResultError(TranscriptionError):
+    """Port вернул результат вне минимального Transcript contract."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(TranscriptionErrorCode.MALFORMED_RESULT, message)
+
+
+class TranscriptionContentTooLargeError(TranscriptionError):
+    """Audio или transcript превышает bounded byte limit."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(TranscriptionErrorCode.CONTENT_TOO_LARGE, message)
+
+
+def _normalize_transcription_error_code(
+    code: TranscriptionErrorCode | str,
+) -> TranscriptionErrorCode:
+    """Свести enum или неизвестную строку к закрытой transcription taxonomy."""
+
+    if isinstance(code, TranscriptionErrorCode):
+        return code
+    try:
+        return TranscriptionErrorCode(code)
+    except TypeError, ValueError:
+        return TranscriptionErrorCode.UPSTREAM_FAILURE
 
 
 class ResearchErrorCode(StrEnum):
