@@ -15,15 +15,23 @@ from typing import Any
 
 from second_brain.application.llm import NoteDraft
 from second_brain.application.research import SourceKind, SourceProvenance
+from second_brain.domain.models import (
+    EvidenceAtPrecision,
+    EvidenceKind,
+    PersonalMemoryMetadata,
+    SelfKind,
+)
 
 REVIEW_TOKEN_VERSION = 1
 REVIEW_TOKEN_SECRET_BYTES = 32
 MAX_REVIEW_TOKEN_BYTES = 128 * 1024
 MAX_CONFIRMATION_TOKEN_BYTES = 8 * 1024
+PERSONAL_MEMORY_CONFIRMATION_VERSION = 1
 _REVIEW_CONTEXT_NONCE_BYTES = 16
 _MAX_REVIEW_PAYLOAD_BYTES = 96 * 1024
 _TOKEN_PREFIX = "v1"
 _CONFIRMATION_PURPOSE = "save-confirmation"
+PERSONAL_MEMORY_CONFIRMATION_PURPOSE = "personal-memory-save-confirmation"
 _SOURCE_FIELDS = frozenset(
     {
         "uri",
@@ -36,6 +44,16 @@ _SOURCE_FIELDS = frozenset(
     }
 )
 _CONFIRMATION_FIELDS = frozenset({"draft_sha256", "mode", "purpose", "review_sha256", "v"})
+_PERSONAL_MEMORY_CONFIRMATION_FIELDS = frozenset(
+    {
+        "draft_sha256",
+        "mode",
+        "personal_memory_sha256",
+        "purpose",
+        "review_sha256",
+        "v",
+    }
+)
 
 
 class ReviewTokenError(ValueError):
@@ -74,6 +92,16 @@ class ConfirmationTokenClaims:
     mode: ReviewTokenMode
     review_sha256: str
     draft_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class PersonalMemoryConfirmationTokenClaims:
+    """Verified binding for one exact reviewed Personal Memory save plan."""
+
+    mode: ReviewTokenMode
+    review_sha256: str
+    draft_sha256: str
+    personal_memory_sha256: str
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -177,6 +205,63 @@ class ReviewTokenCodec:
             raise ReviewTokenError()
         return claims
 
+    def issue_personal_memory_confirmation(
+        self,
+        *,
+        review_token: str,
+        draft: NoteDraft,
+        metadata: PersonalMemoryMetadata,
+    ) -> str:
+        """Issue a purpose-separated token bound to exact normalized PM metadata."""
+
+        review_claims = self.verify(review_token)
+        if review_claims.mode is not ReviewTokenMode.TEXT:
+            raise ReviewTokenError()
+        personal_memory_digest = _personal_memory_digest(metadata)
+        return self._issue(
+            {
+                "draft_sha256": _draft_digest(draft),
+                "mode": ReviewTokenMode.TEXT.value,
+                "personal_memory_sha256": personal_memory_digest,
+                "purpose": PERSONAL_MEMORY_CONFIRMATION_PURPOSE,
+                "review_sha256": _review_digest(review_token),
+                "v": PERSONAL_MEMORY_CONFIRMATION_VERSION,
+            },
+            max_token_bytes=MAX_CONFIRMATION_TOKEN_BYTES,
+        )
+
+    def verify_personal_memory_confirmation(
+        self,
+        token: str,
+        *,
+        review_token: str,
+        draft: NoteDraft,
+        metadata: PersonalMemoryMetadata,
+    ) -> PersonalMemoryConfirmationTokenClaims:
+        """Verify a PM token and its exact review, draft, and metadata binding."""
+
+        review_claims = self.verify(review_token)
+        if review_claims.mode is not ReviewTokenMode.TEXT:
+            raise ReviewTokenError()
+        claims = _personal_memory_confirmation_claims_from_payload(
+            self._verify_signed_payload(token, max_token_bytes=MAX_CONFIRMATION_TOKEN_BYTES)
+        )
+        expected_review_digest = _review_digest(review_token)
+        expected_draft_digest = _draft_digest(draft)
+        expected_personal_memory_digest = _personal_memory_digest(metadata)
+        if claims.mode is not ReviewTokenMode.TEXT:
+            raise ReviewTokenError()
+        if not hmac.compare_digest(claims.review_sha256, expected_review_digest):
+            raise ReviewTokenError()
+        if not hmac.compare_digest(claims.draft_sha256, expected_draft_digest):
+            raise ReviewTokenError()
+        if not hmac.compare_digest(
+            claims.personal_memory_sha256,
+            expected_personal_memory_digest,
+        ):
+            raise ReviewTokenError()
+        return claims
+
     def _verify_signed_payload(self, token: str, *, max_token_bytes: int) -> object:
         """Verify common bounded token framing and return canonical decoded payload."""
 
@@ -272,6 +357,47 @@ def _draft_digest(draft: NoteDraft) -> str:
         raise ReviewTokenError() from None
 
 
+def _personal_memory_digest(metadata: PersonalMemoryMetadata) -> str:
+    """Hash only the exact normalized Stage 1 metadata projection."""
+
+    if type(metadata) is not PersonalMemoryMetadata:
+        raise ReviewTokenError()
+    if (
+        type(metadata.evidence_kind) is not EvidenceKind
+        or type(metadata.self_kind) is not SelfKind
+        or type(metadata.evidence_at_precision) is not EvidenceAtPrecision
+        or (metadata.domain is not None and type(metadata.domain) is not str)
+    ):
+        raise ReviewTokenError()
+    evidence_at = metadata.evidence_at
+    if type(evidence_at) is str:
+        if (
+            evidence_at != "unknown"
+            or metadata.evidence_at_precision is not EvidenceAtPrecision.UNKNOWN
+        ):
+            raise ReviewTokenError()
+    elif type(evidence_at) is datetime:
+        if (
+            evidence_at.tzinfo is None
+            or evidence_at.utcoffset() is None
+            or metadata.evidence_at_precision is not EvidenceAtPrecision.EXACT
+        ):
+            raise ReviewTokenError()
+    else:
+        raise ReviewTokenError()
+    try:
+        payload = {
+            "domain": metadata.domain,
+            "evidence_at": evidence_at if isinstance(evidence_at, str) else evidence_at.isoformat(),
+            "evidence_at_precision": metadata.evidence_at_precision.value,
+            "evidence_kind": metadata.evidence_kind.value,
+            "self_kind": metadata.self_kind.value,
+        }
+        return hashlib.sha256(_canonical_json(payload)).hexdigest()
+    except AttributeError, TypeError, UnicodeEncodeError, ValueError:
+        raise ReviewTokenError() from None
+
+
 def _new_context_nonce() -> str:
     """Give each generated draft a distinct process-local review context."""
 
@@ -346,6 +472,38 @@ def _confirmation_claims_from_payload(payload: object) -> ConfirmationTokenClaim
     review_sha256 = _strict_digest(payload, "review_sha256")
     draft_sha256 = _strict_digest(payload, "draft_sha256")
     return ConfirmationTokenClaims(parsed_mode, review_sha256, draft_sha256)
+
+
+def _personal_memory_confirmation_claims_from_payload(
+    payload: object,
+) -> PersonalMemoryConfirmationTokenClaims:
+    """Decode the exact purpose-separated PM confirmation shape."""
+
+    if type(payload) is not dict or set(payload) != _PERSONAL_MEMORY_CONFIRMATION_FIELDS:
+        raise ReviewTokenError()
+    version = payload.get("v")
+    mode = payload.get("mode")
+    purpose = payload.get("purpose")
+    if (
+        type(version) is not int
+        or version != PERSONAL_MEMORY_CONFIRMATION_VERSION
+        or type(mode) is not str
+        or purpose != PERSONAL_MEMORY_CONFIRMATION_PURPOSE
+    ):
+        raise ReviewTokenError()
+    try:
+        parsed_mode = ReviewTokenMode(mode)
+    except ValueError:
+        raise ReviewTokenError() from None
+    review_sha256 = _strict_digest(payload, "review_sha256")
+    draft_sha256 = _strict_digest(payload, "draft_sha256")
+    personal_memory_sha256 = _strict_digest(payload, "personal_memory_sha256")
+    return PersonalMemoryConfirmationTokenClaims(
+        parsed_mode,
+        review_sha256,
+        draft_sha256,
+        personal_memory_sha256,
+    )
 
 
 def _source_from_payload(payload: object) -> SourceProvenance:
@@ -480,9 +638,12 @@ def _decode_base64url(value: str, max_decoded_bytes: int) -> bytes:
 __all__ = [
     "MAX_CONFIRMATION_TOKEN_BYTES",
     "MAX_REVIEW_TOKEN_BYTES",
+    "PERSONAL_MEMORY_CONFIRMATION_PURPOSE",
+    "PERSONAL_MEMORY_CONFIRMATION_VERSION",
     "REVIEW_TOKEN_SECRET_BYTES",
     "REVIEW_TOKEN_VERSION",
     "ConfirmationTokenClaims",
+    "PersonalMemoryConfirmationTokenClaims",
     "ReviewTokenClaims",
     "ReviewTokenCodec",
     "ReviewTokenError",
