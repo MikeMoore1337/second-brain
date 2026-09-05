@@ -3,6 +3,7 @@
 from second_brain.domain.models import (
     AttachmentPolicy,
     AttachmentRecord,
+    DecisionJournalRecord,
     EvidenceAt,
     EvidenceAtPrecision,
     EvidenceKind,
@@ -11,6 +12,7 @@ from second_brain.domain.models import (
     MarkdownDocument,
     NoteRecord,
     NoteType,
+    OutcomeObservationRecord,
     PersonalMemoryMetadata,
     SelfKind,
     TemporalPrecision,
@@ -23,6 +25,7 @@ from second_brain.domain.models import (
 __all__ = [
     "AttachmentPolicy",
     "AttachmentRecord",
+    "DecisionJournalRecord",
     "EvidenceAt",
     "EvidenceAtPrecision",
     "EvidenceKind",
@@ -31,6 +34,7 @@ __all__ = [
     "MarkdownDocument",
     "NoteRecord",
     "NoteType",
+    "OutcomeObservationRecord",
     "PersonalMemoryMetadata",
     "SelfKind",
     "TemporalPrecision",

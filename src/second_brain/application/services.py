@@ -8,6 +8,14 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
+from second_brain.application.decision_journal import (
+    DecisionJournalDraftError,
+    OutcomeObservationDraftError,
+    parse_decision_journal_body,
+    parse_outcome_observation_body,
+    validate_decision_journal_draft,
+    validate_outcome_observation_draft,
+)
 from second_brain.application.llm import MAX_MAX_OUTPUT_BYTES, validate_note_draft
 from second_brain.application.personal_memory import (
     PersonalMemoryDraftError,
@@ -18,7 +26,9 @@ from second_brain.application.reports import Diagnostic, DiagnosticSeverity, Sca
 from second_brain.application.research_draft import ReviewedResearchDraft
 from second_brain.application.validation import build_report
 from second_brain.application.writes import (
+    CreateManagedNoteFromDecisionJournalDraftRequest,
     CreateManagedNoteFromDraftRequest,
+    CreateManagedNoteFromOutcomeObservationDraftRequest,
     CreateManagedNoteFromPersonalMemoryDraftRequest,
     CreateManagedNoteFromReviewedResearchDraftRequest,
     CreateManagedNoteRequest,
@@ -202,6 +212,163 @@ class CreateManagedNoteFromPersonalMemoryDraft:
 
 
 @dataclass(frozen=True, slots=True)
+class CreateManagedNoteFromDecisionJournalDraft:
+    """Safe Write для одного reviewed Decision Journal Stage 2 record."""
+
+    reader: VaultReader
+    writer: ManagedNoteWriter
+
+    def execute(
+        self,
+        request: CreateManagedNoteFromDecisionJournalDraftRequest,
+    ) -> CreateManagedNoteResult:
+        """Проверить Journal body и переиспользовать общий Safe Write pipeline."""
+
+        if type(request) is not CreateManagedNoteFromDecisionJournalDraftRequest:
+            return CreateManagedNoteResult(
+                CreateStatus.REJECTED,
+                diagnostics=(
+                    _diagnostic(
+                        "DECISION_JOURNAL_DRAFT_INVALID",
+                        "request does not satisfy the Decision Journal draft contract",
+                    ),
+                ),
+            )
+        try:
+            reviewed_draft = validate_decision_journal_draft(request.draft)
+        except DecisionJournalDraftError as exc:
+            return CreateManagedNoteResult(
+                CreateStatus.REJECTED,
+                diagnostics=(_diagnostic(exc.code, exc.message),),
+                apply_requested=request.apply,
+            )
+
+        expected_metadata = reviewed_draft.metadata
+        expected_record = parse_decision_journal_body(reviewed_draft.draft.content)
+
+        def prepare(
+            manifest: VaultManifest,
+            note_type: NoteType,
+            title: str,
+            note_id: UUID,
+            created: datetime,
+        ) -> CreateNotePlan:
+            del note_type, title
+            return self.writer.prepare_from_decision_journal_draft(
+                manifest,
+                reviewed_draft,
+                note_id,
+                created,
+            )
+
+        def validate_created_note(note: NoteRecord, plan: CreateNotePlan) -> bool:
+            del plan
+            return (
+                note.personal_memory == expected_metadata
+                and note.decision_journal == expected_record
+            )
+
+        return _execute_create(
+            self.reader,
+            self.writer,
+            note_type=reviewed_draft.draft.note_type,
+            title=reviewed_draft.draft.title,
+            apply=request.apply,
+            now=request.now,
+            prepare=prepare,
+            post_write_check=validate_created_note,
+        )
+
+    def rollback(self, receipt: WriteReceipt) -> bool:
+        """Безопасно откатить Decision Journal note через receipt writer-а."""
+
+        return _safe_rollback(self.writer, receipt)
+
+
+@dataclass(frozen=True, slots=True)
+class CreateManagedNoteFromOutcomeObservationDraft:
+    """Safe Write для reviewed Outcome Observation с current Journal target."""
+
+    reader: VaultReader
+    writer: ManagedNoteWriter
+
+    def execute(
+        self,
+        request: CreateManagedNoteFromOutcomeObservationDraftRequest,
+    ) -> CreateManagedNoteResult:
+        """Проверить target current-scan до prepare и записать отдельную note."""
+
+        if type(request) is not CreateManagedNoteFromOutcomeObservationDraftRequest:
+            return CreateManagedNoteResult(
+                CreateStatus.REJECTED,
+                diagnostics=(
+                    _diagnostic(
+                        "OUTCOME_OBSERVATION_DRAFT_INVALID",
+                        "request does not satisfy the Outcome Observation draft contract",
+                    ),
+                ),
+            )
+        try:
+            reviewed_draft = validate_outcome_observation_draft(request.draft)
+        except OutcomeObservationDraftError as exc:
+            return CreateManagedNoteResult(
+                CreateStatus.REJECTED,
+                diagnostics=(_diagnostic(exc.code, exc.message),),
+                apply_requested=request.apply,
+            )
+
+        expected_metadata = reviewed_draft.metadata
+        assert expected_metadata.decision_id is not None
+        decision_id = expected_metadata.decision_id
+        expected_record = parse_outcome_observation_body(
+            reviewed_draft.draft.content,
+            decision_id,
+        )
+
+        def check_target(report: ScanReport) -> tuple[Diagnostic, ...]:
+            return _decision_target_diagnostics(report, decision_id)
+
+        def prepare(
+            manifest: VaultManifest,
+            note_type: NoteType,
+            title: str,
+            note_id: UUID,
+            created: datetime,
+        ) -> CreateNotePlan:
+            del note_type, title
+            return self.writer.prepare_from_outcome_observation_draft(
+                manifest,
+                reviewed_draft,
+                note_id,
+                created,
+            )
+
+        def validate_created_note(note: NoteRecord, plan: CreateNotePlan) -> bool:
+            del plan
+            return (
+                note.personal_memory == expected_metadata
+                and note.outcome_observation == expected_record
+            )
+
+        return _execute_create(
+            self.reader,
+            self.writer,
+            note_type=reviewed_draft.draft.note_type,
+            title=reviewed_draft.draft.title,
+            apply=request.apply,
+            now=request.now,
+            prepare=prepare,
+            post_write_check=validate_created_note,
+            preflight_check=check_target,
+        )
+
+    def rollback(self, receipt: WriteReceipt) -> bool:
+        """Безопасно откатить Outcome note через receipt writer-а."""
+
+        return _safe_rollback(self.writer, receipt)
+
+
+@dataclass(frozen=True, slots=True)
 class CreateManagedNoteFromReviewedResearchDraft:
     """Safe Write для reviewed research draft с одним source в v1."""
 
@@ -291,6 +458,7 @@ def _execute_create(
     now: datetime | None,
     prepare: Callable[[VaultManifest, NoteType, str, UUID, datetime], CreateNotePlan],
     post_write_check: Callable[[NoteRecord, CreateNotePlan], bool] | None = None,
+    preflight_check: Callable[[ScanReport], tuple[Diagnostic, ...]] | None = None,
 ) -> CreateManagedNoteResult:
     """Общий Safe Write pipeline для обычного и draft-based создания."""
 
@@ -301,6 +469,22 @@ def _execute_create(
             _diagnostic(
                 "CREATE_PREFLIGHT_FAILED",
                 "vault must have a valid manifest and no validation errors before write",
+            )
+        )
+        return CreateManagedNoteResult(
+            CreateStatus.REJECTED,
+            diagnostics=tuple(diagnostics),
+            apply_requested=apply,
+        )
+
+    preflight_diagnostics = preflight_check(pre_report) if preflight_check is not None else ()
+    if preflight_check is not None and (preflight_diagnostics or pre_report.error_count):
+        diagnostics = list(pre_report.diagnostics)
+        diagnostics.extend(preflight_diagnostics)
+        diagnostics.append(
+            _diagnostic(
+                "CREATE_PREFLIGHT_FAILED",
+                "vault has validation errors or an invalid relation target; no write was attempted",
             )
         )
         return CreateManagedNoteResult(
@@ -441,6 +625,45 @@ def _execute_create(
         receipt=receipt,
         apply_requested=True,
     )
+
+
+def _decision_target_diagnostics(
+    report: ScanReport,
+    decision_id: UUID,
+) -> tuple[Diagnostic, ...]:
+    """Проверить relation target только по current canonical report."""
+
+    matches = [note for note in report.notes if note.note_id == decision_id]
+    if not matches:
+        return (
+            _diagnostic(
+                "OUTCOME_DECISION_NOT_FOUND",
+                "Outcome Observation decision target was not found in the current vault",
+            ),
+        )
+    if len(matches) > 1:
+        return (
+            _diagnostic(
+                "OUTCOME_DECISION_IDENTITY_CONFLICT",
+                "Outcome Observation decision target has conflicting canonical identities",
+            ),
+        )
+    target = matches[0]
+    metadata = target.personal_memory
+    if (
+        not target.managed
+        or metadata is None
+        or metadata.evidence_kind.value != "observed_decision"
+        or metadata.self_kind.value != "decision"
+        or target.decision_journal is None
+    ):
+        return (
+            _diagnostic(
+                "OUTCOME_DECISION_TARGET_INVALID",
+                "Outcome Observation decision target is not a valid Decision Journal",
+            ),
+        )
+    return ()
 
 
 def _post_write_is_valid(
