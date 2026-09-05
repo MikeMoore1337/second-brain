@@ -102,11 +102,15 @@ flowchart TB
     REPORT --> EVIDENCE[typed evidence refs\ncompact in-memory DTO]
     EVIDENCE --> TIMELINE[Personal Timeline\nderived read model]
     EVIDENCE --> SELF[Self Model\nderived claims]
+    REPORT --> JOURNAL[Canonical Decision Journal\npre-choice information]
     CTX --> ASSIST[Assistant\nindependent analysis]
     CTX --> SIM[Simulate Me\nlikely user choice]
     CTX --> COMPARE[Compare\nSimulate Me + Assistant + delta]
-    SIM --> PRED[derived prediction]
-    PRED --> CAL[comparison / calibration]
+    SIM --> SESSIONPRED[session prediction\nderived / ephemeral]
+    JOURNAL --> BACKTEST[retrospective replay\nmask chosen option and outcome]
+    BACKTEST --> HISTPRED[current Simulate Me\nhistorical prediction]
+    HISTPRED --> CAL[rebuildable calibration]
+    SESSIONPRED -.-> FUTUREAUDIT[future policy-governed\nsystem-operation audit]
     COMPARE --> GROWTH[Growth boundary\n"куда хочет прийти"]
 
     DERIVED[(all derived state\nrebuildable / disposable)]
@@ -114,7 +118,8 @@ flowchart TB
     EVIDENCE -.-> DERIVED
     TIMELINE -.-> DERIVED
     SELF -.-> DERIVED
-    PRED -.-> DERIVED
+    SESSIONPRED -.-> DERIVED
+    HISTPRED -.-> DERIVED
     CAL -.-> DERIVED
 ```
 
@@ -129,7 +134,8 @@ context как будто они всё ещё canonical.
 | Представление | Статус | Где живёт | Можно пересоздать/удалить | Правило |
 | --- | --- | --- | --- | --- |
 | Managed Markdown note: UUIDv7, `type`, `created`, optional `updated`, `tags`, `links`, body | Canonical | `second-brain-vault` | Нет без потери user data | Единственная пользовательская запись знания |
-| Reviewed explicit fact, statement, goal, preference, belief, decision или outcome | Canonical | Body и минимальные reviewed metadata note | Нет | Это assertion/observation пользователя, а не оценка модели |
+| Enrolled reviewed evidence record: `evidence_kind` + `self_kind` + optional `domain` + reviewed body | Canonical | Existing YAML metadata и Markdown body | Нет | Evidence class и semantic subject фиксируются пользователем, а не выводятся моделью |
+| Existing note without the new metadata | Canonical note, но не typed Cognitive Twin evidence | `second-brain-vault` | Нет | Старые notes valid для vault/Search/Retrieval, но не получают evidence class задним числом |
 | Persisted source provenance | Canonical, если пользователь её принял в Safe Write | Existing YAML `sources` | Нет | Источник относится к note, а не является Cognitive Twin state |
 | Decision Journal record | Canonical | Одна reviewed managed note и при необходимости связанные notes | Нет | История выбора и outcome принадлежат пользователю |
 | Transcript до review, `NoteDraft`, preview, review token, confirmation token, Safe Write receipt | Ephemeral candidate/process state | Память процесса/UI | Да | Не evidence до review и публикации |
@@ -137,7 +143,9 @@ context как будто они всё ещё canonical.
 | Evidence refs и evidence edges | Derived | Compact DTO/in-memory или disposable cache | Да | Ссылки всегда разрешаются к текущим UUID |
 | Personal Timeline | Derived read model | On-demand first; optional disposable cache later | Да | Не новый журнал событий |
 | Self Model claims, preference estimates, confidence, stale/conflict status | Derived | On-demand first; optional disposable cache later | Да | Не записываются обратно в note |
-| Simulate Me prediction, Compare result, calibration aggregates | Derived | Runtime/result store only if later needed | Да | Удаление сбрасывает историю модели, не actual user decisions |
+| Retrospective calibration aggregate | Derived | Recomputed read model | Да | Полностью пересобирается из canonical historical journals и текущей derivation policy |
+| Prospective Simulate Me prediction/session result | Derived ephemeral state | Runtime/result DTO | Да | После удаления не восстанавливается как историческое наблюдение; v1 не обещает prospective calibration |
+| Future system-operation audit record | Canonical operational/audit state, не user evidence | Отдельная policy-governed boundary будущего | Нет без потери audit history | Нужен только для будущей prospective calibration; в #66 не создаётся |
 | Active Learning question | Derived UX state | Runtime | Да | Сам вопрос не создаёт fact |
 
 Если derived projection противоречит note, исправляется projection или её
@@ -147,17 +155,39 @@ context как будто они всё ещё canonical.
 
 ## 5. Evidence model
 
-Evidence kind отвечает на вопрос «какого типа материал мы видим», а не «насколько
-он истинен вообще». Универсальной шкалы, в которой observed decision всегда
+У canonical reviewed record есть две независимые axes:
+
+- `evidence_kind` — provenance/class: что именно было зафиксировано и как мы
+  это знаем;
+- `self_kind` — semantic subject: о чём пользовательская информация.
+
+`domain` — отдельный optional context label. `evidence_kind` не отвечает на
+вопрос «насколько это истинно», а `self_kind` не отвечает на вопрос «было ли
+это реально сделано». Универсальной шкалы, в которой observed decision всегда
 сильнее explicit statement, нет: сила зависит от claim, контекста и времени.
+
+Canonical `evidence_kind` v1 имеет ровно четыре значения:
+
+- `explicit_user_fact` — пользователь после review явно сообщает факт о себе
+  или своей ситуации;
+- `user_statement` — пользователь после review формулирует мнение, preference,
+  belief, goal, rule или объяснение;
+- `observed_decision` — пользователь после review фиксирует реально выбранный
+  вариант и доступные ему варианты;
+- `outcome_later_observation` — пользователь после review фиксирует поздний
+  результат, реакцию или reassessment.
+
+Названия намеренно описывают происхождение evidence, а не объективную truth.
+`model_inference` не входит в этот enum и никогда не является canonical
+`evidence_kind`.
 
 | Evidence kind | Смысл | Canonical source | Что можно выводить |
 | --- | --- | --- | --- |
-| `explicit_user_fact` | Пользователь после review сообщает конкретный факт о себе или своей ситуации | Reviewed note/body | Факт пользовательского сообщения с его временным контекстом; не внешняя независимая verification |
-| `user_statement` | Пользователь сообщает preference, belief, goal, rule или объяснение | Reviewed note/body | Что пользователь это утверждает/считает/хочет, но не что утверждение объективно истинно |
-| `observed_decision` | Зафиксирован реально выбранный вариант и контекст доступных вариантов | Decision Journal или другой reviewed canonical record | Наблюдение поведения; один выбор не доказывает постоянную preference |
-| `outcome_later_observation` | Позднее зафиксирован фактический результат, реакция или reassessment | Обновлённый reviewed Journal или связанная observation note | Что произошло позже; не следует подменять ожидание результатом |
-| `model_inference` | Derived hypothesis, pattern или prediction, построенный из evidence | Только derived Self Model/retrieval/prediction state | Гипотезу с confidence и audit refs; не canonical fact |
+| `explicit_user_fact` | Reviewed explicit user fact | Typed canonical note с отдельным `self_kind` | Факт пользовательского сообщения с временным контекстом; не внешняя независимая verification |
+| `user_statement` | Reviewed user statement | Typed canonical note с отдельным `self_kind` | Что пользователь это утверждает/считает/хочет, но не что утверждение объективно истинно |
+| `observed_decision` | Reviewed observation of a real choice | Stage 2 Decision Journal note | Наблюдение поведения; один выбор не доказывает постоянную preference |
+| `outcome_later_observation` | Reviewed later outcome/observation | Stage 2 linked outcome note или reviewed Journal observation | Что произошло позже; не следует подменять ожидание результатом |
+| `model_inference` | Derived hypothesis, pattern или prediction | Только derived Self Model/retrieval/prediction state; не canonical enum value | Гипотезу с confidence и audit refs; не canonical fact |
 
 ### Непереговорное правило inference
 
@@ -170,18 +200,25 @@ inference остаётся отдельным derived артефактом ил�
 
 Нельзя смешивать в одном поле формулировку пользователя и формулировку модели.
 Если note содержит текст «мне кажется, я выбираю X», это canonical
-`user_statement`; если система выводит «пользователь обычно выбирает X», это
-`model_inference` с отдельными supporting references.
+`evidence_kind: user_statement` с подходящим `self_kind`; если система выводит
+«пользователь обычно выбирает X», это `model_inference` с отдельными supporting
+references.
+
+Если старой note не хватает `evidence_kind`, это не разрешение приложению
+угадывать класс по body. Такая note остаётся canonical для vault и обычного
+Search/Retrieval, но не является enrolled typed Cognitive Twin evidence, пока
+пользователь явно не пройдёт reviewed capture.
 
 ## 6. Каноническая taxonomy и metadata verdict
 
 ### 6.1. Нужна ли большая taxonomy
 
-- **ACCEPT:** очень маленький optional routing label помогает отличать decision
-  note от обычной заметки и не требует отдельного graph schema.
-- **CHANGE:** `self_kind` должен быть ограниченным scalar label, а не свободным
-  YAML-документом; `domain` должен быть bounded slug без обязательного
-  глобального справочника.
+- **ACCEPT:** две маленькие независимые scalar axes (`evidence_kind` и
+  `self_kind`) позволяют не смешивать provenance с semantic subject и не
+  требуют отдельного graph schema.
+- **CHANGE:** `evidence_kind` должен быть bounded allowlist provenance classes,
+  `self_kind` — bounded semantic label, а `domain` — bounded slug без
+  обязательного глобального справочника.
 - **RISK:** большая taxonomy с подтипами, facets, ontology и domain registry
   быстро станет вторым schema contract, который нужно мигрировать вместе с
   vault.
@@ -189,32 +226,41 @@ inference остаётся отдельным derived артефактом ил�
   evidence subtypes и автоматическую классификацию оставляем будущим стадиям.
 
 Итог: отдельную canonical taxonomy ради taxonomy не создаём. На первом этапе
-достаточно опциональных `self_kind` и `domain`, а точное evidence kind живёт в
-derived evidence model и в смысле reviewed body.
+достаточно двух bounded axes и optional `domain`; evidence kind больше не
+живёт только в derived interpretation body.
 
-### 6.2. Verdict по `self_kind` и `domain`
+### 6.2. Verdict по `evidence_kind`, `self_kind` и `domain`
 
 Предлагаемые additive fields:
 
 ```yaml
-self_kind: decision
+evidence_kind: user_statement
+self_kind: preference
 domain: career
 ```
 
-`self_kind` — один из минимального начального набора:
+`evidence_kind` — ровно четыре значения, перечисленные в разделе 5. Оно
+обязательно для нового enrolled Personal Memory record; отсутствие поля у
+старой note не классифицируется автоматически.
+
+`self_kind` — один из минимального полного набора:
 `memory`, `preference`, `belief`, `goal`, `decision`, `outcome`. Это label
-формы canonical note, а не утверждение, что её содержание истинно. Например,
-explicit user fact может быть записан в note с `self_kind: memory`.
+semantic subject, а не утверждение, что содержание истинно. В Stage 1 реально
+разрешаются только `memory`, `preference`, `belief`, `goal`; `decision` и
+`outcome` резервируются за Stage 2 вместе с более строгим Decision Journal /
+outcome contract. Так Stage 1 не создаёт records, которые Stage 2 может
+ошибочно принять за полноценный Journal.
 
 `domain` — optional один lowercase ASCII slug длиной не более 64 bytes, без
 пробелов, `/`, `\\`, control characters и YAML collection. `career` — пример,
 но не начало обязательного domain registry. Значения вроде `career/backend`
 или массивы доменов в v1 не принимаются.
 
-Verdict: оба поля допустимы как optional additive metadata без обязательной
-переклассификации старых notes. Для нового Personal Memory draft
-`self_kind` должен быть задан, а `domain` остаётся optional; обычные notes и
-существующий `NoteDraft` могут продолжать жить без обоих полей.
+Verdict: все три fields — additive metadata; старые notes не переклассифицируются
+и остаются valid. Для нового Stage 1 Personal Memory draft обязательны
+`evidence_kind` и Stage 1-совместимый `self_kind`, а `domain` optional. Stage 2
+добавляет event evidence/self kinds и stricter body contract без превращения их
+в inference.
 
 Не добавляем в canonical front matter `confidence`, `supporting_evidence`,
 `contradicting_evidence`, `generated_at`, `embedding`, `model_version`,
@@ -224,11 +270,12 @@ Verdict: оба поля допустимы как optional additive metadata б
 
 ### 6.3. Schema version verdict
 
-`schema_version` bump не нужен, если поля остаются optional, scalar, additive и
-старые notes без них полностью валидны. Текущая policy уже сохраняет unknown
-front matter fields при round-trip write; следующая implementation-задача
-добавит явную валидацию именно этих двух fields, не делая остальные unknown
-fields частью Personal Memory Contract.
+`schema_version` bump не нужен, если fields остаются optional для старых notes,
+scalar и additive. Текущая policy уже сохраняет unknown front matter fields при
+round-trip write; следующая implementation-задача добавит явную валидацию
+`evidence_kind`, `self_kind`, `domain`, `evidence_at` и
+`evidence_at_precision`, не делая остальные unknown fields частью Personal
+Memory Contract.
 
 Schema bump потребовался бы только при изменении обязательных полей, смысла
 существующих полей, shape существующего `sources`/`tags`/`links` или при
@@ -237,7 +284,44 @@ Schema bump потребовался бы только при изменении
 ## 7. Temporal semantics
 
 Существующие `created` и `updated` — storage lifecycle timestamps. Они не должны
-молча использоваться как время события, решения или начала preference.
+молча использоваться как время события, решения, assertion или начала
+preference.
+
+### Минимальная canonical temporal foundation
+
+Выбор для v1 — **A: небольшой additive canonical metadata contract**. Foundation
+нужен уже в Stage 1, потому что даже generic fact/statement должен иметь
+deterministic assertion time или явно сохранённое `unknown`, если он позже
+попадёт в Timeline.
+
+Новые enrolled records получают два scalar fields:
+
+```yaml
+evidence_at: "2026-09-05T12:00:00+03:00"
+evidence_at_precision: exact
+```
+
+Допустим также явный неизвестный момент:
+
+```yaml
+evidence_at: unknown
+evidence_at_precision: unknown
+```
+
+В v1 разрешены только `exact` и `unknown`; approximate `day`, `month` и
+`period` откладываются. Смысл `evidence_at` определяется canonical
+`evidence_kind`:
+
+| `evidence_kind` | Смысл `evidence_at` |
+| --- | --- |
+| `explicit_user_fact` / `user_statement` | Когда пользователь это сообщил (`asserted_at`) |
+| `observed_decision` | Когда пользователь сделал/зафиксировал выбор (`decision_at`) |
+| `outcome_later_observation` | Когда был замечен outcome (`outcome_at`) |
+
+Validator требует согласованную пару: RFC 3339 с явным offset + `exact` либо
+`unknown` + `unknown`. LLM не угадывает дату, body не сканируется heuristically,
+а `created` никогда не используется как fallback. Более богатая precision и
+validity interval остаются будущим additive extension.
 
 В будущем temporal context должен различать:
 
@@ -250,9 +334,7 @@ Schema bump потребовался бы только при изменении
 
 Все машинные timestamps используют существующее правило RFC 3339 с явным UTC
 offset. Неизвестное время остаётся неизвестным; его нельзя подменять
-`created`. Приблизительное время должно хранить precision (`day`, `month`,
-`period` или `unknown`) в будущей semantic модели, а не придумывать точный
-момент.
+`created`.
 
 ### Семантика по типам
 
@@ -270,7 +352,7 @@ Superseded preference означает, что новый canonical evidence о�
 заменил применимость старого claim. Это не физическое удаление старой note и не
 универсальный вывод о том, что пользователь «изменился навсегда». Для разных
 доменов, горизонтов и обстоятельств две на первый взгляд конфликтующие
-могут быть одновременно валидны.
+preference могут быть одновременно валидны.
 
 ## 8. Personal Memory Contract v1 — proposal
 
@@ -281,14 +363,18 @@ ontology для всех будущих claims.
 ### Семантика
 
 1. Canonical memory — это существующая managed Markdown note со stable UUIDv7.
-2. Note становится memory только после пользовательского review и Safe Write.
-3. `self_kind` и optional `domain` помогают маршрутизации и фильтрации, но не
-   добавляют truth/confidence semantics.
-4. Human-readable meaning, context, reasons, dates и uncertainty остаются в
-   body, где пользователь может их прочитать и исправить.
-5. Derived evidence refs всегда ссылаются на UUID canonical note; они не
+2. Note становится typed evidence только после пользовательского review и Safe
+   Write.
+3. `evidence_kind` отвечает за provenance/class, `self_kind` — за semantic
+   subject, `domain` — за optional context; они не добавляют truth/confidence
+   semantics.
+4. `evidence_at` и `evidence_at_precision` — единственный Stage 1 machine
+   source для времени evidence; narrative dates в body не заменяют их.
+5. Human-readable meaning, context, reasons и uncertainty остаются в body, где
+   пользователь может их прочитать и исправить.
+6. Derived evidence refs всегда ссылаются на UUID canonical note; они не
    копируют body в отдельное authoritative storage.
-6. Удаление индекса или Self Model не требует восстановления из него
+7. Удаление индекса или Self Model не требует восстановления из него
    пользовательских данных.
 
 ### Минимальная форма
@@ -301,16 +387,20 @@ id: 019...
 type: zettel
 created: 2026-09-05T12:00:00+03:00
 updated: 2026-09-05T12:00:00+03:00
-self_kind: memory
+self_kind: preference
+evidence_kind: user_statement
+evidence_at: "2026-09-05T12:00:00+03:00"
+evidence_at_precision: exact
 domain: career
 tags: []
 links: []
 ---
 ```
 
-`self_kind` и `domain` optional для backward compatibility; пример показывает
-их присутствие в новом reviewed Personal Memory record. `type` остаётся
-существующим `NoteType`, а не `personal_memory`.
+`evidence_kind`, `self_kind`, `evidence_at` и `evidence_at_precision` обязательны
+для нового enrolled Stage 1 Personal Memory record; `domain` optional. Старые
+notes без них остаются valid. `type` остаётся существующим `NoteType`, а не
+`personal_memory`.
 
 Минимальный body должен быть читаемым без приложения. В зависимости от
 `self_kind` достаточно следующих смысловых секций:
@@ -324,9 +414,11 @@ links: []
 
 К каким обстоятельствам это относится.
 
-## Time
+## Time context
 
-Известный период, дата события или явная отметка, что время неизвестно.
+Человеческое пояснение к canonical `evidence_at`; machine-readable timestamp и
+precision находятся в YAML. При неизвестном времени здесь явно написано, что
+оно неизвестно.
 
 ## Notes
 
@@ -342,11 +434,13 @@ human-readable и проходит тот же review.
 | Смысл | YAML metadata | Structured Markdown body |
 | --- | --- | --- |
 | Stable UUID, existing note type, storage timestamps | Да | Нет |
-| Узкий routing label `self_kind` | Да, optional | Можно повторить словами, но не нужно |
+| Provenance class `evidence_kind` | Да, bounded scalar | Не выводится из body |
+| Узкий semantic label `self_kind` | Да, bounded scalar | Можно повторить словами, но не нужно |
 | Один bounded `domain` | Да, optional | Можно описать контекст подробнее |
+| Evidence timestamp и precision | Да, `evidence_at` + `evidence_at_precision` | Можно дать human explanation |
 | Ситуация, варианты, причины, criteria, expected/actual result | Нет | Да |
 | Human wording assertion и uncertainty | Нет | Да |
-| Несколько temporal contexts одной decision | Нет | Да, пока не появится доказанная потребность в typed fields |
+| Дополнительные temporal contexts одной decision | Нет в Stage 1 | Да, narrative only; typed extensions — позже |
 | Supporting/contradicting evidence, confidence, stale status, generated time | Нет | Не canonical body автоматически; это derived DTO |
 
 Не строим YAML ontology ради индекса. Metadata остаётся только там,
@@ -355,9 +449,10 @@ human-readable и проходит тот же review.
 ## 9. Decision Journal v1 — proposal
 
 Decision Journal — canonical human-readable record одной существенной decision,
-а не лог всех кликов и не inferred personality profile. В v1 это существующая
-managed note с `self_kind: decision`, optional `domain` и structured Markdown
-body.
+а не лог всех кликов и не inferred personality profile. В Stage 2 это
+существующая managed note с `evidence_kind: observed_decision`,
+`self_kind: decision`, обязательным `evidence_at` (точное время decision либо
+явный `unknown`), optional `domain` и stricter structured Markdown body.
 
 Минимальный lifecycle:
 
@@ -420,10 +515,17 @@ confidence.
 ```
 
 `actual result` и `reassessment` не заполняются моделью автоматически. Для
-короткой decision они могут быть добавлены в ту же note после reviewed update;
-для длинного периода или нескольких наблюдений допустима отдельная canonical
-observation note, явно связанная с decision. Точный update use case — отдельная
+машинно typed evidence поздний результат фиксируется отдельной reviewed note с
+`evidence_kind: outcome_later_observation`, `self_kind: outcome` и своим
+`evidence_at` как observed time; note связывается с Decision Journal через
+existing `links`/UUID-aware evidence relation. Journal может содержать
+human-readable summary или ссылку на outcome, но body update сам по себе не
+переклассифицируется приложением. Точный update use case — отдельная
 implementation boundary, не часть #66.
+
+Таким образом, `decision_at` хранится как `evidence_at` в Journal note, а
+`outcome_at` — как `evidence_at` в linked outcome observation. Оба значения
+могут быть явно `unknown`; storage `created` не используется вместо них.
 
 Важное разделение:
 
@@ -435,8 +537,9 @@ implementation boundary, не часть #66.
 
 ## 10. Personal Timeline v1 — derived/read model
 
-Personal Timeline — это read model текущих canonical notes, а не новый event
-store. Он собирает события и assertions с известным temporal context:
+Personal Timeline — это read model текущих typed canonical notes, а не новый
+event store. Он собирает события и assertions через deterministic mapping
+`evidence_kind -> evidence_at`, без LLM date extraction:
 
 ```text
 canonical notes -> evidence extraction -> timeline items -> sorted read model
@@ -445,8 +548,9 @@ canonical notes -> evidence extraction -> timeline items -> sorted read model
 Концептуальный `TimelineItem` содержит:
 
 - `event_kind` (`decision`, `goal`, `statement`, `outcome` или другой узкий
-  reviewed kind);
-- `event_at` и temporal precision, либо явную отметку `unknown`;
+  reviewed kind), выведенный из canonical evidence/self axes;
+- `event_at = evidence_at` и `precision = evidence_at_precision`, либо явную
+  отметку `unknown`;
 - короткий summary без подмены полного body;
 - supporting canonical note UUIDs;
 - derived status (`current`, `stale`, `conflicted`, `superseded`, если применимо);
@@ -454,9 +558,9 @@ canonical notes -> evidence extraction -> timeline items -> sorted read model
 
 Сначала timeline пересобирается on demand из `FileSystemVaultReader ->
 build_report`. Persistent timeline DB, watcher и incremental event sourcing не
-нужны. Если explicit event time отсутствует, item может быть показан по
-storage `created` только с честной подписью «время сохранения», а не как время
-события.
+нужны. Если `evidence_at: unknown`, item сохраняет `event_at = unknown` и
+попадает в отдельную неопределённую группу/порядок. Storage `created` никогда
+не используется как время события.
 
 Удаление timeline не теряет ни одной note. Несколько conflicting dates не
 схлопываются в одну «правильную» дату без показа неопределённости.
@@ -603,37 +707,71 @@ Independent `Assistant` branch не получает уже готовый predi
 
 ## 15. Prediction & Calibration v1
 
-В v1 не нужен ML training pipeline. Нужен audit-friendly lifecycle:
+В v1 calibration — **только retrospective/rebuildable**. ML training pipeline
+не нужен. Нужен lifecycle:
 
 ```text
-prediction
+canonical historical Decision Journal
+  -> pre-choice snapshot
+  -> current Simulate Me derivation without chosen option/outcome
   -> predicted choice + confidence
-  -> canonical real choice
-  -> comparison
-  -> calibration aggregate
+  -> compare with canonical observed decision
+  -> rebuildable calibration aggregate
 ```
 
-Derived prediction должна сохранять в своём runtime/derived DTO:
+Для каждого historical Journal строится pre-choice snapshot из:
+
+- `Situation`;
+- `Available options`;
+- `Information known at decision time`;
+- `Criteria`;
+- canonical evidence, доступного не позже `evidence_at` decision.
+
+В Simulate Me input **не входят** `Chosen option`, `Reasons`, `Expected result`,
+`Actual result`, `Reassessment`, поздние notes или сам expected answer. Это
+explicit anti-leakage boundary. После replay predicted choice сравнивается с
+canonical `observed_decision` choice из Journal. Поэтому calibration отвечает
+на вопрос: «насколько текущая версия Cognitive Twin моделирует исторические
+решения пользователя?», а не «насколько система когда-то предсказала их в
+production».
+
+Derived historical prediction существует только во время rebuild и содержит:
 
 - predicted choice и bounded confidence;
-- temporal/context fingerprint запроса;
+- historical context fingerprint и decision cutoff;
 - supporting и contradicting canonical UUIDs;
 - `generated_at` и `derivation_version`.
 
-Actual choice приходит из reviewed Decision Journal, explicit statement или
-другого явно разрешённого canonical capture. Отсутствие actual choice — это
-`unobserved`, а не неправильный prediction. Comparison различает как минимум
-`match`, `mismatch`, `partial/ambiguous` и `unobserved`.
+Actual choice берётся только после replay из reviewed `observed_decision`.
+Если в Journal нет canonical chosen option или pre-choice information, sample
+получает `unobserved/insufficient_input`, а не неправильный prediction.
+Comparison различает как минимум `match`, `mismatch`, `partial/ambiguous` и
+`unobserved`.
 
-Calibration v1 показывает количество наблюдаемых predictions, confidence bins,
+Calibration v1 показывает количество replayable samples, confidence bins,
 empirical hit rate и calibration gap. Brier score или другая proper scoring
-metric может быть добавлена только если choice space и оценка outcome достаточно
-определены; отсутствие достаточного sample должно показываться явно. Нельзя
-выдавать маленькую выборку за validated personal trait.
+metric может быть добавлена только если choice space достаточно определён;
+отсутствие достаточного sample должно показываться явно. Нельзя выдавать
+маленькую выборку за validated personal trait.
 
-Prediction и calibration остаются derived. После удаления derived state
-история prediction может быть сброшена, но canonical actual choices, reasons и
-outcomes не теряются.
+Retrospective prediction и calibration полностью derived: удаление derived
+state не теряет никаких данных и не сбрасывает historical calibration — она
+снова вычисляется из vault той же или новой derivation policy. При смене
+`derivation_version` результат честно является метрикой новой версии, а не
+притворяется историческим production prediction.
+
+Prospective extension (`prediction now -> actual choice later`) в v1 не входит.
+Чтобы такой режим когда-либо имел rebuildable historical calibration, сначала
+потребуется policy-governed immutable canonical audit record факта операции:
+
+```text
+system predicted X at T with confidence C using derivation V
+```
+
+Это не user fact, не `evidence_kind`, не подтверждение inference и не claim о
+пользователе. Такой audit record нельзя подменить текущим Self Model после
+удаления derived state. Его storage, retention и privacy policy потребуют
+отдельного design; новую DB/event store для этого сейчас не добавляем.
 
 ## 16. Active Personal Learning v1
 
@@ -720,62 +858,76 @@ context и derived explanation divergence.
 
 ### Stage 1 — Personal Memory Contract v1
 
-- **Цель:** добавить минимальные reviewed semantics поверх existing managed note,
-  не создавая новую persistence model.
+- **Цель:** добавить минимальный reviewed contract с двумя независимыми axes:
+  provenance (`evidence_kind`) и semantic subject (`self_kind`), не создавая
+  новую persistence model.
 - **Входные зависимости:** UUIDv7 `NoteRecord`, front matter round-trip,
   `FileSystemVaultReader -> build_report`, Safe Write и текущие bounded draft
   boundaries.
-- **Canonical changes:** optional `self_kind` и optional `domain`; старые notes
-  валидны без них; новый Personal Memory draft обязан иметь `self_kind`.
+- **Canonical changes:** optional `evidence_kind`, `self_kind`, `domain`,
+  `evidence_at` и `evidence_at_precision`; старые notes валидны без них. Новый
+  Stage 1 Personal Memory draft обязан иметь `evidence_kind`, Stage 1-compatible
+  `self_kind` и explicit exact/unknown evidence time.
+- **Stage 1 allowlist:** `evidence_kind` — только `explicit_user_fact` или
+  `user_statement`; `self_kind` — только `memory`, `preference`, `belief` или
+  `goal`. `observed_decision`, `outcome_later_observation`, `decision` и
+  `outcome` не создаются на этой стадии.
 - **Derived state:** только чтение/валидация; Self Model, graph и embeddings
   отсутствуют.
 - **Public/application contracts:** отдельный reviewed personal-memory wrapper
   поверх существующего `NoteDraft` допустим в следующей implementation task;
   `NoteDraft`, Search, LLM и transcription contracts не переопределяются.
-- **Risks:** преждевременная taxonomy, arbitrary YAML и accidental inference
-  write-back.
-- **Explicit out-of-scope:** Decision Journal runtime, temporal engine,
-  timeline, Self Model, retrieval modes, updates existing notes.
-- **Acceptance boundary:** optional fields проходят bounded validation и
-  Safe Write/rebuild без schema bump; никаких новых derived claims.
+- **Risks:** преждевременная taxonomy, arbitrary YAML, implicit evidence
+  classification и accidental inference write-back.
+- **Explicit out-of-scope:** `decision/outcome` self semantics, Decision Journal
+  runtime, Journal outcome links, validity intervals, timeline, Self Model,
+  retrieval modes, updates existing notes.
+- **Acceptance boundary:** новые records имеют explicit reviewed evidence class
+  и exact/unknown `evidence_at`; старые notes остаются valid; Stage 1 не может
+  создать record, который выглядит как полноценный Decision Journal.
 
 ### Stage 2 — Decision Journal v1
 
 - **Цель:** canonical, reviewed и human-readable запись выбора с expected и
   later outcome.
-- **Входные зависимости:** Stage 1 labels, existing Safe Write, reviewed
-  Text/URL/Voice capture.
-- **Canonical changes:** notes с `self_kind: decision`, structured body и
-  explicit options/reasons/criteria; actual/reassessment появляются только
-  через reviewed update или linked observation.
+- **Входные зависимости:** Stage 1 typed evidence metadata, existing Safe Write,
+  reviewed Text/URL/Voice capture и deterministic `evidence_at` foundation.
+- **Canonical changes:** Decision Journal note с `evidence_kind:
+  observed_decision`, `self_kind: decision`, `evidence_at` как decision time и
+  stricter body. Поздний результат — отдельная linked note с
+  `evidence_kind: outcome_later_observation`, `self_kind: outcome` и своим
+  `evidence_at` как outcome time; Journal может содержать reviewed summary/link.
 - **Derived state:** optional extraction candidates, не canonical; никакой
   automatic journal completion.
 - **Public/application contracts:** отдельный Journal draft/use case и позже
   reviewed update boundary; current `NoteDraft` остаётся semantic base.
-- **Risks:** backfilling information, которого не было известно при decision;
-  путаница user confidence и model confidence.
+- **Risks:** backfilling information, которого не было известно при decision,
+  путаница user confidence и model confidence, implicit outcome promotion.
 - **Explicit out-of-scope:** automatic action telemetry, personality profile,
-  calibration и recommendation.
+  validity intervals, Timeline runtime, retrospective calibration и
+  recommendation.
 - **Acceptance boundary:** пользователь видит и подтверждает все journal
-  sections; expected/actual остаются различимыми.
+  sections; `evidence_at` не выводится из `created`; expected/actual и
+  decision/outcome evidence остаются различимыми.
 
 ### Stage 3 — Personal Timeline v1
 
 - **Цель:** derived chronological view canonical assertions, decisions и
   outcomes.
-- **Входные зависимости:** Stage 1 semantics и Stage 2 decision/outcome
-  records; current scan/report.
+- **Входные зависимости:** Stage 1 `evidence_at` для facts/statements, Stage 2
+  deterministic decision/outcome records, current scan/report.
 - **Canonical changes:** нет; только reviewed notes из предыдущих стадий.
-- **Derived state:** `TimelineItem` с event time/precision, UUID refs, status и
-  `generated_at`; on-demand first.
+- **Derived state:** `TimelineItem` через deterministic
+  `event_at = evidence_at` и `precision = evidence_at_precision`, UUID refs,
+  status и `generated_at`; on-demand first.
 - **Public/application contracts:** read-only bounded Timeline query/result;
   no new event-store write port.
 - **Risks:** принять storage time за event time, схлопнуть conflicting dates,
-  потерять unknown precision.
+  потерять explicit unknown precision.
 - **Explicit out-of-scope:** background watcher, event sourcing, timeline DB и
-  automatic date extraction без provenance.
+  automatic date/LLM extraction, approximate precision и fallback к `created`.
 - **Acceptance boundary:** timeline честно различает event time, storage time
-  и unknown; rebuild из vault даёт current result.
+  и unknown; rebuild из vault даёт current result без heuristic date guessing.
 
 ### Stage 4 — Self Model v1
 
@@ -834,28 +986,34 @@ context и derived explanation divergence.
 ### Stage 7 — Compare v1 + Prediction & Calibration v1
 
 - **Цель:** сопоставить likely user choice с independent recommendation и
-  измерять observed prediction quality.
-- **Входные зависимости:** Stage 5 context, Stage 6 prediction, canonical
-  actual choice/outcome from Stage 2.
+  измерить, насколько текущая derivation policy воспроизводит исторические
+  decisions.
+- **Входные зависимости:** Stage 5 context, Stage 6 Simulate Me derivation,
+  canonical Stage 2 Decision Journal с pre-choice information и actual
+  `observed_decision`.
 - **Canonical changes:** only user-reviewed actual decisions/outcomes; no
-  calibration fields in notes.
-- **Derived state:** two independent outputs, divergence reasons, comparisons,
-  confidence buckets and calibration aggregates.
+  calibration fields or prediction history in user notes.
+- **Derived state:** two independent outputs, retrospective pre-choice
+  predictions, divergence reasons, comparisons, confidence buckets and
+  rebuildable calibration aggregates.
 - **Public/application contracts:** Compare result always contains both branches;
-  Calibration result reports sample/unknowns and avoids overclaiming.
-- **Risks:** recommendation contamination by prediction, outcome selection bias,
-  false precision from tiny sample.
+  Calibration result reports replay sample/unknowns and derivation version.
+- **Risks:** recommendation contamination by prediction, actual-choice leakage
+  into backtest, outcome selection bias, false precision from tiny sample.
 - **Explicit out-of-scope:** ML training pipeline, automatic goal changes,
+  prospective calibration, policy-governed prediction audit record,
   optimization against a hidden reward and universal user score.
-- **Acceptance boundary:** disagreement is visible; unobserved outcomes are not
-  counted as failures or successes.
+- **Acceptance boundary:** chosen option, reasons and later outcome are masked
+  from historical Simulate Me input; calibration can be deleted and rebuilt
+  from current vault without losing user data.
 
 ### Stage 8 — Active Personal Learning v1
 
 - **Цель:** optional questions only where evidence is weak, conflicting or
   missing.
 - **Входные зависимости:** Stage 4 confidence/conflict, Stage 5 retrieval,
-  Stage 7 comparison/calibration signals.
+  Stage 7 comparison and optional retrospective calibration diagnostics; no
+  prospective prediction history is required.
 - **Canonical changes:** only reviewed user answers through existing capture and
   Safe Write.
 - **Derived state:** question candidate, reason, expiry/rate state and expected
@@ -880,30 +1038,34 @@ context и derived explanation divergence.
 
 1. Ввести понятие reviewed Personal Memory note поверх уже существующей managed
    note.
-2. Разрешить два optional additive front matter fields:
-   `self_kind` и `domain`.
-3. Для нового Personal Memory input требовать `self_kind`; для старых и
-   обычных notes отсутствие обоих fields остаётся valid.
-4. Ограничить `self_kind` значениями `memory`, `preference`, `belief`, `goal`,
-   `decision`, `outcome`.
+2. Разрешить пять additive scalar fields: `evidence_kind`, `self_kind`,
+   optional `domain`, `evidence_at` и `evidence_at_precision`.
+3. Для нового Stage 1 Personal Memory input требовать
+   `evidence_kind: explicit_user_fact | user_statement`,
+   `self_kind: memory | preference | belief | goal` и
+   `evidence_at: <RFC3339 with offset> | unknown` с согласованной precision.
+4. `observed_decision`, `outcome_later_observation`, `decision` и `outcome` не
+   входят в Stage 1 allowlist; они появляются только в Stage 2 вместе со
+   stricter Decision Journal/outcome contract.
 5. Ограничить `domain` одним lowercase ASCII slug до 64 bytes; domain registry
    не вводить.
 6. Считать body canonical только после user review и existing Safe Write.
-7. Не интерпретировать `self_kind` как evidence kind, confidence, truth или
-   inferred profile.
+7. Не интерпретировать ни одну canonical field как confidence, truth или
+   inferred profile; `model_inference` не допускается как `evidence_kind`.
 
 ### Файлы и слои
 
 Минимальный будущий change set должен ограничиться следующими слоями:
 
-- `src/second_brain/domain/models.py` — маленький typed value/enum для
-  разрешённых `self_kind`, если он нужен для общего domain validation; новый
-  `NoteType` не добавлять.
+- `src/second_brain/domain/models.py` — маленькие typed values/enums для
+  Stage 1 `EvidenceKind`, `SelfKind` и bounded temporal precision, если они
+  нужны для общего domain validation; новый `NoteType` не добавлять.
 - `src/second_brain/application/validation.py` — распознавать и проверять
-  optional fields при `build_report`, сохраняя существующее поведение для
-  notes без них.
+  additive fields и согласованную RFC3339/`unknown` temporal pair при
+  `build_report`, сохраняя существующее поведение для notes без них.
 - `src/second_brain/application/personal_memory.py` — новый reviewed DTO и
-  bounded use case/wrapper, не меняющий смысл `NoteDraft`.
+  bounded use case/wrapper, не меняющий смысл `NoteDraft` и не создающий
+  Decision Journal records.
 - `src/second_brain/application/ports.py`, `writes.py` и
   `src/second_brain/adapters/vault/writer.py` — только additive dedicated path
   для Personal Memory plan, который переиспользует существующие manifest,
@@ -917,18 +1079,20 @@ context и derived explanation divergence.
 `NoteDraft`, `SearchIndexPort`, Search DTO, `TranscriptionPort`, `LlmPort`,
 существующие research provenance и public Web/API contracts не менять. Если
 добавляется application wrapper, он принимает существующий `NoteDraft` как
-внутренний semantic content и добавляет только reviewed Personal Memory
-metadata.
+внутренний semantic content и добавляет только reviewed Stage 1 Personal Memory
+metadata. Stage 2 Decision Journal и outcome records в этот slice не входят.
 
 ### Backward compatibility и schema
 
 - `schema_version` остаётся `1`.
-- Notes без `self_kind`/`domain` не мигрируются и продолжают проходить scan,
-  Search и Retrieval.
-- Unknown front matter fields по-прежнему сохраняются round-trip; только два
-  согласованных поля получают explicit validation.
+- Notes без новых fields не мигрируются и продолжают проходить scan, Search и
+  Retrieval, но не получают typed Cognitive Twin evidence автоматически.
+- Unknown front matter fields по-прежнему сохраняются round-trip; только пять
+  согласованных fields получают explicit validation в Stage 1.
 - Неправильный type/shape нового поля даёт bounded diagnostic и не должен
   превращаться в silent coercion.
+- `evidence_at` принимает только RFC3339 с явным offset или literal `unknown`;
+  `evidence_at_precision` согласованно принимает только `exact` или `unknown`.
 - Новый path не меняет существующие note roots и не создаёт
   `NoteType.PERSONAL_MEMORY`.
 
@@ -953,16 +1117,20 @@ implementation task; сначала реализуется безопасное 
 ### Search projection interaction
 
 На следующем slice `SearchDocument`, `SearchHit`, `SearchIndexPort` и текущая
-candidate semantics не меняются. `self_kind`/`domain` не добавляются в Search
-DTO и не становятся hidden filter. Existing Search продолжает находить terms в
-title/body/tags; Self Retrieval и evidence filtering — отдельные Stage 5.
+candidate semantics не меняются. `evidence_kind`/`self_kind`/`domain`/temporal
+fields не добавляются в Search DTO и не становятся hidden filter. Existing
+Search продолжает находить terms в title/body/tags; Self Retrieval и evidence
+filtering — отдельные Stage 5.
 
 ### Validation и tests
 
 Обязательные проверки будущего slice:
 
-- accepted optional `self_kind` values и canonical lowercase `domain`;
-- missing fields на старых notes;
+- accepted Stage 1 `evidence_kind` и `self_kind` allowlists, canonical lowercase
+  `domain`;
+- valid exact/unknown `evidence_at` + `evidence_at_precision` pairs;
+- missing fields на старых notes без автоматической классификации;
+- reject Stage 1 `decision/outcome` evidence/self kinds;
 - reject list/map/bool/empty/oversized/control-character values;
 - reject uppercase or path-like domain values;
 - YAML round-trip с unknown fields, comments и existing wikilinks;
@@ -979,8 +1147,11 @@ title/body/tags; Self Retrieval и evidence filtering — отдельные Sta
 
 ### Security
 
-- allowlist только для двух fields; никаких arbitrary front matter mappings;
+- allowlist только для согласованных scalar fields; никаких arbitrary front
+  matter mappings;
 - bounded UTF-8/ASCII sizes и отказ от control characters;
+- `evidence_at` не принимается как непроверенная дата, а `unknown` не заменяется
+  storage `created`;
 - никакого network, LLM, credential или background inference в validator/write
   path;
 - user review остаётся authority boundary, а inference и transcript считаются
@@ -991,9 +1162,10 @@ title/body/tags; Self Retrieval и evidence filtering — отдельные Sta
 
 ### Что НЕ входит
 
-Не входят Personal Memory Contract v2, Decision Journal runtime и update
-workflow, Timeline, Self Model, evidence graph persistence, Self Retrieval,
-RAG, embeddings, vector DB, Simulate Me, Compare, Calibration, Active Learning,
-automatic inference write-back, schema bump, new dependencies, new note type,
-domain registry, psychological profiling, live smoke, production deployment,
-issue creation и любые изменения `second-brain-vault`.
+Не входят Personal Memory Contract v2, Stage 2 `decision/outcome` evidence,
+Decision Journal runtime и update workflow, outcome observation records, Timeline,
+Self Model, evidence graph persistence, Self Retrieval, RAG, embeddings, vector
+DB, Simulate Me, Compare, Calibration, Active Learning, automatic inference
+write-back, schema bump, new dependencies, new note type, domain registry,
+psychological profiling, live smoke, production deployment, issue creation и
+любые изменения `second-brain-vault`.
