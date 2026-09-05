@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from enum import StrEnum
 from pathlib import PurePosixPath
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 _RFC3339_PATTERN = re.compile(
@@ -26,6 +26,36 @@ class NoteType(StrEnum):
     PROJECT = "project"
     AREA = "area"
     RESOURCE = "resource"
+
+
+class EvidenceKind(StrEnum):
+    """Закрытые provenance-классы Personal Memory Contract v1."""
+
+    EXPLICIT_USER_FACT = "explicit_user_fact"
+    USER_STATEMENT = "user_statement"
+
+
+class SelfKind(StrEnum):
+    """Закрытые semantic subjects Personal Memory Contract v1."""
+
+    MEMORY = "memory"
+    PREFERENCE = "preference"
+    BELIEF = "belief"
+    GOAL = "goal"
+
+
+class EvidenceAtPrecision(StrEnum):
+    """Точность canonical evidence time в Personal Memory Contract v1."""
+
+    EXACT = "exact"
+    UNKNOWN = "unknown"
+
+
+# Алиасы сохраняют нейтральное имя temporal value для application callers.
+TemporalPrecision = EvidenceAtPrecision
+EvidenceTimePrecision = EvidenceAtPrecision
+
+EvidenceAt = datetime | Literal["unknown"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +134,24 @@ class NoteRecord:
     created: datetime | None = None
     updated: datetime | None = None
     tags: tuple[str, ...] = ()
+    personal_memory: PersonalMemoryMetadata | None = None
+
+    @property
+    def personal_memory_metadata(self) -> PersonalMemoryMetadata | None:
+        """Вернуть additive projection под явным application-friendly именем."""
+
+        return self.personal_memory
+
+
+@dataclass(frozen=True, slots=True)
+class PersonalMemoryMetadata:
+    """Проверенная typed metadata projection enrolled managed note."""
+
+    evidence_kind: EvidenceKind
+    self_kind: SelfKind
+    evidence_at: EvidenceAt
+    evidence_at_precision: EvidenceAtPrecision
+    domain: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,10 +197,11 @@ def parse_rfc3339(value: object) -> datetime:
     """Разобрать RFC 3339 timestamp и потребовать явный UTC offset."""
 
     if isinstance(value, datetime):
-        result = value
+        value = value.isoformat()
     elif isinstance(value, date):
         raise ValueError("timestamp must include time")
-    elif isinstance(value, str):
+
+    if isinstance(value, str):
         if not _RFC3339_PATTERN.fullmatch(value):
             if _RFC3339_WITHOUT_OFFSET_PATTERN.fullmatch(value):
                 raise ValueError("timestamp must include an explicit UTC offset")
