@@ -162,6 +162,20 @@ criteria, тестов безопасности или проверки непо
 `--apply`, обойти dry-run/diff, изменить границу репозиториев или самостоятельно
 выполнить commit/push/PR/merge/deploy.
 
+## Night Shift Development Orchestrator v1
+
+Bounded repository protocol для явно активированного overnight batch описан в
+[`docs/automation/night-shift-v1.md`](docs/automation/night-shift-v1.md), а его
+машиночитаемая policy находится в `config/night-shift-v1.yaml`.
+
+- `enabled_by_default: false`: обычная задача не получает autonomous commit,
+  push, PR или merge права из-за наличия policy;
+- GitHub issue/PR state, exact SHA, review threads и CI остаются source of truth;
+- RED/YELLOW gates, failure budget и dependency blocking нельзя обходить;
+- Night Shift не ослабляет Safe Write, privacy, Python 3.14 и границу
+  `second-brain-vault`;
+- этот protocol не добавляет agent runtime, daemon, queue, DB или provider.
+
 ### Handoff
 
 Если задача действительно требует смены роли или агента, передайте только:
