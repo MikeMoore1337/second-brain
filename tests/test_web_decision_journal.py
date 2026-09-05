@@ -11,6 +11,7 @@ from typing import Any, cast
 import pytest
 from fastapi.testclient import TestClient
 
+from second_brain.adapters.vault import FileSystemVaultReader, FileSystemVaultWriter
 from second_brain.adapters.vault.frontmatter import parse_front_matter
 from second_brain.application.decision_journal import (
     DecisionJournalDraft,
@@ -38,6 +39,7 @@ from second_brain.entrypoints.web.app import (
 )
 from second_brain.entrypoints.web.review import (
     DECISION_JOURNAL_CONFIRMATION_PURPOSE,
+    MAX_CONFIRMATION_TOKEN_BYTES,
     OUTCOME_OBSERVATION_CONFIRMATION_PURPOSE,
     ReviewTokenCodec,
     ReviewTokenError,
@@ -51,6 +53,7 @@ LOOPBACK_BASE_URL = "http://127.0.0.1"
 DRAFT_HEADERS = {DRAFT_REQUEST_HEADER_NAME: DRAFT_REQUEST_HEADER_VALUE}
 DECISION_ID = parse_uuid7("0198f4c5-6a00-7000-8000-000000000002")
 FIXED_TIME = "2026-09-05T15:30:00Z"
+PLAN_SHA256 = "a" * 64
 
 
 def decision_payload(**overrides: object) -> dict[str, object]:
@@ -157,6 +160,7 @@ def dry_run_result() -> CreateManagedNoteResult:
             created=datetime(2026, 9, 5, 15, 30, tzinfo=UTC),
             relative_path="10 Projects/Stage 2.md",
             content="---\nid: test\n---\n## Stage 2\n",
+            plan_sha256=PLAN_SHA256,
         ),
     )
 
@@ -180,7 +184,13 @@ class RecordingStage2SaveService:
         self.prepare_decisions.append(draft)
         return dry_run_result()
 
-    def apply_decision_journal(self, draft: DecisionJournalDraft) -> CreateManagedNoteResult:
+    def apply_decision_journal(
+        self,
+        draft: DecisionJournalDraft,
+        *,
+        plan_sha256: str,
+    ) -> CreateManagedNoteResult:
+        assert plan_sha256 == PLAN_SHA256
         self.apply_decisions.append(draft)
         return created_result()
 
@@ -194,7 +204,10 @@ class RecordingStage2SaveService:
     def apply_outcome_observation(
         self,
         draft: OutcomeObservationDraft,
+        *,
+        plan_sha256: str,
     ) -> CreateManagedNoteResult:
+        assert plan_sha256 == PLAN_SHA256
         self.apply_outcomes.append(draft)
         return created_result()
 
@@ -288,8 +301,14 @@ def test_stage2_confirmation_tokens_are_purpose_separated_and_digest_only() -> N
     codec = ReviewTokenCodec(b"stage2-review-secret-that-is-at-least-32-bytes")
     decision = make_decision_draft()
     outcome = make_outcome_draft()
-    decision_token = codec.issue_decision_journal_confirmation(decision)
-    outcome_token = codec.issue_outcome_observation_confirmation(outcome)
+    decision_token = codec.issue_decision_journal_confirmation(
+        decision,
+        plan_sha256=PLAN_SHA256,
+    )
+    outcome_token = codec.issue_outcome_observation_confirmation(
+        outcome,
+        plan_sha256=PLAN_SHA256,
+    )
 
     decision_claims = codec.verify_decision_journal_confirmation(decision_token, decision)
     outcome_claims = codec.verify_outcome_observation_confirmation(outcome_token, outcome)
@@ -297,6 +316,8 @@ def test_stage2_confirmation_tokens_are_purpose_separated_and_digest_only() -> N
     assert outcome_claims.purpose == OUTCOME_OBSERVATION_CONFIRMATION_PURPOSE
     assert len(decision_claims.draft_sha256) == 64
     assert len(decision_claims.metadata_sha256) == 64
+    assert decision_claims.plan_sha256 == PLAN_SHA256
+    assert len(decision_token.encode("ascii")) <= MAX_CONFIRMATION_TOKEN_BYTES
     assert decision.draft.content not in decision_token
     assert outcome.draft.content not in outcome_token
 
@@ -340,8 +361,14 @@ def test_stage2_confirmation_tokens_are_isolated_from_generic_and_personal_memor
         draft=decision.draft,
         metadata=personal_memory_metadata,
     )
-    decision_token = codec.issue_decision_journal_confirmation(decision)
-    outcome_token = codec.issue_outcome_observation_confirmation(outcome)
+    decision_token = codec.issue_decision_journal_confirmation(
+        decision,
+        plan_sha256=PLAN_SHA256,
+    )
+    outcome_token = codec.issue_outcome_observation_confirmation(
+        outcome,
+        plan_sha256=PLAN_SHA256,
+    )
 
     for token in (generic_token, personal_memory_token):
         with pytest.raises(ReviewTokenError):
@@ -374,7 +401,7 @@ def test_decision_confirmation_binds_each_note_and_metadata_mutation() -> None:
 
     codec = ReviewTokenCodec(b"decision-binding-secret-that-is-at-least-32-bytes")
     draft = make_decision_draft()
-    token = codec.issue_decision_journal_confirmation(draft)
+    token = codec.issue_decision_journal_confirmation(draft, plan_sha256=PLAN_SHA256)
     changed_body = render_decision_journal_body(
         situation="Нужно выбрать следующий проект.",
         available_options=("Сделать A", "Сделать B"),
@@ -406,7 +433,7 @@ def test_outcome_confirmation_binds_each_note_relation_and_metadata_mutation() -
 
     codec = ReviewTokenCodec(b"outcome-binding-secret-that-is-at-least-32-bytes")
     draft = make_outcome_draft()
-    token = codec.issue_outcome_observation_confirmation(draft)
+    token = codec.issue_outcome_observation_confirmation(draft, plan_sha256=PLAN_SHA256)
     changed_body = render_outcome_observation_body(
         actual_result="Изменённый результат.",
         reassessment="",
@@ -818,6 +845,174 @@ def test_real_stage2_save_uses_core_and_rechecks_outcome_target(tmp_path: Path) 
     assert not decision_path.exists()
 
 
+def test_stage2_plan_digest_excludes_generated_uuid_and_created(tmp_path: Path) -> None:
+    """The stable Stage 2 precondition ignores only generated id and created fields."""
+
+    vault = create_vault(tmp_path / "vault")
+    for filename in ("Project.md", "Area.md", "Resource.md", "Zettel.md"):
+        (vault / "_templates" / filename).write_text("# template\n", encoding="utf-8")
+
+    report = FileSystemVaultReader(vault).scan()
+    assert report.manifest is not None
+    writer = FileSystemVaultWriter(vault)
+    first = writer.prepare_from_decision_journal_draft(
+        report.manifest,
+        make_decision_draft(),
+        parse_uuid7("0198f4c5-6a00-7000-8000-000000000010"),
+        datetime(2026, 9, 5, 15, 30, tzinfo=UTC),
+    )
+    second = writer.prepare_from_decision_journal_draft(
+        report.manifest,
+        make_decision_draft(),
+        parse_uuid7("0198f4c5-6a00-7000-8000-000000000011"),
+        datetime(2026, 9, 6, 16, 45, tzinfo=UTC),
+    )
+    generic = writer.prepare(
+        report.manifest,
+        NoteType.PROJECT,
+        "Generic",
+        parse_uuid7("0198f4c5-6a00-7000-8000-000000000012"),
+        datetime(2026, 9, 5, 15, 30, tzinfo=UTC),
+    )
+
+    assert first.content != second.content
+    assert first.plan_sha256 is not None
+    assert first.plan_sha256 == second.plan_sha256
+    assert generic.plan_sha256 is None
+
+
+def test_decision_apply_rejects_template_drift_before_write(tmp_path: Path) -> None:
+    """A same-payload apply rejects a changed selected template without publication."""
+
+    vault = create_vault(tmp_path / "vault")
+    for filename in ("Project.md", "Area.md", "Resource.md", "Zettel.md"):
+        (vault / "_templates" / filename).write_text("# template A\n", encoding="utf-8")
+
+    with TestClient(
+        create_app(vault_path_override=str(vault)),
+        base_url=LOOPBACK_BASE_URL,
+    ) as client:
+        prepared = client.post(
+            "/api/drafts/decision-journal/save/prepare",
+            json={"decision": decision_payload()},
+            headers=DRAFT_HEADERS,
+        )
+        assert prepared.status_code == 200, prepared.text
+        before_drift = snapshot_tree(vault)
+        (vault / "_templates" / "Project.md").write_text("# template B\n", encoding="utf-8")
+        after_drift = snapshot_tree(vault)
+        applied = client.post(
+            "/api/drafts/decision-journal/save/apply",
+            json={
+                "confirmation_token": prepared.json()["confirmation_token"],
+                "decision": decision_payload(),
+            },
+            headers=DRAFT_HEADERS,
+        )
+
+    assert before_drift != after_drift
+    assert applied.status_code == 409, applied.text
+    assert applied.json()["error"]["code"] == "SAVE_PREFLIGHT_CONFLICT"
+    assert snapshot_tree(vault) == after_drift
+    assert not (vault / prepared.json()["note"]["relative_path"]).exists()
+
+
+def test_decision_apply_rejects_manifest_routing_drift_before_write(tmp_path: Path) -> None:
+    """A changed manifest target root invalidates the prepared plan before write."""
+
+    vault = create_vault(tmp_path / "vault")
+    (vault / "11 Decisions").mkdir()
+    for filename in ("Project.md", "Area.md", "Resource.md", "Zettel.md"):
+        (vault / "_templates" / filename).write_text("# template\n", encoding="utf-8")
+
+    with TestClient(
+        create_app(vault_path_override=str(vault)),
+        base_url=LOOPBACK_BASE_URL,
+    ) as client:
+        prepared = client.post(
+            "/api/drafts/decision-journal/save/prepare",
+            json={"decision": decision_payload()},
+            headers=DRAFT_HEADERS,
+        )
+        assert prepared.status_code == 200, prepared.text
+        manifest_path = vault / "second-brain.yaml"
+        manifest_path.write_text(
+            manifest_path.read_text(encoding="utf-8").replace(
+                "  projects: 10 Projects\n",
+                "  projects: 11 Decisions\n",
+            ),
+            encoding="utf-8",
+        )
+        after_drift = snapshot_tree(vault)
+        applied = client.post(
+            "/api/drafts/decision-journal/save/apply",
+            json={
+                "confirmation_token": prepared.json()["confirmation_token"],
+                "decision": decision_payload(),
+            },
+            headers=DRAFT_HEADERS,
+        )
+
+    assert applied.status_code == 409, applied.text
+    assert applied.json()["error"]["code"] == "SAVE_PREFLIGHT_CONFLICT"
+    assert snapshot_tree(vault) == after_drift
+
+
+def test_outcome_apply_rejects_template_drift_and_leaves_journal_unchanged(
+    tmp_path: Path,
+) -> None:
+    """Outcome plan drift cannot alter the already valid Decision Journal."""
+
+    vault = create_vault(tmp_path / "vault")
+    for filename in ("Project.md", "Area.md", "Resource.md", "Zettel.md"):
+        (vault / "_templates" / filename).write_text("# template A\n", encoding="utf-8")
+
+    with TestClient(
+        create_app(vault_path_override=str(vault)),
+        base_url=LOOPBACK_BASE_URL,
+    ) as client:
+        decision_prepared = client.post(
+            "/api/drafts/decision-journal/save/prepare",
+            json={"decision": decision_payload()},
+            headers=DRAFT_HEADERS,
+        )
+        decision_applied = client.post(
+            "/api/drafts/decision-journal/save/apply",
+            json={
+                "confirmation_token": decision_prepared.json()["confirmation_token"],
+                "decision": decision_payload(),
+            },
+            headers=DRAFT_HEADERS,
+        )
+        assert decision_applied.status_code == 200, decision_applied.text
+        saved_decision = decision_applied.json()["note"]
+        decision_path = vault / saved_decision["relative_path"]
+        journal_before_outcome = decision_path.read_bytes()
+
+        outcome_prepared = client.post(
+            "/api/drafts/outcome-observation/save/prepare",
+            json={"outcome": outcome_payload(saved_decision["id"])},
+            headers=DRAFT_HEADERS,
+        )
+        assert outcome_prepared.status_code == 200, outcome_prepared.text
+        (vault / "_templates" / "Project.md").write_text("# template B\n", encoding="utf-8")
+        before_apply = snapshot_tree(vault)
+        outcome_applied = client.post(
+            "/api/drafts/outcome-observation/save/apply",
+            json={
+                "confirmation_token": outcome_prepared.json()["confirmation_token"],
+                "outcome": outcome_payload(saved_decision["id"]),
+            },
+            headers=DRAFT_HEADERS,
+        )
+
+    assert outcome_applied.status_code == 409, outcome_applied.text
+    assert outcome_applied.json()["error"]["code"] == "SAVE_PREFLIGHT_CONFLICT"
+    assert decision_path.read_bytes() == journal_before_outcome
+    assert snapshot_tree(vault) == before_apply
+    assert not (vault / "10 Projects" / "Результат выбора.md").exists()
+
+
 def test_real_stage2_success_writes_separate_linked_outcome(tmp_path: Path) -> None:
     """A successful Outcome adds a linked note and leaves the Journal byte-stable."""
 
@@ -902,9 +1097,23 @@ def test_ui_journal_is_separate_storage_free_and_shows_search_ids() -> None:
     assert "/api/drafts/outcome-observation/save/apply" in javascript
     assert "decisionConfirmationToken = null" in javascript
     assert "outcomeDecisionId.value = savedDecisionId" in javascript
+    assert "decisionEvidenceWrapper.hidden = !exact" in journal_javascript
+    assert "decisionEvidenceAt.hidden = !exact" in journal_javascript
+    assert "decisionNow.hidden = !exact" in journal_javascript
+    assert "outcomeEvidenceWrapper.hidden = !exact" in journal_javascript
+    assert "outcomeEvidenceAt.hidden = !exact" in journal_javascript
+    assert "outcomeNow.hidden = !exact" in journal_javascript
     assert 'addSearchField(fields, "ID", hit.id)' in javascript
     assert 'addSearchField(fields, "ID", note.id)' in javascript
     assert "localStorage" not in javascript
     assert "sessionStorage" not in javascript
     assert "indexedDB" not in javascript
     assert javascript.count("innerHTML") == 1
+    css = Path("src/second_brain/entrypoints/web/static/app.css").read_text(encoding="utf-8")
+    assert ".journal-evidence-field {\n  grid-template-columns:" in css
+    assert (
+        ".journal-evidence-field[hidden],\n"
+        ".journal-evidence-field [hidden] {\n"
+        "  display: none !important;\n"
+        "}"
+    ) in css

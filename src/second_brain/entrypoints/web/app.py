@@ -135,6 +135,7 @@ _SAVE_PREFLIGHT_CODES: Final[frozenset[str]] = frozenset(
         "CREATE_LINKED_PATH",
         "CREATE_PATH_ESCAPE",
         "CREATE_PLAN_FAILED",
+        "CREATE_PLAN_STALE",
         "CREATE_PREFLIGHT_FAILED",
         "CREATE_ROOT_MISSING",
         "CREATE_ROOT_NOT_DIRECTORY",
@@ -1321,7 +1322,7 @@ def create_app(
             return _error_response("DECISION_JOURNAL_INVALID_REQUEST")
 
         try:
-            review_tokens.verify_decision_journal_confirmation(
+            claims = review_tokens.verify_decision_journal_confirmation(
                 payload.confirmation_token,
                 draft,
             )
@@ -1329,7 +1330,7 @@ def create_app(
             return _error_response("STAGE2_SAVE_CONFIRMATION_INVALID")
 
         try:
-            result = saver.apply_decision_journal(draft)
+            result = saver.apply_decision_journal(draft, plan_sha256=claims.plan_sha256)
         except ConfigurationError, WriteSafetyError, OSError:
             return _error_response("VAULT_UNAVAILABLE")
         except Exception:
@@ -1368,7 +1369,7 @@ def create_app(
             return _error_response("OUTCOME_OBSERVATION_INVALID_REQUEST")
 
         try:
-            review_tokens.verify_outcome_observation_confirmation(
+            claims = review_tokens.verify_outcome_observation_confirmation(
                 payload.confirmation_token,
                 draft,
             )
@@ -1376,7 +1377,7 @@ def create_app(
             return _error_response("STAGE2_SAVE_CONFIRMATION_INVALID")
 
         try:
-            result = saver.apply_outcome_observation(draft)
+            result = saver.apply_outcome_observation(draft, plan_sha256=claims.plan_sha256)
         except ConfigurationError, WriteSafetyError, OSError:
             return _error_response("VAULT_UNAVAILABLE")
         except Exception:
@@ -1735,16 +1736,25 @@ def _prepare_stage2_response(
     relative_path = _safe_relative_path(result.plan.relative_path)
     if relative_path is None:
         return _error_response("SAVE_FAILED")
+    plan_sha256 = result.plan.plan_sha256
+    if type(plan_sha256) is not str:
+        return _error_response("SAVE_FAILED")
     try:
         diff = _plan_diff(result.plan, relative_path)
         if decision:
             if not isinstance(draft, DecisionJournalDraft):
                 raise ReviewTokenError()
-            confirmation_token = review_tokens.issue_decision_journal_confirmation(draft)
+            confirmation_token = review_tokens.issue_decision_journal_confirmation(
+                draft,
+                plan_sha256=plan_sha256,
+            )
         else:
             if not isinstance(draft, OutcomeObservationDraft):
                 raise ReviewTokenError()
-            confirmation_token = review_tokens.issue_outcome_observation_confirmation(draft)
+            confirmation_token = review_tokens.issue_outcome_observation_confirmation(
+                draft,
+                plan_sha256=plan_sha256,
+            )
     except ReviewTokenError, TypeError, UnicodeError, ValueError:
         return _error_response("SAVE_FAILED")
     response = PrepareResponse(

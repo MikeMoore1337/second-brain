@@ -67,7 +67,9 @@ _PERSONAL_MEMORY_CONFIRMATION_FIELDS = frozenset(
         "v",
     }
 )
-_STAGE2_CONFIRMATION_FIELDS = frozenset({"draft_sha256", "metadata_sha256", "purpose", "v"})
+_STAGE2_CONFIRMATION_FIELDS = frozenset(
+    {"draft_sha256", "metadata_sha256", "plan_sha256", "purpose", "v"}
+)
 
 
 class ReviewTokenError(ValueError):
@@ -126,12 +128,19 @@ class DecisionJournalConfirmationTokenClaims:
     version: int
     draft_sha256: str
     metadata_sha256: str
+    plan_sha256: str
 
     @property
     def note_draft_sha256(self) -> str:
         """Use an explicit name for the bound five-field NoteDraft digest."""
 
         return self.draft_sha256
+
+    @property
+    def precondition_sha256(self) -> str:
+        """Expose the prepared-plan digest under its precondition meaning."""
+
+        return self.plan_sha256
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,12 +151,19 @@ class OutcomeObservationConfirmationTokenClaims:
     version: int
     draft_sha256: str
     metadata_sha256: str
+    plan_sha256: str
 
     @property
     def note_draft_sha256(self) -> str:
         """Use an explicit name for the bound five-field NoteDraft digest."""
 
         return self.draft_sha256
+
+    @property
+    def precondition_sha256(self) -> str:
+        """Expose the prepared-plan digest under its precondition meaning."""
+
+        return self.plan_sha256
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -308,14 +324,21 @@ class ReviewTokenCodec:
             raise ReviewTokenError()
         return claims
 
-    def issue_decision_journal_confirmation(self, draft: DecisionJournalDraft) -> str:
+    def issue_decision_journal_confirmation(
+        self,
+        draft: DecisionJournalDraft,
+        *,
+        plan_sha256: str,
+    ) -> str:
         """Issue a standalone confirmation bound to one normalized Journal draft."""
 
         normalized = _normalized_decision_journal_draft(draft)
+        plan_sha256 = _validate_digest(plan_sha256)
         return self._issue(
             {
                 "draft_sha256": _draft_digest(normalized.draft),
                 "metadata_sha256": _stage2_metadata_digest(normalized.metadata, decision=True),
+                "plan_sha256": plan_sha256,
                 "purpose": DECISION_JOURNAL_CONFIRMATION_PURPOSE,
                 "v": STAGE2_CONFIRMATION_VERSION,
             },
@@ -342,14 +365,21 @@ class ReviewTokenCodec:
         )
         return claims
 
-    def issue_outcome_observation_confirmation(self, draft: OutcomeObservationDraft) -> str:
+    def issue_outcome_observation_confirmation(
+        self,
+        draft: OutcomeObservationDraft,
+        *,
+        plan_sha256: str,
+    ) -> str:
         """Issue a standalone confirmation bound to one normalized Outcome draft."""
 
         normalized = _normalized_outcome_observation_draft(draft)
+        plan_sha256 = _validate_digest(plan_sha256)
         return self._issue(
             {
                 "draft_sha256": _draft_digest(normalized.draft),
                 "metadata_sha256": _stage2_metadata_digest(normalized.metadata, decision=False),
+                "plan_sha256": plan_sha256,
                 "purpose": OUTCOME_OBSERVATION_CONFIRMATION_PURPOSE,
                 "v": STAGE2_CONFIRMATION_VERSION,
             },
@@ -716,7 +746,7 @@ def _decision_journal_confirmation_claims_from_payload(
 ) -> DecisionJournalConfirmationTokenClaims:
     """Decode the exact Decision Journal purpose/version contract."""
 
-    draft_sha256, metadata_sha256 = _stage2_confirmation_digests(
+    draft_sha256, metadata_sha256, plan_sha256 = _stage2_confirmation_digests(
         payload,
         purpose=DECISION_JOURNAL_CONFIRMATION_PURPOSE,
     )
@@ -725,6 +755,7 @@ def _decision_journal_confirmation_claims_from_payload(
         version=STAGE2_CONFIRMATION_VERSION,
         draft_sha256=draft_sha256,
         metadata_sha256=metadata_sha256,
+        plan_sha256=plan_sha256,
     )
 
 
@@ -733,7 +764,7 @@ def _outcome_observation_confirmation_claims_from_payload(
 ) -> OutcomeObservationConfirmationTokenClaims:
     """Decode the exact Outcome Observation purpose/version contract."""
 
-    draft_sha256, metadata_sha256 = _stage2_confirmation_digests(
+    draft_sha256, metadata_sha256, plan_sha256 = _stage2_confirmation_digests(
         payload,
         purpose=OUTCOME_OBSERVATION_CONFIRMATION_PURPOSE,
     )
@@ -742,6 +773,7 @@ def _outcome_observation_confirmation_claims_from_payload(
         version=STAGE2_CONFIRMATION_VERSION,
         draft_sha256=draft_sha256,
         metadata_sha256=metadata_sha256,
+        plan_sha256=plan_sha256,
     )
 
 
@@ -749,7 +781,7 @@ def _stage2_confirmation_digests(
     payload: object,
     *,
     purpose: str,
-) -> tuple[str, str]:
+) -> tuple[str, str, str]:
     """Parse one exact signed Stage 2 digest payload without extra claims."""
 
     if type(payload) is not dict or set(payload) != _STAGE2_CONFIRMATION_FIELDS:
@@ -760,7 +792,11 @@ def _stage2_confirmation_digests(
         or payload.get("purpose") != purpose
     ):
         raise ReviewTokenError()
-    return _strict_digest(payload, "draft_sha256"), _strict_digest(payload, "metadata_sha256")
+    return (
+        _strict_digest(payload, "draft_sha256"),
+        _strict_digest(payload, "metadata_sha256"),
+        _strict_digest(payload, "plan_sha256"),
+    )
 
 
 def _source_from_payload(payload: object) -> SourceProvenance:
@@ -812,7 +848,12 @@ def _strict_optional_string(payload: dict[str, object], field: str) -> str | Non
 def _strict_digest(payload: dict[str, object], field: str) -> str:
     """Read a canonical lowercase SHA-256 hex digest without coercion."""
 
-    value = payload.get(field)
+    return _validate_digest(payload.get(field))
+
+
+def _validate_digest(value: object) -> str:
+    """Validate one lowercase SHA-256 digest used as an opaque binding."""
+
     if type(value) is not str or len(value) != hashlib.sha256().digest_size * 2:
         raise ReviewTokenError()
     if any(character not in "0123456789abcdef" for character in value):

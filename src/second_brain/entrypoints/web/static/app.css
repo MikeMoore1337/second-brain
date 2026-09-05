@@ -999,6 +999,11 @@ textarea#review-content {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+.journal-evidence-field[hidden],
+.journal-evidence-field [hidden] {
+  display: none !important;
+}
+
 .journal-evidence-field .draft-field-label,
 .journal-evidence-field input {
   grid-column: 1 / -1;

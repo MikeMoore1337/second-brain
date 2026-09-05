@@ -80,6 +80,7 @@ class CreateManagedNoteFromDecisionJournalDraftRequest:
     draft: DecisionJournalDraft
     apply: bool = False
     now: datetime | None = None
+    expected_plan_sha256: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +90,7 @@ class CreateManagedNoteFromOutcomeObservationDraftRequest:
     draft: OutcomeObservationDraft
     apply: bool = False
     now: datetime | None = None
+    expected_plan_sha256: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +113,7 @@ class CreateNotePlan:
     relative_path: str
     content: str
     target_root_relative: str = ""
+    plan_sha256: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

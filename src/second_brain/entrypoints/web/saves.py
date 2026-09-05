@@ -71,6 +71,8 @@ class DraftSaveService(Protocol):
     def apply_decision_journal(
         self,
         draft: DecisionJournalDraft,
+        *,
+        plan_sha256: str,
     ) -> CreateManagedNoteResult:
         """Apply one confirmed Decision Journal through Stage 2 core."""
 
@@ -83,6 +85,8 @@ class DraftSaveService(Protocol):
     def apply_outcome_observation(
         self,
         draft: OutcomeObservationDraft,
+        *,
+        plan_sha256: str,
     ) -> CreateManagedNoteResult:
         """Apply one confirmed Outcome Observation through Stage 2 core."""
 
@@ -137,10 +141,19 @@ class LazyVaultDraftSaveService:
 
         return self._execute_decision_journal(draft, apply=False)
 
-    def apply_decision_journal(self, draft: DecisionJournalDraft) -> CreateManagedNoteResult:
+    def apply_decision_journal(
+        self,
+        draft: DecisionJournalDraft,
+        *,
+        plan_sha256: str,
+    ) -> CreateManagedNoteResult:
         """Execute Decision Journal Safe Write apply with ``apply=True``."""
 
-        return self._execute_decision_journal(draft, apply=True)
+        return self._execute_decision_journal(
+            draft,
+            apply=True,
+            expected_plan_sha256=plan_sha256,
+        )
 
     def prepare_outcome_observation(
         self,
@@ -153,10 +166,16 @@ class LazyVaultDraftSaveService:
     def apply_outcome_observation(
         self,
         draft: OutcomeObservationDraft,
+        *,
+        plan_sha256: str,
     ) -> CreateManagedNoteResult:
         """Execute Outcome Observation Safe Write apply with ``apply=True``."""
 
-        return self._execute_outcome_observation(draft, apply=True)
+        return self._execute_outcome_observation(
+            draft,
+            apply=True,
+            expected_plan_sha256=plan_sha256,
+        )
 
     def _execute_text(self, draft: NoteDraft, *, apply: bool) -> CreateManagedNoteResult:
         """Run the existing text Safe Write with a server-selected phase."""
@@ -205,6 +224,7 @@ class LazyVaultDraftSaveService:
         draft: DecisionJournalDraft,
         *,
         apply: bool,
+        expected_plan_sha256: str | None = None,
     ) -> CreateManagedNoteResult:
         """Compose the structured Decision Journal with the existing core use case."""
 
@@ -213,6 +233,7 @@ class LazyVaultDraftSaveService:
             CreateManagedNoteFromDecisionJournalDraftRequest(
                 draft=draft,
                 apply=apply,
+                expected_plan_sha256=expected_plan_sha256,
             )
         )
 
@@ -221,6 +242,7 @@ class LazyVaultDraftSaveService:
         draft: OutcomeObservationDraft,
         *,
         apply: bool,
+        expected_plan_sha256: str | None = None,
     ) -> CreateManagedNoteResult:
         """Compose the structured Outcome with current-target core validation."""
 
@@ -229,6 +251,7 @@ class LazyVaultDraftSaveService:
             CreateManagedNoteFromOutcomeObservationDraftRequest(
                 draft=draft,
                 apply=apply,
+                expected_plan_sha256=expected_plan_sha256,
             )
         )
 
