@@ -67,6 +67,7 @@ from second_brain.application.writes import (
 )
 from second_brain.config import ConfigurationError, load_config
 from second_brain.domain.models import NoteType
+from second_brain.entrypoints.web.app import create_app
 
 
 class OutputFormat(StrEnum):
@@ -136,6 +137,7 @@ def callback(
 
 @web_app.command("serve")
 def web_serve(
+    ctx: typer.Context,
     port: Annotated[
         int,
         typer.Option(
@@ -146,9 +148,13 @@ def web_serve(
 ) -> None:
     """Запустить локальный Web GUI только на 127.0.0.1."""
 
+    options = _root_options(ctx)
+    application = create_app(
+        env_file=options.env_file,
+        vault_path_override=options.vault_path,
+    )
     uvicorn.run(
-        "second_brain.entrypoints.web.app:create_app",
-        factory=True,
+        application,
         host=WEB_HOST,
         port=port,
     )

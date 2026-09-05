@@ -40,24 +40,33 @@ uv run second-brain web serve --port 8123
 
 Команда слушает только `127.0.0.1`; `--port` принимает значение от `1` до
 `65535`, а default — `8000`. В GUI есть Add modes `URL` и `Text`, которые через
-same-origin API создают read-only `NoteDraft`; URL дополнительно показывает
-bounded `SourceProvenance` рядом с draft. Для реальной операции draft нужны
-`CLOUDFLARE_ACCOUNT_ID` и `CLOUDFLARE_API_TOKEN`, но они читаются только при
-POST draft operation. Browser не пишет в vault или Git и не сохраняет draft.
-Authentication, public bind, deploy, PWA, Markdown Preview, Edit и Save в этот
-этап не входят.
+same-origin API создают `NoteDraft`; URL дополнительно показывает bounded
+`SourceProvenance` рядом с draft. После генерации пользователь редактирует
+только пять semantic fields, может запросить безопасный Markdown preview и
+отдельно нажать `Сохранить в vault`. `CLOUDFLARE_ACCOUNT_ID` и
+`CLOUDFLARE_API_TOKEN` нужны только для генерации draft; vault-конфигурация
+(`--env-file`/`--vault-path`) загружается только при явном Save. Browser не
+выбирает path, identity, timestamp, apply или Git metadata и не сохраняет
+review state в persistent browser storage. Authentication, public bind, deploy
+и PWA в этот этап не входят.
 
 API surface:
 
 ```text
 POST /api/drafts/text {"text":"..."}
 POST /api/drafts/url  {"url":"https://example.com/article"}
+POST /api/drafts/preview {"content":"..."}
+POST /api/drafts/save {"review_token":"...", "draft": {"title", "note_type", "content", "tags", "links"}}
 ```
 
-Оба ответа имеют форму `{"draft": {"title", "note_type", "content", "tags",
-"links"}, "sources": [...]}`. API принимает только строгий JSON, ответы
-`draft` и ошибки помечены `Cache-Control: no-store`, а browser общается только
-с same-origin `/api/...`. Ошибки не раскрывают provider/upstream details.
+Ответы генерации имеют форму `{"draft": {"title", "note_type", "content", "tags", "links"},
+"sources": [...], "review_token":"..."}`. Preview возвращает
+только server-rendered safe HTML для одного dedicated container. Save возвращает
+только `status` и `note.id/type/created/relative_path`; `sources`, абсолютные
+пути, receipt и Git metadata в Save request/response запрещены. API принимает
+только строгий JSON, все draft routes помечены `Cache-Control: no-store`, а
+browser общается только с same-origin `/api/...`. Ошибки не раскрывают
+provider/upstream или filesystem details.
 
 ## Public web, RSS, YouTube и GitHub research
 

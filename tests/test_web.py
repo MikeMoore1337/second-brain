@@ -72,7 +72,8 @@ def test_packaged_static_assets_are_cwd_independent(
     assert '"X-Second-Brain-Request": "draft-v1"' in javascript.text
     assert "http://" not in javascript.text
     assert "https://" not in javascript.text
-    assert "innerHTML" not in javascript.text
+    assert javascript.text.count("innerHTML") == 1
+    assert "preview.innerHTML = html" in javascript.text
     assert "localStorage" not in javascript.text
     assert "sessionStorage" not in javascript.text
     assert "indexedDB" not in javascript.text
@@ -110,7 +111,7 @@ def test_web_serve_uses_fixed_loopback_and_fake_runner(
 ) -> None:
     calls: list[dict[str, Any]] = []
 
-    def fake_run(application: str, **kwargs: Any) -> None:
+    def fake_run(application: object, **kwargs: Any) -> None:
         calls.append({"application": application, **kwargs})
 
     monkeypatch.setattr("second_brain.entrypoints.cli.app.uvicorn.run", fake_run)
@@ -118,14 +119,49 @@ def test_web_serve_uses_fixed_loopback_and_fake_runner(
     result = runner.invoke(app, ["web", "serve", "--port", "8123"])
 
     assert result.exit_code == 0
-    assert calls == [
-        {
-            "application": "second_brain.entrypoints.web.app:create_app",
-            "factory": True,
-            "host": "127.0.0.1",
-            "port": 8123,
-        }
-    ]
+    assert len(calls) == 1
+    assert calls[0]["host"] == "127.0.0.1"
+    assert calls[0]["port"] == 8123
+    assert "factory" not in calls[0]
+    assert getattr(calls[0]["application"], "title", None) == "Second Brain"
+
+
+def test_web_serve_forwards_global_vault_options_to_app_object(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app_calls: list[dict[str, object]] = []
+    runner_calls: list[dict[str, object]] = []
+    sentinel = object()
+    env_file = tmp_path / ".env"
+
+    def fake_create_app(**kwargs: object) -> object:
+        app_calls.append(kwargs)
+        return sentinel
+
+    def fake_run(application: object, **kwargs: object) -> None:
+        runner_calls.append({"application": application, **kwargs})
+
+    monkeypatch.setattr("second_brain.entrypoints.cli.app.create_app", fake_create_app)
+    monkeypatch.setattr("second_brain.entrypoints.cli.app.uvicorn.run", fake_run)
+
+    result = runner.invoke(
+        app,
+        [
+            "--env-file",
+            str(env_file),
+            "--vault-path",
+            "relative-vault",
+            "web",
+            "serve",
+            "--port",
+            "8123",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert app_calls == [{"env_file": env_file, "vault_path_override": "relative-vault"}]
+    assert runner_calls == [{"application": sentinel, "host": "127.0.0.1", "port": 8123}]
 
 
 @pytest.mark.parametrize("port", ["0", "65536", "not-a-port"])
