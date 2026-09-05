@@ -109,6 +109,24 @@ Decision/Outcome state хранится только в памяти стран�
 storage и новый frontend framework не используются. `schema_version` не меняется,
 а `second-brain-vault` остаётся отдельным и нетронутым репозиторием.
 
+### Web Personal Timeline v1
+
+Локальный Web GUI предоставляет отдельную read-only surface `Personal Timeline`
+через `POST /api/timeline` с purpose header `timeline-v1`. Это thin projection:
+lazy service на каждый запрос загружает config, создаёт
+`FileSystemVaultReader` и вызывает только existing
+`BuildPersonalTimeline(PersonalTimelineRequest)`. Web не дублирует eligibility,
+event time, evidence integrity, summary или ordering и не использует Search,
+LLM, cache или persistent state.
+
+Ответ сохраняет отдельные `known_items` и `unknown_items`: canonical event time
+остаётся `event_at`, а неизвестное время передаётся literal `unknown`; storage
+timestamps показываются только как отдельный audit detail. Browser рендерит
+Timeline values через DOM `textContent`, не хранит response в persistent storage
+и не сортирует items повторно. Initial load, смена порядка и `Обновить` каждый
+раз запускают свежую on-demand сборку current vault; watcher/polling, pagination
+и Stage 4 Self Model в этот slice не входят.
+
 ### Voice Capture v1
 
 Voice mode принимает короткую запись через browser `MediaRecorder` либо локальный
