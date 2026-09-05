@@ -7,6 +7,31 @@
 репозиторий с пользовательскими Markdown/YAML-знаниями, вложениями, шаблонами и
 безопасной частью конфигурации Obsidian.
 
+## Web GUI foundation v1
+
+Локальный Web GUI теперь является реальным entrypoint/adaptor поверх будущего
+application core:
+
+```text
+Browser
+   |
+FastAPI web entrypoint
+   |
+future application use cases
+```
+
+`second-brain web serve` запускает packaged HTML/CSS/JavaScript shell только на
+`127.0.0.1` (default port `8000`, опциональный bounded `--port`).
+`create_app()` не загружает vault configuration, provider credentials, research
+или LLM, не вызывает сеть, Git, Safe Write и background workers. `GET /` отдаёт
+shell с `Memory` и `Growth`, а `GET /healthz` возвращает только deterministic
+`{"status":"ok"}`. Static assets разрешаются относительно Python package и
+защищены от directory listing/path traversal и базовыми security headers.
+
+В v1 browser не имеет write authority: Add URL/Text, research, LLM, review,
+Safe Write, auth, public exposure, deploy, PWA и frontend framework остаются
+отдельными будущими задачами.
+
 Vault является каноническим источником истины. Индексы, SQLite, embeddings и
 кэш относятся к производному состоянию и могут быть пересозданы из vault.
 

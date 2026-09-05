@@ -27,6 +27,24 @@ uv run second-brain --env-file .env doctor
 uv run second-brain --env-file .env vault validate
 ```
 
+## Локальный Web GUI foundation
+
+Web GUI v1 — это небольшой packaged browser shell поверх будущего application
+core. Он не требует конфигурации vault или Cloudflare и по умолчанию доступен
+только локально:
+
+```powershell
+uv run second-brain web serve
+uv run second-brain web serve --port 8123
+```
+
+Команда слушает только `127.0.0.1`; `--port` принимает значение от `1` до
+`65535`, а default — `8000`. В foundation входят shell с разделами `Memory` и
+`Growth`, локальные HTML/CSS/JavaScript assets и безопасный `GET /healthz`.
+Реальные Add URL/Text, research, LLM, review и Safe Write flow появятся в
+отдельных задачах. Authentication, public bind, deploy, PWA и frontend
+framework в этот этап не входят.
+
 ## Public web, RSS, YouTube и GitHub research
 
 Read-only команда `research read` читает одну публичную web-страницу через
