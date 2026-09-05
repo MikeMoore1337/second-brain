@@ -407,3 +407,5 @@ loopback Host/Origin checks, raw body cap и `Cache-Control: no-store`. CLI
 `second-brain search` остаётся read-only. Persistent DB/cache, file watcher,
 incremental index, embeddings, vector search, RAG и Cognitive Twin здесь не
 реализуются.
+
+Design-only roadmap будущего Personal Cognitive Twin: [design-roadmap-v1.md](../cognitive-twin/design-roadmap-v1.md).
