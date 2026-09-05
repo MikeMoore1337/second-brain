@@ -27,11 +27,11 @@ uv run second-brain --env-file .env doctor
 uv run second-brain --env-file .env vault validate
 ```
 
-## Локальный Web GUI foundation
+## Локальный Web GUI
 
-Web GUI v1 — это небольшой packaged browser shell поверх будущего application
-core. Он не требует конфигурации vault или Cloudflare и по умолчанию доступен
-только локально:
+Web GUI v1 — это небольшой packaged browser shell поверх существующих application
+gateways. Shell и `GET /healthz` по-прежнему создаются без конфигурации vault,
+Cloudflare credentials, сети или записи и по умолчанию доступны только локально:
 
 ```powershell
 uv run second-brain web serve
@@ -39,11 +39,25 @@ uv run second-brain web serve --port 8123
 ```
 
 Команда слушает только `127.0.0.1`; `--port` принимает значение от `1` до
-`65535`, а default — `8000`. В foundation входят shell с разделами `Memory` и
-`Growth`, локальные HTML/CSS/JavaScript assets и безопасный `GET /healthz`.
-Реальные Add URL/Text, research, LLM, review и Safe Write flow появятся в
-отдельных задачах. Authentication, public bind, deploy, PWA и frontend
-framework в этот этап не входят.
+`65535`, а default — `8000`. В GUI есть Add modes `URL` и `Text`, которые через
+same-origin API создают read-only `NoteDraft`; URL дополнительно показывает
+bounded `SourceProvenance` рядом с draft. Для реальной операции draft нужны
+`CLOUDFLARE_ACCOUNT_ID` и `CLOUDFLARE_API_TOKEN`, но они читаются только при
+POST draft operation. Browser не пишет в vault или Git и не сохраняет draft.
+Authentication, public bind, deploy, PWA, Markdown Preview, Edit и Save в этот
+этап не входят.
+
+API surface:
+
+```text
+POST /api/drafts/text {"text":"..."}
+POST /api/drafts/url  {"url":"https://example.com/article"}
+```
+
+Оба ответа имеют форму `{"draft": {"title", "note_type", "content", "tags",
+"links"}, "sources": [...]}`. API принимает только строгий JSON, ответы
+`draft` и ошибки помечены `Cache-Control: no-store`, а browser общается только
+с same-origin `/api/...`. Ошибки не раскрывают provider/upstream details.
 
 ## Public web, RSS, YouTube и GitHub research
 

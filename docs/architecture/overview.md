@@ -7,30 +7,40 @@
 репозиторий с пользовательскими Markdown/YAML-знаниями, вложениями, шаблонами и
 безопасной частью конфигурации Obsidian.
 
-## Web GUI foundation v1
+## Web GUI draft generation v1
 
-Локальный Web GUI теперь является реальным entrypoint/adaptor поверх будущего
-application core:
+Локальный Web GUI является entrypoint/adaptor поверх существующего application
+core:
 
 ```text
 Browser
    |
 FastAPI web entrypoint
-   |
-future application use cases
+   |\
+   | +-- Text -> LlmGateway -> NoteDraft
+   `---- URL -> ResearchDraftGateway -> NoteDraft + SourceProvenance
 ```
 
 `second-brain web serve` запускает packaged HTML/CSS/JavaScript shell только на
 `127.0.0.1` (default port `8000`, опциональный bounded `--port`).
-`create_app()` не загружает vault configuration, provider credentials, research
-или LLM, не вызывает сеть, Git, Safe Write и background workers. `GET /` отдаёт
-shell с `Memory` и `Growth`, а `GET /healthz` возвращает только deterministic
-`{"status":"ok"}`. Static assets разрешаются относительно Python package и
-защищены от directory listing/path traversal и базовыми security headers.
+`create_app()` собирает только лёгкую production composition: credentials,
+research process и LLM worker не читаются и не запускаются до реального POST.
+`GET /` и `GET /healthz` не вызывают draft services, Git, vault или Safe Write.
 
-В v1 browser не имеет write authority: Add URL/Text, research, LLM, review,
-Safe Write, auth, public exposure, deploy, PWA и frontend framework остаются
-отдельными будущими задачами.
+`POST /api/drafts/text` передаёт пользовательский `text` в
+`LlmRequest.context` exact/unmodified и выполняет не более одного LLM draft;
+`sources` всегда пуст. `POST /api/drafts/url` фиксирует `SourceKind.WEB`,
+выполняет существующий `ResearchGateway(JinaReaderWebAdapter)` и затем один
+`LlmGateway`, передавая только `ResearchSource.content` в LLM. Metadata source
+преобразуется в bounded `SourceProvenance` рядом с draft; raw content, backend,
+media type и provider details в browser не возвращаются.
+
+HTTP boundary использует strict JSON request models с reject unknown fields,
+safe error envelope и `Cache-Control: no-store`. Host allowlist ограничена
+`127.0.0.1` и `localhost`; CSP разрешает только `connect-src 'self'`, а
+JavaScript делает только same-origin fetch. Draft, provenance и errors выводятся
+text nodes/plain text без Markdown execution, persistent browser storage и
+write authority.
 
 Vault является каноническим источником истины. Индексы, SQLite, embeddings и
 кэш относятся к производному состоянию и могут быть пересозданы из vault.
