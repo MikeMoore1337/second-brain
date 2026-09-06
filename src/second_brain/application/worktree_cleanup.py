@@ -350,11 +350,21 @@ class WorktreeCleanup:
             )
 
         if not dry_run and any(item.action is CleanupAction.REMOVE for item in decisions):
-            prune_attempted = True
-            result = self._git(("worktree", "prune"))
-            prune_succeeded = result.returncode == 0
-            if not prune_succeeded:
-                errors.append("git_worktree_prune_failed")
+            preflight = self._git(("worktree", "prune", "--dry-run", "--verbose"))
+            if preflight.returncode != 0:
+                errors.append("cleanup_deferred:git_worktree_prune_preflight_failed")
+            elif preflight.stdout or preflight.stderr:
+                # A registered entry proposed by prune is not part of the
+                # verified, non-prunable cleanup set above.  Keep it rather
+                # than trying to correlate opaque Git admin paths with an
+                # unverified registration.
+                errors.append("cleanup_deferred:unrelated_prune_registration")
+            else:
+                prune_attempted = True
+                result = self._git(("worktree", "prune"))
+                prune_succeeded = result.returncode == 0
+                if not prune_succeeded:
+                    errors.append("git_worktree_prune_failed")
 
         return CleanupSummary(
             repo=self.repo,
@@ -446,7 +456,9 @@ class WorktreeCleanup:
         if not self._merged_sha_is_reachable(task.merged_sha, manifest.main_sha):
             return keep("merged_history_not_proven")
 
-        status = self._git(("status", "--porcelain"), cwd=path)
+        status = self._git(
+            ("status", "--porcelain", "--ignored", "--untracked-files=all"), cwd=path
+        )
         if status.returncode != 0:
             return keep("worktree_status_failed")
         if status.stdout:
@@ -569,6 +581,8 @@ def _contains_reparse_point(path: Path) -> bool:
         try:
             info = os.lstat(current)
         except OSError:
+            return True
+        if stat.S_ISLNK(info.st_mode):
             return True
         if getattr(info, "st_file_attributes", 0) & getattr(
             stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400

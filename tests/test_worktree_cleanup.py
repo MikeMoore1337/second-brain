@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from dataclasses import replace
 from pathlib import Path
@@ -216,6 +217,60 @@ def test_dirty_tracked_and_untracked_worktrees_are_kept(tmp_path: Path) -> None:
         assert summary.decisions[0].reason == expected
         assert summary.prune_attempted is False
         assert task_path.exists()
+
+
+def test_ignored_files_are_kept_as_dirty_state(tmp_path: Path) -> None:
+    repo, task_path, branch, task_sha, main_sha = _fixture(tmp_path)
+    (task_path / ".gitignore").write_text(".env\n", encoding="utf-8")
+    _git(task_path, "add", ".gitignore")
+    _git(task_path, "commit", "-m", "ignore local environment state")
+    secret_path = task_path / ".env"
+    secret_path.write_text("LOCAL_ONLY=1\n", encoding="utf-8")
+
+    summary = _cleaner(repo, tmp_path).run(_receipt(repo, task_path, branch, task_sha, main_sha))
+
+    assert summary.decisions[0].reason == "worktree_dirty"
+    assert summary.prune_attempted is False
+    assert secret_path.exists()
+    assert task_path.exists()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX symlink regression")
+def test_posix_symlinked_registered_path_is_kept(tmp_path: Path) -> None:
+    repo, task_path, branch, task_sha, main_sha = _fixture(tmp_path)
+    target_path = task_path.with_name("task worktree target")
+    task_path.rename(target_path)
+    task_path.symlink_to(target_path, target_is_directory=True)
+
+    summary = _cleaner(repo, tmp_path).run(_receipt(repo, task_path, branch, task_sha, main_sha))
+
+    assert summary.decisions[0].reason == "reparse_or_symlink_path"
+    assert task_path.is_symlink()
+    assert target_path.exists()
+
+
+def test_unrelated_stale_registration_defers_prune(tmp_path: Path) -> None:
+    repo, task_path, branch, task_sha, main_sha = _fixture(tmp_path)
+    stale_path = tmp_path / "unrelated stale worktree"
+    _git(repo, "worktree", "add", "--detach", str(stale_path), main_sha)
+    shutil.rmtree(stale_path)
+
+    summary = _cleaner(repo, tmp_path).run(_receipt(repo, task_path, branch, task_sha, main_sha))
+
+    assert summary.decisions[0].action is CleanupAction.REMOVE
+    assert summary.prune_attempted is False
+    assert summary.prune_succeeded is None
+    assert "cleanup_deferred:unrelated_prune_registration" in summary.errors
+    assert not task_path.exists()
+    assert "prunable" in _git(repo, "worktree", "list", "--porcelain")
+    preview = subprocess.run(
+        ["git", "-C", str(repo), "worktree", "prune", "--dry-run", "--verbose"],
+        check=True,
+        capture_output=True,
+        text=True,
+        shell=False,
+    )
+    assert preview.stdout or preview.stderr
 
 
 def test_detached_worktree_is_kept(tmp_path: Path) -> None:

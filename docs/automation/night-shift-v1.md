@@ -91,7 +91,8 @@ post-task lifecycle до запуска следующей задачи:
 2. подтвердить `issue closed/completed`;
 3. получить новый exact SHA локального `main`;
 4. прочитать только зарегистрированные worktree через `git worktree list --porcelain`;
-5. в каждом кандидате проверить `git status --porcelain`;
+5. в каждом кандидате проверить `git status --porcelain --ignored
+   --untracked-files=all`; ignored entries также считаются dirty;
 6. передать уже проверенное состояние в
    [`scripts/worktree_cleanup.py`](../../scripts/worktree_cleanup.py).
 
@@ -114,9 +115,13 @@ uv run python scripts/worktree_cleanup.py \
 Для cohort/orphan pass используется тот же helper с
 `lifecycle=historical_orphan_pass`; GitHub state по-прежнему разрешает
 orchestrator. `--dry-run`/`--list` только классифицирует кандидатов. При
-успешных удалениях helper один раз выполняет `git worktree prune`; он никогда
-не использует `--force`, raw filesystem deletion, remote/local branch deletion
-или очистку по имени соседней папки. Ошибка cleanup даёт
+успешных удалениях helper сначала выполняет bounded preflight
+`git worktree prune --dry-run --verbose`. Если preflight предлагает любую
+непроверенную/чужую регистрацию, глобальный prune не запускается и возвращается
+`cleanup_deferred`; чужая регистрация сохраняется. Только пустой preflight
+разрешает один обычный `git worktree prune`. Helper никогда не использует
+`--force`, raw filesystem deletion, remote/local branch deletion или очистку по
+имени соседней папки. Ошибка cleanup даёт
 `cleanup_deferred`, сохраняет worktree и не является failure задачи, review/CI
 fix cycle или поводом для retry.
 
