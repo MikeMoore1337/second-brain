@@ -30,7 +30,19 @@ def test_create_app_needs_no_vault_or_provider_configuration(
     assert application.title == "Second Brain"
 
 
-def test_root_is_utf8_shell_with_local_assets_only() -> None:
+def test_root_is_the_react_shell_with_local_assets_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text(
+        '<!doctype html><html lang="ru"><head><title>Second Brain React</title></head>'
+        '<body><div id="root"></div><script type="module" '
+        'src="/assets/index.js"></script></body></html>',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(web_app, "REACT_INDEX_FILE", dist / "index.html")
+
     with TestClient(create_app(), base_url=LOOPBACK_BASE_URL) as client:
         response = client.get("/")
 
@@ -38,25 +50,21 @@ def test_root_is_utf8_shell_with_local_assets_only() -> None:
     assert "charset=utf-8" in response.headers["content-type"]
     html = response.content.decode("utf-8")
     assert "Second Brain" in html
-    assert "Memory" in html
-    assert "Growth" in html
-    assert 'href="/static/app.css"' in html
-    assert 'src="/static/app.js"' in html
-    assert 'src="/static/simulate-me.js"' in html
-    assert 'href="#simulate-me"' in html
-    assert "ПРОГНОЗ" in html
+    assert "Second Brain React" in html
+    assert 'id="root"' in html
+    assert "/static/" not in html
     assert "http://" not in html
     assert "https://" not in html
 
 
-def test_react_foundation_is_opt_in_until_legacy_parity_is_complete(
+def test_react_build_is_served_at_root_and_compatibility_alias(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     dist = tmp_path / "dist"
     assets = dist / "assets"
     assets.mkdir(parents=True)
     (dist / "index.html").write_text(
-        '<!doctype html><html lang="ru"><body>React foundation</body></html>',
+        '<!doctype html><html lang="ru"><body>React parity</body></html>',
         encoding="utf-8",
     )
     (assets / "index.js").write_text("console.log('foundation');", encoding="utf-8")
@@ -64,14 +72,17 @@ def test_react_foundation_is_opt_in_until_legacy_parity_is_complete(
     monkeypatch.setattr(web_app, "REACT_ASSETS_DIR", assets)
 
     with TestClient(create_app(), base_url=LOOPBACK_BASE_URL) as client:
-        legacy = client.get("/")
+        root = client.get("/")
         react = client.get("/react/")
+        asset_at_root = client.get("/assets/index.js")
         asset = client.get("/react/assets/index.js")
 
-    assert legacy.status_code == 200
-    assert "Memory" in legacy.text
+    assert root.status_code == 200
+    assert "React parity" in root.text
     assert react.status_code == 200
-    assert "React foundation" in react.text
+    assert "React parity" in react.text
+    assert asset_at_root.status_code == 200
+    assert asset_at_root.text == "console.log('foundation');"
     assert asset.status_code == 200
     assert asset.text == "console.log('foundation');"
 
@@ -85,7 +96,7 @@ def test_healthz_returns_exact_safe_json() -> None:
     assert response.json() == {"status": "ok"}
 
 
-def test_packaged_static_assets_are_cwd_independent(
+def test_legacy_static_entrypoint_is_not_served(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
@@ -95,33 +106,9 @@ def test_packaged_static_assets_are_cwd_independent(
         javascript = client.get("/static/app.js")
         simulate_me_javascript = client.get("/static/simulate-me.js")
 
-    assert css.status_code == 200
-    assert css.headers["content-type"].startswith("text/css")
-    assert "--sb-color-accent" in css.text
-    assert javascript.status_code == 200
-    assert javascript.headers["content-type"].startswith("text/javascript")
-    assert "fetch(" in javascript.text
-    assert '"X-Second-Brain-Request": "draft-v1"' in javascript.text
-    assert '"/api/drafts/save/prepare"' in javascript.text
-    assert '"/api/drafts/save/apply"' in javascript.text
-    assert "Подготовить сохранение" in javascript.text
-    assert "Подтвердить сохранение" in javascript.text
-    assert "http://" not in javascript.text
-    assert "https://" not in javascript.text
-    assert javascript.text.count("innerHTML") == 1
-    assert "preview.innerHTML = html" in javascript.text
-    assert "localStorage" not in javascript.text
-    assert "sessionStorage" not in javascript.text
-    assert "indexedDB" not in javascript.text
-    assert "serviceWorker" not in javascript.text
-    assert simulate_me_javascript.status_code == 200
-    assert '"X-Second-Brain-Request": "simulate-me-v1"' in simulate_me_javascript.text
-    assert 'fetch("/api/simulate-me"' in simulate_me_javascript.text
-    assert "innerHTML" not in simulate_me_javascript.text
-    assert "localStorage" not in simulate_me_javascript.text
-    assert "sessionStorage" not in simulate_me_javascript.text
-    assert "indexedDB" not in simulate_me_javascript.text
-    assert "setInterval" not in simulate_me_javascript.text
+    assert css.status_code == 404
+    assert javascript.status_code == 404
+    assert simulate_me_javascript.status_code == 404
 
 
 def test_static_serving_has_no_directory_listing_or_traversal() -> None:

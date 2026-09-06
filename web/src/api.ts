@@ -2,44 +2,377 @@ export interface SearchHit {
   readonly id: string;
   readonly type: string;
   readonly title: string;
+  readonly relative_path?: string;
+  readonly snippet?: string;
+  readonly tags?: readonly string[];
 }
 
 export interface SearchResponse {
   readonly hits: readonly SearchHit[];
 }
 
-export type FetchLike = typeof fetch;
-
-const SEARCH_HEADERS = {
-  Accept: "application/json",
-  "Content-Type": "application/json",
-  "X-Second-Brain-Request": "search-v1",
-} as const;
-
-function isSearchResponse(value: unknown): value is SearchResponse {
-  if (typeof value !== "object" || value === null || !("hits" in value)) {
-    return false;
-  }
-  return Array.isArray(value.hits);
+export interface RetrievedNote {
+  readonly id: string;
+  readonly type: string;
+  readonly relative_path: string;
+  readonly title?: string;
+  readonly created?: string;
+  readonly updated?: string;
+  readonly tags?: readonly string[];
+  readonly content: string;
 }
 
-export async function searchNotes(
-  query: string,
-  fetcher: FetchLike = window.fetch.bind(window),
-): Promise<SearchResponse> {
-  const response = await fetcher("/api/search", {
+export interface SourceProvenance {
+  readonly uri?: string;
+  readonly kind?: string;
+  readonly retrieved_at?: string;
+  readonly published_at?: string;
+  readonly title?: string;
+  readonly author?: string;
+  readonly upstream_id?: string;
+}
+
+export interface NoteDraft {
+  readonly title: string;
+  readonly note_type: string;
+  readonly content: string;
+  readonly tags: readonly string[];
+  readonly links: readonly string[];
+}
+
+export interface DraftResponse {
+  readonly review_token: string;
+  readonly draft: NoteDraft;
+  readonly sources: readonly SourceProvenance[];
+}
+
+export interface PreviewResponse {
+  readonly html: string;
+}
+
+export interface SaveNote {
+  readonly id: string;
+  readonly type?: string;
+  readonly relative_path?: string;
+  readonly created?: string;
+  readonly updated?: string;
+}
+
+export interface SavePlanResponse {
+  readonly status: "dry-run";
+  readonly confirmation_token: string;
+  readonly note: SaveNote;
+  readonly diff: string;
+}
+
+export interface SavedNoteResponse {
+  readonly status: "created";
+  readonly note: SaveNote;
+}
+
+export interface TimelineItem {
+  readonly id: string;
+  readonly event_at?: string;
+  readonly event_kind?: string;
+  readonly evidence_kind?: string;
+  readonly summary?: string;
+  readonly domain?: string;
+  readonly relative_path?: string;
+  readonly storage_created_at?: string;
+  readonly storage_updated_at?: string;
+  readonly related_note_ids?: readonly string[];
+}
+
+export interface TimelineResponse {
+  readonly known_items: readonly TimelineItem[];
+  readonly unknown_items: readonly TimelineItem[];
+  readonly known_total: number;
+  readonly unknown_total: number;
+}
+
+export interface SelfModelEvidence {
+  readonly id?: string;
+  readonly evidence_kind?: string;
+  readonly self_kind?: string;
+  readonly domain?: string;
+  readonly evidence_at?: string;
+  readonly evidence_at_precision?: string;
+  readonly related_note_ids?: readonly string[];
+}
+
+export interface SelfModelClaim {
+  readonly dimension?: string;
+  readonly claim?: string;
+  readonly domain?: string;
+  readonly confidence: {
+    readonly state?: string;
+    readonly policy_version?: string;
+    readonly supporting_evidence_count?: number;
+    readonly contradicting_evidence_count?: number;
+    readonly unknown_time_count?: number;
+  };
+  readonly temporal_context: {
+    readonly earliest_known_evidence_at?: string;
+    readonly latest_known_evidence_at?: string;
+    readonly known_evidence_count?: number;
+    readonly unknown_evidence_count?: number;
+  };
+  readonly generated_at?: string;
+  readonly derivation_version?: string;
+  readonly supporting_evidence: readonly SelfModelEvidence[];
+  readonly contradicting_evidence: readonly SelfModelEvidence[];
+  readonly contextual_evidence: readonly SelfModelEvidence[];
+}
+
+export interface SelfModelResponse {
+  readonly claims: readonly SelfModelClaim[];
+  readonly eligible_evidence_count: number;
+  readonly represented_evidence_count: number;
+  readonly generated_at?: string;
+  readonly derivation_version?: string;
+  readonly policy_fingerprint?: string;
+}
+
+export interface SelfRetrievalClaim {
+  readonly dimension?: string;
+  readonly claim?: string;
+  readonly supporting_note_ids: readonly string[];
+  readonly derivation_version?: string;
+  readonly policy_fingerprint?: string;
+}
+
+export interface SelfRetrievalItem {
+  readonly note_id: string;
+  readonly title?: string;
+  readonly note_type?: string;
+  readonly search_rank?: number;
+  readonly created?: string;
+  readonly updated?: string;
+  readonly tags?: readonly string[];
+  readonly body: string;
+  readonly self_model_claims: readonly SelfRetrievalClaim[];
+}
+
+export interface SelfRetrievalExclusion {
+  readonly search_rank?: number;
+  readonly reason?: string;
+}
+
+export interface SelfRetrievalResponse {
+  readonly items: readonly SelfRetrievalItem[];
+  readonly exclusions: readonly SelfRetrievalExclusion[];
+  readonly candidate_count: number;
+  readonly included_count: number;
+  readonly excluded_count: number;
+  readonly content_bytes?: number;
+  readonly truncated?: boolean;
+  readonly self_model_derivation_version?: string;
+  readonly self_model_policy_fingerprint?: string;
+}
+
+export interface SimulateMeOption {
+  readonly id?: string;
+  readonly label?: string;
+}
+
+export interface SimulateMeEvidence {
+  readonly claim_id?: string;
+  readonly dimension?: string;
+  readonly note_ids: readonly string[];
+  readonly evidence_at?: string;
+}
+
+export interface SimulateMeResponse {
+  readonly kind: "prediction" | "abstention";
+  readonly selected_option?: SimulateMeOption;
+  readonly abstention_code?: string;
+  readonly derivation_version?: string;
+  readonly policy_id?: string;
+  readonly policy_fingerprint?: string;
+  readonly evidence_refs: readonly SimulateMeEvidence[];
+  readonly contextual_evidence_refs: readonly SimulateMeEvidence[];
+  readonly temporal_caveats: readonly { readonly code?: string; readonly claim_id?: string }[];
+}
+
+export interface DecisionPayload {
+  readonly title: string;
+  readonly note_type: string;
+  readonly tags: readonly string[];
+  readonly links: readonly string[];
+  readonly evidence_at: string;
+  readonly evidence_at_precision: "exact" | "unknown";
+  readonly domain: string | null;
+  readonly situation: string;
+  readonly available_options: readonly string[];
+  readonly information_known_at_decision_time: string;
+  readonly criteria: readonly string[];
+  readonly chosen_option: string;
+  readonly reasons: string;
+  readonly confidence: string;
+  readonly expected_result: string;
+}
+
+export interface OutcomePayload {
+  readonly title: string;
+  readonly note_type: string;
+  readonly tags: readonly string[];
+  readonly links: readonly string[];
+  readonly decision_id: string;
+  readonly evidence_at: string;
+  readonly evidence_at_precision: "exact" | "unknown";
+  readonly domain: string | null;
+  readonly actual_result: string;
+  readonly reassessment: string;
+  readonly notes: string;
+}
+
+export interface PersonalMemoryPayload {
+  readonly evidence_kind: string;
+  readonly self_kind: string;
+  readonly evidence_at: string;
+  readonly evidence_at_precision: "exact" | "unknown";
+  readonly domain: string | null;
+}
+
+export interface FetchLike {
+  (input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
+}
+
+export class ApiRequestError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+  }
+}
+
+const fetchDefault: FetchLike = (input, init) => fetch(input, init);
+
+const headersFor = (purpose: string): HeadersInit => ({
+  Accept: "application/json",
+  "Content-Type": "application/json",
+  "X-Second-Brain-Request": purpose,
+});
+
+function errorMessage(payload: unknown, fallback: string): string {
+  if (typeof payload === "object" && payload !== null && "error" in payload) {
+    const error = payload.error;
+    if (typeof error === "object" && error !== null && "message" in error) {
+      const message = error.message;
+      if (typeof message === "string" && message.length > 0) {
+        return message;
+      }
+    }
+  }
+  return fallback;
+}
+
+async function readJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+async function requestJson<T>(
+  path: string,
+  purpose: string,
+  body: unknown,
+  fetcher: FetchLike,
+  fallback: string,
+): Promise<T> {
+  const response = await fetcher(path, {
     method: "POST",
-    headers: SEARCH_HEADERS,
-    body: JSON.stringify({ query, limit: 20 }),
+    headers: headersFor(purpose),
+    body: JSON.stringify(body),
   });
-
+  const payload = await readJson(response);
   if (!response.ok) {
-    throw new Error("Search request failed");
+    throw new ApiRequestError(errorMessage(payload, fallback), response.status);
   }
+  return payload as T;
+}
 
-  const payload: unknown = await response.json();
-  if (!isSearchResponse(payload)) {
-    throw new Error("Search response is invalid");
+export async function createTextDraft(text: string, fetcher: FetchLike = fetchDefault): Promise<DraftResponse> {
+  return requestJson("/api/drafts/text", "draft-v1", { text }, fetcher, "Не удалось создать черновик.");
+}
+
+export async function createUrlDraft(url: string, fetcher: FetchLike = fetchDefault): Promise<DraftResponse> {
+  return requestJson("/api/drafts/url", "draft-v1", { url }, fetcher, "Не удалось создать черновик.");
+}
+
+export async function previewDraft(content: string, fetcher: FetchLike = fetchDefault): Promise<PreviewResponse> {
+  return requestJson("/api/drafts/preview", "draft-v1", { content }, fetcher, "Не удалось построить preview.");
+}
+
+export async function prepareSave(reviewToken: string, draft: NoteDraft, fetcher: FetchLike = fetchDefault): Promise<SavePlanResponse> {
+  return requestJson("/api/drafts/save/prepare", "draft-v1", { review_token: reviewToken, draft }, fetcher, "Не удалось подготовить сохранение.");
+}
+
+export async function applySave(reviewToken: string, confirmationToken: string, draft: NoteDraft, fetcher: FetchLike = fetchDefault): Promise<SavedNoteResponse> {
+  return requestJson("/api/drafts/save/apply", "draft-v1", { review_token: reviewToken, confirmation_token: confirmationToken, draft }, fetcher, "Не удалось сохранить заметку.");
+}
+
+export async function preparePersonalMemory(reviewToken: string, draft: NoteDraft, personalMemory: PersonalMemoryPayload, fetcher: FetchLike = fetchDefault): Promise<SavePlanResponse> {
+  return requestJson("/api/drafts/personal-memory/save/prepare", "draft-v1", { review_token: reviewToken, draft, personal_memory: personalMemory }, fetcher, "Не удалось подготовить Personal Memory.");
+}
+
+export async function applyPersonalMemory(reviewToken: string, confirmationToken: string, draft: NoteDraft, personalMemory: PersonalMemoryPayload, fetcher: FetchLike = fetchDefault): Promise<SavedNoteResponse> {
+  return requestJson("/api/drafts/personal-memory/save/apply", "draft-v1", { review_token: reviewToken, confirmation_token: confirmationToken, draft, personal_memory: personalMemory }, fetcher, "Не удалось сохранить Personal Memory.");
+}
+
+export async function transcribeAudio(body: Blob, contentType: string, fetcher: FetchLike = fetchDefault): Promise<{ readonly transcript: { readonly text: string } }> {
+  const response = await fetcher("/api/transcriptions/audio", {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": contentType, "X-Second-Brain-Request": "voice-v1" },
+    body,
+  });
+  const payload = await readJson(response);
+  if (!response.ok) {
+    throw new ApiRequestError(errorMessage(payload, "Не удалось распознать audio."), response.status);
   }
-  return payload;
+  return payload as { readonly transcript: { readonly text: string } };
+}
+
+export function loadTimeline(order: "asc" | "desc", fetcher: FetchLike = fetchDefault): Promise<TimelineResponse> {
+  return requestJson("/api/timeline", "timeline-v1", { order, known_limit: 100, unknown_limit: 100 }, fetcher, "Не удалось загрузить Timeline.");
+}
+
+export function loadSelfModel(fetcher: FetchLike = fetchDefault): Promise<SelfModelResponse> {
+  return requestJson("/api/self-model", "self-model-v1", { max_claims: 200, max_evidence_refs_per_claim: 200 }, fetcher, "Не удалось построить Self Model.");
+}
+
+export function loadSelfRetrieval(query: string, fetcher: FetchLike = fetchDefault): Promise<SelfRetrievalResponse> {
+  return requestJson("/api/self-retrieval", "self-retrieval-v1", { query, limit: 20, max_content_bytes: 65536 }, fetcher, "Не удалось собрать контекст.");
+}
+
+export function simulateMe(query: string, options: readonly SimulateMeOption[], fetcher: FetchLike = fetchDefault): Promise<SimulateMeResponse> {
+  return requestJson("/api/simulate-me", "simulate-me-v1", { query, options }, fetcher, "Не удалось получить прогноз.");
+}
+
+export function searchNotes(query: string, fetcher: FetchLike = fetchDefault): Promise<SearchResponse> {
+  return requestJson("/api/search", "search-v1", { query, limit: 20 }, fetcher, "Не удалось выполнить поиск.");
+}
+
+export function retrieveNote(id: string, fetcher: FetchLike = fetchDefault): Promise<RetrievedNote> {
+  return requestJson("/api/retrieval/note", "search-v1", { id }, fetcher, "Не удалось открыть заметку.");
+}
+
+export function prepareDecision(decision: DecisionPayload, fetcher: FetchLike = fetchDefault): Promise<SavePlanResponse> {
+  return requestJson("/api/drafts/decision-journal/save/prepare", "draft-v1", { decision }, fetcher, "Не удалось подготовить Decision Journal.");
+}
+
+export function applyDecision(confirmationToken: string, decision: DecisionPayload, fetcher: FetchLike = fetchDefault): Promise<SavedNoteResponse> {
+  return requestJson("/api/drafts/decision-journal/save/apply", "draft-v1", { confirmation_token: confirmationToken, decision }, fetcher, "Не удалось сохранить Decision Journal.");
+}
+
+export function prepareOutcome(outcome: OutcomePayload, fetcher: FetchLike = fetchDefault): Promise<SavePlanResponse> {
+  return requestJson("/api/drafts/outcome-observation/save/prepare", "draft-v1", { outcome }, fetcher, "Не удалось подготовить Outcome.");
+}
+
+export function applyOutcome(confirmationToken: string, outcome: OutcomePayload, fetcher: FetchLike = fetchDefault): Promise<SavedNoteResponse> {
+  return requestJson("/api/drafts/outcome-observation/save/apply", "draft-v1", { confirmation_token: confirmationToken, outcome }, fetcher, "Не удалось сохранить Outcome.");
 }

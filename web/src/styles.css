@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "../../src/second_brain/entrypoints/web/static/app.css";
 
 @theme {
   --color-sb-void: #07070a;

@@ -1,8 +1,8 @@
-# Основа React frontend
+# React frontend
 
-Этот каталог — ограниченная область реализации задачи #141. Он добавляет
-воспроизводимую React foundation surface, не заменяя текущий legacy GUI до
-завершения #142.
+Этот каталог содержит production React frontend для задач #141–#142. React
+портирует фактически merged Web GUI, а FastAPI остаётся владельцем application,
+security и vault semantics.
 
 ## Граница
 
@@ -10,9 +10,10 @@ React отвечает только за frontend presentation/build layer. Fast
 источником application и security semantics, `second-brain-vault` остаётся
 каноническим, а существующие same-origin API contracts не меняются.
 
-Собранная foundation surface доступна локально по `/react/`. Корневой `/`
-намеренно продолжает отдавать текущий plain frontend: полный parity-перенос всех
-merged GUI surfaces выполняется только в #142.
+После `npm run build` собранный React frontend доступен по корневому `/`.
+`/react/` оставлен совместимым alias для того же bundle. Legacy `/static`
+entrypoint больше не монтируется FastAPI; старые исходники сохранены только как
+исторический parity reference и regression-test fixture.
 
 ## Одноразовая настройка и проверки
 
@@ -33,9 +34,10 @@ npm run build
 uv run second-brain --env-file .env web serve
 ```
 
-Затем открой `http://127.0.0.1:8123/react/`. Опциональный `npm run dev`
+Затем открой `http://127.0.0.1:8123/`. Опциональный `npm run dev`
 использует только loopback Vite server и проксирует существующие `/api/*` и
 `/healthz` на loopback FastAPI; он не становится runtime authority.
 
-В foundation нет browser persistence, polling, внешних assets, новых backend
-dependencies, auth/public bind или переноса trusted logic из FastAPI.
+В frontend нет browser persistence, polling, внешних assets, новых backend
+dependencies, auth/public bind или переноса trusted logic из FastAPI. Review
+tokens, confirmation tokens и draft state живут только в памяти страницы.
