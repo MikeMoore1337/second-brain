@@ -353,7 +353,7 @@ def test_draft_boundary_rejects_cross_origin_or_non_json_before_service(
     assert response.json() == {
         "error": {
             "code": "LLM_INVALID_REQUEST",
-            "message": "draft request failed validation",
+            "message": "Запрос черновика не прошёл проверку",
         }
     }
     assert response.headers["cache-control"] == "no-store"
@@ -388,9 +388,9 @@ def test_declared_raw_body_cap_rejects_before_receive_or_service(path: str, code
         "error": {
             "code": code,
             "message": (
-                "research content is too large"
+                "Содержимое исследования слишком велико"
                 if path.endswith("/url")
-                else "draft content is too large"
+                else "Содержимое черновика слишком велико"
             ),
         }
     }
@@ -465,9 +465,9 @@ def test_draft_requests_are_strict_json_and_reject_unknown_or_wrong_fields(
         "error": {
             "code": expected_code,
             "message": (
-                "research request failed validation"
+                "Запрос исследования не прошёл проверку"
                 if expected_code.startswith("RESEARCH")
-                else "draft request failed validation"
+                else "Запрос черновика не прошёл проверку"
             ),
         }
     }
@@ -598,7 +598,7 @@ def test_unexpected_runtime_error_is_generic_and_does_not_leak_details() -> None
     assert response.json() == {
         "error": {
             "code": "DRAFT_GENERATION_FAILED",
-            "message": "draft generation failed",
+            "message": "Не удалось построить черновик",
         }
     }
     assert "provider secret" not in response.text

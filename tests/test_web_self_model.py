@@ -220,7 +220,7 @@ def test_self_model_invalid_request_is_400_and_never_partial(
     assert response.json() == {
         "error": {
             "code": "SELF_MODEL_INVALID_REQUEST",
-            "message": "self model request failed validation",
+            "message": "Запрос модели себя не прошёл проверку",
         }
     }
     assert "claims" not in response.text

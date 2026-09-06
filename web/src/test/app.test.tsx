@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import * as api from "../api";
 import { CaptureSurface } from "../parity";
+import { presentValue } from "../presentation";
 
 let root: Root | undefined;
 
@@ -36,6 +37,36 @@ async function renderCapture(): Promise<HTMLDivElement> {
 }
 
 describe("React Web parity shell", () => {
+  it("presents machine values with Russian labels", () => {
+    expect(presentValue("note")).toBe("Заметка");
+    expect(presentValue("not_assessed")).toBe("Не оценивалось");
+    expect(presentValue("unknown")).toBe("Неизвестно");
+  });
+
+  it.each([320, 360, 390, 430])("mounts the Russian shell at %dpx", async (width) => {
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
+    vi.spyOn(window, "fetch").mockImplementation((input) => {
+      const path = String(input);
+      const payload = path.endsWith("/api/timeline")
+        ? { known_items: [], unknown_items: [], known_total: 0, unknown_total: 0 }
+        : { claims: [], eligible_evidence_count: 0, represented_evidence_count: 0 };
+      return Promise.resolve(new Response(JSON.stringify(payload), { status: 200 }));
+    });
+
+    try {
+      const host = await renderApp();
+      expect(host.querySelector('[aria-label="Навигация рабочего пространства"]')).not.toBeNull();
+      expect(host.querySelector('[aria-label="Основные разделы"]')).not.toBeNull();
+      expect(host.querySelector('[aria-label="Режим добавления"]')).not.toBeNull();
+      expect(host.querySelector('[aria-label="Режим журнала решений"]')).not.toBeNull();
+      expect(host.textContent).toContain("Сбор контекста");
+      expect(host.textContent).toContain("Подтвердить сохранение");
+    } finally {
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: originalWidth });
+    }
+  });
+
   it("mounts every current-main GUI surface with the legacy Russian entry points", async () => {
     vi.spyOn(window, "fetch").mockImplementation((input) => {
       const path = String(input);
@@ -118,7 +149,7 @@ describe("React Web parity shell", () => {
     const transcribe = vi.spyOn(api, "transcribeAudio").mockResolvedValue({ transcript: { text: "Проверь меня" } });
     const createDraft = vi.spyOn(api, "createTextDraft");
     const host = await renderCapture();
-    const voiceButton = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent === "Voice");
+    const voiceButton = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent === "Голос");
     expect(voiceButton).not.toBeUndefined();
     await act(async () => voiceButton?.click());
     const fileInput = host.querySelector<HTMLInputElement>("input[type='file']");

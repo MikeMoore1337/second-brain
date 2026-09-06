@@ -129,7 +129,7 @@ def test_simulate_me_invalid_payload_is_400_before_service(payload: dict[str, ob
     assert response.json() == {
         "error": {
             "code": "SIMULATE_ME_INVALID_REQUEST",
-            "message": "simulate me request failed validation",
+            "message": "Запрос прогноза не прошёл проверку",
         }
     }
     assert service.requests == []

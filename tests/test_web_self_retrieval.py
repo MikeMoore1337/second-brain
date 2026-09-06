@@ -198,7 +198,7 @@ def test_self_retrieval_invalid_request_is_400_before_service(payload: dict[str,
     assert response.json() == {
         "error": {
             "code": "SELF_RETRIEVAL_INVALID_REQUEST",
-            "message": "self retrieval request failed validation",
+            "message": "Запрос сбора контекста не прошёл проверку",
         }
     }
     assert service.requests == []

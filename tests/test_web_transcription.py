@@ -269,7 +269,7 @@ def test_service_errors_are_safe_and_bounded() -> None:
     assert response.json() == {
         "error": {
             "code": "TRANSCRIPTION_UPSTREAM_FAILURE",
-            "message": "transcription backend failed",
+            "message": "Сервис распознавания вернул ошибку",
         }
     }
     assert "provider" not in response.text
