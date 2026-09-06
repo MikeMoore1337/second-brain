@@ -6,6 +6,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 import pytest
 from typer.testing import CliRunner
@@ -18,11 +19,57 @@ from second_brain.application.ports import (
     LlmErrorCode,
 )
 from second_brain.application.research import ResearchRequest, ResearchSource, SourceKind
+from second_brain.application.self_model import DERIVATION_VERSION
+from second_brain.application.self_retrieval import (
+    DEFAULT_MAX_CONTENT_BYTES,
+    DEFAULT_SELF_CONTEXT_LIMIT,
+    SelfContextItem,
+    SelfContextRequest,
+    SelfContextResult,
+    SelfRetrievalSearchUnavailableError,
+)
 from second_brain.domain.models import NoteType
 from second_brain.entrypoints.cli.app import app
-from tests.conftest import create_vault, managed_note, snapshot_tree, write_note
+from tests.conftest import VALID_NOTE_ID, create_vault, managed_note, snapshot_tree, write_note
 
 runner = CliRunner()
+
+
+def _cli_self_retrieval_result() -> SelfContextResult:
+    item = SelfContextItem(
+        note_id=UUID(VALID_NOTE_ID),
+        note_type=NoteType.RESOURCE,
+        title="Current title",
+        body="Current canonical body.",
+        tags=("current",),
+        created=datetime(2026, 9, 6, 10, 0, tzinfo=UTC),
+        updated=None,
+        search_rank=1,
+        self_model_claims=(),
+    )
+    return SelfContextResult(
+        items=(item,),
+        candidate_count=1,
+        included_count=1,
+        excluded_count=0,
+        exclusions=(),
+        truncated=False,
+        content_bytes=len("\n".join((item.title, item.body, *item.tags)).encode("utf-8")),
+        self_model_derivation_version=DERIVATION_VERSION,
+        self_model_policy_fingerprint="a" * 64,
+    )
+
+
+class FakeSelfRetrievalService:
+    def __init__(self, result: SelfContextResult | Exception) -> None:
+        self.result = result
+        self.requests: list[SelfContextRequest] = []
+
+    def build(self, request: SelfContextRequest) -> SelfContextResult:
+        self.requests.append(request)
+        if isinstance(self.result, Exception):
+            raise self.result
+        return self.result
 
 
 def test_llm_draft_json_uses_one_gateway_call_without_vault_config(
@@ -273,6 +320,119 @@ def test_doctor_supports_json_output_and_returns_success(tmp_path: Path) -> None
     assert payload["notes"] == 1
     assert payload["manifest"]["schema_version"] == 1
     assert snapshot_tree(vault) == before
+
+
+def test_self_retrieval_json_is_exact_current_core_projection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = FakeSelfRetrievalService(_cli_self_retrieval_result())
+    monkeypatch.setattr(
+        "second_brain.entrypoints.cli.app.build_production_self_retrieval_service",
+        lambda **_: service,
+    )
+
+    result = runner.invoke(
+        app,
+        ["self-retrieval", "current context", "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    assert result.stderr == ""
+    payload = json.loads(result.stdout)
+    assert set(payload) == {
+        "items",
+        "candidate_count",
+        "included_count",
+        "excluded_count",
+        "exclusions",
+        "truncated",
+        "content_bytes",
+        "self_model_derivation_version",
+        "self_model_policy_fingerprint",
+    }
+    assert payload["items"][0] == {
+        "note_id": VALID_NOTE_ID,
+        "note_type": "resource",
+        "title": "Current title",
+        "body": "Current canonical body.",
+        "tags": ["current"],
+        "created": "2026-09-06T10:00:00+00:00",
+        "updated": None,
+        "search_rank": 1,
+        "self_model_claims": [],
+    }
+    assert "relative_path" not in payload["items"][0]
+    assert "snippet" not in payload["items"][0]
+    assert service.requests == [
+        SelfContextRequest(
+            "current context",
+            DEFAULT_SELF_CONTEXT_LIMIT,
+            DEFAULT_MAX_CONTENT_BYTES,
+        )
+    ]
+
+
+def test_self_retrieval_text_is_deterministic_and_excludes_search_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = FakeSelfRetrievalService(_cli_self_retrieval_result())
+    monkeypatch.setattr(
+        "second_brain.entrypoints.cli.app.build_production_self_retrieval_service",
+        lambda **_: service,
+    )
+
+    first = runner.invoke(app, ["self-retrieval", "current context"])
+    second = runner.invoke(app, ["self-retrieval", "current context"])
+
+    assert first.exit_code == second.exit_code == 0
+    assert first.stdout == second.stdout
+    assert "Current canonical body." in first.stdout
+    assert "relative_path" not in first.stdout
+    assert "Snippet:" not in first.stdout
+
+
+def test_self_retrieval_rejects_bounds_before_loading_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    called = False
+
+    def unexpected_service(**_: object) -> object:
+        nonlocal called
+        called = True
+        raise AssertionError("service must not be created for invalid request")
+
+    monkeypatch.setattr(
+        "second_brain.entrypoints.cli.app.build_production_self_retrieval_service",
+        unexpected_service,
+    )
+
+    result = runner.invoke(app, ["self-retrieval", "query", "--limit", "0"])
+
+    assert result.exit_code == 2
+    assert "SELF_RETRIEVAL_INVALID_REQUEST" in result.stderr
+    assert called is False
+
+
+def test_self_retrieval_maps_backend_failure_without_secret_details(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret = "vault-secret-path-and-backend-detail"
+    service = FakeSelfRetrievalService(SelfRetrievalSearchUnavailableError(secret))
+    monkeypatch.setattr(
+        "second_brain.entrypoints.cli.app.build_production_self_retrieval_service",
+        lambda **_: service,
+    )
+
+    result = runner.invoke(
+        app,
+        ["self-retrieval", "query", "--format", "json"],
+    )
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stderr)
+    assert payload["error"]["code"] == "SELF_RETRIEVAL_SEARCH_UNAVAILABLE"
+    assert secret not in result.stderr
+    assert "Traceback" not in result.stderr
 
 
 def test_validate_returns_one_for_validation_errors(tmp_path: Path) -> None:
