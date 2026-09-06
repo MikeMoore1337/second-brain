@@ -14,20 +14,21 @@ truth живёт во внешнем vault; Web GUI помогает захва�
 должно показать не «набор функций», а переход **signal → relation → verified
 knowledge**.
 
-Pinned brief:
+Зафиксированный бриф:
 
-- near-black/true-black base; graphite/ink layers only as depth;
-- violet/purple primary family с несколькими разными gradient grammars;
-- controlled bloom, atmospheric light, cognitive-network motifs;
+- near-black/true-black ground; graphite/ink layers используются только для
+  глубины;
+- violet/purple — основная family с несколькими различными gradient grammars;
+- controlled bloom, atmospheric light и cognitive-network motifs;
 - premium, intelligent, futuristic, но не cyberpunk cliché и не YFC;
-- no lime/fitness language, generic SaaS card grid, Inter-everywhere,
-  nested-cards или rounded-square-icon slop;
-- first-class 320–390px phones, large phones, tablets и desktop;
-- touch targets, dynamic viewport, no horizontal overflow, readable type,
-  graceful GPU/battery and reduced-motion degradation;
+- без lime/fitness language, generic SaaS card grid, Inter-everywhere,
+  nested-cards и rounded-square-icon slop;
+- телефоны 320–390px, большие телефоны, tablets и desktop — first-class targets;
+- touch targets, dynamic viewport, no horizontal overflow, readable type и
+  graceful GPU/battery/reduced-motion degradation;
 - три действительно разные концепции, затем один автономно выбранный winner;
-- no production UI, frontend framework, product/API/data-flow/security/privacy
-  changes.
+- без production UI, frontend framework и изменений product/API/data-flow/
+  security/privacy.
 
 ## Основания для визуальных систем
 

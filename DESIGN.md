@@ -8,7 +8,7 @@
 его задача — показать существующие состояния и content, а не диктовать новый
 визуальный язык.
 
-## Thesis
+## Тезис
 
 Second Brain — это не dashboard с набором карточек, а локальный cognitive
 workspace, в котором сигнал становится проверяемым знанием. Визуальный язык
@@ -20,13 +20,13 @@ workspace, в котором сигнал становится проверяе�
 глифов и узлов, sparse trace-линии и слои глубины на чёрном ground. Глифы и
 линии — функциональная навигация по сигналу, не декоративный cyberpunk HUD.
 
-## Color strategy
+## Цветовая стратегия
 
 Стратегия — **committed**: near-black ground занимает 30–60% визуального поля,
 а violet family несёт состояние, маршрут и фокус. Фиолетовый не является
 универсальным background tint: каждая gradient family имеет одну работу.
 
-### Intent tokens
+### Семантические токены
 
 Названия — intent, не обещание готового CSS API. Точные значения можно
 переиспользовать в #109, если они сохраняют контраст и тесты.
@@ -53,7 +53,7 @@ Body text не набирается `violet-electric` или `violet-lilac` на
 объёмах. Для нормального текста и controls обязателен проверяемый WCAG AA
 контраст; цвет никогда не является единственным носителем состояния.
 
-### Gradient families
+### Семейства градиентов
 
 - **Aurora** — медленный radial слой `violet-deep → transparent` за одним
   крупным active region; не повторять на каждой поверхности.
@@ -72,7 +72,7 @@ Body text не набирается `violet-electric` или `violet-lilac` на
 семейства одним purple-blue SaaS gradient. На слабом GPU каждый слой имеет
 неподвижный solid fallback.
 
-## Typography
+## Типографика
 
 Две семейства, две роли:
 
@@ -97,7 +97,7 @@ Body text не набирается `violet-electric` или `violet-lilac` на
 становиться декоративным изображением: основная мысль всегда остаётся
 копируемым DOM-текстом.
 
-## Spacing, radius, elevation
+## Отступы, радиусы и глубина
 
 Базовый rhythm: `4 / 8 / 12 / 16 / 24 / 32 / 48 / 64px`. Основные вертикальные
 переходы используют удвоенный шаг относительно внутреннего padding. Плотность
@@ -112,11 +112,11 @@ hairline, затем очень мягкий local bloom. Большая чёр�
 запрещена. Один смысловой слой — одна surface; list item по умолчанию является
 строкой общей поверхности, а не отдельной карточкой.
 
-## Surface hierarchy
+## Иерархия поверхностей
 
 1. **Void** — спокойный общий ground, задаёт контраст и направление взгляда.
 2. **Workspace plane** — текущая рабочая поверхность: Timeline, Search,
-   Self Model, Self Retrieval, Memory/Growth или Simulate Me.
+   Self Model, Self Retrieval, Decision Journal, Memory/Growth или Simulate Me.
 3. **Signal basin** — один локальный cluster/route, где пользователь видит
    связи и evidence.
 4. **Focus state** — selected node, draft review, prepare/diff или explicit
@@ -127,7 +127,7 @@ hairline, затем очень мягкий local bloom. Большая чёр�
 Shell, navigation и content не раскладываются в сетку одинаковых SaaS-карт.
 Primary action остаётся очевидным по placement и label, а не только по glow.
 
-## Iconography and line language
+## Иконография и язык линий
 
 Иконка — тонкий 1.5px line glyph с несколькими устойчивыми геометрическими
 якорями; optical size обычно 18–20px, touch wrapper минимум 44px. Узел — точка
@@ -139,7 +139,7 @@ Hairlines, crosshairs и registration marks допустимы, когда он�
 связь, границу или координату. Линия без семантики считается шумом и удаляется.
 Focus ring всегда видим keyboard-пользователю и не заменяется violet glow.
 
-## Atmospheric motifs
+## Атмосферные мотивы
 
 - **Signal field:** редкая сетка координат с observable nodes; node density
   соответствует bounded derived state, а не случайному particle effect.
@@ -154,7 +154,7 @@ Focus ring всегда видим keyboard-пользователю и не з�
 semantics. Декоративная сеть не получает `aria` и не должна конкурировать с
 content.
 
-## Motion personality
+## Характер motion
 
 Motion — **точный, тихий, инструментальный**: система подтверждает spatial
 relationship и state, а не просит внимания ради «вау».
@@ -181,7 +181,7 @@ relationship и state, а не просит внимания ради «вау»
 JS-анимацию там, где достаточно CSS. Для interruptible state использовать
 transitions, для жестов — spring только при реальной interruptibility.
 
-## Responsive and mobile rules
+## Адаптивность и правила mobile
 
 Mobile — не сжатый desktop, а первый класс того же world.
 
@@ -202,7 +202,7 @@ Mobile — не сжатый desktop, а первый класс того же w
 - Пустые, error, permission и settings states используют компактные, но не
   обрезанные блоки; состояние не выражается только цветом.
 
-## Reduced motion and accessibility
+## Reduced motion и доступность
 
 `prefers-reduced-motion: reduce` убирает transform/position movement, stagger,
 parallax и decorative trace drift, сохраняя instant state change и короткие
@@ -215,7 +215,7 @@ Keyboard focus, visible error, readable line length, zoom до 200% и logical D
 order являются acceptance criteria будущих UI tasks. SVG/canvas signal layer
 не скрывает DOM fallback.
 
-## Performance budget principles
+## Принципы performance budget
 
 - Base experience не требует WebGL, canvas или animation library.
 - В одном viewport не более трёх gradient layers; full-screen blur и large
@@ -230,7 +230,7 @@ order являются acceptance criteria будущих UI tasks. SVG/canvas s
   overflow и reduced-motion variant; performance regression не компенсируется
   красивым screenshot.
 
-## Anti-patterns
+## Антипаттерны
 
 - lime/fitness language, YFC-like coaching palette или progress-gamification;
 - generic SaaS card grid, cards inside cards, rounded-square icon tile matrix;
@@ -245,7 +245,7 @@ order являются acceptance criteria будущих UI tasks. SVG/canvas s
 - content hidden behind animation, horizontal overflow, fixed viewport height;
 - changing product/API/data-flow semantics under cover of visual redesign.
 
-## Implementation boundary
+## Граница реализации
 
 Issue #108 фиксирует только visual truth. #109 переводит intent tokens и
 gradient families в implementation primitives; #110 — shell/topology; #112 —
