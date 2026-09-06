@@ -645,6 +645,7 @@ if (panel) {
       confirmButton.disabled = true;
       plan.replaceChildren();
       plan.hidden = true;
+      setCaptureStep("review");
       previewStatus.textContent = "Изменения требуют новой подготовки Safe Write.";
     };
 

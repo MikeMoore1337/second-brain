@@ -62,6 +62,7 @@ def test_capture_write_layout_has_bounded_desktop_and_mobile_composition() -> No
         ".review-field-wide",
         ".journal-steps",
         ".review-button-confirm",
+        "@media (max-width: 900px)",
         "@media (max-width: 760px)",
         "grid-template-columns: 1fr;",
         "scrollbar-width: thin;",
@@ -98,6 +99,7 @@ def test_dynamic_review_surface_keeps_safe_write_and_personal_memory_hooks() -> 
     journal_script = _read("decision-journal.js")
     for marker in (
         "const setJournalStep = (currentStep) =>",
+        "const journalStepForMode = (mode) =>",
         'setJournalStep("capture")',
         'setJournalStep("confirm")',
         'step.setAttribute("aria-current", "step")',

@@ -3117,6 +3117,12 @@ textarea#review-content {
   margin-top: 0;
 }
 
+@media (max-width: 900px) {
+  .voice-panel {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 760px) {
   .entry-point {
     grid-template-columns: 1fr;

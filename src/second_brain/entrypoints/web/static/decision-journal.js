@@ -90,6 +90,12 @@ if (decisionJournalSurface) {
     });
   };
 
+  const journalStepForMode = (mode) => {
+    const saved = mode === "outcome" ? outcomeSavedState : decisionSavedState;
+    const token = mode === "outcome" ? outcomeConfirmationToken : decisionConfirmationToken;
+    return saved || typeof token === "string" ? "confirm" : "capture";
+  };
+
   const lines = (value) => value.split(/\r?\n/).filter((item) => item.length > 0);
 
   const setJournalError = (target, statusTarget, message) => {
@@ -136,7 +142,7 @@ if (decisionJournalSurface) {
       button.classList.toggle("is-active", active);
       button.setAttribute("aria-pressed", String(active));
     });
-    setJournalStep("capture");
+    setJournalStep(journalStepForMode(journalMode));
   };
 
   const syncDecisionTime = () => {
