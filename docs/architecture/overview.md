@@ -546,7 +546,9 @@ preference/goal prediction, bounded abstention categories, contextual belief,
 Decision Journal/search-only non-inference, unknown-time caveat, NFC/edge-trim
 matching и malformed current context. Report фиксирует actual evidence refs,
 result category, derivation/policy identity и точный mismatch reason без
-временных путей и note bodies.
+временных путей и note bodies. Corpus также фиксирует case-only,
+internal-whitespace и prefix near-match abstention и asymmetric count/recency
+conflict; Markdown и JSON сохраняют captured refs и caveats.
 
 Harness не читает configured vault, не вызывает provider/network/LLM, не пишет
 canonical notes и не вводит calibration, confidence threshold, quality SLO или

@@ -20,6 +20,9 @@ JSON и Markdown содержат одинаковый versioned report без �
 expected/actual result category, caller option, evidence UUID refs,
 contextual refs, temporal caveats, derivation_version, policy_id,
 policy_fingerprint и точная mismatch_reason.
+Markdown report также показывает captured selected option, refs, caveats и
+policy identity для каждой case; JSON сохраняет ту же информацию в machine-
+readable форме.
 
 ## Synthetic corpus
 
@@ -36,6 +39,8 @@ Corpus version: simulate-me-synthetic-corpus-v1.
 - ordinary searchable note без direct Self Model claim;
 - evidence_at: unknown как temporal caveat;
 - только NFC и edge-trim normalization;
+- case-only, internal-whitespace и prefix near-match abstention;
+- конфликт с неравными support counts и old/new evidence timestamps;
 - malformed current context с fail-closed abstention.
 
 Harness может сообщить pass/fail case и category counts. В нём нет quality

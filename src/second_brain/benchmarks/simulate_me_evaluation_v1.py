@@ -21,9 +21,6 @@ from typing import Final, Literal
 from second_brain.adapters.vault import FileSystemVaultReader
 from second_brain.application.decision_journal import render_decision_journal_body
 from second_brain.application.simulate_me import (
-    DERIVATION_VERSION,
-    POLICY_FINGERPRINT,
-    POLICY_ID,
     BuildSimulateMe,
     SimulateMeContextualEvidenceRef,
     SimulateMeEvidenceRef,
@@ -38,9 +35,16 @@ from second_brain.application.simulate_me import (
 EVALUATION_VERSION: Final[str] = "simulate-me-evaluation-v1"
 CORPUS_VERSION: Final[str] = "simulate-me-synthetic-corpus-v1"
 REPORT_SCHEMA_VERSION: Final[int] = 1
+APPROVED_DERIVATION_VERSION: Final[str] = "simulate-me-v1"
+APPROVED_POLICY_ID: Final[str] = "simulate-me-direct-exact-v1"
+APPROVED_POLICY_FINGERPRINT: Final[str] = (
+    "sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a"
+)
 _FIXED_NOW: Final[datetime] = datetime(2026, 9, 6, 12, 0, tzinfo=UTC)
 _KNOWN_EVIDENCE_AT: Final[str] = "2026-09-05T12:00:00+00:00"
 _UNKNOWN_EVIDENCE_AT: Final[str] = "unknown"
+_OLD_EVIDENCE_AT: Final[str] = "2020-01-01T12:00:00+00:00"
+_NEW_EVIDENCE_AT: Final[str] = "2030-01-01T12:00:00+00:00"
 _NOTE_CREATED_AT: Final[str] = "2026-09-05T18:00:00+00:00"
 _CATEGORY_ORDER: Final[tuple[str, ...]] = (
     "prediction",
@@ -227,9 +231,9 @@ def run_evaluation() -> SimulateMeEvaluationReport:
         corpus_version=CORPUS_VERSION,
         report_schema_version=REPORT_SCHEMA_VERSION,
         synthetic_only=True,
-        derivation_version=DERIVATION_VERSION,
-        policy_id=POLICY_ID,
-        policy_fingerprint=POLICY_FINGERPRINT,
+        derivation_version=APPROVED_DERIVATION_VERSION,
+        policy_id=APPROVED_POLICY_ID,
+        policy_fingerprint=APPROVED_POLICY_FINGERPRINT,
         total_cases=len(measurements),
         passed_cases=passed_cases,
         failed_cases=len(measurements) - passed_cases,
@@ -285,15 +289,26 @@ def render_markdown(report: SimulateMeEvaluationReport) -> str:
     lines.extend(
         (
             "",
-            "| Case | Expected | Actual | Status | Mismatch |",
-            "| --- | --- | --- | --- | --- |",
+            "| Case | Expected | Actual | Status | Selected | Evidence refs | "
+            "Contextual refs | Caveats | Identity | Mismatch |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
         )
     )
     for case in report.cases:
         mismatch = case.mismatch_reason or "-"
+        identity = {
+            "derivation_version": case.actual_derivation_version,
+            "policy_id": case.actual_policy_id,
+            "policy_fingerprint": case.actual_policy_fingerprint,
+        }
         lines.append(
             f"| {case.case_id} | {case.expected_category} | {case.actual_category} | "
-            f"{'PASS' if case.passed else 'FAIL'} | {mismatch} |"
+            f"{'PASS' if case.passed else 'FAIL'} | "
+            f"{_stable_value(case.actual_selected_option)} | "
+            f"{_stable_value(case.actual_evidence_refs)} | "
+            f"{_stable_value(case.actual_contextual_evidence_refs)} | "
+            f"{_stable_value(case.actual_temporal_caveats)} | "
+            f"{_stable_value(identity)} | {mismatch} |"
         )
     return "\n".join(lines) + "\n"
 
@@ -374,11 +389,11 @@ def _measurement(
         actual_contextual_evidence_refs=actual.contextual_evidence_refs,
         expected_temporal_caveats=expected.temporal_caveats,
         actual_temporal_caveats=actual.temporal_caveats,
-        expected_derivation_version=DERIVATION_VERSION,
+        expected_derivation_version=APPROVED_DERIVATION_VERSION,
         actual_derivation_version=actual.derivation_version or None,
-        expected_policy_id=POLICY_ID,
+        expected_policy_id=APPROVED_POLICY_ID,
         actual_policy_id=actual.policy_id or None,
-        expected_policy_fingerprint=POLICY_FINGERPRINT,
+        expected_policy_fingerprint=APPROVED_POLICY_FINGERPRINT,
         actual_policy_fingerprint=actual.policy_fingerprint or None,
         passed=mismatch_reason is None,
         mismatch_reason=mismatch_reason,
@@ -423,9 +438,9 @@ def _mismatch_reason(expected: ExpectedOutcome, actual: _ResultCapture) -> str |
             actual.contextual_evidence_refs,
         ),
         ("temporal_caveats", expected.temporal_caveats, actual.temporal_caveats),
-        ("derivation_version", DERIVATION_VERSION, actual.derivation_version),
-        ("policy_id", POLICY_ID, actual.policy_id),
-        ("policy_fingerprint", POLICY_FINGERPRINT, actual.policy_fingerprint),
+        ("derivation_version", APPROVED_DERIVATION_VERSION, actual.derivation_version),
+        ("policy_id", APPROVED_POLICY_ID, actual.policy_id),
+        ("policy_fingerprint", APPROVED_POLICY_FINGERPRINT, actual.policy_fingerprint),
     )
     for field, expected_value, actual_value in comparisons:
         if expected_value != actual_value:
@@ -770,6 +785,27 @@ EVALUATION_CASES: Final[tuple[EvaluationCase, ...]] = (
         ),
     ),
     EvaluationCase(
+        case_id="abstention-case-only-near-match",
+        description="case-only difference is not an exact whole-label match",
+        notes=(_direct_note(PREFERENCE_A_ID, "10 Projects/Case.md", "Первый вариант"),),
+        request=SimulateMeRequest("Выбор", (SimulateMeOption("a", "первый вариант"),)),
+        expected=_abstention("abstention/no_matching_evidence"),
+    ),
+    EvaluationCase(
+        case_id="abstention-internal-whitespace-near-match",
+        description="internal whitespace difference is not normalized",
+        notes=(_direct_note(PREFERENCE_A_ID, "10 Projects/Whitespace.md", "Первый вариант"),),
+        request=SimulateMeRequest("Выбор", (SimulateMeOption("a", "Первый  вариант"),)),
+        expected=_abstention("abstention/no_matching_evidence"),
+    ),
+    EvaluationCase(
+        case_id="abstention-prefix-near-match",
+        description="substring or prefix evidence cannot support an option",
+        notes=(_direct_note(PREFERENCE_A_ID, "10 Projects/Prefix.md", "Первый вариант"),),
+        request=SimulateMeRequest("Выбор", (SimulateMeOption("a", "Первый"),)),
+        expected=_abstention("abstention/no_matching_evidence"),
+    ),
+    EvaluationCase(
         case_id="abstention-no-match",
         description="no exact direct evidence produces bounded abstention",
         notes=(_direct_note(PREFERENCE_A_ID, "10 Projects/Preference A.md", "Первый вариант"),),
@@ -792,6 +828,42 @@ EVALUATION_CASES: Final[tuple[EvaluationCase, ...]] = (
             (
                 _expected_ref(PREFERENCE_A_ID, "preference"),
                 _expected_ref(PREFERENCE_B_ID, "preference"),
+            ),
+        ),
+    ),
+    EvaluationCase(
+        case_id="abstention-asymmetric-count-and-recency",
+        description="unequal support counts and timestamps still produce conflict abstention",
+        notes=(
+            _direct_note(
+                PREFERENCE_A_ID,
+                "10 Projects/Older A.md",
+                "Первый вариант",
+                evidence_at=_OLD_EVIDENCE_AT,
+            ),
+            _direct_note(
+                GOAL_A_ID,
+                "10 Projects/Newer A.md",
+                "Первый вариант",
+                self_kind="goal",
+                evidence_at=_NEW_EVIDENCE_AT,
+            ),
+            _direct_note(
+                PREFERENCE_B_ID,
+                "10 Projects/Middle B.md",
+                "Второй вариант",
+            ),
+        ),
+        request=SimulateMeRequest(
+            "Выбор",
+            (SimulateMeOption("a", "Первый вариант"), SimulateMeOption("b", "Второй вариант")),
+        ),
+        expected=_abstention(
+            "abstention/multiple_options_supported",
+            (
+                _expected_ref(PREFERENCE_A_ID, "preference", evidence_at=_OLD_EVIDENCE_AT),
+                _expected_ref(PREFERENCE_B_ID, "preference"),
+                _expected_ref(GOAL_A_ID, "goal", evidence_at=_NEW_EVIDENCE_AT),
             ),
         ),
     ),
@@ -863,6 +935,9 @@ EVALUATION_CASES: Final[tuple[EvaluationCase, ...]] = (
 
 
 __all__ = [
+    "APPROVED_DERIVATION_VERSION",
+    "APPROVED_POLICY_FINGERPRINT",
+    "APPROVED_POLICY_ID",
     "CORPUS_VERSION",
     "EVALUATION_CASES",
     "EVALUATION_VERSION",
