@@ -118,7 +118,7 @@ describe("React Web parity shell", () => {
     const transcribe = vi.spyOn(api, "transcribeAudio").mockResolvedValue({ transcript: { text: "Проверь меня" } });
     const createDraft = vi.spyOn(api, "createTextDraft");
     const host = await renderCapture();
-    const voiceButton = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent === "Voice");
+    const voiceButton = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent === "Голос");
     expect(voiceButton).not.toBeUndefined();
     await act(async () => voiceButton?.click());
     const fileInput = host.querySelector<HTMLInputElement>("input[type='file']");

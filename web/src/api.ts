@@ -261,7 +261,7 @@ function errorMessage(payload: unknown, fallback: string): string {
     const error = payload.error;
     if (typeof error === "object" && error !== null && "message" in error) {
       const message = error.message;
-      if (typeof message === "string" && message.length > 0) {
+      if (typeof message === "string" && /[А-Яа-яЁё]/u.test(message)) {
         return message;
       }
     }
@@ -305,7 +305,7 @@ export async function createUrlDraft(url: string, fetcher: FetchLike = fetchDefa
 }
 
 export async function previewDraft(content: string, fetcher: FetchLike = fetchDefault): Promise<PreviewResponse> {
-  return requestJson("/api/drafts/preview", "draft-v1", { content }, fetcher, "Не удалось построить preview.");
+  return requestJson("/api/drafts/preview", "draft-v1", { content }, fetcher, "Не удалось построить предпросмотр.");
 }
 
 export async function prepareSave(reviewToken: string, draft: NoteDraft, fetcher: FetchLike = fetchDefault): Promise<SavePlanResponse> {
@@ -317,11 +317,11 @@ export async function applySave(reviewToken: string, confirmationToken: string, 
 }
 
 export async function preparePersonalMemory(reviewToken: string, draft: NoteDraft, personalMemory: PersonalMemoryPayload, fetcher: FetchLike = fetchDefault): Promise<SavePlanResponse> {
-  return requestJson("/api/drafts/personal-memory/save/prepare", "draft-v1", { review_token: reviewToken, draft, personal_memory: personalMemory }, fetcher, "Не удалось подготовить Personal Memory.");
+  return requestJson("/api/drafts/personal-memory/save/prepare", "draft-v1", { review_token: reviewToken, draft, personal_memory: personalMemory }, fetcher, "Не удалось подготовить сохранение личной памяти.");
 }
 
 export async function applyPersonalMemory(reviewToken: string, confirmationToken: string, draft: NoteDraft, personalMemory: PersonalMemoryPayload, fetcher: FetchLike = fetchDefault): Promise<SavedNoteResponse> {
-  return requestJson("/api/drafts/personal-memory/save/apply", "draft-v1", { review_token: reviewToken, confirmation_token: confirmationToken, draft, personal_memory: personalMemory }, fetcher, "Не удалось сохранить Personal Memory.");
+  return requestJson("/api/drafts/personal-memory/save/apply", "draft-v1", { review_token: reviewToken, confirmation_token: confirmationToken, draft, personal_memory: personalMemory }, fetcher, "Не удалось сохранить личную память.");
 }
 
 export async function transcribeAudio(body: Blob, contentType: string, fetcher: FetchLike = fetchDefault): Promise<{ readonly transcript: { readonly text: string } }> {
@@ -332,17 +332,17 @@ export async function transcribeAudio(body: Blob, contentType: string, fetcher: 
   });
   const payload = await readJson(response);
   if (!response.ok) {
-    throw new ApiRequestError(errorMessage(payload, "Не удалось распознать audio."), response.status);
+    throw new ApiRequestError(errorMessage(payload, "Не удалось распознать аудио."), response.status);
   }
   return payload as { readonly transcript: { readonly text: string } };
 }
 
 export function loadTimeline(order: "asc" | "desc", fetcher: FetchLike = fetchDefault): Promise<TimelineResponse> {
-  return requestJson("/api/timeline", "timeline-v1", { order, known_limit: 100, unknown_limit: 100 }, fetcher, "Не удалось загрузить Timeline.");
+  return requestJson("/api/timeline", "timeline-v1", { order, known_limit: 100, unknown_limit: 100 }, fetcher, "Не удалось загрузить хронологию.");
 }
 
 export function loadSelfModel(fetcher: FetchLike = fetchDefault): Promise<SelfModelResponse> {
-  return requestJson("/api/self-model", "self-model-v1", { max_claims: 200, max_evidence_refs_per_claim: 200 }, fetcher, "Не удалось построить Self Model.");
+  return requestJson("/api/self-model", "self-model-v1", { max_claims: 200, max_evidence_refs_per_claim: 200 }, fetcher, "Не удалось построить модель себя.");
 }
 
 export function loadSelfRetrieval(query: string, fetcher: FetchLike = fetchDefault): Promise<SelfRetrievalResponse> {
@@ -362,17 +362,17 @@ export function retrieveNote(id: string, fetcher: FetchLike = fetchDefault): Pro
 }
 
 export function prepareDecision(decision: DecisionPayload, fetcher: FetchLike = fetchDefault): Promise<SavePlanResponse> {
-  return requestJson("/api/drafts/decision-journal/save/prepare", "draft-v1", { decision }, fetcher, "Не удалось подготовить Decision Journal.");
+  return requestJson("/api/drafts/decision-journal/save/prepare", "draft-v1", { decision }, fetcher, "Не удалось подготовить журнал решений.");
 }
 
 export function applyDecision(confirmationToken: string, decision: DecisionPayload, fetcher: FetchLike = fetchDefault): Promise<SavedNoteResponse> {
-  return requestJson("/api/drafts/decision-journal/save/apply", "draft-v1", { confirmation_token: confirmationToken, decision }, fetcher, "Не удалось сохранить Decision Journal.");
+  return requestJson("/api/drafts/decision-journal/save/apply", "draft-v1", { confirmation_token: confirmationToken, decision }, fetcher, "Не удалось сохранить журнал решений.");
 }
 
 export function prepareOutcome(outcome: OutcomePayload, fetcher: FetchLike = fetchDefault): Promise<SavePlanResponse> {
-  return requestJson("/api/drafts/outcome-observation/save/prepare", "draft-v1", { outcome }, fetcher, "Не удалось подготовить Outcome.");
+  return requestJson("/api/drafts/outcome-observation/save/prepare", "draft-v1", { outcome }, fetcher, "Не удалось подготовить результат.");
 }
 
 export function applyOutcome(confirmationToken: string, outcome: OutcomePayload, fetcher: FetchLike = fetchDefault): Promise<SavedNoteResponse> {
-  return requestJson("/api/drafts/outcome-observation/save/apply", "draft-v1", { confirmation_token: confirmationToken, outcome }, fetcher, "Не удалось сохранить Outcome.");
+  return requestJson("/api/drafts/outcome-observation/save/apply", "draft-v1", { confirmation_token: confirmationToken, outcome }, fetcher, "Не удалось сохранить результат.");
 }

@@ -1064,7 +1064,7 @@ def test_save_config_is_lazy_and_invalid_config_makes_zero_writes(
     assert response.json() == {
         "error": {
             "code": "VAULT_UNAVAILABLE",
-            "message": "vault is unavailable for saving",
+            "message": "Хранилище недоступно для сохранения",
         }
     }
     assert str(tmp_path) not in response.text

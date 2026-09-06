@@ -146,6 +146,15 @@ Hairlines, crosshairs и registration marks допустимы, когда он�
 связь, границу или координату. Линия без семантики считается шумом и удаляется.
 Focus ring всегда видим keyboard-пользователю и не заменяется violet glow.
 
+## Язык интерфейса
+
+Production React Web GUI использует русский язык для всех пользовательских
+текстов, состояний, ошибок и accessibility labels. Единый glossary и границы
+перевода зафиксированы в
+[`docs/design/russian-ui-language-v1.md`](docs/design/russian-ui-language-v1.md).
+Machine-readable codes и identifiers не меняются и показываются только с
+русским контекстом.
+
 ## Атмосферные мотивы
 
 - **Signal field:** редкая сетка координат с observable nodes; node density

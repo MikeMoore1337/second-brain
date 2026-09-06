@@ -192,7 +192,7 @@ def test_timeline_invalid_request_is_400_and_never_partial(
     assert response.json() == {
         "error": {
             "code": "TIMELINE_INVALID_REQUEST",
-            "message": "timeline request failed validation",
+            "message": "Запрос хронологии не прошёл проверку",
         }
     }
     assert "known_items" not in response.text
@@ -214,7 +214,7 @@ def test_timeline_invalid_payload_precedes_missing_vault_config(
     assert response.json() == {
         "error": {
             "code": "TIMELINE_INVALID_REQUEST",
-            "message": "timeline request failed validation",
+            "message": "Запрос хронологии не прошёл проверку",
         }
     }
 
