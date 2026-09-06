@@ -30,7 +30,8 @@ if (selfModelSurface) {
     error.textContent = displayValue(message, "Не удалось построить Self Model.");
     error.hidden = false;
     status.textContent = "";
-    error.focus({ preventScroll: true });
+    error.scrollIntoView({ block: "nearest" });
+    error.focus();
   };
 
   const clearFeedback = () => {

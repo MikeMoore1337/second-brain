@@ -40,6 +40,14 @@ def _read(name: str) -> str:
     return (STATIC_DIR / name).read_text(encoding="utf-8")
 
 
+def _assert_revealed_before_focus(script: str, target: str) -> None:
+    """Keep focus changes observable when the target is outside the viewport."""
+
+    reveal_index = script.index(f"{target}.scrollIntoView")
+    focus_index = script.index(f"{target}.focus()")
+    assert reveal_index < focus_index
+
+
 def test_static_dom_has_landmarks_headings_and_named_controls() -> None:
     """Keep the initial document navigable by landmarks and headings."""
 
@@ -115,23 +123,27 @@ def test_hidden_states_focus_contract_and_reduced_motion_are_explicit() -> None:
     self_model_js = _read("self-model.js")
 
     for script in (app_js, journal_js, timeline_js, self_model_js):
-        assert "focus({ preventScroll: true })" in script
         assert 'setAttribute("aria-busy", String(' in script
 
     assert 'personalMemoryToggle.setAttribute("aria-expanded", "false")' in app_js
     assert 'personalMemoryToggle.setAttribute("aria-expanded", String(enabled))' in app_js
-    assert "result.focus({ preventScroll: true })" in app_js
+    _assert_revealed_before_focus(app_js, "error")
+    _assert_revealed_before_focus(app_js, "result")
+    _assert_revealed_before_focus(app_js, "searchError")
+    _assert_revealed_before_focus(app_js, "retrievedNote")
+    assert "addButton.focus()" in app_js
+    assert "saved.focus" not in app_js
     assert 'preview.scrollIntoView({ block: "nearest" })' in app_js
     assert 'plan.scrollIntoView({ block: "nearest" })' in app_js
-    assert "confirmButton.focus({ preventScroll: true })" in app_js
-    assert "saved.focus({ preventScroll: true })" in app_js
-    assert "retrievedNote.focus({ preventScroll: true })" in app_js
+    assert "confirmButton.focus(" in app_js
     assert 'retrievedNote.scrollIntoView({ block: "start" })' in app_js
-    assert "target.focus({ preventScroll: true })" in journal_js
+    _assert_revealed_before_focus(journal_js, "target")
 
-    assert "decisionConfirm.focus({ preventScroll: true })" in journal_js
-    assert "outcomeConfirm.focus({ preventScroll: true })" in journal_js
+    assert "decisionConfirm.focus(" in journal_js
+    assert "outcomeConfirm.focus(" in journal_js
     assert 'plan.scrollIntoView({ block: "nearest" })' in journal_js
+    _assert_revealed_before_focus(timeline_js, "error")
+    _assert_revealed_before_focus(self_model_js, "error")
 
     assert "const loadTimeline = async (userInitiated = false)" in timeline_js
     assert "if (userInitiated)" in timeline_js

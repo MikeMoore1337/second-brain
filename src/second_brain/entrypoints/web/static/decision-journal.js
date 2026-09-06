@@ -81,7 +81,8 @@ if (decisionJournalSurface) {
     target.textContent = typeof message === "string" && message ? message : "Не удалось выполнить операцию.";
     target.hidden = false;
     statusTarget.textContent = "";
-    target.focus({ preventScroll: true });
+    target.scrollIntoView({ block: "nearest" });
+    target.focus();
   };
 
   const clearJournalError = (target) => {

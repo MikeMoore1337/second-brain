@@ -94,7 +94,8 @@ if (panel) {
     error.textContent = textValue(message, "Не удалось выполнить операцию.");
     error.hidden = false;
     status.textContent = "";
-    error.focus({ preventScroll: true });
+    error.scrollIntoView({ block: "nearest" });
+    error.focus();
   };
 
   const clearFeedback = () => {
@@ -821,7 +822,7 @@ if (panel) {
         addField(savedFields, "Создано", payload.note.created);
         saved.append(savedFields);
         section.append(saved);
-        saved.focus({ preventScroll: true });
+        addButton.focus();
         status.textContent = savedAsPersonalMemory
           ? "Personal Memory сохранена"
           : "Заметка сохранена";
@@ -867,7 +868,8 @@ if (panel) {
       });
     }
     result.hidden = false;
-    result.focus({ preventScroll: true });
+    result.scrollIntoView({ block: "nearest" });
+    result.focus();
   };
 
   const setMode = (nextMode) => {
@@ -1138,7 +1140,8 @@ if (searchSurface) {
     searchError.textContent = searchTextValue(message, "Не удалось выполнить поиск.");
     searchError.hidden = false;
     searchStatus.textContent = "";
-    searchError.focus({ preventScroll: true });
+    searchError.scrollIntoView({ block: "nearest" });
+    searchError.focus();
   };
 
   const clearSearchFeedback = () => {
@@ -1226,8 +1229,8 @@ if (searchSurface) {
     body.textContent = searchTextValue(note.content, "");
     retrievedNote.append(bodyLabel, body);
     retrievedNote.hidden = false;
-    retrievedNote.focus({ preventScroll: true });
     retrievedNote.scrollIntoView({ block: "start" });
+    retrievedNote.focus();
   };
 
   const openNote = async (noteId) => {

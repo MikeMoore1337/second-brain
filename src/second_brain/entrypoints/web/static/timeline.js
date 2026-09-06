@@ -30,7 +30,8 @@ if (timelineSurface) {
   };
 
   const focusError = () => {
-    error.focus({ preventScroll: true });
+    error.scrollIntoView({ block: "nearest" });
+    error.focus();
   };
 
   const clearFeedback = () => {
