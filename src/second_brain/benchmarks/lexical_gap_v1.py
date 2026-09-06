@@ -399,7 +399,7 @@ def _measure_case(
     for rank, hit in enumerate(hits, start=1):
         item = item_by_rank.get(rank)
         if item is not None:
-            if case.scenario == "stale_body":
+            if case.scenario == "stale_body" and hit.note_id == MUTABLE_ID:
                 outcome = (
                     "stale_body_refreshed"
                     if item.body == _MUTABLE_CURRENT_BODY
@@ -413,7 +413,10 @@ def _measure_case(
         current_reread.append(CurrentRereadOutcome(note_id=str(hit.note_id), outcome=outcome))
 
     expected_match = expected_set == actual_set
-    if case.scenario == "stale_body":
+    if case.scenario == "stale_body" and str(MUTABLE_ID) not in candidates:
+        correctness = None
+        failure_category = "lexical_miss"
+    elif case.scenario == "stale_body":
         correctness = (
             expected_match
             and len(result.items) == 1
