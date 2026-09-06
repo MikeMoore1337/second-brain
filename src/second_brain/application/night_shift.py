@@ -186,7 +186,7 @@ class FailureBudgetUsage:
     scope_expansions: int = 0
     flaky_ci_retries: int = 0
     flaky_ci_retry_has_evidence: bool = False
-    flaky_ci_retry_code_changed: bool = False
+    flaky_ci_retry_code_changed: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -330,8 +330,10 @@ def evaluate_failure_budget(
     if (
         usage.flaky_ci_retries
         and limits.flaky_ci_retry_requires_no_code_change
-        and usage.flaky_ci_retry_code_changed
+        and usage.flaky_ci_retry_code_changed is not False
     ):
+        if usage.flaky_ci_retry_code_changed is None:
+            return _human("flaky_ci_retry_no_code_change_not_verified")
         return _human("flaky_ci_retry_changed_code")
     return _ready("failure_budget_within_bounds")
 

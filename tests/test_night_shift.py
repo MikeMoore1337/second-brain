@@ -207,7 +207,11 @@ def test_failure_budget_stops_review_loops_but_evidence_bound_flaky_retry_is_fre
 
     within = evaluate_failure_budget(
         loaded,
-        FailureBudgetUsage(flaky_ci_retries=4, flaky_ci_retry_has_evidence=True),
+        FailureBudgetUsage(
+            flaky_ci_retries=4,
+            flaky_ci_retry_has_evidence=True,
+            flaky_ci_retry_code_changed=False,
+        ),
     )
     assert within.status is GateStatus.READY
 
@@ -223,6 +227,13 @@ def test_failure_budget_stops_review_loops_but_evidence_bound_flaky_retry_is_fre
         FailureBudgetUsage(flaky_ci_retries=1),
     )
     assert no_evidence.status is GateStatus.HUMAN_REQUIRED
+
+    unverified_no_code_change = evaluate_failure_budget(
+        loaded,
+        FailureBudgetUsage(flaky_ci_retries=1, flaky_ci_retry_has_evidence=True),
+    )
+    assert unverified_no_code_change.status is GateStatus.HUMAN_REQUIRED
+    assert unverified_no_code_change.reasons == ("flaky_ci_retry_no_code_change_not_verified",)
 
     code_changed = evaluate_failure_budget(
         loaded,
