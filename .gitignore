@@ -8,6 +8,7 @@ venv/
 # Артефакты сборки
 build/
 dist/
+node_modules/
 *.egg-info/
 
 # Кэши тестов, coverage, lint и type-check
