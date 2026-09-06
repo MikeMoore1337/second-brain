@@ -59,8 +59,8 @@ def test_workspace_shell_has_bounded_responsive_layout_contract() -> None:
     assert "@media (min-width: 761px) and (max-width: 860px)" in css
 
 
-def test_workspace_shell_keeps_touch_targets_and_no_new_motion_system() -> None:
-    """Navigation remains touch-sized while motion ownership stays with #111."""
+def test_workspace_shell_keeps_touch_targets_and_motion_ownership_explicit() -> None:
+    """Navigation remains touch-sized while motion ownership stays explicit."""
 
     css = _read("app.css")
 
@@ -68,4 +68,4 @@ def test_workspace_shell_keeps_touch_targets_and_no_new_motion_system() -> None:
     assert ".topnav a::before" in css
     assert "padding: 8px;" in css
     assert "transition: color var(--sb-duration-short) var(--sb-ease-out);" in css
-    assert "animation:" not in css
+    assert "--sb-duration-ambient: 24s;" in css

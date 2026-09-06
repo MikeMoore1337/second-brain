@@ -126,6 +126,10 @@
   --sb-duration-press: 140ms;
   --sb-duration-short: 180ms;
   --sb-duration-panel: 280ms;
+  --sb-duration-busy: 1s;
+  --sb-duration-ambient: 24s;
+  --sb-motion-distance: 8px;
+  --sb-motion-entry-scale: 0.98;
   --sb-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --sb-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --sb-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
@@ -146,6 +150,8 @@ html {
 }
 
 body {
+  position: relative;
+  isolation: isolate;
   min-width: var(--sb-layout-min-width);
   margin: 0;
   padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
@@ -175,6 +181,8 @@ a {
 }
 
 .page-shell {
+  position: relative;
+  z-index: 1;
   width: min(var(--sb-container-max), calc(100% - var(--sb-page-gutter) - var(--sb-page-gutter)));
   margin: 0 auto;
 }
@@ -2126,6 +2134,194 @@ textarea#review-content {
   outline-offset: var(--sb-focus-offset);
 }
 
+/* Motion system v1: every motion has a bounded purpose and a named owner. */
+body::before {
+  position: fixed;
+  z-index: var(--sb-z-base);
+  inset: 0;
+  pointer-events: none;
+  background: var(--sb-gradient-orbit);
+  content: "";
+  opacity: 0.34;
+  transform: translate3d(-1%, -1%, 0) scale(1.02);
+  animation: sb-ambient-drift var(--sb-duration-ambient) var(--sb-ease-in-out)
+    infinite alternate;
+}
+
+@keyframes sb-ambient-drift {
+  from {
+    opacity: 0.28;
+    transform: translate3d(-1%, -1%, 0) scale(1.02);
+  }
+
+  to {
+    opacity: 0.46;
+    transform: translate3d(1%, 1%, 0) scale(1.04);
+  }
+}
+
+.topnav a,
+.mode-button,
+.capture-submit,
+.voice-button,
+.voice-file-label,
+.review-button {
+  transition:
+    transform var(--sb-duration-press) var(--sb-ease-out),
+    background-color var(--sb-duration-short) var(--sb-ease-out),
+    border-color var(--sb-duration-short) var(--sb-ease-out),
+    color var(--sb-duration-short) var(--sb-ease-out),
+    box-shadow var(--sb-duration-short) var(--sb-ease-out);
+}
+
+.topnav a:active,
+.mode-button:active:not(:disabled),
+.capture-submit:active:not(:disabled),
+.voice-button:active:not(:disabled),
+.voice-file-label:active,
+.review-button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+:where(
+    .entry-point,
+    .capture-panel,
+    .journal-panel,
+    .timeline-panel,
+    .self-model-panel,
+    .simulate-me-panel,
+    .search-surface,
+    .self-retrieval-surface,
+    .pillar-card
+  ) {
+  transition:
+    border-color var(--sb-duration-short) var(--sb-ease-out),
+    box-shadow var(--sb-duration-short) var(--sb-ease-out),
+    background-color var(--sb-duration-short) var(--sb-ease-out);
+}
+
+:where(
+    .entry-point,
+    .capture-panel,
+    .journal-panel,
+    .timeline-panel,
+    .self-model-panel,
+    .simulate-me-panel,
+    .search-surface,
+    .self-retrieval-surface,
+    .pillar-card
+  ):focus-within {
+  border-color: rgb(var(--sb-rgb-accent) / 0.42);
+  box-shadow: var(--sb-shadow-focus);
+}
+
+:where(
+    [data-capture-panel],
+    [data-decision-journal-surface],
+    [data-timeline-surface],
+    [data-self-model-surface],
+    [data-simulate-me-surface],
+    [data-search-surface],
+    [data-self-retrieval-surface]
+  )[aria-busy="true"] {
+  border-color: rgb(var(--sb-rgb-accent) / 0.46);
+  box-shadow: 0 0 0 3px rgb(var(--sb-rgb-accent) / 0.08);
+}
+
+.capture-submit[aria-busy="true"],
+.review-button[aria-busy="true"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.capture-submit[aria-busy="true"]::after,
+.review-button[aria-busy="true"]::after {
+  width: 0.55em;
+  height: 0.55em;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+  opacity: 0.45;
+  animation: sb-busy-pulse var(--sb-duration-busy) var(--sb-ease-in-out) infinite;
+}
+
+@keyframes sb-busy-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+:where(
+    .draft-result,
+    .save-plan,
+    .saved-note,
+    .timeline-item,
+    .self-model-claim,
+    .simulate-me-result,
+    .search-hit,
+    .retrieved-note,
+    .self-retrieval-item,
+    .self-retrieval-exclusions
+  ) {
+  transform-origin: 50% 0;
+  transition:
+    opacity var(--sb-duration-panel) var(--sb-ease-out),
+    transform var(--sb-duration-panel) var(--sb-ease-out);
+}
+
+@starting-style {
+  :where(
+      .draft-result,
+      .save-plan,
+      .saved-note,
+      .timeline-item,
+      .self-model-claim,
+      .simulate-me-result,
+      .search-hit,
+      .retrieved-note,
+      .self-retrieval-item,
+      .self-retrieval-exclusions
+    ) {
+    opacity: 0;
+    transform: translate3d(0, var(--sb-motion-distance), 0)
+      scale(var(--sb-motion-entry-scale));
+  }
+}
+
+.motion-details > summary {
+  cursor: pointer;
+  transition: color var(--sb-duration-short) var(--sb-ease-out);
+}
+
+.motion-details > summary:hover,
+.motion-details > summary:focus-visible,
+.motion-details[open] > summary {
+  color: var(--sb-color-accent);
+}
+
+.motion-details[open] > :not(summary) {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity var(--sb-duration-panel) var(--sb-ease-out),
+    transform var(--sb-duration-panel) var(--sb-ease-out);
+}
+
+@starting-style {
+  .motion-details[open] > :not(summary) {
+    opacity: 0;
+    transform: translateY(calc(var(--sb-motion-distance) * -1));
+  }
+}
+
 /* 760px is the content-driven stack threshold; keep the media query literal because
    CSS custom properties cannot be used in media feature values. */
 @media (max-width: 760px) {
@@ -2377,6 +2573,28 @@ textarea#review-content {
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
+  }
+
+  body::before {
+    animation: none;
+    opacity: 0.34;
+    transform: none;
+  }
+
+  :where(
+      .draft-result,
+      .save-plan,
+      .saved-note,
+      .timeline-item,
+      .self-model-claim,
+      .simulate-me-result,
+      .search-hit,
+      .retrieved-note,
+      .self-retrieval-item,
+      .self-retrieval-exclusions,
+      .motion-details[open] > :not(summary)
+    ) {
+    transform: none;
   }
 
   *,
