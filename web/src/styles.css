@@ -226,6 +226,43 @@ input:focus-visible {
   box-shadow: 0 24px 80px rgb(0 0 0 / 38%);
 }
 
+/* Atmospheric layer v1: a bounded signal field behind the existing hero. */
+.hero {
+  position: relative;
+  overflow: clip;
+}
+
+.hero::before,
+.hero::after {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  content: "";
+}
+
+.hero::before {
+  inset: 12% 32% 16% 3%;
+  border-radius: 50%;
+  background: var(--sb-gradient-aurora), var(--sb-gradient-bloom);
+  opacity: 0.3;
+  transform: rotate(-6deg) scale(1.08);
+}
+
+.hero::after {
+  top: 69%;
+  right: 9%;
+  width: min(32%, 260px);
+  height: 1px;
+  background: var(--sb-gradient-streak);
+  opacity: 0.38;
+}
+
+.hero-copy,
+.hero-orbit {
+  position: relative;
+  z-index: 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
@@ -239,6 +276,12 @@ input:focus-visible {
 
   .primary-control:active:not(:disabled),
   .secondary-control:active:not(:disabled) {
+    transform: none;
+  }
+
+  .hero::before,
+  .hero::after {
+    opacity: 0.22;
     transform: none;
   }
 }
@@ -258,5 +301,10 @@ input:focus-visible {
     animation: none;
     opacity: 0.28;
     transform: none;
+  }
+
+  .hero::before,
+  .hero::after {
+    opacity: 0.2;
   }
 }
