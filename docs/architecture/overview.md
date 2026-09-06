@@ -492,4 +492,15 @@ persistence, cache, watcher, cursor или write capability: `generated_at` —
 только injectable application clock в in-memory result. `schema_version` не
 меняется, а `second-brain-vault` остаётся отдельным нетронутым репозиторием.
 
-Design-only roadmap будущего Personal Cognitive Twin: [design-roadmap-v1.md](../cognitive-twin/design-roadmap-v1.md).
+## Self Model v1 design contract
+
+Stage 4 Self Model пока является только design/contract task из issue #81.
+Точный proposed application DTO, canonical/derived boundary, evidence
+eligibility, fail-closed policy, privacy constraints и `#82` implementation
+matrix находятся в [self-model-v1-contract.md](../cognitive-twin/self-model-v1-contract.md).
+В репозитории нет Self Model runtime, Web surface, persistent profile или
+inference write-back; #82 остаётся blocked до explicit resolution всех
+`HUMAN_REQUIRED` decisions.
+
+Design-only roadmap будущего Personal Cognitive Twin:
+[design-roadmap-v1.md](../cognitive-twin/design-roadmap-v1.md).

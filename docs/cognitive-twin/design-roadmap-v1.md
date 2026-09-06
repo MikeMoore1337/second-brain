@@ -1,17 +1,19 @@
 # Personal Cognitive Twin — design & roadmap v1
 
-Статус этого документа: **DESIGN / ROADMAP**. Personal Memory Contract v1 и
-Stage 2 Decision Journal v1 core реализованы в текущем репозитории; см.
-[issue #72](https://github.com/MikeMoore1337/second-brain/issues/72).
-Production Self Model, RAG, embeddings и prediction runtime остаются
-будущими slices.
+Статус этого документа: **DESIGN / ROADMAP**. Personal Memory Contract v1,
+Stage 2 Decision Journal v1 core и Stage 3 Personal Timeline v1 core
+реализованы в текущем репозитории. Stage 4 Self Model пока представлен только
+design contract в [issue #81](https://github.com/MikeMoore1337/second-brain/issues/81)
+и [self-model-v1-contract.md](self-model-v1-contract.md); runtime не реализован.
+Self Retrieval, RAG, embeddings и prediction runtime остаются будущими slices.
 
-Базовая точка design — merged `main`:
-`5936482b8a2903cf8cecbe5c412393a1eccdfab3`.
+Базовая точка design для текущего Stage 4 contract — exact `origin/main`:
+`c9443a5b6ab9a2876130b9d103a63827733c80ff`.
 
-Issue #66 является source of truth для границ работы. Этот документ описывает
-будущую архитектуру поверх существующих контрактов; он не заменяет их и не
-изменяет их в рамках #66.
+Issue #66 задаёт исходную архитектурную границу roadmap. Для текущего Stage 4
+Self Model scope и contract source of truth — issue #81; этот roadmap и новый
+contract описывают будущую архитектуру поверх существующих контрактов и не
+заменяют их.
 
 ## 1. Цель, инварианты и границы
 
@@ -621,10 +623,16 @@ SelfModelClaim
   contradicting_canonical_evidence_uuids (optional, empty when absent)
   confidence
   temporal_context
-  status: current | stale | conflicted | superseded | unresolved
+  status: policy-bound (final taxonomy is HUMAN_REQUIRED; values below are
+  examples only)
   generated_at
   derivation_version
 ```
+
+Roadmap values `current`, `stale`, `conflicted`, `superseded` и `unresolved`
+являются design examples, а не merged final status taxonomy. Точная форма,
+policy gate и decision memo находятся в
+[self-model-v1-contract.md](self-model-v1-contract.md).
 
 `category / dimension` может быть `preference`, `belief`, `goal`,
 `decision_rule`, `behavioral_pattern` или другим explicitly supported
@@ -975,13 +983,16 @@ context и derived explanation divergence.
 
 ### Stage 4 — Self Model v1
 
+- **Статус:** design contract в issue #81; Self Model runtime ещё не
+  реализован. Канонический документ:
+  [self-model-v1-contract.md](self-model-v1-contract.md).
 - **Цель:** построить evidence-backed derived claims о текущих patterns,
   preferences, beliefs, goals и decision rules.
 - **Входные зависимости:** Stage 1 evidence semantics, Stage 2 journal и
   Stage 3 temporal read model.
 - **Canonical changes:** нет; inferred claims не пишутся в vault.
 - **Derived state:** `SelfModelClaim` с category, claim, support/contradict
-  UUIDs, confidence, temporal context, status и generated time.
+  UUIDs, confidence, temporal context, policy-bound status и generated time.
 - **Public/application contracts:** bounded read-only Self Model DTO с
   explainability refs; no generic profile write API.
 - **Risks:** overfitting, stale/contradictory evidence, diagnosis-like
@@ -1071,12 +1082,13 @@ context и derived explanation divergence.
 - **Acceptance boundary:** user can ignore/reject a question; only reviewed
   answer can become canonical evidence.
 
-# EXACT NEXT IMPLEMENTATION SCOPE:
+# COMPLETED IMPLEMENTATION SCOPE (HISTORICAL):
 
-## Personal Memory Contract v1
+## Personal Memory Contract v1 (Stage 1, completed)
 
-Это следующий implementation slice после review этого design. Он не является
-частью текущего PR и не должен начинаться автоматически.
+Этот раздел сохраняет исходный implementation contract Stage 1 для истории.
+Stage 1, Stage 2 и Stage 3 уже находятся в current main; этот раздел не задаёт
+новую работу и не должен использоваться как trigger следующей задачи.
 
 ### Минимальные semantics
 
@@ -1257,3 +1269,17 @@ DB, Simulate Me, Compare, Calibration, Active Learning, automatic inference
 write-back, schema bump, new dependencies, new note type, domain registry,
 psychological profiling, live smoke, production deployment, issue creation и
 любые изменения `second-brain-vault`.
+
+# EXACT NEXT IMPLEMENTATION SCOPE:
+
+## Self Model v1 core (#82)
+
+Следующим implementation slice является только [issue #82](https://github.com/MikeMoore1337/second-brain/issues/82)
+и только после выполнения его hard dependency gate: #81 merged/closed, без
+нерешённых `HUMAN_REQUIRED` решений, с exact approved Self Model policy и
+merged contract в current main.
+
+До этого #82 остаётся `BLOCKED`; runtime, Web Self Model, Self Retrieval,
+embeddings, inference write-back и новые canonical fields не начинаются.
+Механическая граница и полный test matrix зафиксированы в
+[self-model-v1-contract.md](self-model-v1-contract.md), разделы 16-17.
