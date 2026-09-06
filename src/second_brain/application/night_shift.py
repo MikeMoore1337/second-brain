@@ -191,11 +191,12 @@ class FailureBudgetUsage:
 
 @dataclass(frozen=True, slots=True)
 class CheckRunEvidence:
-    """One required check result bound to the commit it actually tested."""
+    """One required check result bound to its head and latest run identity."""
 
     conclusion: CheckConclusion | str
     head_sha: str
     run_id: int
+    run_is_latest: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -376,6 +377,8 @@ def evaluate_merge_gate(policy: NightShiftPolicy, evidence: MergeGateEvidence) -
             return _blocked(f"required_check_not_bound_to_current_head:{check}")
         if check_evidence.run_id <= 0:
             return _blocked(f"required_check_run_id_missing:{check}")
+        if check_evidence.run_is_latest is not True:
+            return _blocked(f"required_check_run_not_latest:{check}")
     return GateResult(GateStatus.MERGE_READY, ("all_green_merge_gates_passed",))
 
 

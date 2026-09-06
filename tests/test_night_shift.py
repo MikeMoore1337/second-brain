@@ -272,6 +272,7 @@ def _green_merge_evidence(
                 conclusion=CheckConclusion.SUCCESS,
                 head_sha=head_sha,
                 run_id=index,
+                run_is_latest=True,
             )
             for index, (check, head_sha) in enumerate(
                 (
@@ -328,16 +329,40 @@ def test_merge_gate_requires_exact_reviewed_head_and_all_required_checks() -> No
                     conclusion=CheckConclusion.PENDING,
                     head_sha="a" * 40,
                     run_id=1,
+                    run_is_latest=True,
                 ),
                 "windows-ssl-regression": CheckRunEvidence(
                     conclusion=CheckConclusion.SUCCESS,
                     head_sha="a" * 40,
                     run_id=2,
+                    run_is_latest=True,
                 ),
             }
         ),
     )
     assert pending_ci.status is GateStatus.BLOCKED
+
+    superseded_check = evaluate_merge_gate(
+        loaded,
+        _green_merge_evidence(
+            check_evidence={
+                "quality": CheckRunEvidence(
+                    conclusion=CheckConclusion.SUCCESS,
+                    head_sha="a" * 40,
+                    run_id=1,
+                    run_is_latest=False,
+                ),
+                "windows-ssl-regression": CheckRunEvidence(
+                    conclusion=CheckConclusion.SUCCESS,
+                    head_sha="a" * 40,
+                    run_id=2,
+                    run_is_latest=True,
+                ),
+            }
+        ),
+    )
+    assert superseded_check.status is GateStatus.BLOCKED
+    assert superseded_check.reasons == ("required_check_run_not_latest:quality",)
 
 
 def test_merge_gate_preserves_human_required_reviewer_verdict() -> None:
