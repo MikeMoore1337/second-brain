@@ -10,5 +10,6 @@
 6. При RED gate или unresolved product decision остановись, выдай `HUMAN_REQUIRED` и bounded memo `Вопрос / Известные факты / Варианты / Компромиссы / Рекомендация / Затронутые задачи`. Не выбирай confidence, conflict, stale или supersede semantics самостоятельно.
 7. YELLOW можно довести до green PR, но не merge и не запускать зависимые задачи без human/risk decision. GREEN merge возможен только после exact-SHA review и всех merge gates.
 8. После cutoff не начинай новую задачу. Не трогай `second-brain-vault`, credentials, live provider smoke, private note content, другие репозитории или отдельные бессвязные threads.
+9. После подтверждённого GREEN merge выполняй post-task worktree cleanup только через зарегистрированный Git lifecycle. Любой POSIX symlink или Windows reparse point в candidate path/ancestor означает KEEP; ignored/untracked/staged/modified данные считаются dirty и означают KEEP. Перед `git worktree prune` обязателен `--dry-run --verbose`; если dry-run предлагает регистрацию, не доказанную как часть текущего уже проверенного cleanup set, не запускай глобальный prune, зафиксируй `cleanup_deferred` и сохрани чужую регистрацию.
 
 Если GitHub state не изменился, не повторяй audit и молчи. К morning cutoff подготовь report по [`night-shift-morning-report-template.md`](../../docs/automation/night-shift-morning-report-template.md).
