@@ -1,0 +1,11 @@
+# Keep copied skill payload and launcher text stable across Windows/POSIX checkouts.
+/.agents/skills/**/*.md text eol=lf
+/.agents/skills/**/*.toml text eol=lf
+/.agents/skills/**/*.yaml text eol=lf
+/.agents/skills/**/*.json text eol=lf
+/.agents/skills/**/*.js text eol=lf
+/.agents/skills/**/VERSION text eol=lf
+/.agents/skills/**/impeccable text eol=lf
+/.agents/skills/**/impeccable.cmd text eol=lf
+/.codex/hooks.json text eol=lf
+/skills-lock.json text eol=lf

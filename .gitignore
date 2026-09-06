@@ -42,3 +42,12 @@ Thumbs.db
 desktop.ini
 *.swp
 *.tmp
+
+# Project-local Impeccable runtime state (shared config.json remains reviewable)
+.impeccable/config.local.json
+.impeccable/config.local.json.*
+.impeccable/live/
+.impeccable/.cache/
+.impeccable/*.log
+.impeccable/*.ndjson
+.impeccable/*.pid
