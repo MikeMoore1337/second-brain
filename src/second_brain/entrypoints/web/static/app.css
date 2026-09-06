@@ -2129,6 +2129,10 @@ textarea#review-content {
 /* 760px is the content-driven stack threshold; keep the media query literal because
    CSS custom properties cannot be used in media feature values. */
 @media (max-width: 760px) {
+  body {
+    min-width: 0;
+  }
+
   .page-shell {
     width: min(100% - 32px, 560px);
   }
@@ -2218,6 +2222,17 @@ textarea#review-content {
   .entry-point {
     align-items: flex-start;
     padding: 20px;
+  }
+
+  .mode-switch {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .mode-button {
+    min-width: 0;
+    padding: 8px 6px;
   }
 
   .capture-panel {
