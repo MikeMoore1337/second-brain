@@ -320,7 +320,8 @@ Workflow не выполняет pull, rebase, merge, reset, force push или a
 См. [обзор архитектуры](docs/architecture/overview.md),
 [vault contract v1](docs/architecture/vault-contract-v1.md),
 [Self Model v1 design contract](docs/cognitive-twin/self-model-v1-contract.md)
-и [Cognitive Twin roadmap](docs/cognitive-twin/design-roadmap-v1.md).
+и [Self Retrieval v1 design contract](docs/cognitive-twin/self-retrieval-v1-contract.md),
+а также [Cognitive Twin roadmap](docs/cognitive-twin/design-roadmap-v1.md).
 
 ## Лицензия
 
