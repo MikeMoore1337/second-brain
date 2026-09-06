@@ -47,6 +47,7 @@ if (selfRetrievalSurface) {
     busy = value;
     input.disabled = value;
     submit.disabled = value;
+    selfRetrievalSurface.setAttribute("aria-busy", String(value));
     submit.setAttribute("aria-busy", String(value));
     if (value) {
       status.textContent = "Собираю текущий контекст…";
