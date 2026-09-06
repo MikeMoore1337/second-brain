@@ -1,30 +1,33 @@
 # Self Model v1 — contract
 
 Статус: **DESIGN / CONTRACT**, issue [#81](https://github.com/MikeMoore1337/second-brain/issues/81).
-Этот документ не добавляет Stage 4 runtime и не является разрешением начинать
-issue [#82](https://github.com/MikeMoore1337/second-brain/issues/82). Он фиксирует
-границы и proposed application contract, чтобы после принятия всех
-`HUMAN_REQUIRED` решений #82 можно было реализовать механически.
+Этот документ не добавляет Stage 4 runtime и не начинает issue
+[#82](https://github.com/MikeMoore1337/second-brain/issues/82). Он фиксирует
+границы и application contract с owner-approved conservative v1 policy, чтобы
+последующий #82 можно было реализовать механически.
 
 Исходная точка design: `origin/main`
 `c9443a5b6ab9a2876130b9d103a63827733c80ff`.
 
 Issue #81 остаётся source of truth по scope и dependency gate. Если этот
 документ расходится с уже merged контрактом Stage 1-3, приоритет имеет merged
-контракт. Если здесь есть `HUMAN_REQUIRED`, это proposal, а не silently approved
-product semantics.
+контракт. Девять product-semantics decisions, ранее помеченных
+`HUMAN_REQUIRED`, явно разрешены owner в revision этого PR и зафиксированы как
+versioned policy в разделах 4, 15 и 18. Новые product semantics не выводятся из
+этого документа молча.
 
 ## 1. Purpose и non-goals
 
 ### Purpose
 
 Self Model v1 — bounded read model, который на каждом build пересобирает
-объяснимые claims о пользовательских предпочтениях, beliefs, goals и
-наблюдаемых patterns из текущих валидных canonical evidence. Он нужен для
+объяснимые direct assertion claims о пользовательских preferences, beliefs и
+goals из текущих валидных canonical evidence. Он нужен для
 будущих read-only consumers, которым требуется:
 
 - увидеть, на каких canonical UUID основан claim;
-- отдельно увидеть evidence, которое claim поддерживает и ему противоречит;
+- отдельно увидеть supporting evidence и явно разрешённое contradicting
+  evidence (в v1 automatic contradiction отсутствует);
 - сохранить различие между временем evidence и временем построения модели;
 - показать uncertainty вместо убедительного, но неподтверждённого profile;
 - удалить или пересобрать derived state без потери пользовательских знаний.
@@ -159,22 +162,25 @@ class SelfModelDimension(StrEnum):
     BEHAVIORAL_PATTERN = "behavioral_pattern"
 ```
 
-Это derived taxonomy, не `self_kind` и не YAML ontology. В v1 не вводятся
-`risk_profile`, `communication_style`, `knowledge_context`, personality или
-какие-либо sensitive/diagnostic dimensions.
+Это derived taxonomy, не `self_kind` и не YAML ontology. Последние два enum
+values оставлены как additive future seam, но #82 имеет право emit только
+`preference`, `belief` и `goal`. В v1 не вводятся `risk_profile`,
+`communication_style`, `knowledge_context`, personality или какие-либо
+sensitive/diagnostic dimensions.
 
-Mapping является ограниченным:
+Mapping для #82 является ограниченным:
 
-- enrolled `preference`, `belief`, `goal` могут быть direct assertion inputs;
-- enrolled `decision` и `outcome` могут участвовать в policy-approved
-  `decision_rule`/`behavioral_pattern` derivation;
-- `memory` может быть contextual evidence, но сам по себе не создаёт profile
-  dimension;
+- enrolled `explicit_user_fact` или `user_statement` с `self_kind`=
+  `preference`, `belief` или `goal` создают по одному direct assertion claim;
+- `memory` остаётся contextual canonical evidence и сам по себе не создаёт
+  claim;
+- `decision` и `outcome` не создают `decision_rule`/`behavioral_pattern` и не
+  выводят implicit preference, belief или goal в #82;
 - `evidence_kind` не является dimension и не определяет truth strength.
 
-Direct mapping и pattern aggregation — разные операции. Наличие canonical
-`decision` не означает автоматическое создание `preference` или
-recommendation.
+Pattern aggregation и decision-rule derivation — будущие additive slices.
+Наличие canonical `decision` или `outcome` не означает автоматическое создание
+profile claim или recommendation.
 
 ### 4.2. Evidence reference
 
@@ -192,8 +198,9 @@ class SelfModelEvidenceRef:
 
 `note_id` — canonical UUIDv7 конкретной current note. Body, absolute/relative
 path, snippet, storage timestamp и source URL в ref не копируются. `related_note_ids`
-допускается только для уже проверенных current canonical relations; в v1
-главный случай — `OutcomeObservationRecord.decision_id`.
+допускается только для уже проверенных current canonical relations; existing
+contract example — `OutcomeObservationRecord.decision_id`. Этот future relation
+projection не используется в direct claim slice #82.
 
 Invariant:
 
@@ -204,6 +211,9 @@ Invariant:
 - `model_inference` невозможен как `evidence_kind`;
 - `evidence_at == "unknown"` сохраняется буквально и не заменяется другим
   timestamp.
+
+Для exact #82 direct claim ref имеет пустой `related_note_ids`: Stage 2
+decision/outcome relations не участвуют в emitted claims.
 
 В JSON-адаптере можно получить удобную projection
 `supporting_canonical_evidence_uuids` из `supporting_evidence[*].note_id`, но
@@ -238,35 +248,33 @@ class SelfModelTemporalContext:
 ```python
 class SelfModelConfidenceState(StrEnum):
     NOT_ASSESSED = "not_assessed"
-    ASSESSED = "assessed"
 
 
 @dataclass(frozen=True, slots=True)
 class SelfModelConfidence:
     state: SelfModelConfidenceState
-    score: float | None
-    policy_version: str | None
+    score: None
+    policy_version: str
     supporting_evidence_count: int
     contradicting_evidence_count: int
     unknown_time_count: int
 ```
 
-Это envelope, а не formula:
+Это envelope, а не formula. В exact v1 runtime единственное допустимое
+состояние — `state == NOT_ASSESSED`, `score is None` и
+`policy_version == "unassessed-v1"`:
 
-- `score` допускается только как finite value в диапазоне `0.0..1.0` и только
-  при `state == ASSESSED` и non-empty approved `policy_version`;
-- `state == NOT_ASSESSED` означает `score is None` и `policy_version is None`;
-- representation не утверждает, что score является probability, calibration
-  или truth likelihood;
-- counts — descriptive audit counters и сами по себе не являются weights;
-- numeric formula, evidence weights, recency weights, thresholds и calibration
-  interpretation не определяются этим документом;
+- Self Model v1 не выдаёт probability-like score, не вводит `low/medium/high`,
+  thresholds или calibration;
+- counts равны descriptive counts соответствующих role collections, а
+  `unknown_time_count` считает refs с literal `evidence_at == "unknown"`; они
+  сами по себе не являются weights или confidence score;
+- numeric formula, evidence weights и recency weights не применяются;
 - user-entered Decision Journal `Confidence` не копируется, не парсится и не
   преобразуется в этот объект.
 
-Если human-approved policy будет qualitative-only, она может вернуть
-`state == ASSESSED` с `score is None` и собственным policy id. В DTO не
-добавляется неподтверждённая шкала `low/medium/high`.
+Будущая assessed/qualitative/numeric confidence требует отдельного additive
+contract; она не является частью #82.
 
 ### 4.5. Status representation
 
@@ -277,12 +285,10 @@ class SelfModelStatus:
     policy_version: str
 ```
 
-`code` — policy-bound derived token, не canonical field и не `self_kind`.
-Этот документ намеренно не закрывает его allowlist: финальная status taxonomy
-является `HUMAN_REQUIRED`. Пока status policy не утверждена, builder не
-подставляет `current`, `stale`, `conflicted`, `superseded`, `unresolved` или
-любое другое значение по умолчанию, а завершается safe
-`SELF_MODEL_POLICY_UNAVAILABLE`.
+`SelfModelStatus` — только additive future seam. В #82 `status` должен быть
+`None`; builder не создаёт `SelfModelStatus`, не подставляет `current`,
+`stale`, `conflicted`, `superseded`, `supported`, `contested`, `insufficient`,
+`unresolved` или любое другое значение. Нет client/filter semantics по status.
 
 ### 4.6. Claim и result
 
@@ -297,9 +303,9 @@ class SelfModelClaim:
     contextual_evidence: tuple[SelfModelEvidenceRef, ...]
     confidence: SelfModelConfidence
     temporal_context: SelfModelTemporalContext
-    status: SelfModelStatus
     generated_at: datetime
     derivation_version: str
+    status: SelfModelStatus | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -315,21 +321,37 @@ class SelfModelResult:
     represented_evidence_count: int
     generated_at: datetime
     derivation_version: str
+    policy_fingerprint: str
 ```
 
 DTO invariants:
 
-- `claim` — non-empty bounded UTF-8 string; proposed application cap — 4096
-  bytes. Это resource limit, а не разрешение копировать весь body;
+- `claim` — non-empty bounded UTF-8 string; contract cap — 4096 bytes. Это
+  resource limit, а не разрешение копировать весь body;
 - `domain` сохраняет existing optional slug semantics; новый domain registry не
   создаётся;
 - `supporting_evidence` не пустой для каждого emitted claim;
-- UUID одного claim не может одновременно находиться в supporting и
-  contradicting collections; contextual refs не считаются supporting;
+- три role collections pairwise disjoint по canonical `note_id`: запрещены
+  `support ∩ contradiction`, `support ∩ contextual` и
+  `contradiction ∩ contextual`;
+- в #82 каждый direct claim имеет ровно один supporting ref, а
+  `contradicting_evidence` и `contextual_evidence` пусты: ни canonical conflict
+  relation, ни grouping relation не существует;
 - все role collections имеют deterministic order;
 - `generated_at` — aware application clock value и одинаков для result/claims;
 - `derivation_version` в result и claim совпадает и является bounded non-empty
   version identifier;
+- #82 использует `derivation_version == "self-model-derivation-v1"` как версию
+  derivation implementation/contract, а не как policy composition;
+- `policy_fingerprint` — обязательная bounded lowercase SHA-256 fingerprint
+  complete v1 policy binding из раздела 4.7;
+- claims в #82 не являются самостоятельным transport envelope и действительны
+  только внутри `SelfModelResult`; если будущий API отдаёт detached claim,
+  fingerprint должен быть добавлен в этот envelope;
+- `status is None` для каждого claim в #82;
+- `eligible_evidence_count` считает distinct current enrolled refs, прошедшие
+  eligibility/integrity gate, включая `memory`/`decision`/`outcome`, даже если
+  они не становятся emitted claims;
 - `represented_evidence_count` считает distinct current refs, реально включённые
   хотя бы в одну claim role. Evidence, не ставшее claim, не превращается молча
   в claim;
@@ -356,13 +378,35 @@ class SelfModelPolicy:
     contradiction_policy: str
     stale_policy: str
     supersede_policy: str
+    precedence_policy: str
     status_policy: str
 ```
 
 Все policy identifiers — versioned application configuration, а не поля vault.
-Они не извлекаются из note body, SearchHit, LLM или client input. Каждое
-обязательное значение должно быть явно approved; отсутствие или неизвестный
-identifier — fail closed.
+Они не извлекаются из note body, SearchHit, LLM или client input. Exact v1
+binding:
+
+```text
+claim_generation_policy = "direct-assertion-v1"
+confidence_policy       = "unassessed-v1"
+evidence_weight_policy  = "none-v1"
+recency_policy          = "explanation-only-v1"
+contradiction_policy    = "explicit-only-v1"
+stale_policy            = "disabled-v1"
+supersede_policy        = "disabled-v1"
+precedence_policy       = "none-v1"
+status_policy           = "disabled-v1"
+derivation_version      = "self-model-derivation-v1"
+```
+
+Для `policy_fingerprint` builder сериализует следующие девять named policy
+identifiers — от `claim_generation_policy` до `status_policy` — как UTF-8 JSON
+object с lexicographic key order, без whitespace, затем считает SHA-256 и
+возвращает lowercase hexadecimal digest. `derivation_version` остаётся
+отдельным version identifier в result/claim и не перегружается policy
+composition. Missing/unknown identifier, лишний policy key в fingerprint input
+или несовпадающий fingerprint — fail closed. Изменение serialization profile
+требует новой `derivation_version`.
 
 Будущий application use case:
 
@@ -419,13 +463,26 @@ external adapter для получения evidence.
 | --- | --- |
 | `explicit_user_fact` + `memory/preference/belief/goal` | reviewed user assertion; `memory` обычно contextual, остальные могут быть direct input |
 | `user_statement` + `memory/preference/belief/goal` | reviewed user statement; не объективная verification |
-| `observed_decision` + `decision` | reviewed behavior observation; option/reasons доступны через typed Journal projection |
-| `outcome_later_observation` + `outcome` | reviewed later observation; `decision_id` должен разрешаться в current valid Journal |
+| `observed_decision` + `decision` | reviewed behavior observation; option/reasons доступны через typed Journal projection, но claim в #82 не создаётся |
+| `outcome_later_observation` + `outcome` | reviewed later observation; `decision_id` должен разрешаться в current valid Journal, но claim в #82 не создаётся |
 
 `self_kind`/`evidence_kind` pair validation остаётся existing Stage 1-3
 contract. Self Model не добавляет новый pair.
 
-### 5.3. Explicit exclusions
+### 5.3. Exact emitted claim subset for #82
+
+Из eligible inputs #82 emits только direct assertions с парой
+`explicit_user_fact` или `user_statement` и `self_kind` `preference`, `belief`
+или `goal`. Для каждого current canonical assertion создаётся ровно один
+claim с тем же derived dimension и deterministic projection его reviewed body.
+
+`memory` может быть прочитан и учтён в `eligible_evidence_count`, но без
+existing canonical relation не прикрепляется к claim и не становится claim.
+`decision` и `outcome` могут пройти canonical eligibility/integrity gate, но
+не попадают в claim roles и не выводят implicit profile dimension. Поэтому
+`behavioral_pattern` и `decision_rule` не emitted в #82.
+
+### 5.4. Explicit exclusions
 
 Не являются Self Model evidence:
 
@@ -450,7 +507,7 @@ Self Model видит её canonical metadata/body в пределах суще�
 
 ### 6.1. Representation
 
-В каждом claim role collections независимы:
+В каждом claim role collections независимы и pairwise disjoint:
 
 ```text
 supporting_evidence   -> refs, которые policy считает поддерживающими claim
@@ -464,6 +521,13 @@ contextual_evidence   -> refs, использованные для контек�
 что claim доказан. Пустой `contextual_evidence` также не означает отсутствия
 других canonical notes в vault.
 
+В v1 `contradiction_policy == "explicit-only-v1"`, а approved canonical
+conflict relation в существующих контрактах отсутствует. Поэтому #82 никогда
+не заполняет `contradicting_evidence` автоматически: competing direct
+assertions остаются отдельными claims. `contextual_evidence` также не
+заполняется по сходству текста, domain или времени; `memory` без existing
+canonical relation остаётся eligible, но не прикрепляется к claim.
+
 Каждый ref обязан разрешаться к current canonical UUID. Missing/deleted UUID
 не восстанавливается по path, basename, snippet, body similarity или stale
 index. Если missing ref должен быть частью claim, build либо исключает claim,
@@ -475,17 +539,21 @@ claim без обязательного support запрещён.
 Role classification — derived explanation, не truth field в vault. Для одного
 claim:
 
-- один ref не может быть одновременно supporting и contradicting;
-- majority vote не является default resolver;
+- один ref не может быть одновременно ни в одной паре из supporting,
+  contradicting и contextual;
+- в #82 direct assertion ref является единственным supporting ref этого claim;
+- automatic semantic/lexical contradiction detection и majority vote не
+  выполняются;
 - одна observed decision не становится автоматически rule/preference;
 - user confidence не становится relation weight;
-- contradiction не выводится только из different words, different dates или
+- contradiction не выводится из different words, different dates или
   different domains;
 - `supersedes` не выводится из `updated`, `created`, UUID order или более нового
   `evidence_at`.
 
-Если policy не может безопасно классифицировать ref, он остаётся contextual или
-не участвует в emitted claim. Его нельзя silently считать support.
+Ref без разрешённой role classification не участвует в emitted claim; его
+нельзя silently считать support, contradiction или context. Это не создаёт
+новый canonical conflict field.
 
 ### 6.3. Почему нет graph DB
 
@@ -513,7 +581,7 @@ unknown используется только literal `unknown` + `unknown` prec
 ### 7.2. Storage и generation times
 
 - `created` и `updated` могут быть полезны существующему audit/read contract,
-  но не участвуют в evidence weighting, event ordering, stale calculation или
+  но не участвуют в evidence strength, event ordering, stale calculation или
   supersede decision;
 - `generated_at` — время текущего build, а не время claim/evidence;
 - UUIDv7 может использоваться как stable identity/tie-break только при
@@ -533,10 +601,10 @@ Filesystem enumeration не является deterministic source. Proposed orde
 3. unknown timestamps не участвуют в chronological ordering;
 4. порядок никогда не означает «сильнее», «новее» или «current».
 
-Если human policy требует временного weighting, это отдельная decision и не
-следует из этого sorting rule.
+В exact #82 действует `recency_policy == "explanation-only-v1"`: время не
+влияет на strength, confidence, claim selection или ordering semantics.
 
-## 8. Confidence без непринятой formula
+## 8. Confidence v1 — explicitly unassessed
 
 ### 8.1. Что уже известно
 
@@ -547,20 +615,14 @@ Filesystem enumeration не является deterministic source. Proposed orde
 - unknown time и small sample должны быть видны;
 - confidence нельзя записывать в vault как metadata.
 
-### 8.2. Что намеренно не утверждается
+### 8.2. Exact v1 behavior
 
-Этот документ не выбирает:
-
-- numeric formula;
-- per-`evidence_kind` weights;
-- recency decay/weight;
-- confidence thresholds или bins;
-- calibration/probability interpretation;
-- minimum sample для pattern claim.
-
-`SelfModelConfidence` поэтому задаёт только safe representation и policy
-binding. Builder не имеет `default_score`, `newer_is_stronger`,
-`observed_decision=1.0` или похожего скрытого fallback.
+`confidence_policy == "unassessed-v1"`. Builder всегда возвращает
+`state == NOT_ASSESSED`, `score == None` и descriptive counts. Он не имеет
+`default_score`, `newer_is_stronger`, `observed_decision=1.0`,
+`low/medium/high` или похожего hidden fallback. Numeric/qualitative assessed
+confidence, thresholds и calibration остаются будущим additive contract, не
+частью #82.
 
 ## 9. Conflict, stale и supersede boundary
 
@@ -570,103 +632,131 @@ binding. Builder не имеет `default_score`, `newer_is_stronger`,
 
 - сохранять старые canonical notes и никогда не удалять их для разрешения
   конфликта;
-- не схлопывать incompatible evidence в одну canonical truth;
-- не скрывать contradicting refs за итоговым score;
+- не схлопывать competing evidence в одну canonical truth;
+- не скрывать явно разрешённые contradicting refs за итоговым score;
 - не использовать `created`/`updated` или UUID order как supersede signal;
 - пересобирать result из current vault после note edit/delete;
 - fail closed, если required current evidence/relation не может быть доказана.
 
-### 9.2. Unresolved product semantics
+### 9.2. Exact owner-approved v1 policies
 
-Следующие predicates требуют human decision и не следуют однозначно из merged
-Stage 1-3:
+В #82 применяются следующие conservative policies:
 
-- что именно считается contradiction;
-- что является stale и какой threshold применять;
-- что означает superseded и может ли это быть выведено из existing body/links;
-- сильнее ли новое evidence старого и в каких context/horizon;
-- какой status code выдавать при conflict/staleness/insufficient evidence.
+- `contradiction_policy == "explicit-only-v1"`: contradiction возможна только
+  по explicitly approved canonical conflict relation; такой relation сейчас
+  отсутствует, поэтому automatic contradiction не выполняется;
+- `stale_policy == "disabled-v1"`: stale не выводится, global/dimension
+  threshold отсутствует, unknown time не считается stale;
+- `supersede_policy == "disabled-v1"`: supersede relation не выводится и
+  новая assertion не supersedes старую автоматически;
+- `precedence_policy == "none-v1"`: newer evidence не сильнее older
+  автоматически; competing assertions сохраняются;
+- `status_policy == "disabled-v1"`: lifecycle/evidence status не выводится,
+  `status` остаётся `None`.
 
-До approval этих predicates нет default policy. `HUMAN_REQUIRED` — это не
-status claim в vault; это gate реализации.
+Эти policies разрешают #82 реализовать direct model без скрытого resolver.
+Будущие conflict/freshness/supersede/status capabilities являются additive
+slices и не меняют canonical contracts.
 
-### 9.3. Safe handling before policy
+### 9.3. Safe handling if policy is unavailable
 
 Если policy отсутствует или не может доказать relation:
 
 - Self Model не выбирает «победивший» assertion;
-- evidence остаётся unclassified/contextual либо claim не emitted;
-- status/confidence policy error возвращается bounded safe error;
+- evidence не становится supporting/contradicting/contextual без правила;
+- bounded `SELF_MODEL_POLICY_UNAVAILABLE` возвращается до выдачи result;
 - никакая note не меняется;
-- #82 не начинает runtime до разрешения gate из issue #82.
+- no partial result is emitted.
 
 ## 10. Deterministic/rebuild algorithm
 
-Ниже разделяет уже accepted mechanics и policy-dependent steps.
+Ниже приведён полностью bound deterministic v1 sequence; future additive
+policies не входят в #82.
 
 ### 10.1. Build sequence
 
 ```text
 BuildSelfModel(request)
-  1. validate exact request type, bounds и injected clock
+  1. validate exact request type, bounds, injected clock and exact v1 policy
+     binding
   2. read current VaultReader.scan()
   3. build_report(snapshot)
   4. apply canonical scan/integrity gate
   5. collect current eligible NoteRecord evidence
   6. create immutable SelfModelEvidenceRef values
-  7. form claim candidates using approved claim_generation_policy
-  8. classify supporting/contradicting/contextual refs using approved policies
-  9. derive temporal aggregate from evidence_at only
- 10. derive confidence/status using explicitly bound approved policies
- 11. validate every emitted claim/result invariant
- 12. return result in deterministic order; do not persist it
+  7. select only direct preference/belief/goal assertions
+  8. project each current canonical body with the exact direct-assertion
+     normalization policy; one assertion -> one claim
+  9. put the assertion ref in supporting evidence; leave contradiction and
+     contextual roles empty in #82
+ 10. derive temporal aggregate from evidence_at only
+ 11. return explicitly unassessed confidence and `status == None`
+ 12. validate every emitted claim/result invariant and policy_fingerprint
+ 13. return result in deterministic order; do not persist it
 ```
 
 ### 10.2. Candidate generation
 
-Mechanically accepted part:
+Exact v1 candidate generation:
 
-- direct Stage 1 assertion candidate may originate only from current enrolled
-  `preference`, `belief` or `goal` evidence;
-- decision/outcome candidate must originate from current typed Stage 2 DTOs;
-- one canonical decision is not enough to label a permanent preference or rule;
-- `memory` is not silently promoted to profile dimension;
-- no candidate can be emitted without at least one supporting canonical UUID.
+- candidate input is only a current enrolled `explicit_user_fact` or
+  `user_statement` with `self_kind` `preference`, `belief` or `goal`;
+- one current canonical assertion produces exactly one claim with the same
+  dimension and domain;
+- `memory` is not silently promoted to a profile dimension;
+- `decision` and `outcome` are not candidates and cannot support an implicit
+  preference, belief, goal, `decision_rule` or `behavioral_pattern`;
+- no candidate is emitted without its own supporting canonical UUID;
+- multiple assertions are never grouped, deduplicated, majority-voted or
+  semantically merged;
+- minimum sample for a direct claim is exactly one canonical supporting
+  assertion; pattern/rule minimum sample is deferred because those dimensions
+  are not emitted;
+- cross-domain and cross-horizon evidence are never combined.
 
-Policy-dependent part:
+These mechanics are bound by `claim_generation_policy ==
+"direct-assertion-v1"`; implementation must not hide a choice behind an
+arbitrary string normalizer, majority vote, LLM call or recency fallback.
 
-- how canonical body becomes bounded `claim` text;
-- how multiple assertions are grouped into one claim;
-- whether exact normalized chosen options may form a pattern;
-- minimum sample and scope/domain rules;
-- whether decision/outcome evidence can support direct preference/belief/goal
-  claims;
-- whether cross-domain or cross-horizon evidence may be combined.
+### 10.3. Direct assertion text normalization
 
-These choices are in `claim_generation_policy`; implementation must not hide a
-choice behind an arbitrary string normalizer, majority vote, LLM call or
-recency fallback.
+The claim text is a deterministic projection of the current reviewed canonical
+body only:
 
-### 10.3. Rebuild and deletion behavior
+1. use the body returned by the validated `NoteRecord`, after the existing
+   reader has separated front matter;
+2. normalize `CRLF` and lone `CR` to `LF`;
+3. preserve all other semantic text and Unicode code points exactly; do not
+   trim, paraphrase, reorder, deduplicate or add a prefix/suffix;
+4. allow `TAB` and `LF`; reject every other C0 control character and `DEL`
+   with `SELF_MODEL_EVIDENCE_INVALID` rather than silently stripping it;
+5. encode the resulting text as UTF-8 and reject it with
+   `SELF_MODEL_RESULT_TOO_LARGE` when it exceeds the 4096-byte claim cap; never
+   truncate or silently replace text.
+
+No front matter, storage path, snippet, source URL, LLM output or semantic
+normalization enters `claim`.
+
+### 10.4. Rebuild and deletion behavior
 
 The source snapshot is always current. Therefore:
 
 - adding a reviewed eligible note can add or change derived candidates;
 - editing a canonical body/metadata can change or invalidate a claim;
 - deleting a supporting note removes that support and may remove the claim;
-- deleting a contradiction can change relation output only under approved policy;
+- deleting one direct assertion removes only its derived claim;
 - deleting all derived state loses no user data and the next build recomputes it;
 - a stale cache is ignored rather than used as evidence authority.
 
 No incremental event log, background watcher or write-back is required.
 
-### 10.4. Determinism
+### 10.5. Determinism
 
-For the same canonical snapshot, same approved policy, same input request and
-same `generated_at`, repeated builds return byte/field-equivalent DTOs. The
-clock is injected so tests can compare results without using wall-clock
-uncertainty. `generated_at` itself is allowed to differ between real builds;
-that does not make it evidence.
+For the same canonical snapshot, same exact v1 policy binding, same input
+request and same `generated_at`, repeated builds return byte/field-equivalent
+DTOs. The clock is injected so tests can compare results without using
+wall-clock uncertainty. `generated_at` itself is allowed to differ between real
+builds; that does not make it evidence.
 
 ## 11. Fail-closed integrity behavior
 
@@ -759,10 +849,11 @@ authentication/privacy boundary являются отдельными будущ
 
 ### 13.2. Необходимая policy gate
 
-Внутренний composition передаёт approved `SelfModelPolicy`. Нельзя считать
-отсутствующие policy fields «нейтральными defaults»: это скрыло бы product
-decision и сделало #82 необратимо неоднозначным. До решения policy operation
-должна fail closed с `SELF_MODEL_POLICY_UNAVAILABLE`.
+Внутренний composition передаёт immutable exact v1 `SelfModelPolicy`. Нельзя
+считать отсутствующие или неизвестные policy fields «нейтральными defaults»:
+builder сверяет все identifiers с разделом 4.7, вычисляет
+`policy_fingerprint` и при mismatch fail closed с
+`SELF_MODEL_POLICY_UNAVAILABLE`. Client не может выбрать другую policy.
 
 ## 14. Compatibility с Assistant / Simulate Me / Compare
 
@@ -796,34 +887,38 @@ Self Model только supplies labelled personal context. Он не меняе
 | Derived/rebuildable model | `ACCEPT` | On-demand immutable DTO; no write-back, profile file, daemon или durable model DB |
 | Enrollment/Stage 1-3 eligibility | `ACCEPT` | Existing exact marker, pairs, typed Journal/Outcome and current relation validation; no new fields/enums |
 | UUID explainability | `ACCEPT` | Every emitted claim has non-empty supporting current canonical UUID refs |
-| Supporting vs contradicting | `ACCEPT` structurally | Separate role collections, no overlap, no silent majority resolver; relation predicate itself is human-owned |
+| Supporting vs contradicting | `ACCEPT` | Separate role collections are pairwise disjoint; `explicit-only-v1` finds no contradiction because no canonical conflict relation exists |
 | Temporal input | `ACCEPT` | `evidence_at`/precision only; `unknown` remains unknown; `created` is never fallback |
-| Derived dimensions | `ACCEPT` as proposed taxonomy | Five bounded derived dimensions; no YAML ontology, diagnosis or personality dimensions |
-| Confidence shape | `ACCEPT` as envelope | Null/unassessed or policy-bound score; no formula, weight or threshold selected |
+| Derived dimensions | `ACCEPT` | Five bounded enum values for future compatibility; #82 emits only direct `preference`, `belief`, `goal` claims |
+| Claim generation | `ACCEPT` | `direct-assertion-v1`: one current enrolled assertion -> one deterministic body projection; no aggregation/LLM/pattern/rule |
+| Minimum sample | `ACCEPT`/`DEFER` | Direct claim sample is exactly one supporting assertion; pattern/rule sample is deferred because those dimensions are not emitted |
+| Confidence shape | `ACCEPT` | `NOT_ASSESSED`, `score == None`, descriptive counts only; `unassessed-v1`, no formula/weight/threshold/calibration |
 | Search/LLM/cache authority | `ACCEPT` | Candidate-only/non-canonical; #82 reads current report and does not rely on them |
 | Fail-closed result | `ACCEPT` | Invalid/incomplete eligible evidence or missing policy rejects whole unsafe result |
+| Complete policy binding | `ACCEPT` | Result carries deterministic SHA-256 `policy_fingerprint` for all nine policy identifiers; derivation version remains separate |
 | Read-only API name | `ACCEPT` as proposal | `BuildSelfModel(SelfModelRequest) -> SelfModelResult`; no write API |
-| Claim wording/aggregation | `HUMAN_REQUIRED` | Free-text assertions lack a merged deterministic aggregation contract; blocks pattern/rule part of #82 |
-| Numeric confidence formula | `HUMAN_REQUIRED` | Formula and interpretation are not in merged contracts; blocks assessed confidence implementation in #82 |
-| Evidence weights | `HUMAN_REQUIRED` | Provenance classes intentionally do not define universal strength; blocks scoring/comparison |
-| Recency weights | `HUMAN_REQUIRED` | No merged decay/recency policy; blocks time-weighted confidence/status |
-| Contradiction definition | `HUMAN_REQUIRED` | Existing contracts do not define incompatible assertions; blocks relation classification |
-| Stale threshold | `HUMAN_REQUIRED` | No claim-specific/global freshness threshold exists; blocks stale status |
-| Supersede semantics | `HUMAN_REQUIRED` | Existing canonical schema has no supersede field; blocks superseded status/relation |
-| Newer evidence rule | `HUMAN_REQUIRED` | `evidence_at` is time, not universal truth strength; blocks automatic precedence |
-| Final status taxonomy | `HUMAN_REQUIRED` | Roadmap examples are proposals, not merged allowlist; blocks status field semantics |
+| Numeric confidence formula | `ACCEPT` (resolved) | No numeric confidence in v1; `NOT_ASSESSED`/`None` is the only runtime state |
+| Evidence weights | `ACCEPT` (resolved) | `none-v1`; evidence kind remains provenance, with no numeric weights |
+| Recency weights | `ACCEPT` (resolved) | `explanation-only-v1`; `evidence_at` is temporal explanation only, with no decay |
+| Contradiction definition | `ACCEPT` (resolved) | `explicit-only-v1`; no automatic semantic/lexical detection and no new canonical conflict field |
+| Stale threshold | `ACCEPT` (resolved) | `disabled-v1`; no global/dimension threshold and unknown time is not stale |
+| Supersede semantics | `ACCEPT` (resolved) | `disabled-v1`; no inferred supersede relation |
+| Newer evidence rule | `ACCEPT` (resolved) | `none-v1`; newer evidence is not automatically stronger |
+| Final status taxonomy | `ACCEPT` (resolved) | `disabled-v1`; `status` is optional future seam and must be `None` in #82 |
 | Persistent cache/Web/retrieval | `DEFER` | Separate future slices after measured need and privacy/deletion policy |
 | Simulate Me/Compare/Calibration/Active Learning | `DEFER` | Consumers and calibration are later roadmap stages |
 | External provider/LLM/embeddings | `DEFER`/`RED` | No provider or new personal-data boundary in #81/#82 |
 
-`HUMAN_REQUIRED` rows are not resolved by the recommendation text below. They
-remain explicit gates.
+В этой revision active `HUMAN_REQUIRED` decisions нет. Девять бывших
+`HUMAN_REQUIRED` вопросов разрешены owner-approved policies и не блокируют
+механический direct-model slice #82. `DEFER` означает будущую additive scope,
+а не unresolved gate.
 
 ## 16. Exact implementation slice for #82
 
-`#82` может стартовать только после того, как #81 merged/closed, все
-`HUMAN_REQUIRED` решения resolved, exact policy versions доступны и current
-main содержит этот contract. До этого #82 = `BLOCKED`.
+`#82` может стартовать только после того, как #81 merged/closed, exact policy
+binding из раздела 4.7 доступен в current main и dependency gate issue #82
+снят. Этот PR #82 не начинает; до merge/close #81 он остаётся `BLOCKED`.
 
 ### Allowed change set
 
@@ -848,15 +943,19 @@ Search DTO или canonical YAML contract нельзя без отдельной
 4. Собрать refs только из current eligible enrolled notes.
 5. Не вызывать `SearchIndexPort`, `SearchHit`, LLM, transcription, writer,
    network или external provider.
-6. Выполнить exact approved claim-generation/relation/confidence/status policy;
-   никакого hidden fallback для unresolved RED semantics.
-7. Требовать хотя бы один supporting UUID у каждого claim и валидировать
-   раздельные evidence roles.
-8. Сохранить exact known/unknown time semantics и не читать `created` как
-   evidence time.
-9. Возвратить complete bounded result или safe error; partial result должен
-   быть невозможен.
-10. Не создавать файл, cache, DB, profile, write receipt или vault mutation.
+6. Выполнить exact `direct-assertion-v1` claim generation и direct body
+   normalization; не делать grouping, semantic equivalence, majority vote или
+   LLM paraphrase.
+7. Требовать ровно один supporting UUID у каждого direct claim; все три role
+   collections pairwise disjoint, а contradiction/contextual collections
+   пусты.
+8. Вернуть `NOT_ASSESSED`/`score == None`, descriptive counts,
+   `status == None` и exact `policy_fingerprint`.
+9. Сохранить exact known/unknown time semantics и не читать `created` как
+   evidence time; recency не влияет на result.
+10. Возвратить complete bounded result или safe error; partial result должен
+    быть невозможен.
+11. Не создавать файл, cache, DB, profile, write receipt или vault mutation.
 
 ### Explicitly not part of #82
 
@@ -875,21 +974,26 @@ Search DTO или canonical YAML contract нельзя без отдельной
 | Area | Scenario | Expected |
 | --- | --- | --- |
 | Request boundary | wrong DTO type, bool-as-int, `max_claims`/`max_evidence_refs_per_claim` outside `1..200` | safe invalid request; vault/policy not called |
-| Clock/policy | naive clock, missing/unknown policy identifier | `SELF_MODEL_INVALID_CLOCK` или `SELF_MODEL_POLICY_UNAVAILABLE`; no result |
+| Clock/policy | naive clock, missing/unknown policy identifier or fingerprint mismatch | `SELF_MODEL_INVALID_CLOCK` или `SELF_MODEL_POLICY_UNAVAILABLE`; no result |
 | On-demand | two builds after canonical note change | second result reflects current vault; no stale prior result |
 | Legacy gate | no marker, wrong marker type/value, coincidental companion fields | note remains ordinary and never appears as evidence |
-| Stage 1 eligibility | valid enrolled fact/statement for memory/preference/belief/goal | typed ref follows existing metadata; direct claim only under approved generation policy |
-| Stage 2 eligibility | valid Journal and linked Outcome with current UUIDv7 target | decision/outcome refs retain distinct kinds and relation |
+| Stage 1 eligibility | valid enrolled fact/statement for memory/preference/belief/goal | `preference`/`belief`/`goal` each produce one direct claim; `memory` produces no claim |
+| Stage 2 eligibility | valid Journal and linked Outcome with current UUIDv7 target | canonical validation may pass, but decision/outcome produce no claim or implicit dimension in #82 |
 | Invalid evidence | malformed enrolled metadata/body, duplicate UUID, broken Outcome target | whole build fails closed; no partial profile |
 | Explainability | every emitted claim has at least one current supporting UUID | missing support rejects claim/result; no path/snippet substitute |
-| Role separation | same candidate appears in support and contradiction, ambiguous relation | result invalid or relation policy rejects; no overlap/majority fallback |
-| Temporal exact | known RFC3339 `evidence_at`, differing `created` | output uses evidence time only; storage time cannot alter claim temporal context |
+| Role separation | same UUID is placed in any two of support/contradiction/context roles | result invariant rejects all three overlap combinations; no overlap/majority fallback |
+| Competing assertions | two direct assertions look opposite or differ in wording/time | two separate claims; both have their own support, contradiction remains empty |
+| Temporal exact | known RFC3339 `evidence_at`, differing `created`/`updated` | output uses evidence time only; storage time cannot alter claim, order or confidence |
 | Temporal unknown | `evidence_at: unknown` | literal unknown preserved; no created/UUID fallback; unknown count is visible |
 | User confidence | Journal `Confidence` text changes while evidence is same | model confidence is not parsed or copied; policy-owned model value only |
-| Contradiction/stale | policy-approved conflicting/freshness fixtures | exact approved policy result; no hidden threshold/recency behavior |
-| Rebuild deletion | remove supporting canonical note, remove contradiction, delete derived result | claims/refs change from current scan; user note data is not deleted |
+| Contradiction/stale | opposite-looking assertions, missing conflict relation, any age | no automatic contradiction, stale or status; policy identifiers remain exact |
+| Supersede/precedence | newer `evidence_at`, `created`, `updated` or UUID order | no supersede and no newer-wins behavior; competing claims remain |
+| Rebuild deletion | remove supporting canonical note or delete derived result | claims/refs change from current scan; user note data is not deleted |
 | Determinism | same snapshot, fixed clock, same policy, different filesystem enumeration | equivalent DTOs and stable ordering |
-| Bounds | oversized claim/body/result and excessive refs | bounded safe error; no truncation that pretends completeness |
+| Bounds | oversized claim/body/result, disallowed control character or excessive refs | bounded safe error; no truncation or silent control-character replacement |
+| Claim projection | front matter, CRLF/CR, TAB/LF, semantic body text | front matter excluded by reader; line endings normalized; semantic text preserved; unsafe controls rejected |
+| Confidence/status | any Decision Journal `Confidence`, any evidence mix | `NOT_ASSESSED`, `score == None`, descriptive counts, `status == None`; user text is not parsed |
+| Policy fingerprint | same nine identifiers, changed one identifier, unknown/missing identifier | stable SHA-256 for same binding; changed/unknown binding fails closed |
 | Authority isolation | fake SearchHit/cache/LLM output presents stronger-looking claim | ignored/not accepted as evidence; no provider/network call |
 | Privacy | raw exception, body/path/secret in failure | stable safe error without sensitive diagnostic details |
 | Anti-echo-chamber | habitual evidence says X, independent recommendation says Y | future consumer contract preserves both; Self Model never emits recommendation |
@@ -898,12 +1002,14 @@ Search DTO или canonical YAML contract нельзя без отдельной
 No test may use the real `second-brain-vault`, network credentials, live provider,
 or a fake persistent Self Model database.
 
-## 18. HUMAN_REQUIRED decision memo
+## 18. Resolved owner decision memo
 
-Ниже перечислены решения, которые не следуют однозначно из merged contracts.
-Рекомендации являются proposals для human review, не approvals. Для старта
-#82 каждое решение должно получить explicit owner decision и versioned policy
-identifier.
+Ниже сохранён audit trail девяти вопросов, которые были
+`HUMAN_REQUIRED` в первоначальной revision #81. Owner явно разрешил каждый из
+них для Self Model v1; рекомендации ниже являются уже approved contract
+decisions, а не pending proposals. Каждый decision имеет versioned policy
+identifier и не блокирует #82. Future behavioral-pattern/decision-rule work
+остаётся `DEFER`, а не скрытым unresolved decision.
 
 ### 18.1. Numeric confidence formula
 
@@ -939,15 +1045,17 @@ policy и обозначать её как model estimate, не truth.
 - C семантически богаче, но требует исторических samples, calibration и
   дополнительных lifecycle decisions.
 
-**Рекомендация**
+**Owner decision / рекомендация**
 
-Начать с A или с B только при явном numeric interpretation disclaimer;
-не считать numeric score обязательным до evidence/calibration policy.
+Принят A в conservative форме: в #82 `state == NOT_ASSESSED`, `score == None`,
+counts остаются descriptive metadata, а `confidence_policy ==
+"unassessed-v1"`. Probability-like score, bins, thresholds и calibration не
+вводятся.
 
-**Какие части #82 блокируются**
+**Какие части #82 блокируются этим решением**
 
-`SelfModelConfidence` assessed state, score/bins, sorting по confidence,
-threshold-based output и любые consumers, которые сравнивают score.
+Никакие. Assessed confidence и consumers, которые сравнивают score, не входят
+в #82 и остаются будущим additive scope.
 
 ### 18.2. Evidence weights
 
@@ -980,14 +1088,16 @@ A прост и прозрачен, но не различает observation и 
 но превращает provenance label в скрытую ontology; C гибок, но труден для
 объяснения и требует больше product policy.
 
-**Рекомендация**
+**Owner decision / рекомендация**
 
-Не вводить универсальное «observed всегда сильнее statement»; если weighting
-нужен, выбрать explicit claim/context-specific policy и показывать refs.
+Принят A: numeric weights отсутствуют для всех четырёх evidence kinds,
+`evidence_weight_policy == "none-v1"`. Evidence kind остаётся provenance и
+показывается через refs/counts.
 
-**Какие части #82 блокируются**
+**Какие части #82 блокируются этим решением**
 
-Score, conflict resolution, pattern aggregation и порядок/фильтрация claims.
+Никакие. Score, conflict resolution, pattern aggregation и weight-based
+ordering не входят в exact #82.
 
 ### 18.3. Recency weights
 
@@ -1021,14 +1131,16 @@ A прозрачен, но старые и новые assertions равны; B �
 неправдоподобен для goals/beliefs разного lifecycle; C точнее, но сложнее и
 может стать скрытой validity ontology.
 
-**Рекомендация**
+**Owner decision / рекомендация**
 
-До отдельной freshness policy использовать time как explanation only и не
-делать «newer is stronger» default.
+Принят A: `evidence_at` используется только для temporal explanation и
+earliest/latest/known/unknown counters; `recency_policy ==
+"explanation-only-v1"`. Decay и time-based strength отсутствуют.
 
-**Какие части #82 блокируются**
+**Какие части #82 блокируются этим решением**
 
-Recency score, freshness ordering, stale detection и status assignment.
+Никакие. Recency score, freshness ordering, stale detection и status assignment
+не входят в exact #82.
 
 ### 18.4. Contradiction definition
 
@@ -1064,15 +1176,18 @@ A лучше отражает смысл, но требует scope/parser seman
 даёт false conflicts на синонимах и контексте; C safest, но пропускает
 неявные contradictions.
 
-**Рекомендация**
+**Owner decision / рекомендация**
 
-Conservative same-scope explicit incompatibility; lexical difference сама по
-себе не должна становиться contradiction.
+Принят C: `contradiction_policy == "explicit-only-v1"`; contradiction может
+быть только по explicitly approved canonical conflict relation. Такой relation
+сейчас отсутствует, поэтому #82 не выполняет semantic/lexical detection, не
+заполняет `contradicting_evidence` и не добавляет новый canonical field.
 
-**Какие части #82 блокируются**
+**Какие части #82 блокируются этим решением**
 
-Наполнение `contradicting_evidence`, conflict status, confidence и Compare
-explanation.
+Никакие. Conflict resolution и Compare explanation остаются будущими
+additive capabilities; competing direct assertions в #82 сохраняются как
+отдельные claims.
 
 ### 18.5. Stale threshold
 
@@ -1106,15 +1221,15 @@ A безопасен, но не сообщает obsolescence; B прост, н�
 C богаче, но требует product lifecycle decisions и может быть трудно
 объясним.
 
-**Рекомендация**
+**Owner decision / рекомендация**
 
-Не помечать автоматически stale без explicit reviewed lifecycle/freshness
-policy; unknown time нельзя считать stale только из-за отсутствия даты.
+Принят A: `stale_policy == "disabled-v1"`; stale не выводится, global и
+dimension thresholds отсутствуют, unknown time не считается stale.
 
-**Какие части #82 блокируются**
+**Какие части #82 блокируются этим решением**
 
-Freshness status, stale filters, thresholded confidence и Active Learning
-triggers.
+Никакие. Freshness status, stale filters, thresholded confidence и Active
+Learning triggers не входят в exact #82.
 
 ### 18.6. Supersede semantics
 
@@ -1148,15 +1263,17 @@ A требует отдельного canonical design/schema decision; B скр
 meaning и рискует стереть nuance; C safest и сохраняет evidence, но ограничивает
 currentness semantics.
 
-**Рекомендация**
+**Owner decision / рекомендация**
 
-Не делать automatic supersede в #82; explicit relation требует отдельного
-approved contract и не должен появиться скрыто в Self Model.
+Принят C: `supersede_policy == "disabled-v1"`. Новая assertion не supersedes
+старую автоматически; `evidence_at`, `created`, `updated` и UUID order не
+являются supersede signal. Отдельный canonical relation возможен только в
+будущем additive contract.
 
-**Какие части #82 блокируются**
+**Какие части #82 блокируются этим решением**
 
-Superseded relation/status, removal of old claims from current context и
-future correction workflow.
+Никакие. Superseded relation/status, removal of old claims и correction
+workflow не входят в exact #82.
 
 ### 18.7. Правило «новое evidence сильнее старого»
 
@@ -1188,15 +1305,16 @@ future correction workflow.
 A легко реализовать, но опасно для nuance; B fail-safe, но не моделирует
 очевидные updates; C реалистичнее, но требует контекстной policy.
 
-**Рекомендация**
+**Owner decision / рекомендация**
 
-Не вводить universal newer-wins rule; при необходимости выбрать explicit
-conditional policy с explainable refs.
+Принят B: `precedence_policy == "none-v1"`. Более новое evidence не сильнее
+старого автоматически; competing assertions сохраняются отдельными claims,
+а `evidence_at` остаётся explanation-only.
 
-**Какие части #82 блокируются**
+**Какие части #82 блокируются этим решением**
 
-Claim grouping, contradiction/supersede resolution, recency weighting и
-currentness status.
+Никакие. Claim grouping, contradiction/supersede resolution, recency weighting
+и currentness status не входят в exact #82.
 
 ### 18.8. Final status taxonomy
 
@@ -1233,16 +1351,16 @@ A совместим с roadmap, но звучит как lifecycle truth; B л�
 evidence assessment, но всё ещё требует contradiction rules; C наиболее
 честен, но усложняет будущий consumer contract.
 
-**Рекомендация**
+**Owner decision / рекомендация**
 
-Не использовать `current` как молчаливый default. Предпочтителен
-evidence-assessment vocabulary вроде B, если owner явно примет его и свяжет
-с конкретными predicates.
+Принят C: `status_policy == "disabled-v1"`. Lifecycle/evidence taxonomy не
+вводится; additive `status` seam остаётся `None` в каждом #82 claim, без
+allowlist, serialization/filter semantics или скрытого `current` default.
 
-**Какие части #82 блокируются**
+**Какие части #82 блокируются этим решением**
 
-`SelfModelStatus` allowlist, serialization, filtering, Assistant/Simulate Me
-consumer behavior и API compatibility.
+Никакие. Status allowlist, filtering и status-dependent consumer behavior не
+входят в exact #82.
 
 ### 18.9. Claim wording, aggregation и minimum sample
 
@@ -1281,24 +1399,33 @@ A безопаснее и объяснимее, но ограничивает pa
 но может дать false equivalence; C богаче, но существенно расширяет risk и
 не является mechanical no-provider #82.
 
-**Рекомендация**
+**Owner decision / рекомендация**
 
-Для v1 начать с A и явно не утверждать behavioral pattern/decision rule без
-approved B-like policy; C не входит в #82.
+Принят A с точной v1 policy `claim_generation_policy ==
+"direct-assertion-v1"`: для current reviewed body действует deterministic
+projection (front matter excluded by reader, `CRLF`/`CR` -> `LF`, TAB/LF
+allowed, other C0/DEL rejected, semantic text not rewritten), без silent
+truncation; cap 4096 UTF-8 bytes даёт safe error. Один assertion создаёт один
+claim, minimum sample равен 1. `behavioral_pattern` и `decision_rule` не
+emitted и deferred; B/C не входят в #82.
 
-**Какие части #82 блокируются**
+**Какие части #82 блокируются этим решением**
 
-Claim text, candidate grouping, minimum sample, dimensions
-`behavioral_pattern`/`decision_rule` и `represented_evidence_count`.
+Никакие. Direct claim text, minimum sample и `represented_evidence_count`
+полностью определены; pattern/rule dimensions исключены из #82 и потому не
+являются блокером.
 
 ## Decision gate summary
 
-На текущем design этапе разрешены и зафиксированы: canonical/derived boundary,
-eligible input boundary, UUID explainability, separate evidence roles,
-temporal unknown semantics, bounded DTO shape, fail-closed behavior, privacy
-constraints и future read-only API. Не утверждены автоматически: formula,
-weights, recency, contradiction, stale, supersede, newer-wins, status и claim
-aggregation semantics из раздела 18.
+В этой revision зафиксированы и owner-approved: canonical/derived boundary,
+eligible input boundary, UUID explainability, pairwise-disjoint evidence roles,
+direct-only claim generation, deterministic body projection, explicit
+unassessed confidence, temporal unknown semantics, disabled conflict/stale/
+supersede/status/precedence behavior, complete policy fingerprint,
+fail-closed behavior, privacy constraints и future read-only API. Active
+`HUMAN_REQUIRED` decisions нет.
 
-До owner resolution этих вопросов #82 остаётся blocked согласно его issue
-contract. Этот документ не реализует runtime и не меняет canonical vault.
+Future `behavioral_pattern`, `decision_rule`, assessed confidence, conflict,
+freshness, supersede, status and consumer capabilities остаются additive
+`DEFER` scope. Этот документ не реализует runtime и не меняет canonical vault;
+#82 не начинается в этом PR и до merge/close #81 остаётся blocked.

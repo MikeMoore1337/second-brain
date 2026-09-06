@@ -5,6 +5,7 @@ Stage 2 Decision Journal v1 core и Stage 3 Personal Timeline v1 core
 реализованы в текущем репозитории. Stage 4 Self Model пока представлен только
 design contract в [issue #81](https://github.com/MikeMoore1337/second-brain/issues/81)
 и [self-model-v1-contract.md](self-model-v1-contract.md); runtime не реализован.
+Owner-approved v1 contract фиксирует conservative direct-assertion policy;
 Self Retrieval, RAG, embeddings и prediction runtime остаются будущими slices.
 
 Базовая точка design для текущего Stage 4 contract — exact `origin/main`:
@@ -146,7 +147,7 @@ context как будто они всё ещё canonical.
 | Search projection, FTS index, future embedding index | Derived | Disposable adapter state | Да | Только candidate retrieval; body не authoritative |
 | Evidence refs и evidence edges | Derived | Compact DTO/in-memory или disposable cache | Да | Ссылки всегда разрешаются к текущим UUID |
 | Personal Timeline | Derived read model | On-demand first; optional disposable cache later | Да | Не новый журнал событий |
-| Self Model claims, preference estimates, confidence, stale/conflict status | Derived | On-demand first; optional disposable cache later | Да | Не записываются обратно в note |
+| Self Model direct claims, descriptive counts, unassessed confidence, temporal context and policy fingerprint | Derived | On-demand first; optional disposable cache later | Да | Не записываются обратно в note; stale/conflict/supersede/status inference disabled in v1 |
 | Retrospective calibration aggregate | Derived | Recomputed read model | Да | Полностью пересобирается из canonical historical journals и текущей derivation policy |
 | Prospective Simulate Me prediction/session result | Derived ephemeral state | Runtime/result DTO | Да | После удаления не восстанавливается как историческое наблюдение; v1 не обещает prospective calibration |
 | Future system-operation audit record | Canonical operational/audit state, не user evidence | Отдельная policy-governed boundary будущего | Нет без потери audit history | Нужен только для будущей prospective calibration; в #66 не создаётся |
@@ -623,25 +624,27 @@ SelfModelClaim
   contradicting_canonical_evidence_uuids (optional, empty when absent)
   confidence
   temporal_context
-  status: policy-bound (final taxonomy is HUMAN_REQUIRED; values below are
-  examples only)
+  status: optional future seam; always None in #82
   generated_at
   derivation_version
 ```
 
 Roadmap values `current`, `stale`, `conflicted`, `superseded` и `unresolved`
-являются design examples, а не merged final status taxonomy. Точная форма,
-policy gate и decision memo находятся в
+не используются в Self Model v1. Точная форма, owner-approved policy binding
+и decision memo находятся в
 [self-model-v1-contract.md](self-model-v1-contract.md).
 
-`category / dimension` может быть `preference`, `belief`, `goal`,
-`decision_rule`, `behavioral_pattern` или другим explicitly supported
-dimension. Список dimensions не становится YAML ontology в #66.
+`category / dimension` enum может содержать `preference`, `belief`, `goal`,
+`decision_rule`, `behavioral_pattern` для future compatibility, но #82 emit
+только direct `preference`, `belief` и `goal` claims. Список dimensions не
+становится YAML ontology в #66.
 
-`confidence` — оценка именно derived claim, а не факт и не пользовательская
-уверенность из Decision Journal. Для audit claim обязан быть able to answer:
-«какие current notes его поддерживают и какие с ним спорят?» Отсутствие
-supporting refs делает claim недопустимым для personal context.
+`confidence` — envelope именно derived claim, в v1 explicitly unassessed, а не
+факт и не пользовательская уверенность из Decision Journal. Для audit claim
+обязан быть able to answer:
+«какие current notes его поддерживают и есть ли explicitly approved conflict
+relation?» Отсутствие supporting refs делает claim недопустимым для personal
+context; automatic contradiction в v1 отсутствует.
 
 ### Rebuildability
 
@@ -984,19 +987,23 @@ context и derived explanation divergence.
 ### Stage 4 — Self Model v1
 
 - **Статус:** design contract в issue #81; Self Model runtime ещё не
-  реализован. Канонический документ:
+  реализован. Owner-approved conservative direct-assertion policy и точный
+  application contract зафиксированы в каноническом документе:
   [self-model-v1-contract.md](self-model-v1-contract.md).
-- **Цель:** построить evidence-backed derived claims о текущих patterns,
-  preferences, beliefs, goals и decision rules.
+- **Цель:** построить evidence-backed direct assertion claims о reviewed
+  preferences, beliefs и goals; behavioral patterns и decision rules deferred.
 - **Входные зависимости:** Stage 1 evidence semantics, Stage 2 journal и
   Stage 3 temporal read model.
 - **Canonical changes:** нет; inferred claims не пишутся в vault.
-- **Derived state:** `SelfModelClaim` с category, claim, support/contradict
-  UUIDs, confidence, temporal context, policy-bound status и generated time.
+- **Derived state:** `SelfModelClaim` с category, deterministic body projection,
+  pairwise-disjoint support/contradict/context UUIDs, explicitly unassessed
+  confidence, temporal context, optional `None` status и generated time;
+  result carries complete policy fingerprint.
 - **Public/application contracts:** bounded read-only Self Model DTO с
   explainability refs; no generic profile write API.
-- **Risks:** overfitting, stale/contradictory evidence, diagnosis-like
-  language, false confidence.
+- **Risks:** misleading claim wording, future stale/contradictory semantics,
+  diagnosis-like language, false confidence; v1 fails closed and does not
+  infer these states.
 - **Explicit out-of-scope:** automatic profile mutation, LLM fact insertion,
   psychological diagnosis, durable model DB.
 - **Acceptance boundary:** каждый claim объясним current evidence и disappears
@@ -1276,10 +1283,11 @@ psychological profiling, live smoke, production deployment, issue creation и
 
 Следующим implementation slice является только [issue #82](https://github.com/MikeMoore1337/second-brain/issues/82)
 и только после выполнения его hard dependency gate: #81 merged/closed, без
-нерешённых `HUMAN_REQUIRED` решений, с exact approved Self Model policy и
+изменения exact owner-approved Self Model policy, с policy fingerprint и
 merged contract в current main.
 
-До этого #82 остаётся `BLOCKED`; runtime, Web Self Model, Self Retrieval,
-embeddings, inference write-back и новые canonical fields не начинаются.
+До merge/close #81 #82 остаётся `BLOCKED`; этот PR #82 не начинает. Runtime,
+Web Self Model, Self Retrieval, embeddings, inference write-back и новые
+canonical fields не входят в этот PR.
 Механическая граница и полный test matrix зафиксированы в
 [self-model-v1-contract.md](self-model-v1-contract.md), разделы 16-17.
