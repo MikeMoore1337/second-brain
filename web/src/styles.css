@@ -243,14 +243,16 @@ input:focus-visible {
   }
 }
 
-@media (max-width: 760px) {
-  /* Keep the mobile keyboard from triggering iOS input zoom and reflow. */
+/* Keep the tablet keyboard from triggering input zoom and reflow too. */
+@media (max-width: 1024px) {
   input:not([type="checkbox"]):not([type="radio"]),
   select,
   textarea {
     font-size: 16px;
   }
+}
 
+@media (max-width: 760px) {
   /* Decorative drift is static on small GPUs; content and state remain unchanged. */
   body::before {
     animation: none;
