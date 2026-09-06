@@ -11,6 +11,7 @@ from typer.main import get_command
 from typer.testing import CliRunner
 
 from second_brain.entrypoints.cli.app import app
+from second_brain.entrypoints.web import app as web_app
 from second_brain.entrypoints.web.app import create_app
 
 runner = CliRunner()
@@ -46,6 +47,33 @@ def test_root_is_utf8_shell_with_local_assets_only() -> None:
     assert "ПРОГНОЗ" in html
     assert "http://" not in html
     assert "https://" not in html
+
+
+def test_react_foundation_is_opt_in_until_legacy_parity_is_complete(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    dist = tmp_path / "dist"
+    assets = dist / "assets"
+    assets.mkdir(parents=True)
+    (dist / "index.html").write_text(
+        '<!doctype html><html lang="ru"><body>React foundation</body></html>',
+        encoding="utf-8",
+    )
+    (assets / "index.js").write_text("console.log('foundation');", encoding="utf-8")
+    monkeypatch.setattr(web_app, "REACT_INDEX_FILE", dist / "index.html")
+    monkeypatch.setattr(web_app, "REACT_ASSETS_DIR", assets)
+
+    with TestClient(create_app(), base_url=LOOPBACK_BASE_URL) as client:
+        legacy = client.get("/")
+        react = client.get("/react/")
+        asset = client.get("/react/assets/index.js")
+
+    assert legacy.status_code == 200
+    assert "Memory" in legacy.text
+    assert react.status_code == 200
+    assert "React foundation" in react.text
+    assert asset.status_code == 200
+    assert asset.text == "console.log('foundation');"
 
 
 def test_healthz_returns_exact_safe_json() -> None:
