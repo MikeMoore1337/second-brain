@@ -57,6 +57,15 @@ from second_brain.application.research import (
 )
 from second_brain.application.research_draft import ResearchDraftGateway, ResearchDraftRequest
 from second_brain.application.search import DEFAULT_SEARCH_LIMIT, SearchRequest, SearchVault
+from second_brain.application.self_retrieval import (
+    DEFAULT_MAX_CONTENT_BYTES,
+    DEFAULT_SELF_CONTEXT_LIMIT,
+    SelfContextRequest,
+    SelfRetrievalError,
+    SelfRetrievalResultInvalidError,
+    SelfRetrievalSearchUnavailableError,
+    validate_self_context_request,
+)
 from second_brain.application.services import (
     CreateManagedNote,
     CreateManagedNoteFromDraft,
@@ -72,6 +81,12 @@ from second_brain.application.writes import (
 )
 from second_brain.config import ConfigurationError, load_config
 from second_brain.domain.models import NoteType
+from second_brain.entrypoints.cli.self_retrieval import (
+    build_production_self_retrieval_service,
+    render_self_retrieval_text,
+    self_retrieval_as_dict,
+    self_retrieval_error_message,
+)
 from second_brain.entrypoints.web.app import create_app
 
 
@@ -221,6 +236,61 @@ def search(
         )
     else:
         typer.echo(_render_search_text(hits))
+    raise typer.Exit(code=0)
+
+
+@app.command()
+def self_retrieval(
+    ctx: typer.Context,
+    query: Annotated[str, typer.Argument(help="Буквальный bounded запрос по текущим заметкам.")],
+    limit: Annotated[
+        int,
+        typer.Option(help="Максимальное число кандидатов (1-50)."),
+    ] = DEFAULT_SELF_CONTEXT_LIMIT,
+    max_content_bytes: Annotated[
+        int,
+        typer.Option("--max-content-bytes", help="Лимит body/title/tags в UTF-8 bytes."),
+    ] = DEFAULT_MAX_CONTENT_BYTES,
+    output_format: Annotated[
+        OutputFormat,
+        typer.Option("--format", help="Формат результата: text или json."),
+    ] = OutputFormat.TEXT,
+) -> None:
+    """Собрать bounded current Self Retrieval context без записи, сети или LLM."""
+
+    request = SelfContextRequest(
+        query=query,
+        limit=limit,
+        max_content_bytes=max_content_bytes,
+    )
+    try:
+        validate_self_context_request(request)
+    except SelfRetrievalError as exc:
+        _echo_self_retrieval_error(exc, output_format)
+        raise typer.Exit(code=2) from None
+
+    try:
+        options = _root_options(ctx)
+        service = build_production_self_retrieval_service(
+            env_file=options.env_file,
+            vault_path_override=options.vault_path,
+        )
+        result = service.build(request)
+        if output_format is OutputFormat.JSON:
+            typer.echo(
+                json.dumps(self_retrieval_as_dict(result, request), ensure_ascii=False, indent=2)
+            )
+        else:
+            typer.echo(render_self_retrieval_text(result, request))
+    except SelfRetrievalError as exc:
+        _echo_self_retrieval_error(exc, output_format)
+        raise typer.Exit(code=1) from None
+    except ConfigurationError, OSError:
+        _echo_self_retrieval_error(SelfRetrievalSearchUnavailableError(), output_format)
+        raise typer.Exit(code=2) from None
+    except Exception:
+        _echo_self_retrieval_error(SelfRetrievalResultInvalidError(), output_format)
+        raise typer.Exit(code=2) from None
     raise typer.Exit(code=0)
 
 
@@ -627,6 +697,26 @@ def _echo_search_error(error: SearchError, output_format: OutputFormat) -> None:
         )
     else:
         typer.echo(f"Ошибка поиска: {code} — {message}", err=True)
+
+
+def _echo_self_retrieval_error(
+    error: SelfRetrievalError,
+    output_format: OutputFormat,
+) -> None:
+    """Вывести закрытую safe Self Retrieval taxonomy без backend details."""
+
+    code, message = self_retrieval_error_message(error)
+    if output_format is OutputFormat.JSON:
+        typer.echo(
+            json.dumps(
+                {"error": {"code": code, "message": message}},
+                ensure_ascii=False,
+                indent=2,
+            ),
+            err=True,
+        )
+    else:
+        typer.echo(f"Ошибка self retrieval: {code} — {message}", err=True)
 
 
 _SEARCH_ERROR_MESSAGES = {
