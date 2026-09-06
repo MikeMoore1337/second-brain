@@ -18,6 +18,11 @@ def test_rebuild_cost_report_has_fixed_fixture_and_operation_shape() -> None:
     assert payload["report_schema_version"] == 1
     assert payload["synthetic_only"] is True
     assert payload["performance_thresholds"] == []
+    assert payload["timing"] == {
+        "warmup_runs": 1,
+        "samples": 3,
+        "statistic": "median",
+    }
     fixtures = cast(list[dict[str, Any]], payload["fixtures"])
     assert fixtures == [
         {"name": "small", "note_count": 4},
@@ -80,3 +85,19 @@ def test_rebuild_cost_command_supports_json_markdown_and_output(
     artifact_output = artifact.read_text(encoding="utf-8")
     assert "# Derived Read-Model Rebuild Cost rebuild-cost-v1" in artifact_output
     assert "No performance threshold is applied" in artifact_output
+
+
+def test_rebuild_cost_output_fails_closed_for_existing_files_and_vaults(
+    tmp_path: Path,
+) -> None:
+    existing = tmp_path / "existing.md"
+    existing.write_text("keep\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="already exists"):
+        main(["--output", str(existing)])
+    assert existing.read_text(encoding="utf-8") == "keep\n"
+
+    vault = tmp_path / "second-brain-vault"
+    vault.mkdir()
+    (vault / "second-brain.yaml").write_text("schema_version: 1\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="managed vault"):
+        main(["--output", str(vault / "artifacts" / "report.json")])

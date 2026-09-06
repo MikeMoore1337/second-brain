@@ -11,6 +11,8 @@ from __future__ import annotations
 import argparse
 import gc
 import json
+import stat
+import statistics
 import time
 import tracemalloc
 from collections.abc import Callable, Sequence
@@ -36,8 +38,10 @@ from second_brain.application.timeline import (
 
 BENCHMARK_VERSION: Final[str] = "rebuild-cost-v1"
 REPORT_SCHEMA_VERSION: Final[int] = 1
+TIMING_SAMPLE_COUNT: Final[int] = 3
 _FIXED_NOW: Final[datetime] = datetime(2026, 9, 6, 12, 0, tzinfo=UTC)
 _VAULT_ID: Final[str] = "0198f4c5-6a00-7000-8000-000000000001"
+_REPARSE_POINT_ATTRIBUTE: Final[int] = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
 _OperationName = Literal["timeline", "self_model", "self_retrieval"]
 
 
@@ -104,6 +108,11 @@ def report_as_dict(report: RebuildCostReport) -> dict[str, object]:
         "report_schema_version": report.report_schema_version,
         "synthetic_only": True,
         "performance_thresholds": [],
+        "timing": {
+            "warmup_runs": 1,
+            "samples": TIMING_SAMPLE_COUNT,
+            "statistic": "median",
+        },
         "fixtures": [
             {"name": fixture.name, "note_count": fixture.note_count} for fixture in report.fixtures
         ],
@@ -160,6 +169,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="optional artifact path; stdout is used when omitted",
     )
     args = parser.parse_args(argv)
+    if args.output is not None:
+        _validate_artifact_output(args.output)
     report = run_benchmark()
     if args.format == "json":
         rendered = json.dumps(report_as_dict(report), ensure_ascii=False, indent=2) + "\n"
@@ -168,8 +179,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.output is None:
         print(rendered, end="")
     else:
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(rendered, encoding="utf-8")
+        _write_artifact(args.output, rendered)
     return 0
 
 
@@ -194,9 +204,14 @@ def _measure_operation(
     action: Callable[[], dict[str, int]],
 ) -> OperationMeasurement:
     gc.collect()
-    started = time.perf_counter()
-    output = action()
-    elapsed_seconds = time.perf_counter() - started
+    warmup_output = action()
+    timings: list[float] = []
+    for _ in range(TIMING_SAMPLE_COUNT):
+        started = time.perf_counter()
+        output = action()
+        timings.append(time.perf_counter() - started)
+        if output != warmup_output:
+            raise RuntimeError("synthetic benchmark operation changed during timing samples")
 
     gc.collect()
     tracemalloc.start()
@@ -205,16 +220,83 @@ def _measure_operation(
     finally:
         _, peak_traced_bytes = tracemalloc.get_traced_memory()
         tracemalloc.stop()
-    if traced_output != output:
+    if traced_output != warmup_output:
         raise RuntimeError("synthetic benchmark operation changed between measurement runs")
     return OperationMeasurement(
         fixture=fixture.name,
         note_count=fixture.note_count,
         operation=operation,
-        wall_clock_ms=round(max(0.0, elapsed_seconds) * 1000, 3),
+        wall_clock_ms=round(max(0.0, statistics.median(timings)) * 1000, 3),
         peak_traced_bytes=peak_traced_bytes,
-        output=output,
+        output=warmup_output,
     )
+
+
+def _validate_artifact_output(path: Path) -> None:
+    """Reject overwrite, link-like paths, and managed-vault ancestors."""
+
+    current = path
+    while True:
+        try:
+            current.lstat()
+        except FileNotFoundError:
+            exists = False
+        except OSError:
+            raise ValueError("benchmark artifact output path is unavailable") from None
+        else:
+            exists = True
+
+        if exists:
+            if _is_link_like(current):
+                raise ValueError("benchmark artifact output path contains a link-like entry")
+            if current == path:
+                raise ValueError("benchmark artifact output already exists")
+            if not current.is_dir():
+                raise ValueError("benchmark artifact output parent is not a directory")
+            try:
+                manifest_exists = (current / "second-brain.yaml").lstat()
+            except FileNotFoundError:
+                manifest_exists = None
+            except OSError:
+                raise ValueError("benchmark artifact output path is unavailable") from None
+            if manifest_exists is not None:
+                raise ValueError("benchmark artifact output cannot be inside a managed vault")
+
+        parent = current.parent
+        if parent == current:
+            return
+        current = parent
+
+
+def _write_artifact(path: Path, rendered: str) -> None:
+    """Create one new artifact without following a checked path or overwriting."""
+
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _validate_artifact_output(path)
+        with path.open("x", encoding="utf-8", newline="") as stream:
+            stream.write(rendered)
+    except FileExistsError:
+        raise ValueError("benchmark artifact output already exists") from None
+    except OSError:
+        raise ValueError("benchmark artifact output is unavailable") from None
+
+
+def _is_link_like(path: Path) -> bool:
+    """Detect symlink, junction, or Windows reparse entry before writing."""
+
+    try:
+        if path.is_symlink():
+            return True
+        is_junction = getattr(path, "is_junction", None)
+        if callable(is_junction) and is_junction():
+            return True
+        attributes = getattr(path.lstat(), "st_file_attributes", 0)
+        return bool(_REPARSE_POINT_ATTRIBUTE and attributes & _REPARSE_POINT_ATTRIBUTE)
+    except FileNotFoundError:
+        return False
+    except OSError, RuntimeError:
+        return True
 
 
 def _run_timeline(root: Path) -> dict[str, int]:

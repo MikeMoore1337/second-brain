@@ -43,8 +43,9 @@ benchmark создаёт отсутствующие parent directories и зап
 
 Report содержит `benchmark_version`, `report_schema_version`, fixture sizes и
 по одной записи на каждую пару fixture/operation. Для каждой операции сначала
-выполняется untraced run для wall-clock milliseconds, затем независимый traced
-run для peak traced bytes от `tracemalloc`; shape-only counters обоих запусков
+выполняется один untimed warm-up, затем три untraced timing samples; в report
+попадает их median wall-clock milliseconds. После этого независимый traced run
+измеряет peak traced bytes от `tracemalloc`; shape-only counters всех запусков
 должны совпасть. Реальное время и memory зависят от машины и загруженности
 окружения.
 
@@ -52,4 +53,6 @@ run для peak traced bytes от `tracemalloc`; shape-only counters обоих 
 а не product SLO. В benchmark нет hard threshold, автоматического pass/fail по
 скорости, embeddings, provider, persistent DB, cache или vector search. CI
 проверяет только корректность формы отчёта и безопасные synthetic boundaries;
-flaky performance gate намеренно отсутствует.
+flaky performance gate намеренно отсутствует. Artifact output fail-closed: нельзя
+перезаписать существующий файл, пройти через symlink/junction/reparse entry или
+записать внутрь каталога с `second-brain.yaml`.
