@@ -207,6 +207,7 @@ function DraftReview({ response, onReset, allowPersonalMemory }: DraftReviewProp
 
   return (
     <div className="draft-result" tabIndex={-1}>
+      <h3>Черновик готов</h3>
       {response.sources.map((source, index) => (
         <section className="provenance-block" key={`${source.uri ?? "source"}-${index}`}>
           <h4>Источник (только чтение)</h4>
@@ -243,7 +244,7 @@ function DraftReview({ response, onReset, allowPersonalMemory }: DraftReviewProp
           </div>
         </section> : null}
         <div className="review-actions">
-          <button className="review-button review-button-secondary" type="button" disabled={busy || Boolean(saved)} aria-busy={busy} onClick={() => void handlePreview()}>Preview</button>
+          <button className="review-button review-button-secondary" type="button" disabled={busy || Boolean(saved)} aria-busy={busy} onClick={() => void handlePreview()}>Предпросмотр</button>
           <button className="review-button review-button-primary" type="button" disabled={busy || Boolean(saved)} aria-busy={busy} onClick={() => void handlePrepare()}>Подготовить сохранение</button>
           <button className="review-button review-button-primary" type="button" hidden={!confirmationToken} disabled={busy || !confirmationToken || Boolean(saved)} aria-busy={busy} onClick={() => void handleConfirm()}>Подтвердить сохранение</button>
           <button className="review-button review-button-quiet" type="button" disabled={busy} onClick={onReset}>Добавить ещё</button>
