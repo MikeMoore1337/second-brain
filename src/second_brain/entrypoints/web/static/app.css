@@ -3748,6 +3748,25 @@ textarea#review-content {
   min-width: 0;
 }
 
+.timeline-surface:focus-within,
+.self-model-surface:focus-within,
+.simulate-me-surface:focus-within,
+.self-retrieval-surface:focus-within,
+.search-surface:focus-within {
+  border-color: rgb(var(--sb-rgb-accent) / 0.42);
+  box-shadow: var(--sb-shadow-focus);
+}
+
+.timeline-surface[aria-busy="true"],
+.self-model-surface[aria-busy="true"],
+.simulate-me-surface[aria-busy="true"],
+.self-retrieval-surface[aria-busy="true"],
+.search-surface[aria-busy="true"] {
+  border-color: rgb(var(--sb-rgb-accent) / 0.46);
+  box-shadow: 0 0 0 3px rgb(var(--sb-rgb-accent) / 0.08);
+  opacity: 0.96;
+}
+
 @media (max-width: 760px) {
   .timeline-surface,
   .self-model-surface,

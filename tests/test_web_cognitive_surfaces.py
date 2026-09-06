@@ -96,6 +96,8 @@ def test_cognitive_surfaces_keep_safe_rendering_and_shared_motion_contract() -> 
 
     css = _read("app.css")
     assert '[aria-busy="true"]' in css
+    assert ".timeline-surface:focus-within" in css
+    assert '.search-surface[aria-busy="true"]' in css
     assert "@media (hover: hover) and (pointer: fine)" in css
     assert "@media (prefers-reduced-motion: reduce)" in css
     assert "transition: all" not in css
