@@ -316,7 +316,7 @@ def evaluate_failure_budget(
     """Stop the loop when a bounded failure budget is exceeded."""
 
     limits = policy.failure_budget
-    counters = (
+    operation_counters = (
         (usage.tasks_started, limits.max_tasks_per_night, "max_tasks_per_night"),
         (
             usage.review_fix_cycles,
@@ -324,13 +324,16 @@ def evaluate_failure_budget(
             "max_review_fix_cycles_per_task",
         ),
         (usage.ci_fix_cycles, limits.max_ci_fix_cycles_per_task, "max_ci_fix_cycles_per_task"),
-        (usage.scope_expansions, limits.max_scope_expansion, "max_scope_expansion"),
     )
-    for used, maximum, name in counters:
+    for used, maximum, name in operation_counters:
         if used < 0:
             return _human(f"negative_failure_budget_counter:{name}")
-        if used > maximum:
+        if used >= maximum:
             return _human(f"failure_budget_exceeded:{name}")
+    if usage.scope_expansions < 0:
+        return _human("negative_failure_budget_counter:max_scope_expansion")
+    if usage.scope_expansions > limits.max_scope_expansion:
+        return _human("failure_budget_exceeded:max_scope_expansion")
     if usage.flaky_ci_retries < 0:
         return _human("negative_failure_budget_counter:flaky_ci_retries")
     if usage.flaky_ci_retries and not usage.flaky_ci_retry_has_evidence:

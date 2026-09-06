@@ -270,6 +270,52 @@ def test_failure_budget_stops_review_loops_but_evidence_bound_flaky_retry_is_fre
     assert code_changed.status is GateStatus.HUMAN_REQUIRED
 
 
+@pytest.mark.parametrize(
+    ("usage", "expected_status", "expected_reason"),
+    (
+        (
+            FailureBudgetUsage(tasks_started=3),
+            GateStatus.READY,
+            "failure_budget_within_bounds",
+        ),
+        (
+            FailureBudgetUsage(tasks_started=4),
+            GateStatus.HUMAN_REQUIRED,
+            "failure_budget_exceeded:max_tasks_per_night",
+        ),
+        (
+            FailureBudgetUsage(review_fix_cycles=2),
+            GateStatus.READY,
+            "failure_budget_within_bounds",
+        ),
+        (
+            FailureBudgetUsage(review_fix_cycles=3),
+            GateStatus.HUMAN_REQUIRED,
+            "failure_budget_exceeded:max_review_fix_cycles_per_task",
+        ),
+        (
+            FailureBudgetUsage(ci_fix_cycles=2),
+            GateStatus.READY,
+            "failure_budget_within_bounds",
+        ),
+        (
+            FailureBudgetUsage(ci_fix_cycles=3),
+            GateStatus.HUMAN_REQUIRED,
+            "failure_budget_exceeded:max_ci_fix_cycles_per_task",
+        ),
+    ),
+)
+def test_failure_budget_requires_remaining_operation_capacity(
+    usage: FailureBudgetUsage,
+    expected_status: GateStatus,
+    expected_reason: str,
+) -> None:
+    result = evaluate_failure_budget(policy(), usage)
+
+    assert result.status is expected_status
+    assert result.reasons == (expected_reason,)
+
+
 def _green_merge_evidence(
     *,
     risk_lane: RiskLane = RiskLane.GREEN,

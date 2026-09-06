@@ -49,7 +49,7 @@ RED включает canonical schema/version, `evidence_kind`, `self_kind`, mig
 Затронутые задачи
 ```
 
-## Failure budget
+## Бюджет сбоев
 
 ```text
 max_tasks_per_night: 4
