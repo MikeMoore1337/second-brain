@@ -250,6 +250,7 @@ def _green_merge_evidence(
     *,
     risk_lane: RiskLane = RiskLane.GREEN,
     review_verdict: NightShiftVerdict = NightShiftVerdict.MERGE_READY,
+    review_is_latest: bool | None = True,
     current_head_sha: str = "a" * 40,
     reviewed_head_sha: str | None = None,
     check_heads: dict[str, str] | None = None,
@@ -264,6 +265,7 @@ def _green_merge_evidence(
     return MergeGateEvidence(
         risk_lane=risk_lane,
         review_verdict=review_verdict,
+        review_is_latest=review_is_latest,
         current_head_sha=current_head_sha,
         reviewed_head_sha=reviewed_head_sha or current_head_sha,
         check_evidence=check_evidence
@@ -373,6 +375,16 @@ def test_merge_gate_preserves_human_required_reviewer_verdict() -> None:
 
     assert result.status is GateStatus.HUMAN_REQUIRED
     assert result.reasons == ("review_verdict_is_human_required",)
+
+
+def test_merge_gate_rejects_superseded_review_verdict() -> None:
+    result = evaluate_merge_gate(
+        policy(),
+        _green_merge_evidence(review_is_latest=False),
+    )
+
+    assert result.status is GateStatus.BLOCKED
+    assert result.reasons == ("review_verdict_not_latest",)
 
 
 def test_current_merge_ready_task_remains_before_later_candidates() -> None:

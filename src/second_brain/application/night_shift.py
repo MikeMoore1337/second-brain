@@ -214,6 +214,7 @@ class MergeGateEvidence:
     dependency_satisfied: bool
     human_gate: bool
     scope_unchanged: bool
+    review_is_latest: bool | None = None
 
 
 def load_night_shift_policy(path: Path) -> NightShiftPolicy:
@@ -344,6 +345,8 @@ def evaluate_merge_gate(policy: NightShiftPolicy, evidence: MergeGateEvidence) -
 
     if evidence.risk_lane is not RiskLane.GREEN:
         return _human(f"risk_lane_{evidence.risk_lane.value.lower()}_cannot_auto_merge")
+    if evidence.review_is_latest is not True:
+        return _blocked("review_verdict_not_latest")
     if evidence.review_verdict is NightShiftVerdict.HUMAN_REQUIRED:
         return _human("review_verdict_is_human_required")
     if evidence.review_verdict is not NightShiftVerdict.MERGE_READY:
