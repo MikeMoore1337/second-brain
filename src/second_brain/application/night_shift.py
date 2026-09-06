@@ -198,6 +198,7 @@ class CheckRunEvidence:
     head_sha: str
     run_id: int
     run_is_latest: bool | None = None
+    base_sha: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -394,6 +395,11 @@ def evaluate_merge_gate(policy: NightShiftPolicy, evidence: MergeGateEvidence) -
             or check_evidence.head_sha != evidence.current_head_sha
         ):
             return _blocked(f"required_check_not_bound_to_current_head:{check}")
+        if (
+            not _is_full_commit_sha(check_evidence.base_sha or "")
+            or check_evidence.base_sha != evidence.current_base_sha
+        ):
+            return _blocked(f"required_check_not_bound_to_current_base:{check}")
         if check_evidence.run_id <= 0:
             return _blocked(f"required_check_run_id_missing:{check}")
         if check_evidence.run_is_latest is not True:

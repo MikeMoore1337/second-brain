@@ -283,6 +283,7 @@ def _green_merge_evidence(
                 head_sha=head_sha,
                 run_id=index,
                 run_is_latest=True,
+                base_sha=current_base_sha,
             )
             for index, (check, head_sha) in enumerate(
                 (
@@ -340,12 +341,14 @@ def test_merge_gate_requires_exact_reviewed_head_and_all_required_checks() -> No
                     head_sha="a" * 40,
                     run_id=1,
                     run_is_latest=True,
+                    base_sha="c" * 40,
                 ),
                 "windows-ssl-regression": CheckRunEvidence(
                     conclusion=CheckConclusion.SUCCESS,
                     head_sha="a" * 40,
                     run_id=2,
                     run_is_latest=True,
+                    base_sha="c" * 40,
                 ),
             }
         ),
@@ -361,18 +364,44 @@ def test_merge_gate_requires_exact_reviewed_head_and_all_required_checks() -> No
                     head_sha="a" * 40,
                     run_id=1,
                     run_is_latest=False,
+                    base_sha="c" * 40,
                 ),
                 "windows-ssl-regression": CheckRunEvidence(
                     conclusion=CheckConclusion.SUCCESS,
                     head_sha="a" * 40,
                     run_id=2,
                     run_is_latest=True,
+                    base_sha="c" * 40,
                 ),
             }
         ),
     )
     assert superseded_check.status is GateStatus.BLOCKED
     assert superseded_check.reasons == ("required_check_run_not_latest:quality",)
+
+    stale_check_base = evaluate_merge_gate(
+        loaded,
+        _green_merge_evidence(
+            check_evidence={
+                "quality": CheckRunEvidence(
+                    conclusion=CheckConclusion.SUCCESS,
+                    head_sha="a" * 40,
+                    run_id=1,
+                    run_is_latest=True,
+                    base_sha="d" * 40,
+                ),
+                "windows-ssl-regression": CheckRunEvidence(
+                    conclusion=CheckConclusion.SUCCESS,
+                    head_sha="a" * 40,
+                    run_id=2,
+                    run_is_latest=True,
+                    base_sha="c" * 40,
+                ),
+            }
+        ),
+    )
+    assert stale_check_base.status is GateStatus.BLOCKED
+    assert stale_check_base.reasons == ("required_check_not_bound_to_current_base:quality",)
 
 
 def test_merge_gate_preserves_human_required_reviewer_verdict() -> None:
