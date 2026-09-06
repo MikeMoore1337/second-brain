@@ -116,7 +116,7 @@ hairline, затем очень мягкий local bloom. Большая чёр�
 
 1. **Void** — спокойный общий ground, задаёт контраст и направление взгляда.
 2. **Workspace plane** — текущая рабочая поверхность: Timeline, Search,
-   Self Model, Self Retrieval, Diagnostics или Simulate Me.
+   Self Model, Self Retrieval, Memory/Growth или Simulate Me.
 3. **Signal basin** — один локальный cluster/route, где пользователь видит
    связи и evidence.
 4. **Focus state** — selected node, draft review, prepare/diff или explicit
