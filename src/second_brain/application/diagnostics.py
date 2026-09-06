@@ -49,6 +49,7 @@ _CONTENT_ROOT_FAILURE_CODES: Final[frozenset[str]] = frozenset(
         "VAULT_OVERLAPPING_ROOTS",
         "VAULT_PATH_ESCAPE",
         "VAULT_ROOT_MISSING",
+        "VAULT_ROOT_NOT_DIRECTORY",
     }
 )
 _CONTENT_ROOT_FIELDS: Final[tuple[str, ...]] = (
@@ -69,12 +70,8 @@ _ATTACHMENT_SCAN_FAILURE_CODES: Final[frozenset[str]] = frozenset(
         "VAULT_LINKED_DIRECTORY",
         "VAULT_PATH_ESCAPE",
         "VAULT_ROOT_MISSING",
+        "VAULT_ROOT_NOT_DIRECTORY",
     }
-)
-_ALL_MANIFEST_ROOT_FIELDS: Final[tuple[str, ...]] = (
-    *_CONTENT_ROOT_FIELDS,
-    "templates",
-    "attachments",
 )
 
 
@@ -290,7 +287,8 @@ def _build_report(
     manifest_available = report.manifest is not None
     content_roots_available = _content_roots_available(report)
     diagnostics = _group_diagnostics(report.diagnostics)
-    snapshot_reader = _SnapshotReader(snapshot)
+    derived_snapshot = _snapshot_for_derived_layers(snapshot, report)
+    snapshot_reader = _SnapshotReader(derived_snapshot)
     timeline = _build_timeline_status(snapshot_reader, generated_at=generated_at)
     self_model = _build_self_model_status(snapshot_reader, generated_at=generated_at)
     self_retrieval = _build_self_retrieval_status(
@@ -408,6 +406,26 @@ def _build_self_retrieval_status(
     return DoctorLayerStatus(DoctorStatus.HEALTHY, False)
 
 
+def _snapshot_for_derived_layers(snapshot: VaultSnapshot, report: ScanReport) -> VaultSnapshot:
+    """Hide only support-root overlap errors from builders requiring content completeness."""
+
+    diagnostics = tuple(
+        item
+        for item in snapshot.diagnostics
+        if item.code != "VAULT_OVERLAPPING_ROOTS" or _diagnostic_affects_content_scope(item, report)
+    )
+    if diagnostics == snapshot.diagnostics:
+        return snapshot
+    return VaultSnapshot(
+        vault_path=snapshot.vault_path,
+        manifest=snapshot.manifest,
+        documents=snapshot.documents,
+        links=snapshot.links,
+        attachments=snapshot.attachments,
+        diagnostics=diagnostics,
+    )
+
+
 def _attachment_bytes_available(report: ScanReport) -> bool:
     """Keep attachment totals unknown when the attachment tree was partial."""
 
@@ -434,7 +452,7 @@ def _content_roots_available(report: ScanReport) -> bool:
         return False
     return not any(
         item.severity is DiagnosticSeverity.ERROR
-        and (item.code.startswith("VAULT_ROOT_") or item.code in _CONTENT_ROOT_FAILURE_CODES)
+        and item.code in _CONTENT_ROOT_FAILURE_CODES
         and _diagnostic_affects_content_scope(item, report)
         for item in report.diagnostics
     )
@@ -446,7 +464,7 @@ def _diagnostic_affects_content_scope(item: Diagnostic, report: ScanReport) -> b
     if report.manifest is None:
         return True
     if item.code == "VAULT_OVERLAPPING_ROOTS" and item.path is None:
-        return _manifest_has_content_root_overlap(report)
+        return _overlap_affects_content_scope(item)
     if item.path is None:
         return False
     candidate = PurePosixPath(item.path)
@@ -456,24 +474,14 @@ def _diagnostic_affects_content_scope(item: Diagnostic, report: ScanReport) -> b
     )
 
 
-def _manifest_has_content_root_overlap(report: ScanReport) -> bool:
-    """Recognize overlap only when a declared content root participates."""
+def _overlap_affects_content_scope(item: Diagnostic) -> bool:
+    """Use scanner's root field names, preserving resolved filesystem semantics."""
 
-    manifest = report.manifest
-    if manifest is None:
+    marker = " roots overlap"
+    if not item.message.endswith(marker):
         return True
-    paths = {
-        field: PurePosixPath(getattr(manifest.paths, field).as_posix())
-        for field in _ALL_MANIFEST_ROOT_FIELDS
-    }
-    for content_field in _CONTENT_ROOT_FIELDS:
-        content_path = paths[content_field]
-        for other_field, other_path in paths.items():
-            if other_field == content_field:
-                continue
-            if _is_path_under(content_path, other_path) or _is_path_under(other_path, content_path):
-                return True
-    return False
+    fields = item.message[: -len(marker)].split(" and ", maxsplit=1)
+    return any(field in _CONTENT_ROOT_FIELDS for field in fields)
 
 
 def _is_path_under(candidate: PurePosixPath, root: PurePosixPath) -> bool:

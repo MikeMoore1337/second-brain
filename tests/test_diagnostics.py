@@ -170,6 +170,45 @@ def test_doctor_keeps_attachment_total_for_oversized_but_readable_file(tmp_path:
     assert any(item.code == "ATTACHMENT_TOO_LARGE" for item in report.diagnostics)
 
 
+def test_doctor_nulls_attachment_total_when_attachment_root_is_not_directory(
+    tmp_path: Path,
+) -> None:
+    vault = create_vault(tmp_path / "vault")
+    (vault / "_attachments").rmdir()
+    (vault / "_attachments").write_text("not a directory", encoding="utf-8")
+
+    report = BuildDoctorReport(
+        FileSystemVaultReader(vault),
+        config_resolvable=True,
+        clock=lambda: GENERATED_AT,
+    ).execute()
+
+    assert report.content_roots_available is True
+    assert report.attachment_bytes is None
+    assert any(item.code == "VAULT_ROOT_NOT_DIRECTORY" for item in report.diagnostics)
+
+
+def test_doctor_support_root_overlap_does_not_break_derived_builds(tmp_path: Path) -> None:
+    vault = create_vault(tmp_path / "vault")
+    (vault / "_templates" / "assets").mkdir()
+    manifest = (vault / "second-brain.yaml").read_text(encoding="utf-8")
+    (vault / "second-brain.yaml").write_text(
+        manifest.replace("attachments: _attachments", "attachments: _templates/assets"),
+        encoding="utf-8",
+    )
+
+    report = BuildDoctorReport(
+        FileSystemVaultReader(vault),
+        config_resolvable=True,
+        clock=lambda: GENERATED_AT,
+    ).execute()
+
+    assert report.status is DoctorStatus.DEGRADED
+    assert report.content_roots_available is True
+    assert report.timeline.status is DoctorStatus.HEALTHY
+    assert report.self_model.status is DoctorStatus.HEALTHY
+
+
 def test_doctor_derived_layers_replay_the_initial_snapshot_once(tmp_path: Path) -> None:
     vault = create_vault(tmp_path / "vault")
     write_note(vault, "10 Projects/Note.md", managed_note())
