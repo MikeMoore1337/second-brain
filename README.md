@@ -27,6 +27,32 @@ uv run second-brain --env-file .env doctor
 uv run second-brain --env-file .env vault validate
 ```
 
+## Тесты и границы изоляции
+
+Обычный запуск тестов полностью локальный и не должен читать или изменять
+реальный vault, обращаться к сети или запускать network-capable provider
+executables. Vault fixtures создаются только под pytest `tmp_path` через
+`create_vault`; унаследованный `SECOND_BRAIN_VAULT_PATH` отклоняется с
+детерминированной ошибкой. Network/provider seams должны быть fake-объектами;
+локальные процессы для тестов разрешены, а проверка `curl --version` сохраняет
+Windows SSL regression contract.
+
+```powershell
+uv run pytest
+uv run ruff format --check .
+uv run ruff check .
+uv run mypy src tests
+```
+
+Отдельные live smoke-тесты обязаны иметь marker `@pytest.mark.live_smoke` и не
+входят в обычный CI. Их можно запускать только отдельной явной командой после
+осознанного разрешения сети и provider credentials:
+
+```powershell
+$env:SECOND_BRAIN_ALLOW_LIVE_SMOKE = "1"
+uv run pytest -m live_smoke
+```
+
 ## Локальный Web GUI
 
 Web GUI v1 — это небольшой packaged browser shell поверх существующих application
