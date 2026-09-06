@@ -121,8 +121,9 @@ def test_hidden_states_focus_contract_and_reduced_motion_are_explicit() -> None:
     journal_js = _read("decision-journal.js")
     timeline_js = _read("timeline.js")
     self_model_js = _read("self-model.js")
+    simulate_me_js = _read("simulate-me.js")
 
-    for script in (app_js, journal_js, timeline_js, self_model_js):
+    for script in (app_js, journal_js, timeline_js, self_model_js, simulate_me_js):
         assert 'setAttribute("aria-busy", String(' in script
 
     assert 'personalMemoryToggle.setAttribute("aria-expanded", "false")' in app_js
@@ -144,6 +145,7 @@ def test_hidden_states_focus_contract_and_reduced_motion_are_explicit() -> None:
     assert 'plan.scrollIntoView({ block: "nearest" })' in journal_js
     _assert_revealed_before_focus(timeline_js, "error")
     _assert_revealed_before_focus(self_model_js, "error")
+    _assert_revealed_before_focus(simulate_me_js, "error")
 
     assert "const loadTimeline = async (userInitiated = false)" in timeline_js
     assert "if (userInitiated)" in timeline_js

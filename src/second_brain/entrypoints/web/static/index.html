@@ -10,6 +10,7 @@
     <script src="/static/decision-journal.js" defer></script>
     <script src="/static/timeline.js" defer></script>
     <script src="/static/self-model.js" defer></script>
+    <script src="/static/simulate-me.js" defer></script>
     <script src="/static/self-retrieval.js" defer></script>
   </head>
   <body>
@@ -26,6 +27,7 @@
         <nav class="topnav" aria-label="Основные разделы">
           <a href="#timeline">Timeline</a>
           <a href="#self-model">Self Model</a>
+          <a href="#simulate-me">Simulate Me</a>
           <a href="#self-retrieval">Self Retrieval</a>
           <a href="#search">Search</a>
           <a href="#memory">Memory</a>
@@ -410,6 +412,82 @@
             <p class="self-model-empty" data-self-model-empty hidden>
               Прямых preference, belief или goal claims пока нет.
             </p>
+          </div>
+        </section>
+
+        <section
+          class="simulate-me-surface"
+          id="simulate-me"
+          aria-labelledby="simulate-me-title"
+          data-simulate-me-surface
+        >
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Stage 6 · mechanical, current, bounded</p>
+              <h2 id="simulate-me-title">Simulate Me.</h2>
+            </div>
+            <p class="simulate-me-lede">
+              Получи только механический <strong>ПРОГНОЗ</strong> по exact current evidence — без
+              изменения vault.
+            </p>
+          </div>
+          <div class="simulate-me-panel">
+            <form class="simulate-me-form" data-simulate-me-form>
+              <label class="simulate-me-field simulate-me-field-wide" for="simulate-me-query">
+                <span class="draft-field-label">Literal task / query</span>
+                <textarea
+                  class="capture-input capture-textarea"
+                  id="simulate-me-query"
+                  rows="3"
+                  autocomplete="off"
+                  required
+                  data-simulate-me-query
+                ></textarea>
+              </label>
+
+              <fieldset class="simulate-me-options">
+                <legend>Caller-owned options</legend>
+                <p class="simulate-me-help">
+                  Введи варианты как есть. Core сам вернёт prediction или abstention; интерфейс
+                  только покажет этот результат.
+                </p>
+                <div class="simulate-me-option-list" data-simulate-me-options>
+                  <div class="simulate-me-option-row" data-simulate-me-option>
+                    <label class="simulate-me-field">
+                      <span class="draft-field-label">Option id</span>
+                      <input class="review-input" type="text" value="a" autocomplete="off" data-simulate-me-option-id />
+                    </label>
+                    <label class="simulate-me-field">
+                      <span class="draft-field-label">Label</span>
+                      <input class="review-input" type="text" autocomplete="off" required data-simulate-me-option-label />
+                    </label>
+                    <button class="review-button review-button-quiet" type="button" data-simulate-me-remove hidden>
+                      Удалить
+                    </button>
+                  </div>
+                </div>
+                <button class="review-button review-button-secondary" type="button" data-simulate-me-add>
+                  Добавить вариант
+                </button>
+              </fieldset>
+
+              <div class="simulate-me-actions">
+                <button class="review-button review-button-primary" type="submit" data-simulate-me-submit>
+                  Получить прогноз
+                </button>
+                <p class="simulate-me-status" data-simulate-me-status role="status" aria-live="polite"></p>
+              </div>
+            </form>
+            <p class="capture-error simulate-me-error" data-simulate-me-error role="alert" tabindex="-1" hidden></p>
+            <section
+              class="simulate-me-result"
+              data-simulate-me-result
+              aria-labelledby="simulate-me-result-title"
+              hidden
+            >
+              <h3 id="simulate-me-result-title">Результат core</h3>
+              <div data-simulate-me-result-content></div>
+            </section>
           </div>
         </section>
 

@@ -522,3 +522,18 @@ fingerprint. Stage 5 не выбирает relevance/confidence semantics, не 
 embeddings/RAG/provider, persistence/cache, prediction mode или write-back.
 Эти три merged slices остаются отдельными слоями и не меняют canonical vault,
 Search DTO или provider boundary.
+
+## Simulate Me v1 local Web projection
+
+Stage 6 Simulate Me v1 core из #101 и local Web projection из #102 остаются
+разделёнными слоями. Web принимает только exact `query` и caller-owned
+`options`, передаёт immutable request в `BuildSimulateMe` и сериализует только
+его prediction/abstention result, evidence UUID refs и temporal caveats. Web не
+добавляет matching, ranking, client inference или новый result field; UI
+показывает результат как **ПРОГНОЗ**, а abstention — как недостаток evidence.
+
+`POST /api/simulate-me` использует loopback/same-origin JSON boundary,
+`X-Second-Brain-Request: simulate-me-v1`, bounded raw body, `Cache-Control:
+no-store` и скрытую OpenAPI schema. Запросы lazy: current vault читается только
+по явному submit; browser storage, polling, LLM/provider, cache и write path в
+этом slice отсутствуют. `second-brain-vault` и canonical schema не изменяются.

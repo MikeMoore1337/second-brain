@@ -41,6 +41,9 @@ def test_root_is_utf8_shell_with_local_assets_only() -> None:
     assert "Growth" in html
     assert 'href="/static/app.css"' in html
     assert 'src="/static/app.js"' in html
+    assert 'src="/static/simulate-me.js"' in html
+    assert 'href="#simulate-me"' in html
+    assert "ПРОГНОЗ" in html
     assert "http://" not in html
     assert "https://" not in html
 
@@ -62,6 +65,7 @@ def test_packaged_static_assets_are_cwd_independent(
     with TestClient(create_app(), base_url=LOOPBACK_BASE_URL) as client:
         css = client.get("/static/app.css")
         javascript = client.get("/static/app.js")
+        simulate_me_javascript = client.get("/static/simulate-me.js")
 
     assert css.status_code == 200
     assert css.headers["content-type"].startswith("text/css")
@@ -82,6 +86,14 @@ def test_packaged_static_assets_are_cwd_independent(
     assert "sessionStorage" not in javascript.text
     assert "indexedDB" not in javascript.text
     assert "serviceWorker" not in javascript.text
+    assert simulate_me_javascript.status_code == 200
+    assert '"X-Second-Brain-Request": "simulate-me-v1"' in simulate_me_javascript.text
+    assert 'fetch("/api/simulate-me"' in simulate_me_javascript.text
+    assert "innerHTML" not in simulate_me_javascript.text
+    assert "localStorage" not in simulate_me_javascript.text
+    assert "sessionStorage" not in simulate_me_javascript.text
+    assert "indexedDB" not in simulate_me_javascript.text
+    assert "setInterval" not in simulate_me_javascript.text
 
 
 def test_static_serving_has_no_directory_listing_or_traversal() -> None:
