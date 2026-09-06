@@ -537,3 +537,20 @@ Stage 6 Simulate Me v1 core из #101 и local Web projection из #102 оста
 no-store` и скрытую OpenAPI schema. Запросы lazy: current vault читается только
 по явному submit; browser storage, polling, LLM/provider, cache и write path в
 этом slice отсутствуют. `second-brain-vault` и canonical schema не изменяются.
+
+## Simulate Me deterministic evaluation harness v1
+
+Для Stage 6 добавлен on-demand evaluation harness из #103. Он использует
+только versioned synthetic cases и temporary managed vault: direct
+preference/goal prediction, bounded abstention categories, contextual belief,
+Decision Journal/search-only non-inference, unknown-time caveat, NFC/edge-trim
+matching и malformed current context. Report фиксирует actual evidence refs,
+result category, derivation/policy identity и точный mismatch reason без
+временных путей и note bodies. Corpus также фиксирует case-only,
+internal-whitespace и prefix near-match abstention и asymmetric count/recency
+conflict; Markdown и JSON сохраняют captured refs и caveats.
+
+Harness не читает configured vault, не вызывает provider/network/LLM, не пишет
+canonical notes и не вводит calibration, confidence threshold, quality SLO или
+автоматическое изменение prediction policy. Полный контракт запускается как
+uv run python -m second_brain.benchmarks.simulate_me_evaluation_v1.
