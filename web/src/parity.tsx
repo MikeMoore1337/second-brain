@@ -53,10 +53,12 @@ function Field({ label, value }: { label: string; value: unknown }): ReactElemen
   );
 }
 
-function ErrorMessage({ message, onFocus }: { message: string; onFocus?: () => void }): ReactElement | null {
+function ErrorMessage({ message }: { message: string }): ReactElement | null {
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => { errorRef.current?.focus(); }, [message]);
   if (!message) return null;
   return (
-    <p className="capture-error" role="alert" tabIndex={-1} ref={(node) => { if (node && onFocus) onFocus(); }}>
+    <p className="capture-error" role="alert" tabIndex={-1} ref={errorRef}>
       {message}
     </p>
   );
@@ -93,9 +95,10 @@ function SavedNote({ payload, label, addOutcome }: { payload: SavedNoteResponse;
 interface DraftReviewProps {
   response: DraftResponse;
   onReset: () => void;
+  allowPersonalMemory: boolean;
 }
 
-function DraftReview({ response, onReset }: DraftReviewProps): ReactElement {
+function DraftReview({ response, onReset, allowPersonalMemory }: DraftReviewProps): ReactElement {
   const [draft, setDraft] = useState<NoteDraft>({
     title: response.draft.title,
     note_type: NOTE_TYPES.includes(response.draft.note_type as (typeof NOTE_TYPES)[number]) ? response.draft.note_type : "resource",
@@ -227,7 +230,7 @@ function DraftReview({ response, onReset }: DraftReviewProps): ReactElement {
           <label className="review-field draft-field-label">Ссылки (одна на строку)<textarea className="review-input" rows={3} value={draft.links.join("\n")} disabled={busy || Boolean(saved)} onChange={(event) => updateDraft("links", lines(event.target.value))} /></label>
           <label className="review-field review-field-wide draft-field-label">Содержание<textarea className="review-input" rows={12} value={draft.content} disabled={busy || Boolean(saved)} onChange={(event) => updateDraft("content", event.target.value)} /></label>
         </div>
-        <section className="personal-memory-panel">
+        {allowPersonalMemory ? <section className="personal-memory-panel">
           <h5>Личная память</h5>
           <p className="personal-memory-description">Включи режим только после проверки draft и явно укажи Stage 1 metadata.</p>
           <label className="personal-memory-toggle"><input type="checkbox" checked={personalMemoryEnabled} disabled={busy || Boolean(saved)} aria-controls="personal-memory-fields" aria-expanded={personalMemoryEnabled} onChange={(event) => { setPersonalMemoryEnabled(event.target.checked); invalidate("Изменения требуют новой подготовки Safe Write."); }} /><span>Сохранить как Personal Memory</span></label>
@@ -238,7 +241,7 @@ function DraftReview({ response, onReset }: DraftReviewProps): ReactElement {
             <label className="review-field draft-field-label">Время факта<select className="review-input" value={timeMode} disabled={busy || Boolean(saved)} onChange={(event) => { const value = event.target.value as "exact" | "unknown"; setTimeMode(value); setEvidenceAt(value === "exact" ? "" : "unknown"); invalidate(); }}><option value="exact">Точное время</option><option value="unknown">Время неизвестно</option></select></label>
             {timeMode === "exact" ? <div className="personal-memory-time-field"><label className="draft-field-label" htmlFor="personal-memory-evidence-at">RFC3339 время факта</label><input className="review-input" id="personal-memory-evidence-at" type="text" value={evidenceAt} disabled={busy || Boolean(saved)} onChange={(event) => { setEvidenceAt(event.target.value); invalidate(); }} /><button className="review-button review-button-secondary" type="button" disabled={busy || Boolean(saved)} onClick={() => { setEvidenceAt(new Date().toISOString()); invalidate(); }}>Сейчас</button></div> : null}
           </div>
-        </section>
+        </section> : null}
         <div className="review-actions">
           <button className="review-button review-button-secondary" type="button" disabled={busy || Boolean(saved)} aria-busy={busy} onClick={() => void handlePreview()}>Preview</button>
           <button className="review-button review-button-primary" type="button" disabled={busy || Boolean(saved)} aria-busy={busy} onClick={() => void handlePrepare()}>Подготовить сохранение</button>
@@ -271,18 +274,54 @@ export function CaptureSurface(): ReactElement {
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => () => { streamRef.current?.getTracks().forEach((track) => track.stop()); }, []);
+  const microphoneGenerationRef = useRef(0);
+  const [microphonePending, setMicrophonePending] = useState(false);
 
   const canRecord = typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia) && typeof window !== "undefined" && typeof window.MediaRecorder === "function";
 
-  function resetReview(): void {
-    setDraftResponse(null);
-    setStatus("");
-    setError("");
+  function stopStream(): void {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  }
+
+  function clearAudioState(): void {
+    microphoneGenerationRef.current += 1;
+    setMicrophonePending(false);
+    const recorder = recorderRef.current;
+    if (recorder) {
+      recorder.onstop = null;
+      if (recorder.state !== "inactive") {
+        try { recorder.stop(); } catch { /* recorder may already be stopping */ }
+      }
+    }
+    recorderRef.current = null;
+    stopStream();
+    chunksRef.current = [];
+    setRecording(false);
     setAudioBlob(null);
     setAudioType("");
     setVoiceStatus("");
+  }
+
+  useEffect(() => () => {
+    microphoneGenerationRef.current += 1;
+    const recorder = recorderRef.current;
+    if (recorder) {
+      recorder.onstop = null;
+      if (recorder.state !== "inactive") {
+        try { recorder.stop(); } catch { /* component is unmounting */ }
+      }
+    }
+    stopStream();
+  }, []);
+
+  function resetReview(): void {
+    clearAudioState();
+    setDraftResponse(null);
+    setUrl("");
+    setText("");
+    setStatus("");
+    setError("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -309,9 +348,17 @@ export function CaptureSurface(): ReactElement {
   }
 
   async function startRecording(): Promise<void> {
-    if (!canRecord || busy || recording) return;
+    if (!canRecord || busy || recording || microphonePending) return;
+    const generation = ++microphoneGenerationRef.current;
+    setMicrophonePending(true);
+    setError("");
+    setVoiceStatus("Запрашиваю доступ к микрофону…");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (generation !== microphoneGenerationRef.current || mode !== "voice") {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       streamRef.current = stream;
       const mimeType = typeof MediaRecorder.isTypeSupported === "function"
         ? ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/webm", "audio/ogg"].find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? ""
@@ -342,12 +389,18 @@ export function CaptureSurface(): ReactElement {
       setRecording(true);
       setVoiceStatus("Идёт запись…");
     } catch {
-      setError("Не удалось получить доступ к microphone.");
+      if (generation === microphoneGenerationRef.current) {
+        clearAudioState();
+        setError("Не удалось получить доступ к microphone.");
+        setVoiceStatus("");
+      }
+    } finally {
+      if (generation === microphoneGenerationRef.current) setMicrophonePending(false);
     }
   }
 
   function stopRecording(): void {
-    if (recording && recorderRef.current) recorderRef.current.stop();
+    if (recording && recorderRef.current && recorderRef.current.state !== "inactive") recorderRef.current.stop();
   }
 
   function handleAudioFile(event: ChangeEvent<HTMLInputElement>): void {
@@ -378,24 +431,14 @@ export function CaptureSurface(): ReactElement {
     try {
       const transcript = await transcribeAudio(audioBlob, audioType || audioBlob.type || "audio/webm");
       setText(transcript.transcript.text);
+      clearAudioState();
       setMode("text");
-      await makeDraftFromText(transcript.transcript.text);
+      setStatus("Проверь расшифровку и затем создай черновик.");
     } catch (caught) {
       setError(responseError(caught, "Не удалось распознать audio."));
       setVoiceStatus("");
     } finally {
       setBusy(false);
-    }
-  }
-
-  async function makeDraftFromText(value: string): Promise<void> {
-    setStatus("Создаю черновик из transcript…");
-    try {
-      setDraftResponse(await createTextDraft(value));
-      setStatus("Черновик готов к проверке.");
-    } catch (caught) {
-      setError(responseError(caught, "Не удалось создать черновик."));
-      setStatus("");
     }
   }
 
@@ -408,7 +451,7 @@ export function CaptureSurface(): ReactElement {
         <p id="add-description">Получи структурированный черновик из текста, голоса или публичной страницы.</p>
         {!draftResponse ? <div className="capture-panel" data-capture-panel aria-busy={busy}>
           <div className="mode-switch" role="group" aria-label="Режим добавления">
-            {(["url", "text", "voice"] as const).map((item) => <button className={`mode-button${mode === item ? " is-active" : ""}`} key={item} type="button" disabled={busy} aria-pressed={mode === item} onClick={() => { setMode(item); setError(""); }}>{item === "url" ? "URL" : item === "text" ? "Text" : "Voice"}</button>)}
+            {(["url", "text", "voice"] as const).map((item) => <button className={`mode-button${mode === item ? " is-active" : ""}`} key={item} type="button" disabled={busy || microphonePending} aria-pressed={mode === item} onClick={() => { if (item !== "voice") clearAudioState(); setMode(item); setError(""); }}>{item === "url" ? "URL" : item === "text" ? "Text" : "Voice"}</button>)}
           </div>
           {mode !== "voice" ? <form className="capture-form" aria-describedby="add-description" onSubmit={(event) => void handleSubmit(event)}>
             <label className="capture-label" htmlFor={mode === "url" ? "source-input" : "text-input"}>{mode === "url" ? "Публичный URL" : "Текст материала"}</label>
@@ -416,13 +459,13 @@ export function CaptureSurface(): ReactElement {
             <div className="capture-actions"><button className="capture-submit" type="submit" disabled={busy} aria-busy={busy}>{busy ? "Создаю…" : "Создать черновик"}</button><span className="capture-status" role="status" aria-live="polite">{status}</span></div>
           </form> : <section className="voice-panel" aria-labelledby="voice-title" aria-describedby="voice-description">
             <div><p className="voice-kicker">Голосовой вход</p><h3 id="voice-title">Скажи, что хочешь сохранить</h3><p id="voice-description" className="voice-description">Запиши короткую заметку или выбери audio-файл. После распознавания проверь текст перед созданием черновика.</p></div>
-            <div className="voice-actions"><button className="voice-button voice-button-primary" type="button" disabled={busy || recording || !canRecord} onClick={() => void startRecording()}>Записать голос</button><button className="voice-button voice-button-secondary" type="button" disabled={busy || !recording} hidden={!recording} onClick={stopRecording}>Остановить</button><label className="voice-file-label">Выбрать audio-файл<input ref={fileInputRef} className="voice-file-input" type="file" accept={AUDIO_TYPES.join(",")} disabled={busy || recording} onChange={handleAudioFile} /></label><button className="voice-button voice-button-primary" type="button" disabled={busy || recording || !audioBlob} onClick={() => void handleTranscribe()}>Распознать</button></div>
+            <div className="voice-actions"><button className="voice-button voice-button-primary" type="button" disabled={busy || recording || microphonePending || !canRecord} onClick={() => void startRecording()}>Записать голос</button><button className="voice-button voice-button-secondary" type="button" disabled={busy || !recording} hidden={!recording} onClick={stopRecording}>Остановить</button><label className="voice-file-label">Выбрать audio-файл<input ref={fileInputRef} className="voice-file-input" type="file" accept={AUDIO_TYPES.join(",")} disabled={busy || recording || microphonePending} onChange={handleAudioFile} /></label><button className="voice-button voice-button-primary" type="button" disabled={busy || recording || microphonePending || !audioBlob} onClick={() => void handleTranscribe()}>Распознать</button></div>
             <p className="voice-status" role="status" aria-live="polite">{voiceStatus}</p>
           </section>}
           {error ? <ErrorMessage message={error} /> : null}
         </div> : <>
           <p className="capture-status" role="status" aria-live="polite">{status}</p>
-          <DraftReview response={draftResponse} onReset={resetReview} />
+          <DraftReview response={draftResponse} onReset={resetReview} allowPersonalMemory={draftResponse.sources.length === 0} />
         </>}
       </div>
     </section>

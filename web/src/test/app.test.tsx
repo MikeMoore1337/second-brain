@@ -3,6 +3,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
+import * as api from "../api";
+import { CaptureSurface } from "../parity";
 
 let root: Root | undefined;
 
@@ -19,6 +21,16 @@ async function renderApp(): Promise<HTMLDivElement> {
   root = createRoot(host);
   await act(async () => {
     root?.render(<App />);
+  });
+  return host;
+}
+
+async function renderCapture(): Promise<HTMLDivElement> {
+  const host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  await act(async () => {
+    root?.render(<CaptureSurface />);
   });
   return host;
 }
@@ -75,5 +87,48 @@ describe("React Web parity shell", () => {
       resolve?.(new Response(JSON.stringify({ items: [], exclusions: [], candidate_count: 0, included_count: 0, excluded_count: 0 }), { status: 200 }));
     });
     expect(host.querySelector("[data-self-retrieval-surface]")?.getAttribute("aria-busy")).toBe("false");
+  });
+
+  it("keeps Personal Memory opt-in only for source-free drafts", async () => {
+    vi.spyOn(api, "createUrlDraft").mockResolvedValue({
+      review_token: "review",
+      draft: { title: "URL", note_type: "resource", content: "content", tags: [], links: [] },
+      sources: [{ uri: "https://example.test", kind: "web" }],
+    });
+    const host = await renderCapture();
+    const input = host.querySelector<HTMLInputElement>("#source-input");
+    const form = host.querySelector<HTMLFormElement>(".capture-form");
+    expect(input).not.toBeNull();
+    expect(form).not.toBeNull();
+    if (!input || !form) return;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(input, "example.test");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    expect(host.querySelector(".review-editor")).not.toBeNull();
+    expect(host.querySelector(".personal-memory-panel")).toBeNull();
+  });
+
+  it("leaves Voice transcript in Text mode for explicit draft submission", async () => {
+    const transcribe = vi.spyOn(api, "transcribeAudio").mockResolvedValue({ transcript: { text: "Проверь меня" } });
+    const createDraft = vi.spyOn(api, "createTextDraft");
+    const host = await renderCapture();
+    const voiceButton = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent === "Voice");
+    expect(voiceButton).not.toBeUndefined();
+    await act(async () => voiceButton?.click());
+    const fileInput = host.querySelector<HTMLInputElement>("input[type='file']");
+    expect(fileInput).not.toBeNull();
+    if (!fileInput) return;
+    const file = new File(["audio"], "note.webm", { type: "audio/webm" });
+    Object.defineProperty(fileInput, "files", { configurable: true, value: [file] });
+    await act(async () => fileInput.dispatchEvent(new Event("change", { bubbles: true })));
+    const transcribeButton = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent === "Распознать");
+    expect(transcribeButton).not.toBeUndefined();
+    await act(async () => transcribeButton?.click());
+    expect(transcribe).toHaveBeenCalledOnce();
+    expect(createDraft).not.toHaveBeenCalled();
+    expect(host.querySelector<HTMLTextAreaElement>("#text-input")?.value).toBe("Проверь меня");
   });
 });
