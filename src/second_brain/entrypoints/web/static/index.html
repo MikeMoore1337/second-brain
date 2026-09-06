@@ -2,7 +2,7 @@
 <html lang="ru">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#07070b" />
     <title>Second Brain — Memory + Growth</title>
     <link rel="stylesheet" href="/static/app.css" />
@@ -24,19 +24,29 @@
             <span class="brand-name">Second Brain</span>
           </span>
         </a>
-        <nav class="topnav" aria-label="Основные разделы">
-          <a href="#timeline">Timeline</a>
-          <a href="#self-model">Self Model</a>
-          <a href="#simulate-me">Simulate Me</a>
-          <a href="#self-retrieval">Self Retrieval</a>
-          <a href="#search">Search</a>
-          <a href="#memory">Memory</a>
-          <a href="#growth">Growth</a>
-        </nav>
-        <span class="status-pill"><span aria-hidden="true"></span> Local foundation</span>
       </header>
 
-      <main id="main-content">
+      <div class="workspace-frame">
+        <aside class="workspace-rail" aria-label="Навигация рабочего пространства">
+          <div class="rail-intro">
+            <span class="rail-kicker">Workspace map</span>
+            <span class="rail-title">Signal field</span>
+          </div>
+          <nav class="topnav" aria-label="Основные разделы">
+            <a href="#decision-journal">Decision Journal</a>
+            <a href="#timeline">Timeline</a>
+            <a href="#self-model">Self Model</a>
+            <a href="#simulate-me">Simulate Me</a>
+            <a href="#self-retrieval">Self Retrieval</a>
+            <a href="#search">Search</a>
+            <a href="#memory">Memory</a>
+            <a href="#growth">Growth</a>
+          </nav>
+          <span class="status-pill"><span aria-hidden="true"></span> Local foundation</span>
+        </aside>
+
+        <div class="workspace-content">
+          <main id="main-content">
         <section class="hero" aria-labelledby="hero-title">
           <div class="hero-copy">
             <p class="eyebrow">Memory <span aria-hidden="true">+</span> Growth</p>
@@ -591,13 +601,15 @@
             </article>
           </div>
         </section>
-      </main>
+          </main>
 
-      <footer class="footer">
-        <span>Local by default</span>
-        <span class="footer-line" aria-hidden="true"></span>
-        <span>Private knowledge, deliberate growth</span>
-      </footer>
+          <footer class="footer">
+            <span>Local by default</span>
+            <span class="footer-line" aria-hidden="true"></span>
+            <span>Private knowledge, deliberate growth</span>
+          </footer>
+        </div>
+      </div>
     </div>
   </body>
 </html>
