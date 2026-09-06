@@ -20,7 +20,7 @@ const navigation = [
   ["#self-retrieval", "Self Retrieval", "self-retrieval"],
   ["#search", "Search", "search"],
   ["#memory", "Memory", "memory"],
-  ["#growth", "Growth", "simulate"],
+  ["#growth", "Growth", "growth"],
 ] as const;
 
 export function App(): ReactElement {

@@ -40,7 +40,7 @@ pack не добавлен: у текущего GUI нет объективно�
 
 | Семантика | Local name | Где используется/зарезервировано |
 | --- | --- | --- |
-| главная навигация | `decision`, `timeline`, `self-model`, `simulate`, `self-retrieval`, `search`, `memory` | workspace rail |
+| главная навигация | `decision`, `timeline`, `self-model`, `simulate`, `self-retrieval`, `search`, `memory`, `growth` | workspace rail |
 | добавить / захват | `add`, `capture` | Capture entry и будущие capture affordances |
 | URL / текст / голос | `url`, `text`, `voice` | режимы capture |
 | Personal Memory | `memory` | memory route |

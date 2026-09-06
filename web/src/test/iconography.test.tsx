@@ -6,6 +6,7 @@ import { ICON_NAMES, Icon } from "../icons";
 describe("local icon system", () => {
   it("ships the bounded semantic mapping as local currentColor SVG", () => {
     expect(ICON_NAMES).toContain("decision");
+    expect(ICON_NAMES).toContain("growth");
     expect(ICON_NAMES).toContain("self-retrieval");
     expect(ICON_NAMES).toContain("relation");
     const markup = renderToStaticMarkup(<Icon name="search" />);
