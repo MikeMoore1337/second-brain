@@ -1041,6 +1041,8 @@ context и derived explanation divergence.
 
 ### Stage 6 — Simulate Me v1
 
+- **Статус:** design gate `HUMAN_REQUIRED`; bounded memo и A/B/C choices
+  находятся в [simulate-me-v1-contract.md](simulate-me-v1-contract.md).
 - **Цель:** predict likely user choice from current evidence, without calling it
   recommendation.
 - **Входные зависимости:** Stage 4 Self Model and Stage 5 current context;
