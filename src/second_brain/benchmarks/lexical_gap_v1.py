@@ -40,6 +40,7 @@ PROJECT_BETA_ID: Final[UUID] = UUID("0198f4c5-6a00-7000-8000-000000000011")
 JOGGING_ID: Final[UUID] = UUID("0198f4c5-6a00-7000-8000-000000000012")
 MUTABLE_ID: Final[UUID] = UUID("0198f4c5-6a00-7000-8000-000000000013")
 DELETED_ID: Final[UUID] = UUID("0198f4c5-6a00-7000-8000-000000000014")
+_MUTABLE_CURRENT_BODY: Final[str] = "mutable context current body.\n"
 
 _Scenario = Literal["live", "stale_body", "deleted_candidate"]
 
@@ -193,7 +194,7 @@ def run_benchmark() -> LexicalGapReport:
             _create_synthetic_vault(case_root)
             hits = _search_synthetic(case_root, case)
             if case.scenario == "stale_body":
-                _rewrite_note(case_root, MUTABLE_ID, "mutable context current body.")
+                _rewrite_note(case_root, MUTABLE_ID, _MUTABLE_CURRENT_BODY.rstrip("\n"))
             elif case.scenario == "deleted_candidate":
                 _delete_note(case_root, DELETED_ID)
             result = _build_current_context(case_root, case, hits)
@@ -398,9 +399,14 @@ def _measure_case(
     for rank, hit in enumerate(hits, start=1):
         item = item_by_rank.get(rank)
         if item is not None:
-            outcome = (
-                "stale_body_refreshed" if case.scenario == "stale_body" else "included_current"
-            )
+            if case.scenario == "stale_body":
+                outcome = (
+                    "stale_body_refreshed"
+                    if item.body == _MUTABLE_CURRENT_BODY
+                    else "stale_body_not_refreshed"
+                )
+            else:
+                outcome = "included_current"
         else:
             exclusion = exclusion_by_rank[rank]
             outcome = exclusion.reason.value
@@ -411,19 +417,25 @@ def _measure_case(
         correctness = (
             expected_match
             and len(result.items) == 1
-            and result.items[0].body == "mutable context current body.\n"
+            and result.items[0].body == _MUTABLE_CURRENT_BODY
             and not result.exclusions
         )
         failure_category = "stale_body_refreshed" if correctness else "stale_body_not_refreshed"
+    elif case.scenario == "deleted_candidate" and not hits:
+        correctness = None
+        failure_category = "lexical_miss"
     elif case.scenario == "deleted_candidate":
         correctness = (
             not result.items
             and len(result.exclusions) == 1
             and result.exclusions[0].reason is SelfContextExclusionReason.CANDIDATE_NOT_FOUND
         )
-        failure_category = (
-            "deleted_candidate_excluded" if correctness else "deleted_candidate_resurrected"
-        )
+        if correctness:
+            failure_category = "deleted_candidate_excluded"
+        elif str(DELETED_ID) in actual_set:
+            failure_category = "deleted_candidate_resurrected"
+        else:
+            failure_category = "deleted_candidate_boundary_regression"
     elif expected_set and not expected_set.issubset(actual_set):
         correctness = None
         failure_category = "lexical_miss"
