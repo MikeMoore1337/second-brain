@@ -6,6 +6,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CSS_PATH = PROJECT_ROOT / "src" / "second_brain" / "entrypoints" / "web" / "static" / "app.css"
+INDEX_PATH = PROJECT_ROOT / "src" / "second_brain" / "entrypoints" / "web" / "static" / "index.html"
 
 
 def _css() -> str:
@@ -116,3 +117,11 @@ def test_accessibility_and_responsive_roles_are_wired() -> None:
     assert "--sb-breakpoint-stack: 760px" in css
     assert "@media (max-width: 760px)" in css
     assert "prefers-reduced-motion" in css
+
+
+def test_mobile_browser_chrome_matches_the_page_ground() -> None:
+    """The mobile theme color does not reintroduce the retired green palette."""
+
+    index = INDEX_PATH.read_text(encoding="utf-8")
+    assert '<meta name="theme-color" content="#07070b" />' in index
+    assert "#0f1716" not in index

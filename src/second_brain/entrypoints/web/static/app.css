@@ -314,7 +314,7 @@ a {
 
 .orbit {
   position: absolute;
-  border: 1px solid rgb(var(--sb-rgb-success) / 0.28);
+  border: 1px solid rgb(var(--sb-rgb-violet-signal) / 0.28);
   border-radius: 50%;
   transform: rotate(-26deg) skewX(-8deg);
 }
@@ -326,7 +326,7 @@ a {
 
 .orbit-inner {
   inset: 48px 28px;
-  border-color: rgb(var(--sb-rgb-success) / 0.35);
+  border-color: rgb(var(--sb-rgb-violet-signal) / 0.35);
   transform: rotate(38deg) skewX(12deg);
 }
 
@@ -528,9 +528,9 @@ a {
   gap: 16px;
   margin-top: 18px;
   padding: 16px;
-  border: 1px solid rgb(var(--sb-rgb-success) / 0.25);
+  border: 1px solid rgb(var(--sb-rgb-violet-signal) / 0.25);
   border-radius: 14px;
-  background: rgb(var(--sb-rgb-success) / 0.06);
+  background: rgb(var(--sb-rgb-violet-signal) / 0.06);
 }
 
 .voice-panel h3 {
@@ -995,7 +995,7 @@ textarea#review-content {
   padding: 17px;
   border: 1px solid rgb(var(--sb-rgb-success) / 0.3);
   border-radius: 12px;
-  background: rgb(var(--sb-rgb-success) / 0.06);
+  background: var(--sb-gradient-surface-success);
 }
 
 .save-plan h4,
@@ -1615,9 +1615,9 @@ textarea#review-content {
 .search-surface {
   margin-top: 96px;
   padding: 30px;
-  border: 1px solid rgb(var(--sb-rgb-success) / 0.26);
+  border: 1px solid rgb(var(--sb-rgb-violet-signal) / 0.26);
   border-radius: var(--sb-radius-lg);
-  background: var(--sb-gradient-surface-success);
+  background: var(--sb-gradient-surface-violet);
 }
 
 .search-form {
@@ -1762,9 +1762,9 @@ textarea#review-content {
 .self-retrieval-surface {
   margin-top: 96px;
   padding: 30px;
-  border: 1px solid rgb(var(--sb-rgb-success) / 0.26);
+  border: 1px solid rgb(var(--sb-rgb-violet-signal) / 0.26);
   border-radius: var(--sb-radius-lg);
-  background: var(--sb-gradient-surface-success);
+  background: var(--sb-gradient-surface-violet);
 }
 
 .self-retrieval-lede {
@@ -1960,7 +1960,7 @@ textarea#review-content {
 }
 
 .pillar-card-memory {
-  background: var(--sb-gradient-surface-success);
+  background: var(--sb-gradient-surface-violet);
 }
 
 .pillar-card-growth {
@@ -1983,9 +1983,9 @@ textarea#review-content {
 .card-dot {
   width: 9px;
   height: 9px;
-  border: 1px solid var(--sb-color-success);
+  border: 1px solid var(--sb-color-violet-signal);
   border-radius: 50%;
-  background: rgb(var(--sb-rgb-success) / 0.3);
+  background: rgb(var(--sb-rgb-violet-signal) / 0.3);
 }
 
 .pillar-card-growth .card-dot {
