@@ -30,6 +30,7 @@ if (selfModelSurface) {
     error.textContent = displayValue(message, "Не удалось построить Self Model.");
     error.hidden = false;
     status.textContent = "";
+    error.focus({ preventScroll: true });
   };
 
   const clearFeedback = () => {
@@ -40,6 +41,7 @@ if (selfModelSurface) {
 
   const setBusy = (value) => {
     busy = value;
+    selfModelSurface.setAttribute("aria-busy", String(value));
     refreshButton.disabled = value;
     refreshButton.setAttribute("aria-busy", String(value));
     if (value) {

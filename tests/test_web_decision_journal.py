@@ -1088,9 +1088,10 @@ def test_ui_journal_is_separate_storage_free_and_shows_search_ids() -> None:
     assert "data-decision-journal-surface" in html
     assert 'data-journal-mode="decision"' in html
     assert 'data-journal-mode="outcome"' in html
-    decision_form = html.split('<form class="journal-form" data-decision-form>', 1)[1].split(
-        "</form>", 1
-    )[0]
+    decision_form = html.split(
+        '<form id="decision-form" class="journal-form" data-decision-form>',
+        1,
+    )[1].split("</form>", 1)[0]
     assert "Actual result" not in decision_form
     assert "Reassessment" not in decision_form
     assert "/api/drafts/decision-journal/save/prepare" in javascript

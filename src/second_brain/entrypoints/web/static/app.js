@@ -94,6 +94,7 @@ if (panel) {
     error.textContent = textValue(message, "Не удалось выполнить операцию.");
     error.hidden = false;
     status.textContent = "";
+    error.focus({ preventScroll: true });
   };
 
   const clearFeedback = () => {
@@ -200,6 +201,7 @@ if (panel) {
 
   const setLoading = (loading) => {
     busy = loading;
+    panel.setAttribute("aria-busy", String(loading));
     setCaptureLoading(loading);
     setReviewLoading(loading);
     if (loading) {
@@ -308,6 +310,7 @@ if (panel) {
   const createEditor = (draft, allowPersonalMemory) => {
     const section = document.createElement("section");
     section.className = "review-editor";
+    section.setAttribute("aria-busy", "false");
     const heading = document.createElement("h4");
     heading.textContent = "Проверь и отредактируй";
     section.append(heading);
@@ -366,6 +369,7 @@ if (panel) {
       personalMemoryToggle.id = "personal-memory-toggle";
       personalMemoryToggle.dataset.personalMemoryToggle = "";
       personalMemoryToggle.setAttribute("aria-controls", "personal-memory-fields");
+      personalMemoryToggle.setAttribute("aria-expanded", "false");
       const toggleText = document.createElement("span");
       toggleText.textContent = "Сохранить как Personal Memory";
       toggleLabel.append(personalMemoryToggle, toggleText);
@@ -477,6 +481,7 @@ if (panel) {
       const syncPersonalMemoryVisibility = () => {
         const enabled = personalMemoryToggle.checked;
         metadataFields.hidden = !enabled;
+        personalMemoryToggle.setAttribute("aria-expanded", String(enabled));
         personalMemoryEvidenceKind.required = enabled;
         personalMemorySelfKind.required = enabled;
         personalMemoryTimeMode.required = enabled;
@@ -569,10 +574,12 @@ if (panel) {
     section.append(previewStatus);
     const preview = document.createElement("div");
     preview.className = "markdown-preview";
+    preview.tabIndex = -1;
     preview.hidden = true;
     section.append(preview);
     const plan = document.createElement("section");
     plan.className = "save-plan";
+    plan.tabIndex = -1;
     plan.hidden = true;
     section.append(plan);
 
@@ -653,6 +660,7 @@ if (panel) {
       diff.textContent = payload.diff;
       plan.append(planHeading, planFields, explanation, diffHeading, diff);
       plan.hidden = false;
+      plan.focus({ preventScroll: true });
     };
 
     previewButton.addEventListener("click", async () => {
@@ -679,6 +687,7 @@ if (panel) {
         preview.innerHTML = html;
         preview.hidden = false;
         previewStatus.textContent = "Preview готов";
+        preview.focus({ preventScroll: true });
       } catch (_error) {
         setError("Сервис preview недоступен.");
         previewStatus.textContent = "";
@@ -794,6 +803,7 @@ if (panel) {
         confirmButton.hidden = true;
         const saved = document.createElement("section");
         saved.className = "saved-note";
+        saved.tabIndex = -1;
         const savedHeading = document.createElement("h4");
         savedHeading.textContent = "Сохранено";
         saved.append(savedHeading);
@@ -810,6 +820,7 @@ if (panel) {
         addField(savedFields, "Создано", payload.note.created);
         saved.append(savedFields);
         section.append(saved);
+        saved.focus({ preventScroll: true });
         status.textContent = savedAsPersonalMemory
           ? "Personal Memory сохранена"
           : "Заметка сохранена";
@@ -855,6 +866,7 @@ if (panel) {
       });
     }
     result.hidden = false;
+    result.focus({ preventScroll: true });
   };
 
   const setMode = (nextMode) => {
@@ -1125,6 +1137,7 @@ if (searchSurface) {
     searchError.textContent = searchTextValue(message, "Не удалось выполнить поиск.");
     searchError.hidden = false;
     searchStatus.textContent = "";
+    searchError.focus({ preventScroll: true });
   };
 
   const clearSearchFeedback = () => {
@@ -1135,6 +1148,7 @@ if (searchSurface) {
 
   const setSearchBusy = (busy) => {
     searchBusy = busy;
+    searchSurface.setAttribute("aria-busy", String(busy));
     searchInput.disabled = busy;
     searchSubmit.disabled = busy;
     searchSubmit.setAttribute("aria-busy", String(busy));
@@ -1211,6 +1225,7 @@ if (searchSurface) {
     body.textContent = searchTextValue(note.content, "");
     retrievedNote.append(bodyLabel, body);
     retrievedNote.hidden = false;
+    retrievedNote.focus({ preventScroll: true });
   };
 
   const openNote = async (noteId) => {

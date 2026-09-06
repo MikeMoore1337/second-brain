@@ -27,6 +27,7 @@ if (timelineSurface) {
     error.textContent = textValue(message, "Не удалось загрузить Timeline.");
     error.hidden = false;
     status.textContent = "";
+    error.focus({ preventScroll: true });
   };
 
   const clearFeedback = () => {
@@ -37,6 +38,7 @@ if (timelineSurface) {
 
   const setBusy = (value) => {
     busy = value;
+    timelineSurface.setAttribute("aria-busy", String(value));
     orderSelect.disabled = value;
     refreshButton.disabled = value;
     refreshButton.setAttribute("aria-busy", String(value));

@@ -81,6 +81,7 @@ if (decisionJournalSurface) {
     target.textContent = typeof message === "string" && message ? message : "Не удалось выполнить операцию.";
     target.hidden = false;
     statusTarget.textContent = "";
+    target.focus({ preventScroll: true });
   };
 
   const clearJournalError = (target) => {
@@ -98,6 +99,7 @@ if (decisionJournalSurface) {
 
   const setJournalBusy = (loading) => {
     journalBusy = loading;
+    decisionJournalSurface.setAttribute("aria-busy", String(loading));
     journalControls.forEach((control) => {
       const savedControl =
         (decisionSavedState && decisionForm.contains(control)) ||
@@ -282,6 +284,8 @@ if (decisionJournalSurface) {
     diff.textContent = payload.diff;
     plan.append(heading, fields, diffHeading, diff);
     plan.hidden = false;
+    plan.tabIndex = -1;
+    plan.focus({ preventScroll: true });
   };
 
   const renderSavedJournalNote = (target, payload, label, addOutcome) => {
@@ -321,6 +325,8 @@ if (decisionJournalSurface) {
       target.append(button);
     }
     target.hidden = false;
+    target.tabIndex = -1;
+    target.focus({ preventScroll: true });
   };
 
   const responseError = (payload, fallback) =>
