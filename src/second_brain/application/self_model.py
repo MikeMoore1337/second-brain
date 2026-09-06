@@ -505,6 +505,8 @@ def validate_self_model_result(
         )
         for claim in result.claims
     )
+    if any(claim.generated_at != result.generated_at for claim in claims):
+        raise SelfModelResultInvalidError()
     if claims != tuple(sorted(claims, key=_claim_sort_key)):
         raise SelfModelResultInvalidError()
     represented_ids = {

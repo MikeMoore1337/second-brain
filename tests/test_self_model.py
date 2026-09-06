@@ -40,6 +40,7 @@ from second_brain.application.self_model import (
     SelfModelTemporalContext,
     SelfModelVaultUnavailableError,
     validate_self_model_claim,
+    validate_self_model_result,
 )
 from second_brain.domain.models import (
     EvidenceAtPrecision,
@@ -524,6 +525,24 @@ def test_policy_fingerprint_is_present_and_result_is_reproducible(tmp_path: Path
     assert len(first.policy_fingerprint) == 64
     assert first.policy_fingerprint == first.policy_fingerprint.lower()
     assert first.derivation_version == DERIVATION_VERSION
+
+
+def test_result_validation_rejects_mixed_generation_times(tmp_path: Path) -> None:
+    vault = create_vault(tmp_path / "vault")
+    write_note(vault, "10 Projects/Preference.md", _note(PREFERENCE_ID, body="same"))
+    result = _build(vault)
+    mixed = replace(
+        result,
+        claims=(replace(result.claims[0], generated_at=datetime(2026, 9, 6, 11, tzinfo=UTC)),),
+    )
+
+    with pytest.raises(SelfModelResultInvalidError):
+        validate_self_model_result(
+            mixed,
+            request=SelfModelRequest(),
+            policy=DEFAULT_SELF_MODEL_POLICY,
+            expected_policy_fingerprint=result.policy_fingerprint,
+        )
 
 
 def test_rebuild_and_deletion_use_current_vault_without_derived_state(tmp_path: Path) -> None:
