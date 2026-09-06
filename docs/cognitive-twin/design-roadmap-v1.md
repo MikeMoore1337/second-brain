@@ -2,19 +2,23 @@
 
 Статус этого документа: **DESIGN / ROADMAP**. Personal Memory Contract v1,
 Stage 2 Decision Journal v1 core и Stage 3 Personal Timeline v1 core
-реализованы в текущем репозитории. Stage 4 Self Model пока представлен только
-design contract в [issue #81](https://github.com/MikeMoore1337/second-brain/issues/81)
-и [self-model-v1-contract.md](self-model-v1-contract.md); runtime не реализован.
-Owner-approved v1 contract фиксирует conservative direct-assertion policy;
-Self Retrieval, RAG, embeddings и prediction runtime остаются будущими slices.
+реализованы в текущем репозитории. Stage 4 Self Model core реализован в
+текущем `main`, а local Web Self Model остаётся read-only projection. Stage 5
+Self Retrieval имеет отдельный approved design contract в issue #88 и
+[self-retrieval-v1-contract.md](self-retrieval-v1-contract.md); core/Web/CLI
+runtime ещё не реализованы. Owner-approved v1 contracts фиксируют conservative
+direct-assertion и current-UUID retrieval policies; RAG, embeddings и
+prediction runtime остаются будущими slices.
 
-Базовая точка design для текущего Stage 4 contract — exact `origin/main`:
-`c9443a5b6ab9a2876130b9d103a63827733c80ff`.
+Базовая точка design для текущего Stage 4/5 status — exact `origin/main`:
+`e1067be7ffa0c5cfc89b6317ffdc8f68cccdb3de`.
 
 Issue #66 задаёт исходную архитектурную границу roadmap. Для текущего Stage 4
-Self Model scope и contract source of truth — issue #81; этот roadmap и новый
-contract описывают будущую архитектуру поверх существующих контрактов и не
-заменяют их.
+Self Model scope и contract source of truth — issue #81 и
+[self-model-v1-contract.md](self-model-v1-contract.md). Stage 5 contract source
+of truth — issue #88 и [self-retrieval-v1-contract.md](self-retrieval-v1-contract.md).
+Этот roadmap описывает status и sequencing поверх существующих contracts и не
+заменяет их.
 
 ## 1. Цель, инварианты и границы
 
@@ -694,6 +698,11 @@ EvidenceEdge
 
 ## 13. Self Retrieval поверх Search/Retrieval v1
 
+Approved bounded v1 contract для этой границы находится в
+[self-retrieval-v1-contract.md](self-retrieval-v1-contract.md). Следующий
+параграф сохраняет общую roadmap rationale; normative DTO, bounds, error
+taxonomy и build sequence определяются contract document.
+
 Существующая граница остаётся такой:
 
 ```text
@@ -986,10 +995,9 @@ context и derived explanation divergence.
 
 ### Stage 4 — Self Model v1
 
-- **Статус:** design contract в issue #81; Self Model runtime ещё не
-  реализован. Owner-approved conservative direct-assertion policy и точный
-  application contract зафиксированы в каноническом документе:
-  [self-model-v1-contract.md](self-model-v1-contract.md).
+- **Статус:** merged Self Model core и local read-only Web projection. Точный
+  owner-approved conservative direct-assertion policy и application contract
+  зафиксированы в [self-model-v1-contract.md](self-model-v1-contract.md).
 - **Цель:** построить evidence-backed direct assertion claims о reviewed
   preferences, beliefs и goals; behavioral patterns и decision rules deferred.
 - **Входные зависимости:** Stage 1 evidence semantics, Stage 2 journal и
@@ -1011,6 +1019,9 @@ context и derived explanation divergence.
 
 ### Stage 5 — Self Retrieval v1
 
+- **Статус:** approved design contract issue #88; core ещё не реализован.
+  Normative DTO, current-reread rules, bounds, safe errors и test matrix — в
+  [self-retrieval-v1-contract.md](self-retrieval-v1-contract.md).
 - **Цель:** собрать personal context поверх current Search/Retrieval без
   превращения index hit в truth.
 - **Входные зависимости:** existing `SearchIndexPort`/`RetrieveManagedNote`,
@@ -1277,17 +1288,17 @@ write-back, schema bump, new dependencies, new note type, domain registry,
 psychological profiling, live smoke, production deployment, issue creation и
 любые изменения `second-brain-vault`.
 
-# EXACT NEXT IMPLEMENTATION SCOPE:
+# CURRENT NEXT IMPLEMENTATION SCOPE:
 
-## Self Model v1 core (#82)
+## Self Retrieval v1 core (#89)
 
-Следующим implementation slice является только [issue #82](https://github.com/MikeMoore1337/second-brain/issues/82)
-и только после выполнения его hard dependency gate: #81 merged/closed, без
-изменения exact owner-approved Self Model policy, с policy fingerprint и
-merged contract в current main.
+Следующим implementation slice является только [issue #89](https://github.com/MikeMoore1337/second-brain/issues/89)
+и только после того, как этот approved design contract из #88 находится в
+current `main` без `HUMAN_REQUIRED`. #89 должен оставаться механической
+реализацией [self-retrieval-v1-contract.md](self-retrieval-v1-contract.md):
+lexical candidates, current UUID reread, bounded context DTO, exact supporting
+UUID links и safe errors.
 
-До merge/close #81 #82 остаётся `BLOCKED`; этот PR #82 не начинает. Runtime,
-Web Self Model, Self Retrieval, embeddings, inference write-back и новые
-canonical fields не входят в этот PR.
-Механическая граница и полный test matrix зафиксированы в
-[self-model-v1-contract.md](self-model-v1-contract.md), разделы 16-17.
+После merge #89 dependency-gated slices — thin local Web #90 и CLI #91.
+Embeddings, RAG, prediction, inference write-back, canonical fields и
+`second-brain-vault` changes в эти slices не входят.

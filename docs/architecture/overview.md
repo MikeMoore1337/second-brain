@@ -494,14 +494,30 @@ persistence, cache, watcher, cursor или write capability: `generated_at` —
 
 ## Self Model v1 design contract
 
-Stage 4 Self Model пока является только design/contract task из issue #81.
-Точный proposed application DTO, canonical/derived boundary, evidence
-eligibility, owner-approved direct-assertion policy, fail-closed behavior,
-privacy constraints и `#82` implementation matrix находятся в
-[self-model-v1-contract.md](../cognitive-twin/self-model-v1-contract.md).
-В репозитории нет Self Model runtime, Web surface, persistent profile или
-inference write-back; этот PR #82 не начинает, а до merge/close #81 он остаётся
-blocked.
+Stage 4 Self Model core и local Web projection уже merged после issue #81.
+Точный application DTO, canonical/derived boundary, evidence eligibility,
+owner-approved direct-assertion policy, fail-closed behavior и privacy
+constraints находятся в [self-model-v1-contract.md](../cognitive-twin/self-model-v1-contract.md).
+В репозитории нет persistent profile или inference write-back: Self Model
+остаётся rebuildable read model.
 
 Design-only roadmap будущего Personal Cognitive Twin:
 [design-roadmap-v1.md](../cognitive-twin/design-roadmap-v1.md).
+
+## Self Retrieval v1 design contract
+
+Stage 5 Self Retrieval пока является design-only boundary из issue #88.
+Approved contract находится в
+[self-retrieval-v1-contract.md](../cognitive-twin/self-retrieval-v1-contract.md).
+Он добавляет только bounded application composition над existing lexical
+Search, `SearchHit` как candidate и current UUID reread через
+`RetrieveManagedNote`; `SearchDocument`, `SearchHit`, `SearchIndexPort` и
+canonical vault semantics не изменяются.
+
+Final context item всегда строится из current `RetrievedNote`. Search snippet,
+ordinal rank и disposable index не являются evidence truth. Exact Self Model
+claim link допустим только через current supporting UUID и validated policy
+fingerprint. Stage 5 не выбирает relevance/confidence semantics, не вводит
+embeddings/RAG/provider, persistence/cache, prediction mode или write-back.
+Core #89, а затем thin local Web/CLI adapters #90/#91, остаются отдельными
+dependency-gated slices.
