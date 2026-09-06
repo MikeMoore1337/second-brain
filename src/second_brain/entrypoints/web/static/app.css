@@ -172,7 +172,7 @@ a {
 }
 
 .page-shell {
-  width: min(var(--sb-container-max), calc(100% - (2 * var(--sb-page-gutter))));
+  width: min(var(--sb-container-max), calc(100% - var(--sb-page-gutter) - var(--sb-page-gutter)));
   margin: 0 auto;
 }
 
