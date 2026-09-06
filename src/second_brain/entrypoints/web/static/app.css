@@ -145,6 +145,7 @@
 }
 
 html {
+  overflow-x: clip;
   scroll-behavior: smooth;
   scroll-padding-top: 24px;
 }
@@ -153,6 +154,7 @@ body {
   position: relative;
   isolation: isolate;
   min-width: var(--sb-layout-min-width);
+  overflow-x: clip;
   margin: 0;
   padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
     env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
@@ -316,7 +318,7 @@ a {
   color: var(--sb-color-text-secondary);
   font-size: var(--sb-type-control);
   text-decoration: none;
-  transition: color var(--sb-duration-short) var(--sb-ease-out);
+  transition: transform var(--sb-duration-press) var(--sb-ease-out);
 }
 
 .topnav a::before {
@@ -328,7 +330,6 @@ a {
   content: "";
 }
 
-.topnav a:hover,
 .topnav a:focus-visible {
   background: rgb(var(--sb-rgb-accent) / 0.08);
   color: var(--sb-color-text-primary);
@@ -545,7 +546,6 @@ a {
   text-transform: uppercase;
 }
 
-.mode-button:hover,
 .mode-button:focus-visible,
 .mode-button.is-active {
   border-color: rgb(var(--sb-rgb-accent) / 0.55);
@@ -681,7 +681,6 @@ a {
   color: var(--sb-color-on-accent);
 }
 
-.voice-button-primary:hover,
 .voice-button-primary:focus-visible {
   background: var(--sb-color-accent-hover);
 }
@@ -692,7 +691,6 @@ a {
   color: var(--sb-color-danger-strong);
 }
 
-.voice-button-secondary:hover,
 .voice-button-secondary:focus-visible {
   background: rgb(var(--sb-rgb-danger) / 0.18);
 }
@@ -739,7 +737,6 @@ a {
   font-weight: 800;
 }
 
-.capture-submit:hover,
 .capture-submit:focus-visible {
   background: var(--sb-color-accent-hover);
 }
@@ -1002,7 +999,6 @@ textarea#review-content {
   color: var(--sb-color-on-accent);
 }
 
-.review-button-primary:hover,
 .review-button-primary:focus-visible {
   background: var(--sb-color-accent-hover);
 }
@@ -1013,7 +1009,6 @@ textarea#review-content {
   color: var(--sb-color-success);
 }
 
-.review-button-secondary:hover,
 .review-button-secondary:focus-visible {
   background: rgb(var(--sb-rgb-success) / 0.18);
 }
@@ -1024,10 +1019,47 @@ textarea#review-content {
   color: var(--sb-color-text-secondary);
 }
 
-.review-button-quiet:hover,
 .review-button-quiet:focus-visible {
   border-color: var(--sb-color-text-secondary);
   color: var(--sb-color-text-primary);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .topnav a:hover {
+    background: rgb(var(--sb-rgb-accent) / 0.08);
+    color: var(--sb-color-text-primary);
+  }
+
+  .mode-button:hover {
+    border-color: rgb(var(--sb-rgb-accent) / 0.55);
+    background: rgb(var(--sb-rgb-accent) / 0.12);
+    color: var(--sb-color-accent);
+  }
+
+  .voice-button-primary:hover {
+    background: var(--sb-color-accent-hover);
+  }
+
+  .voice-button-secondary:hover {
+    background: rgb(var(--sb-rgb-danger) / 0.18);
+  }
+
+  .capture-submit:hover {
+    background: var(--sb-color-accent-hover);
+  }
+
+  .review-button-primary:hover {
+    background: var(--sb-color-accent-hover);
+  }
+
+  .review-button-secondary:hover {
+    background: rgb(var(--sb-rgb-success) / 0.18);
+  }
+
+  .review-button-quiet:hover {
+    border-color: var(--sb-color-text-secondary);
+    color: var(--sb-color-text-primary);
+  }
 }
 
 .review-status {
@@ -2143,20 +2175,20 @@ body::before {
   background: var(--sb-gradient-orbit);
   content: "";
   opacity: 0.34;
-  transform: translate3d(-1%, -1%, 0) scale(1.02);
+  transform: translate3d(-1%, -1%, 0);
   animation: sb-ambient-drift var(--sb-duration-ambient) var(--sb-ease-in-out)
-    infinite alternate;
+    1 alternate both;
 }
 
 @keyframes sb-ambient-drift {
   from {
     opacity: 0.28;
-    transform: translate3d(-1%, -1%, 0) scale(1.02);
+    transform: translate3d(-1%, -1%, 0);
   }
 
   to {
     opacity: 0.46;
-    transform: translate3d(1%, 1%, 0) scale(1.04);
+    transform: translate3d(1%, 1%, 0);
   }
 }
 
@@ -2166,12 +2198,7 @@ body::before {
 .voice-button,
 .voice-file-label,
 .review-button {
-  transition:
-    transform var(--sb-duration-press) var(--sb-ease-out),
-    background-color var(--sb-duration-short) var(--sb-ease-out),
-    border-color var(--sb-duration-short) var(--sb-ease-out),
-    color var(--sb-duration-short) var(--sb-ease-out),
-    box-shadow var(--sb-duration-short) var(--sb-ease-out);
+  transition: transform var(--sb-duration-press) var(--sb-ease-out);
 }
 
 .topnav a:active,
@@ -2184,20 +2211,15 @@ body::before {
 }
 
 :where(
-    .entry-point,
-    .capture-panel,
-    .journal-panel,
-    .timeline-panel,
-    .self-model-panel,
-    .simulate-me-panel,
-    .search-surface,
-    .self-retrieval-surface,
-    .pillar-card
+    [data-capture-panel],
+    [data-decision-journal-surface],
+    [data-timeline-surface],
+    [data-self-model-surface],
+    [data-simulate-me-surface],
+    [data-search-surface],
+    [data-self-retrieval-surface]
   ) {
-  transition:
-    border-color var(--sb-duration-short) var(--sb-ease-out),
-    box-shadow var(--sb-duration-short) var(--sb-ease-out),
-    background-color var(--sb-duration-short) var(--sb-ease-out);
+  transition: opacity var(--sb-duration-short) var(--sb-ease-out);
 }
 
 :where(
@@ -2226,6 +2248,7 @@ body::before {
   )[aria-busy="true"] {
   border-color: rgb(var(--sb-rgb-accent) / 0.46);
   box-shadow: 0 0 0 3px rgb(var(--sb-rgb-accent) / 0.08);
+  opacity: 0.96;
 }
 
 .capture-submit[aria-busy="true"],
@@ -2259,12 +2282,13 @@ body::before {
   }
 }
 
+/* Limit high-volume timeline and self-model refreshes to the first six items. */
 :where(
     .draft-result,
     .save-plan,
     .saved-note,
-    .timeline-item,
-    .self-model-claim,
+    .timeline-item:nth-child(-n + 6),
+    .self-model-claim:nth-child(-n + 6),
     .simulate-me-result,
     .search-hit,
     .retrieved-note,
@@ -2282,8 +2306,8 @@ body::before {
       .draft-result,
       .save-plan,
       .saved-note,
-      .timeline-item,
-      .self-model-claim,
+      .timeline-item:nth-child(-n + 6),
+      .self-model-claim:nth-child(-n + 6),
       .simulate-me-result,
       .search-hit,
       .retrieved-note,
@@ -2298,10 +2322,8 @@ body::before {
 
 .motion-details > summary {
   cursor: pointer;
-  transition: color var(--sb-duration-short) var(--sb-ease-out);
 }
 
-.motion-details > summary:hover,
 .motion-details > summary:focus-visible,
 .motion-details[open] > summary {
   color: var(--sb-color-accent);
@@ -2319,6 +2341,12 @@ body::before {
   .motion-details[open] > :not(summary) {
     opacity: 0;
     transform: translateY(calc(var(--sb-motion-distance) * -1));
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .motion-details > summary:hover {
+    color: var(--sb-color-accent);
   }
 }
 
@@ -2585,8 +2613,8 @@ body::before {
       .draft-result,
       .save-plan,
       .saved-note,
-      .timeline-item,
-      .self-model-claim,
+      .timeline-item:nth-child(-n + 6),
+      .self-model-claim:nth-child(-n + 6),
       .simulate-me-result,
       .search-hit,
       .retrieved-note,

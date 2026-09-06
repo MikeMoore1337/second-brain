@@ -26,9 +26,16 @@ def test_motion_tokens_and_ambient_layer_are_named_and_low_frequency() -> None:
     assert "body::before" in css
     assert "pointer-events: none;" in css
     assert "animation: sb-ambient-drift var(--sb-duration-ambient)" in css
+    assert "1 alternate both;" in css
+    assert "infinite alternate" not in css
     assert "@keyframes sb-ambient-drift" in css
     assert "transform: translate3d" in css
+    assert "overflow-x: clip;" in css
     assert "transition: all" not in css
+    assert "background-color var(--sb-duration-short)" not in css
+    assert "border-color var(--sb-duration-short)" not in css
+    assert "color var(--sb-duration-short)" not in css
+    assert "box-shadow var(--sb-duration-short)" not in css
     assert "scale(0)" not in css
 
 
@@ -40,8 +47,6 @@ def test_motion_primitives_cover_state_arrival_feedback_and_details() -> None:
         ".draft-result",
         ".save-plan",
         ".saved-note",
-        ".timeline-item",
-        ".self-model-claim",
         ".simulate-me-result",
         ".search-hit",
         ".retrieved-note",
@@ -53,10 +58,21 @@ def test_motion_primitives_cover_state_arrival_feedback_and_details() -> None:
     assert "@starting-style" in css
     assert ".motion-details > summary" in css
     assert ".motion-details[open] > :not(summary)" in css
+    assert ":nth-child(-n + 6)" in css
     assert '[aria-busy="true"]' in css
     assert "@keyframes sb-busy-pulse" in css
     assert ".topnav a:active" in css
     assert ".review-button:active:not(:disabled)" in css
+
+    motion_section = css.split("/* Motion system v1:", 1)[1].split("@media (max-width: 760px)", 1)[
+        0
+    ]
+    assert ".timeline-item:nth-child(-n + 6)" in motion_section
+    assert ".self-model-claim:nth-child(-n + 6)" in motion_section
+
+    reduced_motion_section = css.split("@media (prefers-reduced-motion: reduce)", 1)[1]
+    assert ".timeline-item:nth-child(-n + 6)" in reduced_motion_section
+    assert ".self-model-claim:nth-child(-n + 6)" in reduced_motion_section
 
 
 def test_motion_respects_touch_hover_and_reduced_motion_contracts() -> None:
@@ -65,6 +81,7 @@ def test_motion_respects_touch_hover_and_reduced_motion_contracts() -> None:
     css = _read("app.css")
 
     assert ":active" in css
+    assert "@media (hover: hover) and (pointer: fine)" in css
     assert "@media (prefers-reduced-motion: reduce)" in css
     assert "body::before {\n    animation: none;" in css
     assert "transition-duration: 0.01ms !important;" in css

@@ -67,5 +67,5 @@ def test_workspace_shell_keeps_touch_targets_and_motion_ownership_explicit() -> 
     assert "min-height: var(--sb-touch-target);" in css
     assert ".topnav a::before" in css
     assert "padding: 8px;" in css
-    assert "transition: color var(--sb-duration-short) var(--sb-ease-out);" in css
+    assert "transition: transform var(--sb-duration-press) var(--sb-ease-out);" in css
     assert "--sb-duration-ambient: 24s;" in css
