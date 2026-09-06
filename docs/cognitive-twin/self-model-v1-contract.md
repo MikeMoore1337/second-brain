@@ -1,10 +1,13 @@
 # Self Model v1 — contract
 
 Статус: **DESIGN / CONTRACT**, issue [#81](https://github.com/MikeMoore1337/second-brain/issues/81).
-Этот документ не добавляет Stage 4 runtime и не начинает issue
-[#82](https://github.com/MikeMoore1337/second-brain/issues/82). Он фиксирует
-границы и application contract с owner-approved conservative v1 policy, чтобы
-последующий #82 можно было реализовать механически.
+Stage 4 Self Model core и local Web read-only projection из #82/#85 уже
+merged; этот документ остаётся нормативным contract source для их bounded
+semantics. Историческая design-time boundary ниже фиксировала contract до
+реализации [#82](https://github.com/MikeMoore1337/second-brain/issues/82); она
+сохранена для объяснения исходного dependency gate и не отменяет merged status
+выше. Границы и application contract используют owner-approved conservative
+v1 policy.
 
 Исходная точка design: `origin/main`
 `c9443a5b6ab9a2876130b9d103a63827733c80ff`.

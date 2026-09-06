@@ -351,6 +351,13 @@ Workflow не выполняет pull, rebase, merge, reset, force push или a
 
 ## Архитектура
 
+Текущий Cognitive Twin status: Stage 1 Personal Memory, Stage 2 Decision
+Journal, Stage 3 Personal Timeline, Stage 4 Self Model и Stage 5 Self
+Retrieval реализованы как bounded reviewed/read-only projections. Stage 5
+включает core, local Web и CLI adapters; канонический vault остаётся единственным
+источником истины. Simulate Me, Compare, prediction, RAG и embeddings остаются
+будущими roadmap slices.
+
 См. [обзор архитектуры](docs/architecture/overview.md),
 [vault contract v1](docs/architecture/vault-contract-v1.md),
 [Self Model v1 design contract](docs/cognitive-twin/self-model-v1-contract.md)

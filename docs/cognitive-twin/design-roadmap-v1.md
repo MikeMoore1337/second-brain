@@ -4,14 +4,14 @@
 Stage 2 Decision Journal v1 core и Stage 3 Personal Timeline v1 core
 реализованы в текущем репозитории. Stage 4 Self Model core реализован в
 текущем `main`, а local Web Self Model остаётся read-only projection. Stage 5
-Self Retrieval имеет отдельный approved design contract в issue #88 и
-[self-retrieval-v1-contract.md](self-retrieval-v1-contract.md); core/Web/CLI
-runtime ещё не реализованы. Owner-approved v1 contracts фиксируют conservative
-direct-assertion и current-UUID retrieval policies; RAG, embeddings и
-prediction runtime остаются будущими slices.
+Self Retrieval также реализован bounded core/Web/CLI slices из #89, #90 и #91
+поверх approved contract issue #88; он остаётся read-only и current-UUID based.
+Owner-approved v1 contracts фиксируют conservative direct-assertion и
+current-UUID retrieval policies; RAG, embeddings и prediction runtime остаются
+будущими slices.
 
-Базовая точка design для текущего Stage 4/5 status — exact `origin/main`:
-`e1067be7ffa0c5cfc89b6317ffdc8f68cccdb3de`.
+Точный status snapshot перед этой docs reconciliation — current `main`:
+`3cc06db5b3490a0af9ebb9a1e14aac659b6e44f9`.
 
 Issue #66 задаёт исходную архитектурную границу roadmap. Для текущего Stage 4
 Self Model scope и contract source of truth — issue #81 и
@@ -1019,7 +1019,9 @@ context и derived explanation divergence.
 
 ### Stage 5 — Self Retrieval v1
 
-- **Статус:** approved design contract issue #88; core ещё не реализован.
+- **Статус:** core, local Web и CLI projections из #89/#90/#91 merged в
+  current `main`; approved normative contract issue #88 остаётся источником
+  границ и DTO.
   Normative DTO, current-reread rules, bounds, safe errors и test matrix — в
   [self-retrieval-v1-contract.md](self-retrieval-v1-contract.md).
 - **Цель:** собрать personal context поверх current Search/Retrieval без
@@ -1288,17 +1290,14 @@ write-back, schema bump, new dependencies, new note type, domain registry,
 psychological profiling, live smoke, production deployment, issue creation и
 любые изменения `second-brain-vault`.
 
-# CURRENT NEXT IMPLEMENTATION SCOPE:
+## Current implementation status after Stage 5
 
-## Self Retrieval v1 core (#89)
+Stage 1–3 core, Stage 4 Self Model core/Web projection и Stage 5
+Self Retrieval core/Web/CLI (#89/#90/#91) находятся в current `main`.
+Stage 5 сохраняет lexical candidates, current UUID reread, bounded context DTO,
+exact supporting UUID links и safe errors; он не добавляет embeddings, RAG,
+prediction, inference write-back, canonical fields или изменения
+`second-brain-vault`.
 
-Следующим implementation slice является только [issue #89](https://github.com/MikeMoore1337/second-brain/issues/89)
-и только после того, как этот approved design contract из #88 находится в
-current `main` без `HUMAN_REQUIRED`. #89 должен оставаться механической
-реализацией [self-retrieval-v1-contract.md](self-retrieval-v1-contract.md):
-lexical candidates, current UUID reread, bounded context DTO, exact supporting
-UUID links и safe errors.
-
-После merge #89 dependency-gated slices — thin local Web #90 и CLI #91.
-Embeddings, RAG, prediction, inference write-back, canonical fields и
-`second-brain-vault` changes в эти slices не входят.
+Нижеследующие Stage 6–8 остаются design/roadmap boundaries. Этот status sync
+не объявляет новый implementation scope и не меняет product semantics.
