@@ -99,6 +99,7 @@ SUPPORTED_RED_GATES: Final[frozenset[str]] = frozenset(
 )
 
 _CUTOFF_PATTERN: Final[re.Pattern[str]] = re.compile(r"(?:[01]\d|2[0-3]):[0-5]\d")
+_EXPECTED_BASE_REF: Final[str] = "main"
 _ACTIVE_STATES: Final[frozenset[TaskState]] = frozenset(
     {
         TaskState.IN_PROGRESS,
@@ -207,6 +208,10 @@ class MergeGateEvidence:
     review_verdict: NightShiftVerdict
     current_head_sha: str
     reviewed_head_sha: str
+    current_base_ref: str
+    reviewed_base_ref: str
+    current_base_sha: str
+    reviewed_base_sha: str
     check_evidence: Mapping[str, CheckRunEvidence]
     unresolved_review_threads: int
     accepted_blockers: int
@@ -351,6 +356,17 @@ def evaluate_merge_gate(policy: NightShiftPolicy, evidence: MergeGateEvidence) -
         return _human("review_verdict_is_human_required")
     if evidence.review_verdict is not NightShiftVerdict.MERGE_READY:
         return _blocked("review_verdict_is_not_merge_ready")
+    if (
+        evidence.current_base_ref != _EXPECTED_BASE_REF
+        or evidence.reviewed_base_ref != _EXPECTED_BASE_REF
+    ):
+        return _blocked("merge_target_ref_is_not_main")
+    if not _is_full_commit_sha(evidence.current_base_sha) or not _is_full_commit_sha(
+        evidence.reviewed_base_sha
+    ):
+        return _blocked("reviewed_base_sha_is_not_full_commit_sha")
+    if evidence.current_base_sha != evidence.reviewed_base_sha:
+        return _blocked("reviewed_base_sha_is_not_current_base")
     if not _is_full_commit_sha(evidence.current_head_sha) or not _is_full_commit_sha(
         evidence.reviewed_head_sha
     ):
