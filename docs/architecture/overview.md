@@ -25,8 +25,8 @@ FastAPI web entrypoint
 ```
 
 `second-brain web serve` запускает packaged HTML/CSS/JavaScript shell только на
-`127.0.0.1` (default port `8123`, опциональный bounded `--port`; `8000` остаётся
-доступным только как explicit override, например для YFC).
+`127.0.0.1` (порт по умолчанию `8123`, опциональный ограниченный `--port`; `8000`
+остаётся доступным только как явное переопределение, например для YFC).
 `--env-file` и `--vault-path` передаются в app object, но lazy Save service не
 загружает их до явной подготовки или применения Save. `create_app()` собирает только лёгкую
 production composition: credentials, research process, LLM worker и vault не

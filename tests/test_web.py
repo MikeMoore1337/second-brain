@@ -132,12 +132,12 @@ def test_web_serve_uses_fixed_loopback_and_fake_runner(
 
     monkeypatch.setattr("second_brain.entrypoints.cli.app.uvicorn.run", fake_run)
 
-    result = runner.invoke(app, ["web", "serve", "--port", "8123"])
+    result = runner.invoke(app, ["web", "serve", "--port", "8000"])
 
     assert result.exit_code == 0
     assert len(calls) == 1
     assert calls[0]["host"] == "127.0.0.1"
-    assert calls[0]["port"] == 8123
+    assert calls[0]["port"] == 8000
     assert "factory" not in calls[0]
     assert getattr(calls[0]["application"], "title", None) == "Second Brain"
 
