@@ -91,6 +91,16 @@ input:focus-visible {
   align-items: center;
 }
 
+.brand,
+.skip-link {
+  min-height: 44px;
+}
+
+.skip-link {
+  display: inline-flex;
+  align-items: center;
+}
+
 .signal-plane {
   position: relative;
   overflow: hidden;
@@ -229,6 +239,24 @@ input:focus-visible {
 
   .primary-control:active:not(:disabled),
   .secondary-control:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* Keep the tablet keyboard from triggering input zoom and reflow too. */
+@media (max-width: 1024px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 760px) {
+  /* Decorative drift is static on small GPUs; content and state remain unchanged. */
+  body::before {
+    animation: none;
+    opacity: 0.28;
     transform: none;
   }
 }
