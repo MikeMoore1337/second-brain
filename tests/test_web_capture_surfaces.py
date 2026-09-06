@@ -29,6 +29,7 @@ def test_capture_and_journal_surfaces_expose_one_review_first_route() -> None:
         'class="capture-panel-heading"',
         'class="journal-steps"',
         'data-journal-step="capture" aria-current="step"',
+        "01</span> Capture",
         'data-journal-step="review"',
         'data-journal-step="confirm"',
         "02</span> Dry-run diff",
