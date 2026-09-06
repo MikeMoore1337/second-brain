@@ -660,7 +660,7 @@ if (panel) {
       diff.textContent = payload.diff;
       plan.append(planHeading, planFields, explanation, diffHeading, diff);
       plan.hidden = false;
-      plan.focus({ preventScroll: true });
+      plan.scrollIntoView({ block: "nearest" });
     };
 
     previewButton.addEventListener("click", async () => {
@@ -687,7 +687,7 @@ if (panel) {
         preview.innerHTML = html;
         preview.hidden = false;
         previewStatus.textContent = "Preview готов";
-        preview.focus({ preventScroll: true });
+        preview.scrollIntoView({ block: "nearest" });
       } catch (_error) {
         setError("Сервис preview недоступен.");
         previewStatus.textContent = "";
@@ -738,6 +738,7 @@ if (panel) {
         confirmationToken = payload.confirmation_token;
         confirmButton.hidden = false;
         confirmButton.disabled = false;
+        confirmButton.focus({ preventScroll: true });
         previewStatus.textContent = "План подготовлен; проверь diff и подтверди сохранение.";
       } catch (_error) {
         setError("Сервис подготовки сохранения недоступен.");
@@ -1226,6 +1227,7 @@ if (searchSurface) {
     retrievedNote.append(bodyLabel, body);
     retrievedNote.hidden = false;
     retrievedNote.focus({ preventScroll: true });
+    retrievedNote.scrollIntoView({ block: "start" });
   };
 
   const openNote = async (noteId) => {

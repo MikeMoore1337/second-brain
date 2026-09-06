@@ -285,7 +285,7 @@ if (decisionJournalSurface) {
     plan.append(heading, fields, diffHeading, diff);
     plan.hidden = false;
     plan.tabIndex = -1;
-    plan.focus({ preventScroll: true });
+    plan.scrollIntoView({ block: "nearest" });
   };
 
   const renderSavedJournalNote = (target, payload, label, addOutcome) => {
@@ -428,6 +428,7 @@ if (decisionJournalSurface) {
       decisionConfirmationToken = payload.confirmation_token;
       decisionConfirm.hidden = false;
       decisionConfirm.disabled = false;
+      decisionConfirm.focus({ preventScroll: true });
       decisionStatus.textContent = "Проверь полный diff и подтверди сохранение.";
     } catch (_error) {
       setJournalError(decisionError, decisionStatus, "Сервис Decision Journal недоступен.");
@@ -510,6 +511,7 @@ if (decisionJournalSurface) {
       outcomeConfirmationToken = payload.confirmation_token;
       outcomeConfirm.hidden = false;
       outcomeConfirm.disabled = false;
+      outcomeConfirm.focus({ preventScroll: true });
       outcomeStatus.textContent = "Проверь полный diff и подтверди сохранение.";
     } catch (_error) {
       setJournalError(outcomeError, outcomeStatus, "Сервис Outcome недоступен.");

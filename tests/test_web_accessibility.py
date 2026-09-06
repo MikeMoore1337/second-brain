@@ -121,11 +121,23 @@ def test_hidden_states_focus_contract_and_reduced_motion_are_explicit() -> None:
     assert 'personalMemoryToggle.setAttribute("aria-expanded", "false")' in app_js
     assert 'personalMemoryToggle.setAttribute("aria-expanded", String(enabled))' in app_js
     assert "result.focus({ preventScroll: true })" in app_js
-    assert "preview.focus({ preventScroll: true })" in app_js
-    assert "plan.focus({ preventScroll: true })" in app_js
+    assert 'preview.scrollIntoView({ block: "nearest" })' in app_js
+    assert 'plan.scrollIntoView({ block: "nearest" })' in app_js
+    assert "confirmButton.focus({ preventScroll: true })" in app_js
     assert "saved.focus({ preventScroll: true })" in app_js
     assert "retrievedNote.focus({ preventScroll: true })" in app_js
+    assert 'retrievedNote.scrollIntoView({ block: "start" })' in app_js
     assert "target.focus({ preventScroll: true })" in journal_js
+
+    assert "decisionConfirm.focus({ preventScroll: true })" in journal_js
+    assert "outcomeConfirm.focus({ preventScroll: true })" in journal_js
+    assert 'plan.scrollIntoView({ block: "nearest" })' in journal_js
+
+    assert "const loadTimeline = async (userInitiated = false)" in timeline_js
+    assert "if (userInitiated)" in timeline_js
+    assert 'refreshButton.addEventListener("click", () => loadTimeline(true))' in timeline_js
+    assert 'orderSelect.addEventListener("change", () => loadTimeline(true))' in timeline_js
+    assert "loadTimeline();" in timeline_js
 
 
 def test_packaged_ui_stays_local_storage_free_and_keeps_safe_rendering() -> None:
