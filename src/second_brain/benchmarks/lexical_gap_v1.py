@@ -424,7 +424,7 @@ def _measure_case(
             and not result.exclusions
         )
         failure_category = "stale_body_refreshed" if correctness else "stale_body_not_refreshed"
-    elif case.scenario == "deleted_candidate" and not hits:
+    elif case.scenario == "deleted_candidate" and str(DELETED_ID) not in candidates:
         correctness = None
         failure_category = "lexical_miss"
     elif case.scenario == "deleted_candidate":
