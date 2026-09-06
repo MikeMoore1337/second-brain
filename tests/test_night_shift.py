@@ -176,6 +176,32 @@ def test_selection_preserves_human_dependency_gate_when_no_independent_task_is_r
     assert result.status is GateStatus.HUMAN_REQUIRED
 
 
+def test_task_human_required_state_is_deferred_then_returned_without_ready_work() -> None:
+    human_task = TaskCandidate(
+        issue_number=81,
+        state=TaskState.HUMAN_REQUIRED,
+        risk_lane=RiskLane.YELLOW,
+        source=TaskSelectionSource.CURRENT_ACTIVE,
+    )
+    independent_task = TaskCandidate(
+        issue_number=79,
+        state=TaskState.QUEUED,
+        risk_lane=RiskLane.GREEN,
+        source=TaskSelectionSource.OVERNIGHT_QUEUED,
+    )
+
+    selected, ready = select_next_task(
+        policy(), (human_task, independent_task), night_mode_enabled=True
+    )
+    assert selected == independent_task
+    assert ready.status is GateStatus.READY
+
+    selected, human = select_next_task(policy(), (human_task,), night_mode_enabled=True)
+    assert selected is None
+    assert human.status is GateStatus.HUMAN_REQUIRED
+    assert human.reasons == ("task_has_human_required_gate",)
+
+
 def test_failure_budget_stops_review_loops_but_evidence_bound_flaky_retry_is_free() -> None:
     loaded = policy()
 
@@ -301,6 +327,16 @@ def test_merge_gate_requires_exact_reviewed_head_and_all_required_checks() -> No
         ),
     )
     assert pending_ci.status is GateStatus.BLOCKED
+
+
+def test_merge_gate_preserves_human_required_reviewer_verdict() -> None:
+    result = evaluate_merge_gate(
+        policy(),
+        _green_merge_evidence(review_verdict=NightShiftVerdict.HUMAN_REQUIRED),
+    )
+
+    assert result.status is GateStatus.HUMAN_REQUIRED
+    assert result.reasons == ("review_verdict_is_human_required",)
 
 
 def test_current_merge_ready_task_remains_before_later_candidates() -> None:

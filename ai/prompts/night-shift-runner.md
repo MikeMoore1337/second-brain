@@ -1,4 +1,4 @@
-# Night Shift runner prompt
+# Промпт исполнителя Night Shift
 
 Работай только в явно активированном overnight batch и в пределах repository policy [`config/night-shift-v1.yaml`](../../config/night-shift-v1.yaml).
 

@@ -242,7 +242,7 @@ def evaluate_task_start(
 
     if not night_mode_enabled:
         return _human("night_mode_not_explicitly_enabled")
-    if candidate.human_required:
+    if candidate.human_required or candidate.state is TaskState.HUMAN_REQUIRED:
         return _human("task_has_human_required_gate")
     if candidate.scope_expansions > policy.failure_budget.max_scope_expansion:
         return _human("scope_expansion_exceeds_budget")
@@ -292,7 +292,9 @@ def select_next_task(
             if result.status is GateStatus.READY:
                 return candidate, result
             if result.status is GateStatus.HUMAN_REQUIRED:
-                if result.reasons[0].startswith("dependency_"):
+                if result.reasons[0].startswith("dependency_") or result.reasons[0] == (
+                    "task_has_human_required_gate"
+                ):
                     deferred_human = deferred_human or result
                     continue
                 return None, result
@@ -339,6 +341,8 @@ def evaluate_merge_gate(policy: NightShiftPolicy, evidence: MergeGateEvidence) -
 
     if evidence.risk_lane is not RiskLane.GREEN:
         return _human(f"risk_lane_{evidence.risk_lane.value.lower()}_cannot_auto_merge")
+    if evidence.review_verdict is NightShiftVerdict.HUMAN_REQUIRED:
+        return _human("review_verdict_is_human_required")
     if evidence.review_verdict is not NightShiftVerdict.MERGE_READY:
         return _blocked("review_verdict_is_not_merge_ready")
     if not _is_full_commit_sha(evidence.current_head_sha) or not _is_full_commit_sha(

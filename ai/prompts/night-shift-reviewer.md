@@ -1,4 +1,4 @@
-# Night Shift independent reviewer prompt
+# Промпт независимой проверки Night Shift
 
 Проверь только текущий GitHub PR и его current head. Никогда не доверяй executor report без самостоятельной проверки.
 
