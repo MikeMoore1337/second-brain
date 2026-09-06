@@ -22,7 +22,7 @@ from second_brain.adapters.research.rss import PublicRssAdapter
 from second_brain.adapters.research.youtube import PublicYouTubeAdapter
 from second_brain.adapters.search import SqliteFts5SearchIndex
 from second_brain.adapters.vault import FileSystemVaultReader, FileSystemVaultWriter
-from second_brain.application.diagnostics import BuildDoctorReport, DoctorReport
+from second_brain.application.diagnostics import BuildDoctorReport, DoctorLayerStatus, DoctorReport
 from second_brain.application.draft_files import DraftFileError, read_note_draft_file
 from second_brain.application.llm import (
     DEFAULT_MAX_OUTPUT_BYTES,
@@ -1169,6 +1169,9 @@ def _render_doctor_text(report: DoctorReport) -> str:
     def _count(value: int | None) -> str:
         return "недоступно" if value is None else str(value)
 
+    def _layer(layer: DoctorLayerStatus) -> str:
+        return layer.status.value if layer.code is None else f"{layer.status.value} ({layer.code})"
+
     lines = [
         f"Статус: {report.status.value.upper()}",
         f"Сформирован: {report.generated_at.isoformat()}",
@@ -1180,9 +1183,9 @@ def _render_doctor_text(report: DoctorReport) -> str:
         f"Valid Decision Journal: {_count(report.valid_decision_count)}",
         f"Valid Outcome Observation: {_count(report.valid_outcome_count)}",
         f"Attachment bytes: {_count(report.attachment_bytes)}",
-        f"Timeline: {report.timeline.status.value}",
-        f"Self Model: {report.self_model.status.value}",
-        f"Self Retrieval: {report.self_retrieval.status.value}"
+        f"Timeline: {_layer(report.timeline)}",
+        f"Self Model: {_layer(report.self_model)}",
+        f"Self Retrieval: {_layer(report.self_retrieval)}"
         + (" (optional)" if not report.self_retrieval.required else ""),
         f"Ошибки: {report.error_count}; предупреждения: {report.warning_count}",
     ]

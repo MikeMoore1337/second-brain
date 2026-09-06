@@ -19,7 +19,7 @@ from second_brain.application.ports import (
     LlmErrorCode,
 )
 from second_brain.application.research import ResearchRequest, ResearchSource, SourceKind
-from second_brain.application.self_model import DERIVATION_VERSION
+from second_brain.application.self_model import DERIVATION_VERSION, MAX_SELF_MODEL_CLAIM_BYTES
 from second_brain.application.self_retrieval import (
     DEFAULT_MAX_CONTENT_BYTES,
     DEFAULT_SELF_CONTEXT_LIMIT,
@@ -320,6 +320,55 @@ def test_doctor_supports_json_output_and_returns_success(tmp_path: Path) -> None
     assert payload["notes"] == 1
     assert payload["manifest"]["schema_version"] == 1
     assert snapshot_tree(vault) == before
+
+
+def test_doctor_text_shows_bounded_derived_fields(tmp_path: Path) -> None:
+    vault = create_vault(tmp_path / "vault")
+    write_note(vault, "10 Projects/Note.md", managed_note())
+    before = snapshot_tree(vault)
+    env_file = tmp_path / "config" / ".env"
+    env_file.parent.mkdir()
+    env_file.write_text("SECOND_BRAIN_VAULT_PATH=../vault\n", encoding="utf-8")
+
+    result = runner.invoke(app, ["--env-file", str(env_file), "doctor"])
+
+    assert result.exit_code == 0
+    assert "Self Model: healthy" in result.stdout
+    assert "Attachment bytes: 0" in result.stdout
+    assert snapshot_tree(vault) == before
+
+
+def test_doctor_text_shows_derived_layer_code(tmp_path: Path) -> None:
+    vault = create_vault(tmp_path / "vault")
+    oversized_body = "🧠" * ((MAX_SELF_MODEL_CLAIM_BYTES // 4) + 1)
+    note = (
+        "\n".join(
+            (
+                "---",
+                "id: 0198f4c5-6a00-7000-8000-000000000010",
+                "type: zettel",
+                "created: 2026-09-02T12:00:00+03:00",
+                "tags: []",
+                "second_brain_personal_memory: 1",
+                "evidence_kind: user_statement",
+                "self_kind: preference",
+                'evidence_at: "2026-09-02T12:00:00+03:00"',
+                "evidence_at_precision: exact",
+                "---",
+                "",
+            )
+        )
+        + oversized_body
+        + "\n"
+    )
+    write_note(vault, "10 Projects/Oversized.md", note)
+    env_file = tmp_path / ".env"
+    env_file.write_text("SECOND_BRAIN_VAULT_PATH=vault\n", encoding="utf-8")
+
+    result = runner.invoke(app, ["--env-file", str(env_file), "doctor"])
+
+    assert result.exit_code == 1
+    assert "Self Model: degraded (SELF_MODEL_RESULT_TOO_LARGE)" in result.stdout
 
 
 def test_self_retrieval_json_is_exact_current_core_projection(

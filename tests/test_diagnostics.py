@@ -149,6 +149,27 @@ def test_doctor_support_root_failure_does_not_hide_content_counts(tmp_path: Path
     assert report.valid_outcome_count == 0
 
 
+def test_doctor_keeps_attachment_total_for_oversized_but_readable_file(tmp_path: Path) -> None:
+    vault = create_vault(tmp_path / "vault")
+    manifest = (vault / "second-brain.yaml").read_text(encoding="utf-8")
+    (vault / "second-brain.yaml").write_text(
+        manifest.replace("warning_size_bytes: 10485760", "warning_size_bytes: 1").replace(
+            "max_size_bytes: 52428800", "max_size_bytes: 1"
+        ),
+        encoding="utf-8",
+    )
+    (vault / "_attachments" / "large.bin").write_bytes(b"1234")
+
+    report = BuildDoctorReport(
+        FileSystemVaultReader(vault),
+        config_resolvable=True,
+        clock=lambda: GENERATED_AT,
+    ).execute()
+
+    assert report.attachment_bytes == 4
+    assert any(item.code == "ATTACHMENT_TOO_LARGE" for item in report.diagnostics)
+
+
 def test_doctor_derived_layers_replay_the_initial_snapshot_once(tmp_path: Path) -> None:
     vault = create_vault(tmp_path / "vault")
     write_note(vault, "10 Projects/Note.md", managed_note())

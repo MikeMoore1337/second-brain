@@ -48,6 +48,7 @@ _CONTENT_ROOT_FAILURE_CODES: Final[frozenset[str]] = frozenset(
         "VAULT_LINKED_DIRECTORY",
         "VAULT_OVERLAPPING_ROOTS",
         "VAULT_PATH_ESCAPE",
+        "VAULT_ROOT_MISSING",
     }
 )
 _CONTENT_ROOT_FIELDS: Final[tuple[str, ...]] = (
@@ -417,10 +418,10 @@ def _attachment_bytes_available(report: ScanReport) -> bool:
     for item in report.diagnostics:
         if item.severity is not DiagnosticSeverity.ERROR:
             continue
-        if item.code.startswith("ATTACHMENT_"):
-            return False
-        if item.code not in _ATTACHMENT_SCAN_FAILURE_CODES or item.path is None:
+        if item.code not in _ATTACHMENT_SCAN_FAILURE_CODES:
             continue
+        if item.path is None:
+            return False
         if _is_path_under(PurePosixPath(item.path), attachment_root):
             return False
     return True
@@ -447,7 +448,7 @@ def _diagnostic_affects_content_scope(item: Diagnostic, report: ScanReport) -> b
     if item.code == "VAULT_OVERLAPPING_ROOTS" and item.path is None:
         return _manifest_has_content_root_overlap(report)
     if item.path is None:
-        return True
+        return False
     candidate = PurePosixPath(item.path)
     return any(
         _is_path_under(candidate, getattr(report.manifest.paths, field))
