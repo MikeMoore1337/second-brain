@@ -21,6 +21,7 @@ runner = CliRunner()
 def test_doctor_report_is_healthy_bounded_and_read_only(tmp_path: Path) -> None:
     vault = create_vault(tmp_path / "vault")
     write_note(vault, "10 Projects/Note.md", managed_note())
+    (vault / "_attachments" / "small.bin").write_bytes(b"1234")
     before = snapshot_tree(vault)
 
     report = BuildDoctorReport(
@@ -35,14 +36,16 @@ def test_doctor_report_is_healthy_bounded_and_read_only(tmp_path: Path) -> None:
     assert report.enrolled_personal_memory_count == 0
     assert report.valid_decision_count == 0
     assert report.valid_outcome_count == 0
+    assert report.attachment_bytes == 4
     assert report.timeline.status is DoctorStatus.HEALTHY
     assert report.self_model.status is DoctorStatus.HEALTHY
-    assert report.self_retrieval.status is DoctorStatus.UNAVAILABLE
+    assert report.self_retrieval.status is DoctorStatus.HEALTHY
     assert report.self_retrieval.required is False
     payload = report.as_dict()
     serialized = json.dumps(payload, ensure_ascii=False)
     assert "vault_path" not in payload
     assert "paths" not in payload["manifest"]
+    assert payload["attachment_bytes"] == 4
     assert "second-brain.yaml" not in serialized
     assert snapshot_tree(vault) == before
 
@@ -107,6 +110,25 @@ def test_doctor_counts_are_unknown_when_a_declared_content_root_is_unavailable(
     assert report.valid_outcome_count is None
 
 
+def test_doctor_counts_are_unknown_when_a_note_cannot_be_read(tmp_path: Path) -> None:
+    vault = create_vault(tmp_path / "vault")
+    (vault / "10 Projects" / "Unreadable.md").write_bytes(b"\xff\xfe\xfd")
+
+    report = BuildDoctorReport(
+        FileSystemVaultReader(vault),
+        config_resolvable=True,
+        clock=lambda: GENERATED_AT,
+    ).execute()
+
+    assert report.status is DoctorStatus.UNAVAILABLE
+    assert report.manifest_available is True
+    assert report.content_roots_available is True
+    assert report.managed_note_count is None
+    assert report.enrolled_personal_memory_count is None
+    assert report.valid_decision_count is None
+    assert report.valid_outcome_count is None
+
+
 def test_doctor_support_root_failure_does_not_hide_content_counts(tmp_path: Path) -> None:
     vault = create_vault(tmp_path / "vault")
     write_note(vault, "10 Projects/Note.md", managed_note())
@@ -163,6 +185,7 @@ def test_doctor_unavailable_config_has_safe_null_counts() -> None:
     assert report.exit_code == 2
     assert report.managed_note_count is None
     assert report.self_retrieval.required is False
+    assert report.self_retrieval.code == "CONFIG_UNAVAILABLE"
     payload = report.as_dict()
     assert payload["config"] == {"resolvable": False}
     assert payload["counts"]["managed_notes"] is None

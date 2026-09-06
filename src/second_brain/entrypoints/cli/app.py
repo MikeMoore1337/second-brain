@@ -1179,6 +1179,7 @@ def _render_doctor_text(report: DoctorReport) -> str:
         f"Enrolled Personal Memory: {_count(report.enrolled_personal_memory_count)}",
         f"Valid Decision Journal: {_count(report.valid_decision_count)}",
         f"Valid Outcome Observation: {_count(report.valid_outcome_count)}",
+        f"Attachment bytes: {_count(report.attachment_bytes)}",
         f"Timeline: {report.timeline.status.value}",
         f"Self Model: {report.self_model.status.value}",
         f"Self Retrieval: {report.self_retrieval.status.value}"

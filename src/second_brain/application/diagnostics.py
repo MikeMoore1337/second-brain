@@ -10,6 +10,7 @@ from enum import StrEnum
 from pathlib import PurePosixPath
 from typing import Any, Final
 
+from second_brain.adapters.search import SqliteFts5SearchIndex
 from second_brain.application.personal_memory import is_personal_memory_enrolled
 from second_brain.application.ports import VaultReader
 from second_brain.application.reports import (
@@ -24,6 +25,11 @@ from second_brain.application.self_model import (
     SelfModelError,
     SelfModelErrorCode,
     SelfModelRequest,
+)
+from second_brain.application.self_retrieval import (
+    BuildSelfContext,
+    SelfContextRequest,
+    SelfRetrievalError,
 )
 from second_brain.application.timeline import (
     BuildPersonalTimeline,
@@ -51,6 +57,18 @@ _CONTENT_ROOT_FIELDS: Final[tuple[str, ...]] = (
     "resources",
     "zettelkasten",
     "archive",
+)
+_INCOMPLETE_COUNT_CODES: Final[frozenset[str]] = frozenset({"NOTE_READ_ERROR"})
+_ATTACHMENT_SCAN_FAILURE_CODES: Final[frozenset[str]] = frozenset(
+    {
+        "ATTACHMENT_DIRECTORY_READ_ERROR",
+        "ATTACHMENT_STAT_ERROR",
+        "VAULT_DIRECTORY_READ_ERROR",
+        "VAULT_ENTRY_RESOLVE_ERROR",
+        "VAULT_LINKED_DIRECTORY",
+        "VAULT_PATH_ESCAPE",
+        "VAULT_ROOT_MISSING",
+    }
 )
 _ALL_MANIFEST_ROOT_FIELDS: Final[tuple[str, ...]] = (
     *_CONTENT_ROOT_FIELDS,
@@ -117,6 +135,7 @@ class DoctorReport:
     enrolled_personal_memory_count: int | None
     valid_decision_count: int | None
     valid_outcome_count: int | None
+    attachment_bytes: int | None
     timeline: DoctorLayerStatus
     self_model: DoctorLayerStatus
     self_retrieval: DoctorLayerStatus
@@ -167,6 +186,7 @@ class DoctorReport:
                 "available": self.manifest_available,
                 "schema_version": self.manifest_schema_version,
             },
+            "attachment_bytes": self.attachment_bytes,
             "counts": counts,
             # Keep these compact aliases for the existing doctor CLI contract.
             "notes": self.managed_note_count,
@@ -203,12 +223,13 @@ class DoctorReport:
             enrolled_personal_memory_count=None,
             valid_decision_count=None,
             valid_outcome_count=None,
+            attachment_bytes=None,
             timeline=DoctorLayerStatus(DoctorStatus.UNAVAILABLE, True, code),
             self_model=DoctorLayerStatus(DoctorStatus.UNAVAILABLE, True, code),
             self_retrieval=DoctorLayerStatus(
                 DoctorStatus.UNAVAILABLE,
                 False,
-                "SELF_RETRIEVAL_NOT_MERGED",
+                code,
             ),
             diagnostics=diagnostics,
         )
@@ -271,10 +292,9 @@ def _build_report(
     snapshot_reader = _SnapshotReader(snapshot)
     timeline = _build_timeline_status(snapshot_reader, generated_at=generated_at)
     self_model = _build_self_model_status(snapshot_reader, generated_at=generated_at)
-    self_retrieval = DoctorLayerStatus(
-        DoctorStatus.UNAVAILABLE,
-        False,
-        "SELF_RETRIEVAL_NOT_MERGED",
+    self_retrieval = _build_self_retrieval_status(
+        snapshot_reader,
+        generated_at=generated_at,
     )
 
     status = DoctorStatus.HEALTHY
@@ -288,7 +308,14 @@ def _build_report(
         status = DoctorStatus.DEGRADED
 
     managed_notes = tuple(note for note in report.notes if note.managed is True)
-    counts_available = manifest_available and content_roots_available
+    counts_available = (
+        manifest_available
+        and content_roots_available
+        and not any(
+            item.severity is DiagnosticSeverity.ERROR and item.code in _INCOMPLETE_COUNT_CODES
+            for item in report.diagnostics
+        )
+    )
     return DoctorReport(
         status=status,
         generated_at=generated_at,
@@ -304,6 +331,7 @@ def _build_report(
         ),
         valid_decision_count=len(report.decision_journals) if counts_available else None,
         valid_outcome_count=len(report.outcome_observations) if counts_available else None,
+        attachment_bytes=(report.attachment_bytes if _attachment_bytes_available(report) else None),
         timeline=timeline,
         self_model=self_model,
         self_retrieval=self_retrieval,
@@ -354,6 +382,48 @@ def _build_self_model_status(
     except Exception:
         return DoctorLayerStatus(DoctorStatus.UNAVAILABLE, True, "SELF_MODEL_UNAVAILABLE")
     return DoctorLayerStatus(DoctorStatus.HEALTHY, True)
+
+
+def _build_self_retrieval_status(
+    reader: VaultReader,
+    *,
+    generated_at: datetime,
+) -> DoctorLayerStatus:
+    """Exercise the merged Stage 5 core against the same initial snapshot."""
+
+    index = SqliteFts5SearchIndex()
+    try:
+        BuildSelfContext(
+            reader,
+            index,
+            clock=lambda: generated_at,
+        ).execute(SelfContextRequest(query="doctor", limit=1))
+    except SelfRetrievalError as exc:
+        return DoctorLayerStatus(DoctorStatus.UNAVAILABLE, False, exc.code)
+    except Exception:
+        return DoctorLayerStatus(DoctorStatus.UNAVAILABLE, False, "SELF_RETRIEVAL_UNAVAILABLE")
+    finally:
+        index.close()
+    return DoctorLayerStatus(DoctorStatus.HEALTHY, False)
+
+
+def _attachment_bytes_available(report: ScanReport) -> bool:
+    """Keep attachment totals unknown when the attachment tree was partial."""
+
+    manifest = report.manifest
+    if manifest is None:
+        return False
+    attachment_root = PurePosixPath(manifest.paths.attachments.as_posix())
+    for item in report.diagnostics:
+        if item.severity is not DiagnosticSeverity.ERROR:
+            continue
+        if item.code.startswith("ATTACHMENT_"):
+            return False
+        if item.code not in _ATTACHMENT_SCAN_FAILURE_CODES or item.path is None:
+            continue
+        if _is_path_under(PurePosixPath(item.path), attachment_root):
+            return False
+    return True
 
 
 def _content_roots_available(report: ScanReport) -> bool:

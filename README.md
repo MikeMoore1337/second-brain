@@ -30,10 +30,12 @@ uv run second-brain --env-file .env vault validate
 `doctor` — bounded read-only status для config, manifest/content roots,
 managed/enrolled counts, valid Decision/Outcome projections, Timeline и Self
 Model. Он возвращает только statuses и grouped diagnostic codes: без bodies,
-absolute paths, source URLs, secrets и raw YAML. Self Retrieval помечается как
-optional unavailable до merge Stage 5 core и не делает исправный Stage 4
-environment ошибочным. `--format json` даёт machine-readable report; exit
-codes: `0` — healthy, `1` — degraded, `2` — unavailable/configuration failure.
+absolute paths, source URLs, secrets и raw YAML. Self Retrieval получает
+фактический status текущего merged Stage 5 core и остаётся optional, поэтому
+его unavailable status не делает исправный Stage 4 environment ошибочным.
+Report также показывает bounded total attachment bytes. `--format json` даёт
+machine-readable report; exit codes: `0` — healthy, `1` — degraded, `2` —
+unavailable/configuration failure.
 
 ## Локальный Web GUI
 
