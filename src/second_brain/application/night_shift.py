@@ -105,6 +105,7 @@ _ACTIVE_STATES: Final[frozenset[TaskState]] = frozenset(
         TaskState.PR_OPEN,
         TaskState.FIX_REQUIRED,
         TaskState.CI_WAIT,
+        TaskState.MERGE_READY,
     }
 )
 
@@ -189,6 +190,15 @@ class FailureBudgetUsage:
 
 
 @dataclass(frozen=True, slots=True)
+class CheckRunEvidence:
+    """One required check result bound to the commit it actually tested."""
+
+    conclusion: CheckConclusion | str
+    head_sha: str
+    run_id: int
+
+
+@dataclass(frozen=True, slots=True)
 class MergeGateEvidence:
     """Evidence required before a GREEN squash merge can be considered."""
 
@@ -196,7 +206,7 @@ class MergeGateEvidence:
     review_verdict: NightShiftVerdict
     current_head_sha: str
     reviewed_head_sha: str
-    check_conclusions: Mapping[str, CheckConclusion | str]
+    check_evidence: Mapping[str, CheckRunEvidence]
     unresolved_review_threads: int
     accepted_blockers: int
     mergeable_clean: bool
@@ -350,9 +360,16 @@ def evaluate_merge_gate(policy: NightShiftPolicy, evidence: MergeGateEvidence) -
     if evidence.accepted_blockers:
         return _human("accepted_review_blocker_present")
     for check in policy.required_checks:
-        conclusion = evidence.check_conclusions.get(check)
-        if not _check_is_success(conclusion):
+        check_evidence = evidence.check_evidence.get(check)
+        if check_evidence is None or not _check_is_success(check_evidence.conclusion):
             return _blocked(f"required_check_not_green:{check}")
+        if (
+            not _is_full_commit_sha(check_evidence.head_sha)
+            or check_evidence.head_sha != evidence.current_head_sha
+        ):
+            return _blocked(f"required_check_not_bound_to_current_head:{check}")
+        if check_evidence.run_id <= 0:
+            return _blocked(f"required_check_run_id_missing:{check}")
     return GateResult(GateStatus.MERGE_READY, ("all_green_merge_gates_passed",))
 
 
@@ -656,6 +673,7 @@ __all__ = [
     "SUPPORTED_RED_GATES",
     "SUPPORTED_SCHEMA_VERSION",
     "CheckConclusion",
+    "CheckRunEvidence",
     "FailureBudget",
     "FailureBudgetUsage",
     "GateResult",

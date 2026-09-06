@@ -8,6 +8,7 @@ import pytest
 
 from second_brain.application.night_shift import (
     CheckConclusion,
+    CheckRunEvidence,
     FailureBudgetUsage,
     GateStatus,
     MergeGateEvidence,
@@ -214,7 +215,8 @@ def _green_merge_evidence(
     review_verdict: NightShiftVerdict = NightShiftVerdict.MERGE_READY,
     current_head_sha: str = "a" * 40,
     reviewed_head_sha: str | None = None,
-    check_conclusions: dict[str, CheckConclusion | str] | None = None,
+    check_heads: dict[str, str] | None = None,
+    check_evidence: dict[str, CheckRunEvidence] | None = None,
     unresolved_review_threads: int = 0,
     accepted_blockers: int = 0,
     mergeable_clean: bool = True,
@@ -227,10 +229,23 @@ def _green_merge_evidence(
         review_verdict=review_verdict,
         current_head_sha=current_head_sha,
         reviewed_head_sha=reviewed_head_sha or current_head_sha,
-        check_conclusions=check_conclusions
+        check_evidence=check_evidence
         or {
-            "quality": CheckConclusion.SUCCESS,
-            "windows-ssl-regression": CheckConclusion.SUCCESS,
+            check: CheckRunEvidence(
+                conclusion=CheckConclusion.SUCCESS,
+                head_sha=head_sha,
+                run_id=index,
+            )
+            for index, (check, head_sha) in enumerate(
+                (
+                    check_heads
+                    or {
+                        "quality": current_head_sha,
+                        "windows-ssl-regression": current_head_sha,
+                    }
+                ).items(),
+                start=1,
+            )
         },
         unresolved_review_threads=unresolved_review_threads,
         accepted_blockers=accepted_blockers,
@@ -259,11 +274,48 @@ def test_merge_gate_requires_exact_reviewed_head_and_all_required_checks() -> No
     assert abbreviated_review.status is GateStatus.BLOCKED
     assert abbreviated_review.reasons == ("reviewed_head_sha_is_not_full_commit_sha",)
 
+    stale_check = evaluate_merge_gate(
+        loaded,
+        _green_merge_evidence(
+            check_heads={"quality": "b" * 40, "windows-ssl-regression": "a" * 40}
+        ),
+    )
+    assert stale_check.status is GateStatus.BLOCKED
+    assert stale_check.reasons == ("required_check_not_bound_to_current_head:quality",)
+
     pending_ci = evaluate_merge_gate(
         loaded,
-        _green_merge_evidence(check_conclusions={"quality": CheckConclusion.PENDING}),
+        _green_merge_evidence(
+            check_evidence={
+                "quality": CheckRunEvidence(
+                    conclusion=CheckConclusion.PENDING,
+                    head_sha="a" * 40,
+                    run_id=1,
+                ),
+                "windows-ssl-regression": CheckRunEvidence(
+                    conclusion=CheckConclusion.SUCCESS,
+                    head_sha="a" * 40,
+                    run_id=2,
+                ),
+            }
+        ),
     )
     assert pending_ci.status is GateStatus.BLOCKED
+
+
+def test_current_merge_ready_task_remains_before_later_candidates() -> None:
+    loaded = policy()
+    candidate = TaskCandidate(
+        issue_number=79,
+        state=TaskState.MERGE_READY,
+        risk_lane=RiskLane.GREEN,
+        source=TaskSelectionSource.CURRENT_ACTIVE,
+    )
+
+    selected, result = select_next_task(loaded, (candidate,), night_mode_enabled=True)
+
+    assert selected == candidate
+    assert result.status is GateStatus.READY
 
 
 def test_yellow_is_implementable_but_never_auto_mergeable() -> None:
