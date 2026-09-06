@@ -76,3 +76,7 @@ def test_russian_ui_mobile_contract_retains_existing_touch_and_width_floor() -> 
     assert "overflow-x: clip" in production_styles
     assert "@media (max-width: 760px)" in production_styles
     assert "width: min(100%, calc(100vw - 32px))" in production_styles
+    assert "font-size: 16px" in styles
+    assert ".brand" in styles
+    assert ".skip-link" in styles
+    assert "body::before" in styles
