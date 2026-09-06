@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from httpx import Response
 from starlette.types import ASGIApp, Message, Scope
 
 from second_brain.entrypoints.web.app import (
@@ -163,27 +163,6 @@ def _valid_headers(route: PrivateRoute) -> dict[str, str]:
     }
 
 
-def _assert_safe_private_response(response: Response, *, expected_code: str) -> None:
-    """Assert the shared safe envelope and headers without coupling to a service."""
-
-    status_code = response.status_code
-    headers = response.headers
-    text = response.text
-    payload = response.json()
-
-    assert status_code == 400
-    assert payload["error"]["code"] == expected_code
-    assert set(payload["error"]) == {"code", "message"}
-    assert headers["cache-control"] == "no-store"
-    assert headers["x-content-type-options"] == "nosniff"
-    assert headers["referrer-policy"] == "no-referrer"
-    assert headers["x-frame-options"] == "DENY"
-    assert "content-security-policy" in headers
-    assert "access-control-allow-origin" not in headers
-    assert "traceback" not in text.lower()
-    assert "exception" not in text.lower()
-
-
 @pytest.mark.parametrize(
     "route",
     PRIVATE_ROUTES,
@@ -211,10 +190,27 @@ def test_every_private_route_rejects_boundary_metadata_before_service(
     else:
         headers["Content-Type"] = "text/plain"
 
-    with TestClient(create_app(), base_url=LOOPBACK_BASE_URL) as client:
-        response = client.post(route.path, content=route.body, headers=headers)
+    raw_headers = [("host", "127.0.0.1"), *headers.items()]
+    status, response_headers, response_body, receive_calls = _raw_request(
+        create_app(),
+        path=route.path,
+        headers=raw_headers,
+        body=route.body,
+    )
+    payload = json.loads(response_body)
 
-    _assert_safe_private_response(response, expected_code=route.invalid_code)
+    assert status == 400
+    assert receive_calls == 0
+    assert payload["error"]["code"] == route.invalid_code
+    assert set(payload["error"]) == {"code", "message"}
+    assert response_headers["cache-control"] == "no-store"
+    assert response_headers["x-content-type-options"] == "nosniff"
+    assert response_headers["referrer-policy"] == "no-referrer"
+    assert response_headers["x-frame-options"] == "DENY"
+    assert "content-security-policy" in response_headers
+    assert "access-control-allow-origin" not in response_headers
+    assert b"traceback" not in response_body.lower()
+    assert b"exception" not in response_body.lower()
 
 
 def _raw_request(
