@@ -68,7 +68,7 @@ surface и не выглядит каталогом карточек. В раб�
 контекста и primary `Добавить`; под ней — большой signal field с 5–9
 обозначенными nodes, одной violet route и readable list/metadata рядом. Внизу
 первого viewport — один текущий verified/review state, а не dashboard grid.
-Каждый node ведёт к существующей Timeline/Search/Self Model/Diagnostics/
+Каждый node ведёт к существующей Timeline/Search/Self Model/Self Retrieval/
 Simulate Me surface, без новых product semantics.
 
 **Маршрут пользователя.** Пользователь видит, где находится и какой signal выбран,
@@ -82,8 +82,8 @@ Scrub/snapping допускается только для редких intention
 
 **Распространение по поверхностям.** Одна lattice grammar переводится в Timeline (route),
 Search (signal density), Self Model (layers), Self Retrieval (evidence path),
-Diagnostics (health markers), Simulate Me (bounded scenario path) и capture/write
-surfaces (draft/evidence/provenance).
+Simulate Me (bounded scenario path) и capture/write surfaces
+(draft/evidence/provenance).
 
 **Честный риск.** Glyph density может стать шумом, а animated network — дорогим
 декором. Контрмера: DOM-first labels, максимум редких traces, static fallback,
@@ -111,7 +111,7 @@ relation, а plate остаётся на месте. Transition — opacity/clip
 
 **Распространение по поверхностям.** Особенно силён для Search, read-only Retrieval,
 Decision Journal и Safe Write diff; Timeline получает editorial chronology,
-Diagnostics — annotated report.
+а read-only report states получают annotated report grammar.
 
 **Честный риск.** Может стать слишком museum/editorial и недодать живой network
 metaphor; на маленьком экране plate легко превращается в длинную статичную
@@ -139,7 +139,7 @@ violet flag, под rail — compact deferred bin. Secondary detail pane пок�
 горизонтального scrolling.
 
 **Распространение по поверхностям.** Сильнее всего для Timeline, Decision Journal,
-Personal Memory и capture/write; Search и Diagnostics требуют дополнительных
+Personal Memory и capture/write; Search и report states требуют дополнительных
 правил, чтобы не выглядеть чужими системами.
 
 **Честный риск.** Temporal metaphor может исказить модель vault и сделать
@@ -170,46 +170,48 @@ decision отсутствует.
 
 **Мир.** True-black/ink void, violet signal family, sparse typographic nodes,
 registration-like junctions и bounded route traces. Люминесценция локальна,
-а контент — непрерывный DOM text.
+а контент остаётся непрерывным DOM-текстом.
 
-**Первый экран.** Desktop shell с компактным rail слева и одной workspace
-plane. Верхняя context line + `Добавить` action; основной focus — signal field
-с 5–9 nodes/labels и одной active route; рядом readable current signal list;
-нижняя часть первого viewport показывает один explicit review/prepare state.
-Никакой tile grid и никакого декоративного hero вместо рабочего состояния.
+**Первый экран.** Desktop shell с компактным rail слева и одной рабочей plane.
+Сверху — context line и action `Добавить`; основной focus — signal field с 5–9
+nodes/labels и одним active route; рядом — читаемый список текущих signal.
+Нижняя часть первого экрана показывает одно явное review/prepare state. Никакой
+tile grid и никакого декоративного hero вместо рабочего состояния.
 
-**Маршрут пользователя.** Context → signal/node → evidence or current note → existing
-read/draft/prepare action. Every route has a textual label and keyboard target.
+**Маршрут пользователя.** Context → signal/node → evidence или текущая note →
+существующее чтение, создание draft или prepare action. У каждого route есть
+текстовая label и keyboard target.
 
 **Фирменное взаимодействие.** `Signal trace` — bounded CSS-переход на 180–250ms
-clip-path/opacity transition for the selected relation. Frequent keyboard/Search
-changes are instant; no infinite network animation.
+через `clip-path`/`opacity` для выбранной relation. Частые изменения через
+keyboard/Search выполняются мгновенно; бесконечной network-анимации нет.
 
-**Распространение по поверхностям.** Timeline is the primary rail, Search exposes density
-and relation marks, Self Model exposes layers, Self Retrieval explains route to
-evidence, Diagnostics uses stable state markers, Simulate Me uses a bounded
-scenario path, and capture/write shows provenance around draft/review/save.
+**Распространение по поверхностям.** Timeline — основной rail; Search показывает
+density и relation marks; Self Model — layers; Self Retrieval объясняет маршрут
+к evidence; Simulate Me использует bounded scenario path; Memory/Growth и
+capture/write показывают provenance вокруг draft/review/save. Этот список
+соответствует текущим shipped Web surfaces и не добавляет новую route semantics.
 
-**Честный риск и ограничитель.** The world can drift into unreadable terminal or
-cyberpunk. The guardrail is IBM Plex Sans for body, IBM Plex Mono only for
-metadata, violet glow under 20% opacity except focus, static fallback first,
-and #117 contrast/performance/reduced-motion gates.
+**Честный риск и ограничитель.** World может уйти в нечитаемый terminal или
+cyberpunk. Ограничители: IBM Plex Sans для body, IBM Plex Mono только для
+metadata, violet glow с opacity ниже 20% вне focus, static fallback first и
+contrast/performance/reduced-motion gates из #117.
 
 ## Механический контракт реализации
 
 1. #109 создаёт intent tokens, gradient families, type roles и contrast fixtures
-   без framework migration.
-2. #110 строит shell и navigation topology; rail must collapse without changing
+   без смены framework.
+2. #110 строит shell и navigation topology; rail складывается без изменения
    route semantics.
-3. #112 вводит motion primitives only for named purposes and reduced-motion
-   variants.
+3. #112 вводит motion primitives только для названных purposes и варианты для
+   reduced-motion.
 4. #113–#116 применяют world к capture/write, cognitive surfaces, mobile и
-   atmosphere; content and API contracts remain unchanged.
-5. #117 verifies contrast, focus, motion, no overflow, GPU budget and graceful
-   fallbacks on desktop/mobile.
-6. #118 performs final Impeccable + Emil review and synchronizes this contract
-   with the implemented `DESIGN.md`.
+   atmosphere; content и API contracts не меняются.
+5. #117 проверяет contrast, focus, motion, no overflow, GPU budget и graceful
+   fallbacks на desktop/mobile.
+6. #118 выполняет final Impeccable + Emil review и синхронизирует этот contract
+   с реализованным `DESIGN.md`.
 
-No prototype or production code is part of #108. Any product flow, security,
-privacy, authentication, public bind, deployment or data-flow change exits the
-GREEN design scope and requires a separate HUMAN_REQUIRED decision.
+В #108 нет prototype или production code. Любое изменение product flow,
+security, privacy, authentication, public bind, deployment или data-flow выходит
+за GREEN design scope и требует отдельного HUMAN_REQUIRED решения.

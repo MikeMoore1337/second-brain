@@ -42,7 +42,9 @@ application gateways. Vault path передаётся явной конфигу�
 - Local/offline read-only операции не вызывают сеть или LLM.
 - Networked draft/research операции возвращают validated DTO и не пишут в vault.
 - Сохранение требует path containment, review/diff, hash preconditions и явного
-  подтверждения; browser не выбирает path, identity, timestamp или Git metadata.
+  подтверждения; приложение само выбирает storage path, note identity,
+  created/updated timestamps и Git metadata, а пользовательские `evidence_at`
+  для Personal Memory и Decision Journal вводятся явно.
 - Production UI и design contract должны сохранять loopback-only, privacy,
   отсутствие persistent browser storage для review state и границу
   `second-brain-vault`.
