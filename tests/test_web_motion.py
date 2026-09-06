@@ -91,8 +91,6 @@ def test_motion_respects_touch_hover_and_reduced_motion_contracts() -> None:
     reduced_motion_section = css.split("@media (prefers-reduced-motion: reduce)", 1)[1]
     assert ".topnav a:active," in reduced_motion_section
     assert "transform: none;" in reduced_motion_section
-    reduced_motion_section = css.split("@media (prefers-reduced-motion: reduce)", 1)[1]
-    assert ".topnav a:active" in reduced_motion_section
     assert ".review-button:active:not(:disabled)" in reduced_motion_section
 
 

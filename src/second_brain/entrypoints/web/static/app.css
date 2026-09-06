@@ -2634,15 +2634,6 @@ body::before {
     transform: none;
   }
 
-  .topnav a:active,
-  .mode-button:active:not(:disabled),
-  .capture-submit:active:not(:disabled),
-  .voice-button:active:not(:disabled),
-  .voice-file-label:active,
-  .review-button:active:not(:disabled) {
-    transform: none;
-  }
-
   *,
   *::before,
   *::after {
