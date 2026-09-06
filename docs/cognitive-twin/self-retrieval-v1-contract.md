@@ -2,8 +2,10 @@
 
 Статус этого документа: **DESIGN / APPROVED FOR MECHANICAL CORE**. Он закрывает
 issue [#88](https://github.com/MikeMoore1337/second-brain/issues/88) и задаёт
-границу, достаточную для механической реализации issue #89. Текущая design
-base — `main` commit `e1067be7ffa0c5cfc89b6317ffdc8f68cccdb3de`.
+границу, достаточную для механической реализации issue #89. Core #89, local
+Web #90 и CLI #91 уже merged в current `main`; этот contract остаётся их
+нормативным source of truth. Историческая design base — `main` commit
+`e1067be7ffa0c5cfc89b6317ffdc8f68cccdb3de`.
 
 Этот документ не меняет canonical schema, `schema_version`, Search/Retrieval
 DTO, Self Model policy, `second-brain-vault` или consumer semantics. В текущем
@@ -275,7 +277,10 @@ DTO, поэтому clock не является частью determinism contrac
 полноту relevant read boundary, core возвращает safe error. Он не пытается
 собрать «достаточно убедительный» subset из уже найденных hits.
 
-## 6. Build sequence for #89–#91
+## 6. Historical build sequence for #89–#91
+
+Этот раздел сохраняет исходный dependency gate; текущий merged status указан в
+начале документа.
 
 Порядок реализации остаётся серийным и dependency-driven:
 

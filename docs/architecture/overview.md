@@ -464,8 +464,8 @@ identity conflict. Web использует scoped same-origin `POST /api/search
 `POST /api/retrieval/note` с `X-Second-Brain-Request: search-v1`, strict JSON,
 loopback Host/Origin checks, raw body cap и `Cache-Control: no-store`. CLI
 `second-brain search` остаётся read-only. Persistent DB/cache, file watcher,
-incremental index, embeddings, vector search, RAG и Cognitive Twin здесь не
-реализуются.
+incremental index, embeddings, vector search и RAG в этом Search/Retrieval
+layer не реализуются; отдельный Stage 5 Self Retrieval status описан ниже.
 
 ## Personal Timeline v1 core
 
@@ -506,8 +506,9 @@ Design-only roadmap будущего Personal Cognitive Twin:
 
 ## Self Retrieval v1 design contract
 
-Stage 5 Self Retrieval пока является design-only boundary из issue #88.
-Approved contract находится в
+Stage 5 Self Retrieval реализован в current `main`: core из #89, thin local
+Web projection из #90 и CLI projection из #91 уже merged. Нормативный
+approved contract из issue #88 находится в
 [self-retrieval-v1-contract.md](../cognitive-twin/self-retrieval-v1-contract.md).
 Он добавляет только bounded application composition над existing lexical
 Search, `SearchHit` как candidate и current UUID reread через
@@ -519,5 +520,5 @@ ordinal rank и disposable index не являются evidence truth. Exact Sel
 claim link допустим только через current supporting UUID и validated policy
 fingerprint. Stage 5 не выбирает relevance/confidence semantics, не вводит
 embeddings/RAG/provider, persistence/cache, prediction mode или write-back.
-Core #89, а затем thin local Web/CLI adapters #90/#91, остаются отдельными
-dependency-gated slices.
+Эти три merged slices остаются отдельными слоями и не меняют canonical vault,
+Search DTO или provider boundary.
