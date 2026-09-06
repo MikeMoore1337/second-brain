@@ -61,11 +61,13 @@ Cloudflare credentials, сети или записи и по умолчанию 
 
 ```powershell
 uv run second-brain web serve
-uv run second-brain web serve --port 8123
+uv run second-brain web serve --port 8000  # явное переопределение, например для YFC
 ```
 
 Команда слушает только `127.0.0.1`; `--port` принимает значение от `1` до
-`65535`, а default — `8000`. В GUI есть Add modes `URL`, `Text` и `Voice`.
+`65535`, а порт по умолчанию — `8123`. Соглашение для разработки: YFC использует
+`127.0.0.1:8000`, Second Brain — `127.0.0.1:8123`. В GUI есть Add modes
+`URL`, `Text` и `Voice`.
 `URL` и `Text` через same-origin API создают `NoteDraft`; URL дополнительно
 показывает bounded `SourceProvenance` рядом с draft. Voice принимает запись
 через native `MediaRecorder` или локальный audio file, отправляет один raw
