@@ -94,6 +94,11 @@ def test_cognitive_surfaces_keep_safe_rendering_and_shared_motion_contract() -> 
     assert "innerHTML" not in _read("self-retrieval.js")
     assert _read("app.js").count("innerHTML") == 1
 
+    self_retrieval_script = _read("self-retrieval.js")
+    assert 'selfRetrievalSurface.setAttribute("aria-busy", String(value));' in (
+        self_retrieval_script
+    )
+
     css = _read("app.css")
     assert '[aria-busy="true"]' in css
     assert ".timeline-surface:focus-within" in css
