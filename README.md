@@ -27,6 +27,14 @@ uv run second-brain --env-file .env doctor
 uv run second-brain --env-file .env vault validate
 ```
 
+`doctor` — bounded read-only status для config, manifest/content roots,
+managed/enrolled counts, valid Decision/Outcome projections, Timeline и Self
+Model. Он возвращает только statuses и grouped diagnostic codes: без bodies,
+absolute paths, source URLs, secrets и raw YAML. Self Retrieval помечается как
+optional unavailable до merge Stage 5 core и не делает исправный Stage 4
+environment ошибочным. `--format json` даёт machine-readable report; exit
+codes: `0` — healthy, `1` — degraded, `2` — unavailable/configuration failure.
+
 ## Локальный Web GUI
 
 Web GUI v1 — это небольшой packaged browser shell поверх существующих application
