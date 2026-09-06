@@ -9,6 +9,7 @@
     <script src="/static/app.js" defer></script>
     <script src="/static/decision-journal.js" defer></script>
     <script src="/static/timeline.js" defer></script>
+    <script src="/static/self-model.js" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">К содержанию</a>
@@ -23,6 +24,7 @@
         </a>
         <nav class="topnav" aria-label="Основные разделы">
           <a href="#timeline">Timeline</a>
+          <a href="#self-model">Self Model</a>
           <a href="#search">Search</a>
           <a href="#memory">Memory</a>
           <a href="#growth">Growth</a>
@@ -368,6 +370,37 @@
               <div class="timeline-list" data-timeline-unknown-list></div>
               <p class="timeline-empty" data-timeline-unknown-empty hidden>Пока нет событий без известного времени.</p>
             </section>
+          </div>
+        </section>
+
+        <section
+          class="self-model-surface"
+          id="self-model"
+          aria-labelledby="self-model-title"
+          data-self-model-surface
+        >
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Stage 4 · derived, current, explainable</p>
+              <h2 id="self-model-title">Self Model.</h2>
+            </div>
+            <p class="self-model-lede">
+              Прямые preference, belief и goal claims из текущего vault — с canonical UUID evidence и без скрытого профиля.
+            </p>
+          </div>
+          <div class="self-model-panel">
+            <div class="self-model-controls">
+              <button class="review-button review-button-secondary" type="button" data-self-model-refresh>
+                Построить / обновить
+              </button>
+              <p class="self-model-status" data-self-model-status role="status" aria-live="polite"></p>
+            </div>
+            <p class="capture-error self-model-error" data-self-model-error role="alert" hidden></p>
+            <p class="self-model-summary" data-self-model-summary></p>
+            <div class="self-model-list" data-self-model-list></div>
+            <p class="self-model-empty" data-self-model-empty hidden>
+              Прямых preference, belief или goal claims пока нет.
+            </p>
           </div>
         </section>
 

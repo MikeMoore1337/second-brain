@@ -44,6 +44,11 @@ from second_brain.application.ports import (
     TranscriptionError,
 )
 from second_brain.application.research import SourceProvenance
+from second_brain.application.self_model import (
+    SelfModelError,
+    SelfModelRequest,
+    validate_self_model_request,
+)
 from second_brain.application.timeline import (
     PersonalTimelineRequest,
     TimelineError,
@@ -75,6 +80,13 @@ from .preview import (
 from .review import ReviewTokenClaims, ReviewTokenCodec, ReviewTokenError, ReviewTokenMode
 from .saves import DraftSaveService, build_production_save_service
 from .search import SearchService, build_production_search_service
+from .self_model import (
+    SelfModelRequestPayload,
+    SelfModelResponse,
+    SelfModelService,
+    build_production_self_model_service,
+    self_model_response,
+)
 from .timeline import (
     TimelineRequestPayload,
     TimelineResponse,
@@ -94,14 +106,18 @@ SEARCH_REQUEST_HEADER_NAME: Final[str] = DRAFT_REQUEST_HEADER_NAME
 SEARCH_REQUEST_HEADER_VALUE: Final[str] = "search-v1"
 TIMELINE_REQUEST_HEADER_NAME: Final[str] = DRAFT_REQUEST_HEADER_NAME
 TIMELINE_REQUEST_HEADER_VALUE: Final[str] = "timeline-v1"
+SELF_MODEL_REQUEST_HEADER_NAME: Final[str] = DRAFT_REQUEST_HEADER_NAME
+SELF_MODEL_REQUEST_HEADER_VALUE: Final[str] = "self-model-v1"
 MAX_RAW_DRAFT_BODY_BYTES: Final[int] = 512 * 1024
 MAX_RAW_TRANSCRIPTION_BODY_BYTES: Final[int] = MAX_TRANSCRIPTION_AUDIO_BYTES
 MAX_RAW_AUDIO_BODY_BYTES: Final[int] = MAX_RAW_TRANSCRIPTION_BODY_BYTES
 MAX_RAW_SEARCH_BODY_BYTES: Final[int] = 64 * 1024
 MAX_RAW_TIMELINE_BODY_BYTES: Final[int] = 16 * 1024
+MAX_RAW_SELF_MODEL_BODY_BYTES: Final[int] = 16 * 1024
 _TRANSCRIPTION_PATH: Final[str] = "/api/transcriptions/audio"
 _SEARCH_PATHS: Final[frozenset[str]] = frozenset({"/api/search", "/api/retrieval/note"})
 _TIMELINE_PATHS: Final[frozenset[str]] = frozenset({"/api/timeline"})
+_SELF_MODEL_PATHS: Final[frozenset[str]] = frozenset({"/api/self-model"})
 _DECISION_JOURNAL_PATHS: Final[frozenset[str]] = frozenset(
     {
         "/api/drafts/decision-journal/save/prepare",
@@ -574,6 +590,14 @@ _ERRORS: Final[dict[str, tuple[int, str]]] = {
     "TIMELINE_VAULT_UNAVAILABLE": (503, "timeline vault is unavailable"),
     "TIMELINE_INVALID_CLOCK": (500, "timeline server clock is invalid"),
     "TIMELINE_INTERNAL_ERROR": (500, "timeline could not be built"),
+    "SELF_MODEL_INVALID_REQUEST": (400, "self model request failed validation"),
+    "SELF_MODEL_CONTENT_TOO_LARGE": (413, "self model request is too large"),
+    "SELF_MODEL_POLICY_UNAVAILABLE": (500, "self model policy binding is unavailable"),
+    "SELF_MODEL_VAULT_UNAVAILABLE": (503, "self model vault is unavailable"),
+    "SELF_MODEL_EVIDENCE_INVALID": (409, "self model evidence is invalid"),
+    "SELF_MODEL_RESULT_INVALID": (500, "self model result failed validation"),
+    "SELF_MODEL_RESULT_TOO_LARGE": (413, "self model result is too large"),
+    "SELF_MODEL_INVALID_CLOCK": (500, "self model server clock is invalid"),
 }
 _GENERIC_ERROR: Final[tuple[int, str, str]] = (
     500,
@@ -870,6 +894,103 @@ class TimelineRequestBoundaryMiddleware:
         await self.app(scope, replay_receive, send)
 
 
+class SelfModelRequestBoundaryMiddleware:
+    """Scoped ASGI boundary for private Self Model JSON requests."""
+
+    def __init__(self, app: ASGIApp, *, max_body_bytes: int) -> None:
+        """Store the small raw-body cap before FastAPI JSON parsing."""
+
+        self.app = app
+        self.max_body_bytes = max_body_bytes
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Require self-model-v1, loopback same-origin metadata and bounded JSON."""
+
+        if (
+            scope["type"] != "http"
+            or scope.get("method") != "POST"
+            or scope.get("path") not in _SELF_MODEL_PATHS
+        ):
+            await self.app(scope, receive, send)
+            return
+
+        path = str(scope["path"])
+        content_type_present, content_type = _single_header(scope, "content-type")
+        request_header_present, request_header = _single_header(
+            scope, SELF_MODEL_REQUEST_HEADER_NAME
+        )
+        origin_present, origin = _single_header(scope, "origin")
+        content_length_present, content_length = _single_header(scope, "content-length")
+        if (
+            not content_type_present
+            or content_type is None
+            or not _is_json_content_type(content_type)
+            or not request_header_present
+            or request_header != SELF_MODEL_REQUEST_HEADER_VALUE
+            or not _trusted_request_host(scope)
+            or (origin_present and (origin is None or not _origin_matches(scope, origin)))
+        ):
+            await _send_boundary_error(scope, receive, send, _invalid_request_code(path))
+            return
+
+        if content_length_present:
+            if content_length is None:
+                await _send_boundary_error(scope, receive, send, _invalid_request_code(path))
+                return
+            try:
+                declared_length = int(content_length.strip())
+            except ValueError:
+                await _send_boundary_error(scope, receive, send, _invalid_request_code(path))
+                return
+            if declared_length < 0:
+                await _send_boundary_error(scope, receive, send, _invalid_request_code(path))
+                return
+            if declared_length > self.max_body_bytes:
+                await _send_boundary_error(
+                    scope,
+                    receive,
+                    send,
+                    _content_too_large_code(path),
+                )
+                return
+
+        received_bytes = 0
+        body_messages: list[Message] = []
+        while True:
+            message = await receive()
+            if message["type"] != "http.request":
+                body_messages.append(message)
+                break
+            body = message.get("body", b"")
+            if not isinstance(body, bytes):
+                await _send_boundary_error(
+                    scope,
+                    receive,
+                    send,
+                    _content_too_large_code(path),
+                )
+                return
+            received_bytes += len(body)
+            if received_bytes > self.max_body_bytes:
+                await _send_boundary_error(
+                    scope,
+                    receive,
+                    send,
+                    _content_too_large_code(path),
+                )
+                return
+            body_messages.append(message)
+            if not message.get("more_body", False):
+                break
+
+        async def replay_receive() -> Message:
+            if body_messages:
+                return body_messages.pop(0)
+            return {"type": "http.disconnect"}
+
+        await self.app(scope, replay_receive, send)
+
+
 class TranscriptionRequestBoundaryMiddleware:
     """Scoped ASGI boundary для raw audio, voice headers, Origin и byte cap."""
 
@@ -1083,8 +1204,10 @@ def _loopback_host_port(value: str, scheme: str) -> tuple[str, int] | None:
 
 
 def _invalid_request_code(path: str) -> str:
-    """Выбрать safe application code по draft route."""
+    """Выбрать safe application code по private API route."""
 
+    if path in _SELF_MODEL_PATHS:
+        return "SELF_MODEL_INVALID_REQUEST"
     if path in _TIMELINE_PATHS:
         return "TIMELINE_INVALID_REQUEST"
     if path in _DECISION_JOURNAL_PATHS:
@@ -1105,8 +1228,10 @@ def _invalid_request_code(path: str) -> str:
 
 
 def _content_too_large_code(path: str) -> str:
-    """Выбрать bounded content-too-large code по draft route."""
+    """Выбрать bounded content-too-large code по private API route."""
 
+    if path in _SELF_MODEL_PATHS:
+        return "SELF_MODEL_CONTENT_TOO_LARGE"
     if path in _TIMELINE_PATHS:
         return "TIMELINE_CONTENT_TOO_LARGE"
     if path in _SEARCH_PATHS:
@@ -1127,10 +1252,11 @@ def create_app(
     save_service: DraftSaveService | None = None,
     search_service: SearchService | None = None,
     timeline_service: TimelineService | None = None,
+    self_model_service: SelfModelService | None = None,
     env_file: Path | None = None,
     vault_path_override: str | None = None,
 ) -> FastAPI:
-    """Создать Web GUI без config/vault side effects до Timeline/Search/Retrieval/Save."""
+    """Создать Web GUI без config/vault side effects до явного read/write запроса."""
 
     service = draft_service if draft_service is not None else build_production_draft_service()
     transcriber = (
@@ -1162,6 +1288,14 @@ def create_app(
             vault_path_override=vault_path_override,
         )
     )
+    self_modeler = (
+        self_model_service
+        if self_model_service is not None
+        else build_production_self_model_service(
+            env_file=env_file,
+            vault_path_override=vault_path_override,
+        )
+    )
     review_tokens = ReviewTokenCodec()
     app = FastAPI(
         title="Second Brain",
@@ -1189,6 +1323,10 @@ def create_app(
         TimelineRequestBoundaryMiddleware,
         max_body_bytes=MAX_RAW_TIMELINE_BODY_BYTES,
     )
+    app.add_middleware(
+        SelfModelRequestBoundaryMiddleware,
+        max_body_bytes=MAX_RAW_SELF_MODEL_BODY_BYTES,
+    )
 
     @app.middleware("http")
     async def add_security_headers(
@@ -1208,6 +1346,7 @@ def create_app(
                 "/api/search",
                 "/api/retrieval/",
                 "/api/timeline",
+                "/api/self-model",
             )
         ):
             response.headers["Cache-Control"] = "no-store"
@@ -1543,6 +1682,28 @@ def create_app(
             return _error_response("TIMELINE_VAULT_UNAVAILABLE")
         except Exception:
             return _error_response("TIMELINE_INTERNAL_ERROR")
+        return JSONResponse(
+            content=response.model_dump(mode="json"),
+            headers=_DRAFT_ERROR_HEADERS,
+        )
+
+    @app.post("/api/self-model", include_in_schema=False)
+    def self_model(payload: SelfModelRequestPayload) -> Response:
+        """Return one fresh bounded projection of the canonical Self Model result."""
+
+        request = SelfModelRequest(
+            max_claims=payload.max_claims,
+            max_evidence_refs_per_claim=payload.max_evidence_refs_per_claim,
+        )
+        try:
+            validate_self_model_request(request)
+            response = self_model_response(self_modeler.build(request), request)
+        except SelfModelError as error:
+            return _error_response(error.code)
+        except ConfigurationError, OSError:
+            return _error_response("SELF_MODEL_VAULT_UNAVAILABLE")
+        except Exception:
+            return _error_response("SELF_MODEL_RESULT_INVALID")
         return JSONResponse(
             content=response.model_dump(mode="json"),
             headers=_DRAFT_ERROR_HEADERS,
@@ -2035,10 +2196,13 @@ __all__ = [
     "MAX_RAW_AUDIO_BODY_BYTES",
     "MAX_RAW_DRAFT_BODY_BYTES",
     "MAX_RAW_SEARCH_BODY_BYTES",
+    "MAX_RAW_SELF_MODEL_BODY_BYTES",
     "MAX_RAW_TIMELINE_BODY_BYTES",
     "MAX_RAW_TRANSCRIPTION_BODY_BYTES",
     "SEARCH_REQUEST_HEADER_NAME",
     "SEARCH_REQUEST_HEADER_VALUE",
+    "SELF_MODEL_REQUEST_HEADER_NAME",
+    "SELF_MODEL_REQUEST_HEADER_VALUE",
     "TIMELINE_REQUEST_HEADER_NAME",
     "TIMELINE_REQUEST_HEADER_VALUE",
     "TRANSCRIPTION_REQUEST_HEADER_NAME",
@@ -2071,6 +2235,9 @@ __all__ = [
     "SearchRequestBoundaryMiddleware",
     "SearchRequestPayload",
     "SearchResponse",
+    "SelfModelRequestBoundaryMiddleware",
+    "SelfModelRequestPayload",
+    "SelfModelResponse",
     "SourceProvenancePayload",
     "TextDraftRequest",
     "TimelineRequestBoundaryMiddleware",
