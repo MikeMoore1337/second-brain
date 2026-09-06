@@ -22,6 +22,9 @@ if (panel) {
   const audioFileInput = panel.querySelector("[data-audio-file]");
   const transcribeButton = panel.querySelector("[data-transcribe]");
   const voiceStatus = panel.querySelector("[data-voice-status]");
+  const captureSteps = Array.from(
+    panel.closest(".entry-point")?.querySelectorAll("[data-capture-step]") ?? [],
+  );
   const requestHeaders = {
     Accept: "application/json",
     "Content-Type": "application/json",
@@ -69,6 +72,18 @@ if (panel) {
   let recordingBytes = 0;
   let recordingTooLarge = false;
 
+  const setCaptureStep = (currentStep) => {
+    captureSteps.forEach((step) => {
+      const active = step.dataset.captureStep === currentStep;
+      step.classList.toggle("is-current", active);
+      if (active) {
+        step.setAttribute("aria-current", "step");
+      } else {
+        step.removeAttribute("aria-current");
+      }
+    });
+  };
+
   const canRecord = Boolean(
     typeof navigator !== "undefined" &&
     navigator.mediaDevices &&
@@ -108,6 +123,7 @@ if (panel) {
     reviewToken = null;
     confirmationToken = null;
     reviewState = null;
+    setCaptureStep("capture");
     result.replaceChildren();
     result.hidden = true;
   };
@@ -746,6 +762,7 @@ if (panel) {
         confirmationToken = payload.confirmation_token;
         confirmButton.hidden = false;
         confirmButton.disabled = false;
+        setCaptureStep("confirm");
         confirmButton.focus({ preventScroll: true });
         previewStatus.textContent = "План подготовлен; проверь diff и подтверди сохранение.";
       } catch (_error) {
@@ -810,6 +827,7 @@ if (panel) {
         reviewState.saved = true;
         reviewState.preparedPersonalMemory = false;
         confirmButton.hidden = true;
+        setCaptureStep("confirm");
         const saved = document.createElement("section");
         saved.className = "saved-note";
         saved.tabIndex = -1;
@@ -875,6 +893,7 @@ if (panel) {
       });
     }
     result.hidden = false;
+    setCaptureStep("review");
     result.scrollIntoView({ block: "nearest" });
     result.focus();
   };

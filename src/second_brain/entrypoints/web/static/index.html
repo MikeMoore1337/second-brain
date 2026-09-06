@@ -74,9 +74,9 @@
             <h2 id="entry-title">Добавить знание</h2>
             <p id="add-description">Получи структурированный черновик из текста, голоса или публичной страницы.</p>
             <ol class="capture-route" aria-label="Маршрут новой заметки">
-              <li class="capture-route-step is-current"><span>01</span> Capture</li>
-              <li class="capture-route-step"><span>02</span> Review</li>
-              <li class="capture-route-step"><span>03</span> Confirm</li>
+              <li class="capture-route-step is-current" data-capture-step="capture" aria-current="step"><span>01</span> Capture</li>
+              <li class="capture-route-step" data-capture-step="review"><span>02</span> Review</li>
+              <li class="capture-route-step" data-capture-step="confirm"><span>03</span> Confirm</li>
             </ol>
             <div class="capture-panel" data-capture-panel>
               <div class="capture-panel-heading">
@@ -84,7 +84,7 @@
                   <p class="capture-panel-label">Signal intake</p>
                   <h3>Сначала зафиксируй сигнал</h3>
                 </div>
-                <span class="capture-panel-meta">LOCAL · REVIEW FIRST</span>
+                <span class="capture-panel-meta">LOCAL UI · NETWORKED DRAFT</span>
               </div>
               <div class="mode-switch" role="group" aria-label="Режим добавления">
                 <button class="mode-button is-active" type="button" data-mode="url" aria-pressed="true">URL</button>
@@ -169,9 +169,9 @@
           </div>
           <div class="journal-panel">
             <ol class="journal-steps" aria-label="Маршрут Decision Journal">
-              <li class="is-current"><span>01</span> Decision</li>
-              <li><span>02</span> Dry-run diff</li>
-              <li><span>03</span> Confirm</li>
+              <li class="is-current" data-journal-step="capture" aria-current="step"><span>01</span> Decision</li>
+              <li data-journal-step="review"><span>02</span> Dry-run diff</li>
+              <li data-journal-step="confirm"><span>03</span> Confirm</li>
             </ol>
             <div class="mode-switch journal-mode-switch" role="group" aria-label="Режим Decision Journal">
               <button

@@ -23,8 +23,14 @@ def test_capture_and_journal_surfaces_expose_one_review_first_route() -> None:
         "01</span> Capture",
         "02</span> Review",
         "03</span> Confirm",
+        'data-capture-step="capture" aria-current="step"',
+        'data-capture-step="review"',
+        'data-capture-step="confirm"',
         'class="capture-panel-heading"',
         'class="journal-steps"',
+        'data-journal-step="capture" aria-current="step"',
+        'data-journal-step="review"',
+        'data-journal-step="confirm"',
         "02</span> Dry-run diff",
         'data-mode="url"',
         'data-mode="text"',
@@ -38,6 +44,8 @@ def test_capture_and_journal_surfaces_expose_one_review_first_route() -> None:
 
     assert 'aria-describedby="add-description"' in html
     assert 'aria-describedby="voice-description"' in html
+    assert "LOCAL UI · NETWORKED DRAFT" in html
+    assert "LOCAL · REVIEW FIRST" not in html
     assert 'class="review-button review-button-primary review-button-confirm"' in html
 
 
@@ -73,6 +81,10 @@ def test_dynamic_review_surface_keeps_safe_write_and_personal_memory_hooks() -> 
     for marker in (
         'section.className = "review-editor"',
         'phase.textContent = "02 / review"',
+        "const setCaptureStep = (currentStep) =>",
+        'setCaptureStep("review")',
+        'setCaptureStep("confirm")',
+        'step.setAttribute("aria-current", "step")',
         'content.parentElement?.classList.add("review-field-wide")',
         'confirmButton.className = "review-button review-button-primary review-button-confirm"',
         'personalMemoryPanel.className = "personal-memory-panel"',
@@ -82,3 +94,12 @@ def test_dynamic_review_surface_keeps_safe_write_and_personal_memory_hooks() -> 
         'diff.className = "save-diff"',
     ):
         assert marker in script
+
+    journal_script = _read("decision-journal.js")
+    for marker in (
+        "const setJournalStep = (currentStep) =>",
+        'setJournalStep("capture")',
+        'setJournalStep("confirm")',
+        'step.setAttribute("aria-current", "step")',
+    ):
+        assert marker in journal_script

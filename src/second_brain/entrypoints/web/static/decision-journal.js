@@ -10,6 +10,9 @@ if (decisionJournalSurface) {
   const journalModeButtons = Array.from(
     decisionJournalSurface.querySelectorAll("[data-journal-mode]"),
   );
+  const journalSteps = Array.from(
+    decisionJournalSurface.querySelectorAll("[data-journal-step]"),
+  );
   const decisionTitle = decisionForm.querySelector("[data-decision-title]");
   const decisionNoteType = decisionForm.querySelector("[data-decision-note-type]");
   const decisionTags = decisionForm.querySelector("[data-decision-tags]");
@@ -75,6 +78,18 @@ if (decisionJournalSurface) {
   let outcomeSavedState = false;
   let savedDecisionId = null;
 
+  const setJournalStep = (currentStep) => {
+    journalSteps.forEach((step) => {
+      const active = step.dataset.journalStep === currentStep;
+      step.classList.toggle("is-current", active);
+      if (active) {
+        step.setAttribute("aria-current", "step");
+      } else {
+        step.removeAttribute("aria-current");
+      }
+    });
+  };
+
   const lines = (value) => value.split(/\r?\n/).filter((item) => item.length > 0);
 
   const setJournalError = (target, statusTarget, message) => {
@@ -121,6 +136,7 @@ if (decisionJournalSurface) {
       button.classList.toggle("is-active", active);
       button.setAttribute("aria-pressed", String(active));
     });
+    setJournalStep("capture");
   };
 
   const syncDecisionTime = () => {
@@ -218,6 +234,7 @@ if (decisionJournalSurface) {
     confirm.disabled = true;
     plan.replaceChildren();
     plan.hidden = true;
+    setJournalStep("capture");
     if (message) {
       statusTarget.textContent = message;
     }
@@ -429,6 +446,7 @@ if (decisionJournalSurface) {
       decisionConfirmationToken = payload.confirmation_token;
       decisionConfirm.hidden = false;
       decisionConfirm.disabled = false;
+      setJournalStep("confirm");
       decisionConfirm.focus({ preventScroll: true });
       decisionStatus.textContent = "Проверь полный diff и подтверди сохранение.";
     } catch (_error) {
@@ -512,6 +530,7 @@ if (decisionJournalSurface) {
       outcomeConfirmationToken = payload.confirmation_token;
       outcomeConfirm.hidden = false;
       outcomeConfirm.disabled = false;
+      setJournalStep("confirm");
       outcomeConfirm.focus({ preventScroll: true });
       outcomeStatus.textContent = "Проверь полный diff и подтверди сохранение.";
     } catch (_error) {
