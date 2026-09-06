@@ -10,6 +10,7 @@
     <script src="/static/decision-journal.js" defer></script>
     <script src="/static/timeline.js" defer></script>
     <script src="/static/self-model.js" defer></script>
+    <script src="/static/self-retrieval.js" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">К содержанию</a>
@@ -25,6 +26,7 @@
         <nav class="topnav" aria-label="Основные разделы">
           <a href="#timeline">Timeline</a>
           <a href="#self-model">Self Model</a>
+          <a href="#self-retrieval">Self Retrieval</a>
           <a href="#search">Search</a>
           <a href="#memory">Memory</a>
           <a href="#growth">Growth</a>
@@ -402,6 +404,46 @@
               Прямых preference, belief или goal claims пока нет.
             </p>
           </div>
+        </section>
+
+        <section
+          class="self-retrieval-surface"
+          id="self-retrieval"
+          aria-labelledby="self-retrieval-title"
+          data-self-retrieval-surface
+        >
+          <div class="section-heading">
+            <p class="eyebrow">Stage 5 · current context</p>
+            <h2 id="self-retrieval-title">Собрать контекст.</h2>
+            <p class="self-retrieval-lede">
+              Лексический запрос, текущая перечитка заметок и только точные supporting UUID links из Self Model.
+            </p>
+          </div>
+          <form class="self-retrieval-form" data-self-retrieval-form>
+            <label class="capture-label" for="self-retrieval-input">Запрос для контекста</label>
+            <div class="self-retrieval-form-row">
+              <input
+                class="capture-input"
+                id="self-retrieval-input"
+                name="query"
+                type="search"
+                placeholder="Например, fastapi testing"
+                autocomplete="off"
+                required
+                data-self-retrieval-input
+              />
+              <button class="capture-submit" type="submit" data-self-retrieval-submit>
+                Собрать
+              </button>
+            </div>
+            <p class="self-retrieval-status" data-self-retrieval-status role="status" aria-live="polite"></p>
+          </form>
+          <p class="capture-error self-retrieval-error" data-self-retrieval-error role="alert" hidden></p>
+          <p class="self-retrieval-summary" data-self-retrieval-summary></p>
+          <p class="self-retrieval-empty" data-self-retrieval-empty hidden>
+            По этому запросу текущий контекст не найден.
+          </p>
+          <div class="self-retrieval-results" data-self-retrieval-results aria-live="polite"></div>
         </section>
 
         <section class="search-surface" id="search" aria-labelledby="search-title" data-search-surface>
