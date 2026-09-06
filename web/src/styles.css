@@ -1,6 +1,27 @@
 @import "tailwindcss";
 @import "../../src/second_brain/entrypoints/web/static/app.css";
 
+.icon {
+  display: inline-block;
+  flex: 0 0 auto;
+  overflow: visible;
+  vertical-align: middle;
+}
+
+.topnav a::before {
+  display: none;
+}
+
+.entry-icon .icon {
+  width: 24px;
+  height: 24px;
+}
+
+.card-meta .icon {
+  width: 18px;
+  height: 18px;
+}
+
 @theme {
   --color-sb-void: #07070a;
   --color-sb-ink: #0e0e15;

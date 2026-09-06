@@ -135,6 +135,13 @@ Primary action остаётся очевидным по placement и label, а �
 rounded-square icon tiles, случайные emoji, толстые filled icons или новую
 декоративную iconography ради заполнения пустоты.
 
+Production mapping и license provenance зафиксированы в
+[`docs/design/iconography-v1.md`](docs/design/iconography-v1.md). React Web
+использует локальный Lucide-derived SVG subset из `web/src/icons.tsx`:
+24×24 viewBox, `currentColor`, stroke 1.5px, round caps/joins; CDN, icon font и
+runtime icon loader запрещены. Decorative SVG получает `aria-hidden`, а
+icon-only control обязан иметь русский accessible name.
+
 Hairlines, crosshairs и registration marks допустимы, когда они объясняют
 связь, границу или координату. Линия без семантики считается шумом и удаляется.
 Focus ring всегда видим keyboard-пользователю и не заменяется violet glow.

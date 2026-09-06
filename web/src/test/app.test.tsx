@@ -54,6 +54,9 @@ describe("React Web parity shell", () => {
     }
     expect(host.querySelector('[data-capture-panel]')).not.toBeNull();
     expect(host.querySelector('[data-self-retrieval-surface]')).not.toBeNull();
+    expect(host.querySelector('.entry-icon [data-icon="add"]')).not.toBeNull();
+    expect(host.querySelector('.topnav [data-icon="decision"]')).not.toBeNull();
+    expect(host.querySelector('.card-meta [data-icon="open"]')).not.toBeNull();
   });
 
   it("reflects busy state on the complete Self Retrieval surface while the request is pending", async () => {

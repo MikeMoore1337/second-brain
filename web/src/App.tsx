@@ -10,16 +10,17 @@ import {
   SimulateMeSurface,
   TimelineSurface,
 } from "./parity";
+import { Icon, type IconName } from "./icons";
 
 const navigation = [
-  ["#decision-journal", "Decision Journal"],
-  ["#timeline", "Timeline"],
-  ["#self-model", "Self Model"],
-  ["#simulate-me", "Simulate Me"],
-  ["#self-retrieval", "Self Retrieval"],
-  ["#search", "Search"],
-  ["#memory", "Memory"],
-  ["#growth", "Growth"],
+  ["#decision-journal", "Decision Journal", "decision"],
+  ["#timeline", "Timeline", "timeline"],
+  ["#self-model", "Self Model", "self-model"],
+  ["#simulate-me", "Simulate Me", "simulate"],
+  ["#self-retrieval", "Self Retrieval", "self-retrieval"],
+  ["#search", "Search", "search"],
+  ["#memory", "Memory", "memory"],
+  ["#growth", "Growth", "simulate"],
 ] as const;
 
 export function App(): ReactElement {
@@ -36,7 +37,7 @@ export function App(): ReactElement {
         <div className="workspace-frame">
           <aside className="workspace-rail" aria-label="Навигация рабочего пространства">
             <div className="rail-intro"><span className="rail-kicker">Workspace map</span><span className="rail-title">Signal field</span></div>
-            <nav className="topnav" aria-label="Основные разделы"><>{navigation.map(([href, label]) => <a href={href} key={href}>{label}</a>)}</></nav>
+            <nav className="topnav" aria-label="Основные разделы"><>{navigation.map(([href, label, icon]) => <a href={href} key={href}><Icon name={icon as IconName} size={18} /><span>{label}</span></a>)}</></nav>
             <span className="status-pill"><span aria-hidden="true" /> Local foundation</span>
           </aside>
           <div className="workspace-content">
@@ -52,7 +53,7 @@ export function App(): ReactElement {
               <SimulateMeSurface />
               <SelfRetrievalSurface />
               <SearchSurface />
-              <section className="pillars" aria-labelledby="pillars-title"><div className="section-heading"><p className="eyebrow">Две центральные части</p><h2 id="pillars-title">Система, которая растёт вместе с тобой.</h2></div><div className="pillar-grid"><article className="pillar-card pillar-card-memory" id="memory"><div className="card-topline"><span className="card-index">01</span><span className="card-dot" aria-hidden="true" /></div><h3>Memory</h3><p>Собирай идеи, источники и наблюдения в надёжную личную память.</p><div className="card-meta"><span>Knowledge base</span><span aria-hidden="true">↗</span></div></article><article className="pillar-card pillar-card-growth" id="growth"><div className="card-topline"><span className="card-index">02</span><span className="card-dot" aria-hidden="true" /></div><h3>Growth</h3><p>Превращай накопленное знание в ясность, навыки и следующий шаг.</p><div className="card-meta"><span>Personal development</span><span aria-hidden="true">↗</span></div></article></div></section>
+              <section className="pillars" aria-labelledby="pillars-title"><div className="section-heading"><p className="eyebrow">Две центральные части</p><h2 id="pillars-title">Система, которая растёт вместе с тобой.</h2></div><div className="pillar-grid"><article className="pillar-card pillar-card-memory" id="memory"><div className="card-topline"><span className="card-index">01</span><span className="card-dot" aria-hidden="true" /></div><h3>Memory</h3><p>Собирай идеи, источники и наблюдения в надёжную личную память.</p><div className="card-meta"><span>Knowledge base</span><Icon name="open" size={18} /></div></article><article className="pillar-card pillar-card-growth" id="growth"><div className="card-topline"><span className="card-index">02</span><span className="card-dot" aria-hidden="true" /></div><h3>Growth</h3><p>Превращай накопленное знание в ясность, навыки и следующий шаг.</p><div className="card-meta"><span>Personal development</span><Icon name="open" size={18} /></div></article></div></section>
             </main>
             <footer className="footer"><span>Local by default</span><span className="footer-line" aria-hidden="true" /><span>Private knowledge, deliberate growth</span></footer>
           </div>

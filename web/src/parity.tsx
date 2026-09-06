@@ -23,6 +23,7 @@ import {
   type SavePlanResponse,
   type SavedNoteResponse,
 } from "./api";
+import { Icon } from "./icons";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactElement, type ReactNode } from "react";
 
 const NOTE_TYPES = ["project", "area", "resource", "zettel"] as const;
@@ -445,7 +446,7 @@ export function CaptureSurface(): ReactElement {
 
   return (
     <section className="entry-point" aria-labelledby="entry-title">
-      <div className="entry-icon" aria-hidden="true">+</div>
+      <div className="entry-icon" aria-hidden="true"><Icon name="add" size={24} /></div>
       <div className="entry-copy">
         <p className="entry-kicker">Новая заметка</p>
         <h2 id="entry-title">Добавить знание</h2>
