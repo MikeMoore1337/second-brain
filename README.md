@@ -130,6 +130,18 @@ uv run python -m second_brain.benchmarks.lexical_gap_v1
 uv run python -m second_brain.benchmarks.lexical_gap_v1 --format json
 ```
 
+Synthetic rebuild-cost benchmark v1 для on-demand Timeline, Self Model и Self
+Retrieval также запускается отдельно; он использует только temporary synthetic
+vault и не применяет performance threshold:
+
+```powershell
+uv run python -m second_brain.benchmarks.rebuild_cost_v1
+uv run python -m second_brain.benchmarks.rebuild_cost_v1 --format json
+```
+
+Подробности и формат artifact описаны в
+[rebuild-cost benchmark v1](docs/benchmarks/rebuild-cost-v1.md).
+
 Private Search/Retrieval API принимает только same-origin loopback `POST` с
 `X-Second-Brain-Request: search-v1` и `Content-Type: application/json`; для
 успешных и ошибочных ответов используется `Cache-Control: no-store`. Query —
