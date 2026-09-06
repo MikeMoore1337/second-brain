@@ -101,7 +101,9 @@ def test_dynamic_review_surface_keeps_safe_write_and_personal_memory_hooks() -> 
     for marker in (
         "const setJournalStep = (currentStep) =>",
         "const journalStepForMode = (mode) =>",
+        'return typeof token === "string" ? "review" : "capture";',
         'setJournalStep("capture")',
+        'setJournalStep("review")',
         'setJournalStep("confirm")',
         'step.setAttribute("aria-current", "step")',
     ):

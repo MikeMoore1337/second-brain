@@ -93,7 +93,10 @@ if (decisionJournalSurface) {
   const journalStepForMode = (mode) => {
     const saved = mode === "outcome" ? outcomeSavedState : decisionSavedState;
     const token = mode === "outcome" ? outcomeConfirmationToken : decisionConfirmationToken;
-    return saved || typeof token === "string" ? "confirm" : "capture";
+    if (saved) {
+      return "confirm";
+    }
+    return typeof token === "string" ? "review" : "capture";
   };
 
   const lines = (value) => value.split(/\r?\n/).filter((item) => item.length > 0);
@@ -452,7 +455,7 @@ if (decisionJournalSurface) {
       decisionConfirmationToken = payload.confirmation_token;
       decisionConfirm.hidden = false;
       decisionConfirm.disabled = false;
-      setJournalStep("confirm");
+      setJournalStep("review");
       decisionConfirm.focus({ preventScroll: true });
       decisionStatus.textContent = "Проверь полный diff и подтверди сохранение.";
     } catch (_error) {
@@ -493,6 +496,7 @@ if (decisionJournalSurface) {
       decisionConfirm.hidden = true;
       decisionConfirm.disabled = true;
       renderSavedJournalNote(decisionSaved, payload, "Decision Journal сохранён", true);
+      setJournalStep("confirm");
       decisionStatus.textContent = "Decision Journal сохранён. Можно добавить outcome.";
       decisionForm.querySelectorAll("input, textarea, select, [data-decision-prepare]").forEach((control) => {
         control.disabled = true;
@@ -536,7 +540,7 @@ if (decisionJournalSurface) {
       outcomeConfirmationToken = payload.confirmation_token;
       outcomeConfirm.hidden = false;
       outcomeConfirm.disabled = false;
-      setJournalStep("confirm");
+      setJournalStep("review");
       outcomeConfirm.focus({ preventScroll: true });
       outcomeStatus.textContent = "Проверь полный diff и подтверди сохранение.";
     } catch (_error) {
@@ -576,6 +580,7 @@ if (decisionJournalSurface) {
       outcomeConfirm.hidden = true;
       outcomeConfirm.disabled = true;
       renderSavedJournalNote(outcomeSaved, payload, "Outcome Observation сохранён", false);
+      setJournalStep("confirm");
       outcomeStatus.textContent = "Outcome сохранён отдельной связанной заметкой.";
       outcomeForm.querySelectorAll("input, textarea, select, [data-outcome-prepare]").forEach((control) => {
         control.disabled = true;
