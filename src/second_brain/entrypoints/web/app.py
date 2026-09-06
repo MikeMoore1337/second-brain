@@ -121,8 +121,6 @@ from .timeline import (
 )
 from .transcriptions import TranscriptionService, build_production_transcription_service
 
-STATIC_DIR: Final[Path] = Path(__file__).resolve().parent / "static"
-INDEX_FILE: Final[Path] = STATIC_DIR / "index.html"
 REACT_DIST_DIR: Final[Path] = Path(__file__).resolve().parents[4] / "web" / "dist"
 REACT_INDEX_FILE: Final[Path] = REACT_DIST_DIR / "index.html"
 REACT_ASSETS_DIR: Final[Path] = REACT_DIST_DIR / "assets"
@@ -1997,32 +1995,36 @@ def create_app(
         )
 
     @app.get("/", include_in_schema=False)
-    def index() -> FileResponse:
-        return FileResponse(INDEX_FILE, media_type="text/html")
+    def index() -> Response:
+        return react_index()
 
     @app.get("/react", include_in_schema=False)
     @app.get("/react/", include_in_schema=False)
     def react_index() -> Response:
-        """Serve the opt-in built React foundation until parity is complete."""
+        """Serve the single production React GUI after the parity build."""
 
         if not REACT_INDEX_FILE.is_file():
-            return Response(status_code=404)
+            return Response(
+                content="React frontend build is required.",
+                status_code=503,
+                media_type="text/plain",
+            )
         return FileResponse(REACT_INDEX_FILE, media_type="text/html")
 
     @app.get("/healthz", include_in_schema=False)
     def healthz() -> JSONResponse:
         return JSONResponse(content={"status": "ok"})
 
-    app.mount(
-        "/static",
-        StaticFiles(directory=STATIC_DIR, html=False, check_dir=True),
-        name="static",
-    )
     if REACT_ASSETS_DIR.is_dir():
+        app.mount(
+            "/assets",
+            StaticFiles(directory=REACT_ASSETS_DIR, html=False, check_dir=True),
+            name="react-assets",
+        )
         app.mount(
             "/react/assets",
             StaticFiles(directory=REACT_ASSETS_DIR, html=False, check_dir=True),
-            name="react-assets",
+            name="react-assets-compat",
         )
     return app
 

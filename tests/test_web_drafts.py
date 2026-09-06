@@ -618,7 +618,7 @@ def test_production_composition_defers_cloudflare_config_until_real_post(
     application = create_app()
 
     with TestClient(application, base_url=LOOPBACK_BASE_URL) as client:
-        assert client.get("/").status_code == 200
+        assert client.get("/").status_code in {200, 503}
         assert client.get("/healthz").status_code == 200
         assert load_calls == 0
         response = client.post(

@@ -1042,7 +1042,7 @@ def test_save_config_is_lazy_and_invalid_config_makes_zero_writes(
     monkeypatch.setattr("second_brain.entrypoints.web.saves.load_config", fail_load_config)
     application = make_app()
     with TestClient(application, base_url=LOOPBACK_BASE_URL) as client:
-        assert client.get("/").status_code == 200
+        assert client.get("/").status_code in {200, 503}
         assert client.get("/healthz").status_code == 200
         assert (
             client.post(
