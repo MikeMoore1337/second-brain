@@ -22,6 +22,7 @@ from second_brain.adapters.vault.writer import FileSystemVaultWriter
 ISOLATION_ERROR_PREFIX: Final = "TEST_ISOLATION_VIOLATION:"
 LIVE_SMOKE_ENV: Final = "SECOND_BRAIN_ALLOW_LIVE_SMOKE"
 _NETWORK_EXECUTABLES: Final = frozenset({"curl", "curl.exe", "yt-dlp", "yt-dlp.exe"})
+_PROVIDER_WORKER_MODULE: Final = "second_brain.adapters.llm.cloudflare_workers_ai_worker"
 _FORBIDDEN_INHERITED_ENVIRONMENT: Final = ("SECOND_BRAIN_VAULT_PATH",)
 _SECRET_ENVIRONMENT_NAMES: Final = (
     "CLOUDFLARE_ACCOUNT_ID",
@@ -83,6 +84,15 @@ def _is_forbidden_network_process(command: object) -> bool:
     if not arguments or _executable_name(arguments[0]) not in _NETWORK_EXECUTABLES:
         return False
     return arguments[1:] != ("--version",)
+
+
+def _is_provider_worker_process(command: object) -> bool:
+    """Recognize the real provider worker before it can perform HTTPS egress."""
+
+    arguments = _command_arguments(command)
+    return (
+        any(argument == _PROVIDER_WORKER_MODULE for argument in arguments[1:]) and "-m" in arguments
+    )
 
 
 def _blocked_network(*_args: object, **_kwargs: object) -> NoReturn:
@@ -154,11 +164,18 @@ _ORIGINAL_VAULT_WRITER_INIT = FileSystemVaultWriter.__init__
 
 
 def _guard_subprocess_call(command: object) -> None:
-    if _is_forbidden_network_process(command):
+    if _is_forbidden_network_process(command) or _is_provider_worker_process(command):
         raise IsolationViolation(
             f"{ISOLATION_ERROR_PREFIX} network-capable process is forbidden in ordinary tests; "
             "use a fake runner or an explicitly authorized live_smoke test"
         )
+
+
+def _explicit_live_smoke_selector(config: pytest.Config) -> bool:
+    """Require the exact ``pytest -m live_smoke`` selector, not env alone."""
+
+    mark_expression = str(getattr(config.option, "markexpr", "") or "").strip()
+    return mark_expression == "live_smoke"
 
 
 @pytest.fixture(autouse=True)
@@ -172,6 +189,7 @@ def _isolate_test_boundaries(
     live_smoke_authorized = (
         request.node.get_closest_marker("live_smoke") is not None
         and os.environ.get(LIVE_SMOKE_ENV) == "1"
+        and _explicit_live_smoke_selector(request.config)
     )
     if not live_smoke_authorized:
         for name in _SECRET_ENVIRONMENT_NAMES:
@@ -216,8 +234,10 @@ def pytest_configure(config: pytest.Config) -> None:
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Не запускать live smoke в обычном тестовом процессе."""
 
-    del config
-    if os.environ.get(LIVE_SMOKE_ENV) == "1":
+    live_smoke_selected = os.environ.get(LIVE_SMOKE_ENV) == "1" and _explicit_live_smoke_selector(
+        config
+    )
+    if live_smoke_selected:
         return
     reason = (
         f"{ISOLATION_ERROR_PREFIX} live_smoke requires "

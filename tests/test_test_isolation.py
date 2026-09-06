@@ -49,6 +49,14 @@ def test_network_process_attempt_is_rejected_before_launch() -> None:
         subprocess.Popen(["curl", "https://example.invalid"], stdout=subprocess.PIPE)
 
 
+def test_provider_worker_process_attempt_is_rejected_before_launch() -> None:
+    with pytest.raises(IsolationViolation, match=r"TEST_ISOLATION_VIOLATION:.*network-capable"):
+        subprocess.Popen(
+            [sys.executable, "-m", "second_brain.adapters.llm.cloudflare_workers_ai_worker"],
+            stdout=subprocess.PIPE,
+        )
+
+
 def test_local_process_remains_available_to_unit_tests() -> None:
     result = subprocess.run(
         [sys.executable, "-c", "print('local test process')"],
