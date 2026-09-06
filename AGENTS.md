@@ -175,6 +175,10 @@ Bounded repository protocol для явно активированного overn
 - Night Shift не ослабляет Safe Write, privacy, Python 3.14 и границу
   `second-brain-vault`;
 - этот protocol не добавляет agent runtime, daemon, queue, DB или provider.
+- после verified GREEN merge применяется bounded Git-only post-task cleanup из
+  [`scripts/worktree_cleanup.py`](scripts/worktree_cleanup.py); его receipt,
+  safety rules и `cleanup_deferred` описаны в
+  [`docs/automation/night-shift-v1.md`](docs/automation/night-shift-v1.md).
 
 ### Handoff
 

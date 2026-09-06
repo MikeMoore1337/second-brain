@@ -82,6 +82,46 @@ NIGHT_SHIFT: HUMAN_REQUIRED
 
 Метод merge — одобренный репозиторием squash. После merge нужно проверить новый SHA ветки `main` и закрытие issue.
 
+## Post-task cleanup worktree
+
+После каждого проверенного `GREEN` merge исполнитель обязан выполнить bounded
+post-task lifecycle до запуска следующей задачи:
+
+1. подтвердить `PR merged`;
+2. подтвердить `issue closed/completed`;
+3. получить новый exact SHA локального `main`;
+4. прочитать только зарегистрированные worktree через `git worktree list --porcelain`;
+5. в каждом кандидате проверить `git status --porcelain`;
+6. передать уже проверенное состояние в
+   [`scripts/worktree_cleanup.py`](../../scripts/worktree_cleanup.py).
+
+Helper принимает JSON receipt от orchestrator и не делает GitHub-запросов.
+Удаление возможно только для clean, registered, non-primary, non-vault
+worktree с `task_state=merged`, закрытым issue, merged PR, отсутствующим OPEN
+PR для branch, доказанным `merged_sha`, отсутствующим active-use/CWD и
+совпадающим branch mapping. Detached, unknown, locked, dirty, deferred,
+`HUMAN_REQUIRED`, `BLOCKED`, open или unmerged worktree сохраняются.
+
+Обычный вызов после verified merge:
+
+```text
+uv run python scripts/worktree_cleanup.py \
+  --repo <primary-second-brain> \
+  --manifest <verified-green-merge-receipt.json> \
+  --format json
+```
+
+Для cohort/orphan pass используется тот же helper с
+`lifecycle=historical_orphan_pass`; GitHub state по-прежнему разрешает
+orchestrator. `--dry-run`/`--list` только классифицирует кандидатов. При
+успешных удалениях helper один раз выполняет `git worktree prune`; он никогда
+не использует `--force`, raw filesystem deletion, remote/local branch deletion
+или очистку по имени соседней папки. Ошибка cleanup даёт
+`cleanup_deferred`, сохраняет worktree и не является failure задачи, review/CI
+fix cycle или поводом для retry.
+
+После merge #128 этот lifecycle обязателен для всех последующих задач.
+
 ## Отсечка и аудит
 
 Текущая policy задаёт `08:00 Europe/Moscow`. На cutoff исполнитель не начинает новую задачу, не оставляет частично записанное состояние и доводит только короткий безопасный checkpoint/commit/PR. Утренний отчёт не создаётся автоматически в репозитории; используется [версионируемый шаблон](night-shift-morning-report-template.md).

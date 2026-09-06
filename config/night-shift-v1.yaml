@@ -81,3 +81,12 @@ merge_gate:
     - quality
     - windows-ssl-regression
   method: squash
+
+post_task_cleanup:
+  enabled_after_verified_green_merge: true
+  helper: scripts/worktree_cleanup.py
+  prune_after_successful_removals: true
+  allow_force: false
+  allow_remote_branch_delete: false
+  allow_local_branch_delete: false
+  failure_is_task_failure: false
