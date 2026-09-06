@@ -7,8 +7,9 @@ Stage 2 Decision Journal v1 core и Stage 3 Personal Timeline v1 core
 Self Retrieval также реализован bounded core/Web/CLI slices из #89, #90 и #91
 поверх approved contract issue #88; он остаётся read-only и current-UUID based.
 Owner-approved v1 contracts фиксируют conservative direct-assertion и
-current-UUID retrieval policies; RAG, embeddings и prediction runtime остаются
-будущими slices.
+current-UUID retrieval policies. Stage 6 Simulate Me получил approved
+mechanical design contract в #100: provider-free exact-match
+prediction/abstention policy без confidence; runtime остаётся будущим slice.
 
 Точный status snapshot перед этой docs reconciliation — current `main`:
 `3cc06db5b3490a0af9ebb9a1e14aac659b6e44f9`.
@@ -1041,22 +1042,30 @@ context и derived explanation divergence.
 
 ### Stage 6 — Simulate Me v1
 
+- **Статус:** approved mechanical design; runtime implementation не начата.
+  Нормативный contract находится в
+  [simulate-me-v1-contract.md](simulate-me-v1-contract.md),
+  `HUMAN_REQUIRED = none`.
 - **Цель:** predict likely user choice from current evidence, without calling it
   recommendation.
-- **Входные зависимости:** Stage 4 Self Model and Stage 5 current context;
-  Stage 2 journal provides choice examples.
-- **Canonical changes:** actual choices remain canonical only when reviewed;
-  prediction itself is not canonical.
-- **Derived state:** predicted choice, bounded confidence, evidence refs,
-  temporal caveats, `generated_at` and derivation version.
-- **Public/application contracts:** explicit Simulate Me request/result with
-  uncertainty and candidate evidence.
-- **Risks:** prediction becomes imperative, stale habitual patterns, small
-  sample, hidden recommendation leakage.
-- **Explicit out-of-scope:** independent recommendation, Compare, calibration
-  training and background predictions.
-- **Acceptance boundary:** response is labelled prediction and can say
-  `insufficient evidence`; no canonical write occurs.
+- **Входные зависимости:** Stage 4 current direct Self Model dimensions and
+  Stage 5 current-UUID context; historical Decision Journal не является
+  selection authority.
+- **Canonical changes:** none; actual choices remain canonical only when
+  reviewed, prediction itself is never canonical.
+- **Derived state:** prediction или deterministic abstention, bounded evidence
+  refs, temporal caveats, exact derivation version и policy fingerprint; numeric
+  confidence отсутствует.
+- **Public/application contracts:** caller-owned bounded `{id,label}` options;
+  exact whole-label matching; result только `prediction` или `abstention`.
+- **Risks:** hidden semantic matching, recommendation leakage, stale/conflict
+  inference и provider/persistence expansion.
+- **Explicit out-of-scope:** aliases/synonyms/fuzzy matching, confidence,
+  ranking, recency, recommendation, Compare, calibration, background
+  predictions и canonical write-back.
+- **Acceptance boundary:** response явно labelled **ПРОГНОЗ** либо abstention;
+  `preference`/`goal` могут выбрать ровно один distinct option, а missing или
+  ambiguous evidence даёт bounded abstention; canonical write отсутствует.
 
 ### Stage 7 — Compare v1 + Prediction & Calibration v1
 
@@ -1299,5 +1308,6 @@ exact supporting UUID links и safe errors; он не добавляет embeddi
 prediction, inference write-back, canonical fields или изменения
 `second-brain-vault`.
 
-Нижеследующие Stage 6–8 остаются design/roadmap boundaries. Этот status sync
-не объявляет новый implementation scope и не меняет product semantics.
+Stage 6 contract approved, но Stage 6 runtime и нижеследующие Stage 7–8
+остаются design/roadmap boundaries. Этот status sync не объявляет новый
+implementation scope и не меняет product semantics.
