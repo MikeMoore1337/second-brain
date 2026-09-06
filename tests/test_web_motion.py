@@ -61,8 +61,9 @@ def test_motion_primitives_cover_state_arrival_feedback_and_details() -> None:
     assert ":nth-child(-n + 6)" in css
     assert '[aria-busy="true"]' in css
     assert "@keyframes sb-busy-pulse" in css
-    assert ".topnav a:active" in css
+    assert ".topnav a:active:not(:focus-visible)" in css
     assert ".review-button:active:not(:disabled)" in css
+    assert ".review-button:active:not(:disabled):not(:focus-visible)" in css
 
     motion_section = css.split("/* Motion system v1:", 1)[1].split("@media (max-width: 760px)", 1)[
         0
@@ -87,6 +88,12 @@ def test_motion_respects_touch_hover_and_reduced_motion_contracts() -> None:
     assert "transition-duration: 0.01ms !important;" in css
     assert "animation-iteration-count: 1 !important;" in css
     assert "transform: none;" in css
+    reduced_motion_section = css.split("@media (prefers-reduced-motion: reduce)", 1)[1]
+    assert ".topnav a:active," in reduced_motion_section
+    assert "transform: none;" in reduced_motion_section
+    reduced_motion_section = css.split("@media (prefers-reduced-motion: reduce)", 1)[1]
+    assert ".topnav a:active" in reduced_motion_section
+    assert ".review-button:active:not(:disabled)" in reduced_motion_section
 
 
 def test_motion_consumers_match_existing_dynamic_dom_contracts() -> None:

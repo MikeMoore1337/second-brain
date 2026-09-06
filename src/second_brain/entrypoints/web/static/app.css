@@ -2201,12 +2201,12 @@ body::before {
   transition: transform var(--sb-duration-press) var(--sb-ease-out);
 }
 
-.topnav a:active,
-.mode-button:active:not(:disabled),
-.capture-submit:active:not(:disabled),
-.voice-button:active:not(:disabled),
-.voice-file-label:active,
-.review-button:active:not(:disabled) {
+.topnav a:active:not(:focus-visible),
+.mode-button:active:not(:disabled):not(:focus-visible),
+.capture-submit:active:not(:disabled):not(:focus-visible),
+.voice-button:active:not(:disabled):not(:focus-visible),
+.voice-file-label:active:not(:focus-visible),
+.review-button:active:not(:disabled):not(:focus-visible) {
   transform: scale(0.97);
 }
 
@@ -2609,6 +2609,15 @@ body::before {
     transform: none;
   }
 
+  .topnav a:active,
+  .mode-button:active:not(:disabled),
+  .capture-submit:active:not(:disabled),
+  .voice-button:active:not(:disabled),
+  .voice-file-label:active,
+  .review-button:active:not(:disabled) {
+    transform: none;
+  }
+
   :where(
       .draft-result,
       .save-plan,
@@ -2622,6 +2631,15 @@ body::before {
       .self-retrieval-exclusions,
       .motion-details[open] > :not(summary)
     ) {
+    transform: none;
+  }
+
+  .topnav a:active,
+  .mode-button:active:not(:disabled),
+  .capture-submit:active:not(:disabled),
+  .voice-button:active:not(:disabled),
+  .voice-file-label:active,
+  .review-button:active:not(:disabled) {
     transform: none;
   }
 
