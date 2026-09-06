@@ -7,7 +7,7 @@
 3. Продолжай незавершённый task только в его scope. Перед commit/push/PR выполни focused tests, затем один финальный Python 3.14 gate согласно `AGENTS.md`.
 4. После каждого нового head дождись exact-head `quality` и `windows-ssl-regression` и нового review. Verdict старого head не переносится на новый.
 5. Соблюдай failure budget: максимум 3 review-fix cycles, 3 code-changing CI-fix cycles и 0 scope expansion на task; flaky retry не считай fix cycle только при evidence и без изменения кода.
-6. При RED gate или unresolved product decision остановись, выдай `HUMAN_REQUIRED` и bounded memo `Question / Known facts / Options / Trade-offs / Recommendation / Affected tasks`. Не выбирай confidence, conflict, stale или supersede semantics самостоятельно.
+6. При RED gate или unresolved product decision остановись, выдай `HUMAN_REQUIRED` и bounded memo `Вопрос / Известные факты / Варианты / Компромиссы / Рекомендация / Затронутые задачи`. Не выбирай confidence, conflict, stale или supersede semantics самостоятельно.
 7. YELLOW можно довести до green PR, но не merge и не запускать зависимые задачи без human/risk decision. GREEN merge возможен только после exact-SHA review и всех merge gates.
 8. После cutoff не начинай новую задачу. Не трогай `second-brain-vault`, credentials, live provider smoke, private note content, другие репозитории или отдельные бессвязные threads.
 

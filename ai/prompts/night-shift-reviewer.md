@@ -21,4 +21,4 @@ NIGHT_SHIFT: MERGE_READY
 NIGHT_SHIFT: HUMAN_REQUIRED
 ```
 
-`MERGE_READY` разрешён только для exact current head. RED или нерешённая product semantics всегда означают `HUMAN_REQUIRED` с memo `Question / Known facts / Options / Trade-offs / Recommendation / Affected tasks`. Если finding — false positive, объясни это в thread после проверки фактов.
+`MERGE_READY` разрешён только для exact current head. RED или нерешённая product semantics всегда означают `HUMAN_REQUIRED` с memo `Вопрос / Известные факты / Варианты / Компромиссы / Рекомендация / Затронутые задачи`. Если finding — false positive, объясни это в thread после проверки фактов.
