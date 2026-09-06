@@ -5,12 +5,15 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import NoReturn, cast
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from starlette.types import ASGIApp, Message, Scope
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from second_brain.entrypoints.web.app import (
     DRAFT_REQUEST_HEADER_NAME,
@@ -31,8 +34,16 @@ from second_brain.entrypoints.web.app import (
     TIMELINE_REQUEST_HEADER_VALUE,
     TRANSCRIPTION_REQUEST_HEADER_NAME,
     TRANSCRIPTION_REQUEST_HEADER_VALUE,
+    TranscriptionRequestBoundaryMiddleware,
     create_app,
 )
+from second_brain.entrypoints.web.drafts import DraftService
+from second_brain.entrypoints.web.saves import DraftSaveService
+from second_brain.entrypoints.web.search import SearchService
+from second_brain.entrypoints.web.self_model import SelfModelService
+from second_brain.entrypoints.web.self_retrieval import SelfRetrievalService
+from second_brain.entrypoints.web.timeline import TimelineService
+from second_brain.entrypoints.web.transcriptions import TranscriptionService
 
 LOOPBACK_BASE_URL = "http://127.0.0.1"
 _REVIEW_TOKEN = "review-token-v1"
@@ -289,6 +300,37 @@ def _valid_headers(route: PrivateRoute) -> dict[str, str]:
     }
 
 
+class RecordingBoundaryService:
+    """Fail-fast seam proving boundary tests never call production services."""
+
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def __getattr__(self, name: str) -> Callable[..., NoReturn]:
+        def fail(*args: object, **kwargs: object) -> NoReturn:
+            del args, kwargs
+            self.calls.append(name)
+            raise AssertionError(f"unexpected downstream service call: {name}")
+
+        return fail
+
+
+def _boundary_test_app() -> tuple[FastAPI, RecordingBoundaryService]:
+    """Build the route graph with fail-fast seams instead of production services."""
+
+    service = RecordingBoundaryService()
+    application = create_app(
+        draft_service=cast(DraftService, service),
+        transcription_service=cast(TranscriptionService, service),
+        save_service=cast(DraftSaveService, service),
+        search_service=cast(SearchService, service),
+        timeline_service=cast(TimelineService, service),
+        self_model_service=cast(SelfModelService, service),
+        self_retrieval_service=cast(SelfRetrievalService, service),
+    )
+    return application, service
+
+
 @pytest.mark.parametrize(
     "route",
     PRIVATE_ROUTES,
@@ -296,7 +338,15 @@ def _valid_headers(route: PrivateRoute) -> dict[str, str]:
 )
 @pytest.mark.parametrize(
     "violation",
-    ["missing-purpose", "wrong-purpose", "foreign-origin", "wrong-host", "wrong-content-type"],
+    [
+        "missing-purpose",
+        "wrong-purpose",
+        "foreign-origin",
+        "missing-host",
+        "wrong-host",
+        "missing-content-type",
+        "wrong-content-type",
+    ],
 )
 def test_every_private_route_rejects_boundary_metadata_before_service(
     route: PrivateRoute,
@@ -311,16 +361,21 @@ def test_every_private_route_rejects_boundary_metadata_before_service(
         headers[route.request_header_name] = "wrong-purpose-v1"
     elif violation == "foreign-origin":
         headers["Origin"] = "https://evil.example"
+    elif violation == "missing-host":
+        pass
     elif violation == "wrong-host":
         headers["Host"] = "evil.example"
+    elif violation == "missing-content-type":
+        headers.pop("Content-Type")
     else:
         headers["Content-Type"] = "text/plain"
 
     raw_headers = list(headers.items())
-    if violation != "wrong-host":
+    if violation not in {"missing-host", "wrong-host"}:
         raw_headers.insert(0, ("host", "127.0.0.1"))
+    application, service = _boundary_test_app()
     status, response_headers, response_body, receive_calls = _raw_request(
-        create_app(),
+        application,
         path=route.path,
         headers=raw_headers,
         body=route.body,
@@ -329,6 +384,7 @@ def test_every_private_route_rejects_boundary_metadata_before_service(
 
     assert status == 400
     assert receive_calls == 0
+    assert service.calls == []
     assert payload["error"]["code"] == route.invalid_code
     assert set(payload["error"]) == {"code", "message"}
     assert response_headers["cache-control"] == "no-store"
@@ -339,6 +395,44 @@ def test_every_private_route_rejects_boundary_metadata_before_service(
     assert "access-control-allow-origin" not in response_headers
     assert b"traceback" not in response_body.lower()
     assert b"exception" not in response_body.lower()
+
+
+@pytest.mark.parametrize(
+    "route",
+    PRIVATE_ROUTES,
+    ids=lambda route: route.path,
+)
+@pytest.mark.parametrize(
+    ("host", "origin"),
+    [
+        ("127.0.0.1:8080", "http://127.0.0.1:8080"),
+        ("localhost:8080", "http://localhost:8080"),
+    ],
+    ids=["ipv4-port", "localhost-port"],
+)
+def test_private_routes_accept_trusted_loopback_ports_and_matching_origin(
+    route: PrivateRoute,
+    host: str,
+    origin: str,
+) -> None:
+    """Keep valid loopback Host/Origin port pairs on the accepted boundary path."""
+
+    application, _ = _boundary_test_app()
+    headers = [
+        ("host", host),
+        ("origin", origin),
+        ("content-type", route.content_type),
+        (route.request_header_name, route.request_header_value),
+    ]
+
+    _, _, _, receive_calls = _raw_request(
+        application,
+        path=route.path,
+        headers=headers,
+        body=route.body,
+    )
+
+    assert receive_calls == 1
 
 
 def _raw_request(
@@ -410,6 +504,42 @@ def _raw_request(
     return int(response_start["status"]), response_headers, response_body, receive_calls
 
 
+def test_transcription_stream_cap_rejects_before_downstream_invocation() -> None:
+    """Prove the transcription middleware rejects overflow before the endpoint runs."""
+
+    downstream_calls = 0
+
+    async def downstream(scope: Scope, receive: Receive, send: Send) -> None:
+        nonlocal downstream_calls
+        del scope, receive, send
+        downstream_calls += 1
+        raise AssertionError("transcription endpoint must not run for an oversized stream")
+
+    headers = [
+        ("host", "127.0.0.1"),
+        ("content-type", "audio/wav"),
+        (TRANSCRIPTION_REQUEST_HEADER_NAME, TRANSCRIPTION_REQUEST_HEADER_VALUE),
+    ]
+    application = TranscriptionRequestBoundaryMiddleware(
+        downstream,
+        max_body_bytes=MAX_RAW_TRANSCRIPTION_BODY_BYTES,
+    )
+
+    status, response_headers, body, receive_calls = _raw_request(
+        application,
+        path="/api/transcriptions/audio",
+        headers=headers,
+        body=b"",
+        body_chunks=(b"x" * MAX_RAW_TRANSCRIPTION_BODY_BYTES, b"x"),
+    )
+
+    assert status == 413
+    assert json.loads(body)["error"]["code"] == "TRANSCRIPTION_CONTENT_TOO_LARGE"
+    assert response_headers["cache-control"] == "no-store"
+    assert receive_calls == 2
+    assert downstream_calls == 0
+
+
 @pytest.mark.parametrize(
     "route",
     PRIVATE_ROUTES,
@@ -441,8 +571,9 @@ def test_every_private_route_rejects_duplicate_security_headers_before_body_read
     else:
         headers.extend([("content-length", str(len(route.body)))] * 2)
 
+    application, service = _boundary_test_app()
     status, response_headers, body, receive_calls = _raw_request(
-        create_app(),
+        application,
         path=route.path,
         headers=headers,
         body=route.body,
@@ -450,6 +581,7 @@ def test_every_private_route_rejects_duplicate_security_headers_before_body_read
 
     assert status == 400
     assert receive_calls == 0
+    assert service.calls == []
     assert response_headers["cache-control"] == "no-store"
     assert response_headers["x-content-type-options"] == "nosniff"
     assert response_headers["referrer-policy"] == "no-referrer"
@@ -474,8 +606,9 @@ def test_every_private_route_enforces_raw_body_cap_before_parser(route: PrivateR
         ("content-length", str(route.max_body_bytes + 1)),
     ]
 
+    application, service = _boundary_test_app()
     status, response_headers, body, receive_calls = _raw_request(
-        create_app(),
+        application,
         path=route.path,
         headers=headers,
         body=route.body,
@@ -483,6 +616,7 @@ def test_every_private_route_enforces_raw_body_cap_before_parser(route: PrivateR
 
     assert status == 413
     assert receive_calls == 0
+    assert service.calls == []
     assert response_headers["cache-control"] == "no-store"
     assert response_headers["x-content-type-options"] == "nosniff"
     assert response_headers["referrer-policy"] == "no-referrer"
@@ -514,8 +648,9 @@ def test_every_private_route_enforces_streamed_raw_body_cap(
     if declared_length is not None:
         headers.append(("content-length", declared_length))
 
+    application, service = _boundary_test_app()
     status, response_headers, body, receive_calls = _raw_request(
-        create_app(),
+        application,
         path=route.path,
         headers=headers,
         body=b"",
@@ -524,6 +659,7 @@ def test_every_private_route_enforces_streamed_raw_body_cap(
 
     assert status == 413
     assert receive_calls >= 2
+    assert service.calls == []
     assert response_headers["cache-control"] == "no-store"
     assert response_headers["x-content-type-options"] == "nosniff"
     assert response_headers["referrer-policy"] == "no-referrer"
@@ -534,7 +670,7 @@ def test_every_private_route_enforces_streamed_raw_body_cap(
 def test_private_route_matrix_covers_all_registered_private_post_routes() -> None:
     """Keep the security matrix exhaustive as private POST routes are added."""
 
-    application = create_app()
+    application, _ = _boundary_test_app()
     registered_private_post_paths: set[str] = set()
     for route in application.routes:
         route_path = getattr(route, "path", None)
@@ -562,7 +698,8 @@ def test_private_routes_are_post_only_and_cacheless_on_method_errors(
 ) -> None:
     """Keep accidental non-POST exposure out of the private API surface."""
 
-    with TestClient(create_app(), base_url=LOOPBACK_BASE_URL) as client:
+    application, _ = _boundary_test_app()
+    with TestClient(application, base_url=LOOPBACK_BASE_URL) as client:
         response = client.request(method, path)
 
     assert response.status_code == 405
@@ -576,7 +713,7 @@ def test_private_routes_are_post_only_and_cacheless_on_method_errors(
 def test_private_routes_are_not_documented_and_no_cors_is_configured() -> None:
     """Keep local private routes hidden from generated docs and CORS negotiation."""
 
-    application = create_app()
+    application, _ = _boundary_test_app()
     assert application.docs_url is None
     assert application.redoc_url is None
     assert application.openapi_url is None
