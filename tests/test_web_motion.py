@@ -89,9 +89,9 @@ def test_motion_respects_touch_hover_and_reduced_motion_contracts() -> None:
     assert "animation-iteration-count: 1 !important;" in css
     assert "transform: none;" in css
     reduced_motion_section = css.split("@media (prefers-reduced-motion: reduce)", 1)[1]
-    assert ".topnav a:active," in reduced_motion_section
+    assert ".topnav a:active:not(:focus-visible)," in reduced_motion_section
     assert "transform: none;" in reduced_motion_section
-    assert ".review-button:active:not(:disabled)" in reduced_motion_section
+    assert ".review-button:active:not(:disabled):not(:focus-visible)" in reduced_motion_section
 
 
 def test_motion_consumers_match_existing_dynamic_dom_contracts() -> None:
