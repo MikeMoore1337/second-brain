@@ -61,6 +61,7 @@ def test_web_error_messages_are_safe_russian_human_messages() -> None:
 def test_localized_presentation_keeps_machine_values_out_of_visible_labels() -> None:
     presentation = _read("web/src/presentation.ts")
     assert 'project: "Проект"' in presentation
+    assert 'note: "Заметка"' in presentation
     assert 'not_assessed: "Не оценивалось"' in presentation
     assert 'no_matching_evidence: "Подходящих свидетельств не найдено"' in presentation
     assert "insufficient_or_invalid_current_context:" in presentation
@@ -69,5 +70,9 @@ def test_localized_presentation_keeps_machine_values_out_of_visible_labels() -> 
 
 def test_russian_ui_mobile_contract_retains_existing_touch_and_width_floor() -> None:
     styles = _read("web/src/styles.css")
+    production_styles = _read("src/second_brain/entrypoints/web/static/app.css")
     assert "min-width: 320px" in styles
     assert "min-width: 44px" in styles
+    assert "overflow-x: clip" in production_styles
+    assert "@media (max-width: 760px)" in production_styles
+    assert "width: min(100%, calc(100vw - 32px))" in production_styles

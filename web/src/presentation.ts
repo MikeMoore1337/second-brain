@@ -11,6 +11,7 @@ const VALUE_LABELS: Readonly<Record<string, string>> = {
   explicit_user_fact: "Явный факт о пользователе",
   goal: "Цель",
   memory: "Память",
+  note: "Заметка",
   multiple_options_supported: "Поддерживается несколько вариантов",
   no_matching_evidence: "Подходящих свидетельств не найдено",
   not_assessed: "Не оценивалось",
