@@ -58,11 +58,6 @@ input:focus-visible {
   transition: color 160ms ease-out, text-decoration-color 160ms ease-out;
 }
 
-.route-link:hover {
-  color: #f4f1fa;
-  text-decoration-color: #9b7bff;
-}
-
 .signal-plane {
   position: relative;
   overflow: hidden;
@@ -119,23 +114,14 @@ input:focus-visible {
 
 .primary-control {
   border: 1px solid #9b7bff;
-  background: #7658e8;
-  color: #07070a;
-}
-
-.primary-control:hover:not(:disabled) {
   background: #9b7bff;
+  color: #07070a;
 }
 
 .secondary-control {
   border: 1px solid #302844;
   background: transparent;
   color: #f4f1fa;
-}
-
-.secondary-control:hover:not(:disabled) {
-  border-color: #9b7bff;
-  background: #211a3b;
 }
 
 .primary-control:active:not(:disabled),
@@ -158,6 +144,22 @@ input:focus-visible {
 
 .foundation-input::placeholder {
   color: #898198;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .route-link:hover {
+    color: #f4f1fa;
+    text-decoration-color: #9b7bff;
+  }
+
+  .primary-control:hover:not(:disabled) {
+    background: #d8c7ff;
+  }
+
+  .secondary-control:hover:not(:disabled) {
+    border-color: #9b7bff;
+    background: #211a3b;
+  }
 }
 
 .foundation-dialog-overlay {
