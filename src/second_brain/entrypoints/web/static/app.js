@@ -312,9 +312,15 @@ if (panel) {
     const section = document.createElement("section");
     section.className = "review-editor";
     section.setAttribute("aria-busy", "false");
+    const headingRow = document.createElement("div");
+    headingRow.className = "review-heading-row";
+    const phase = document.createElement("span");
+    phase.className = "review-phase";
+    phase.textContent = "02 / review";
     const heading = document.createElement("h4");
     heading.textContent = "Проверь и отредактируй";
-    section.append(heading);
+    headingRow.append(phase, heading);
+    section.append(headingRow);
 
     const fields = document.createElement("div");
     fields.className = "review-fields";
@@ -341,6 +347,7 @@ if (panel) {
     links.value = arrayValue(draft.links).join("\n");
 
     const content = editorField(fields, "Содержание", "review-content", "textarea");
+    content.parentElement?.classList.add("review-field-wide");
     content.rows = 12;
     content.value = typeof draft.content === "string" ? draft.content : "";
     section.append(fields);
@@ -556,7 +563,7 @@ if (panel) {
     prepareButton.type = "button";
     prepareButton.textContent = "Подготовить сохранение";
     const confirmButton = document.createElement("button");
-    confirmButton.className = "review-button review-button-primary";
+    confirmButton.className = "review-button review-button-primary review-button-confirm";
     confirmButton.type = "button";
     confirmButton.textContent = "Подтвердить сохранение";
     confirmButton.hidden = true;

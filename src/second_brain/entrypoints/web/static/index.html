@@ -73,7 +73,19 @@
             <p class="entry-kicker">Новая заметка</p>
             <h2 id="entry-title">Добавить знание</h2>
             <p id="add-description">Получи структурированный черновик из текста, голоса или публичной страницы.</p>
+            <ol class="capture-route" aria-label="Маршрут новой заметки">
+              <li class="capture-route-step is-current"><span>01</span> Capture</li>
+              <li class="capture-route-step"><span>02</span> Review</li>
+              <li class="capture-route-step"><span>03</span> Confirm</li>
+            </ol>
             <div class="capture-panel" data-capture-panel>
+              <div class="capture-panel-heading">
+                <div>
+                  <p class="capture-panel-label">Signal intake</p>
+                  <h3>Сначала зафиксируй сигнал</h3>
+                </div>
+                <span class="capture-panel-meta">LOCAL · REVIEW FIRST</span>
+              </div>
               <div class="mode-switch" role="group" aria-label="Режим добавления">
                 <button class="mode-button is-active" type="button" data-mode="url" aria-pressed="true">URL</button>
                 <button class="mode-button" type="button" data-mode="text" aria-pressed="false">Text</button>
@@ -113,7 +125,7 @@
                 aria-labelledby="voice-title"
                 aria-describedby="voice-description"
               >
-                <div>
+                <div class="voice-copy">
                   <p class="voice-kicker">Голосовой вход</p>
                   <h3 id="voice-title">Скажи, что хочешь сохранить</h3>
                   <p id="voice-description" class="voice-description">Запиши короткую заметку или выбери audio-файл. После распознавания проверь текст перед созданием черновика.</p>
@@ -156,7 +168,12 @@
             </p>
           </div>
           <div class="journal-panel">
-            <div class="mode-switch" role="group" aria-label="Режим Decision Journal">
+            <ol class="journal-steps" aria-label="Маршрут Decision Journal">
+              <li class="is-current"><span>01</span> Decision</li>
+              <li><span>02</span> Dry-run diff</li>
+              <li><span>03</span> Confirm</li>
+            </ol>
+            <div class="mode-switch journal-mode-switch" role="group" aria-label="Режим Decision Journal">
               <button
                 class="mode-button is-active"
                 type="button"
@@ -257,7 +274,7 @@
               </div>
               <div class="journal-actions">
                 <button class="review-button review-button-primary" type="submit" data-decision-prepare>Подготовить сохранение</button>
-                <button class="review-button review-button-primary" type="button" data-decision-confirm hidden disabled>Подтвердить сохранение</button>
+                <button class="review-button review-button-primary review-button-confirm" type="button" data-decision-confirm hidden disabled>Подтвердить сохранение</button>
               </div>
               <p class="review-status" data-decision-status role="status" aria-live="polite"></p>
               <p class="capture-error" data-decision-error role="alert" tabindex="-1" hidden></p>
@@ -329,7 +346,7 @@
               </div>
               <div class="journal-actions">
                 <button class="review-button review-button-primary" type="submit" data-outcome-prepare>Подготовить сохранение</button>
-                <button class="review-button review-button-primary" type="button" data-outcome-confirm hidden disabled>Подтвердить сохранение</button>
+                <button class="review-button review-button-primary review-button-confirm" type="button" data-outcome-confirm hidden disabled>Подтвердить сохранение</button>
               </div>
               <p class="review-status" data-outcome-status role="status" aria-live="polite"></p>
               <p class="capture-error" data-outcome-error role="alert" tabindex="-1" hidden></p>
