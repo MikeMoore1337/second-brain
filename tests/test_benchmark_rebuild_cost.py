@@ -74,7 +74,7 @@ def test_rebuild_cost_command_supports_json_markdown_and_output(
     assert "No performance threshold is applied" in markdown_output
     assert "| Fixture | Notes | Operation | Wall-clock ms |" in markdown_output
 
-    artifact = tmp_path / "rebuild-cost-v1.md"
+    artifact = tmp_path / "artifacts" / "rebuild-cost-v1.md"
     assert main(["--format", "markdown", "--output", str(artifact)]) == 0
     assert capsys.readouterr().out == ""
     artifact_output = artifact.read_text(encoding="utf-8")

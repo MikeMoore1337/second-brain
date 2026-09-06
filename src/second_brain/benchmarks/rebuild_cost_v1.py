@@ -1,8 +1,9 @@
 """Synthetic rebuild-cost evidence for the derived read models.
 
-The harness measures one on-demand rebuild of Timeline, Self Model, and Self
-Retrieval for fixed temporary-vault sizes. Timings are evidence, not an SLO;
-the command never reads process configuration or a user vault.
+The harness measures on-demand Timeline, Self Model, and Self Retrieval
+operations for fixed temporary-vault sizes. Wall-clock and traced-memory runs
+are intentionally separate; timings are evidence, not an SLO. The command
+never reads process configuration or a user vault.
 """
 
 from __future__ import annotations
@@ -167,6 +168,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.output is None:
         print(rendered, end="")
     else:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(rendered, encoding="utf-8")
     return 0
 
@@ -192,14 +194,19 @@ def _measure_operation(
     action: Callable[[], dict[str, int]],
 ) -> OperationMeasurement:
     gc.collect()
-    tracemalloc.start()
     started = time.perf_counter()
+    output = action()
+    elapsed_seconds = time.perf_counter() - started
+
+    gc.collect()
+    tracemalloc.start()
     try:
-        output = action()
+        traced_output = action()
     finally:
-        elapsed_seconds = time.perf_counter() - started
         _, peak_traced_bytes = tracemalloc.get_traced_memory()
         tracemalloc.stop()
+    if traced_output != output:
+        raise RuntimeError("synthetic benchmark operation changed between measurement runs")
     return OperationMeasurement(
         fixture=fixture.name,
         note_count=fixture.note_count,

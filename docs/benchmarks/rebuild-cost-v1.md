@@ -20,8 +20,9 @@ uv run python -m second_brain.benchmarks.rebuild_cost_v1 `
   --format json --output artifacts/rebuild-cost-v1.json
 ```
 
-Без `--output` результат печатается в stdout. Явно указанный путь получает
-обычный JSON или Markdown artifact; benchmark не создаёт artifact сам по себе.
+Без `--output` результат печатается в stdout. При явно указанном `--output`
+benchmark создаёт отсутствующие parent directories и записывает обычный JSON
+или Markdown artifact; без этого option artifact не создаётся.
 
 ## Фикстуры и измерения
 
@@ -41,9 +42,10 @@ uv run python -m second_brain.benchmarks.rebuild_cost_v1 `
   reread bounded Self Context.
 
 Report содержит `benchmark_version`, `report_schema_version`, fixture sizes и
-по одной записи на каждую пару fixture/operation. В записи есть wall-clock
-milliseconds, peak traced bytes от `tracemalloc` и shape-only counters
-результата операции. Реальное время и memory зависят от машины и загруженности
+по одной записи на каждую пару fixture/operation. Для каждой операции сначала
+выполняется untraced run для wall-clock milliseconds, затем независимый traced
+run для peak traced bytes от `tracemalloc`; shape-only counters обоих запусков
+должны совпасть. Реальное время и memory зависят от машины и загруженности
 окружения.
 
 Эти значения — evidence для последующего human-reviewed решения об оптимизации,
