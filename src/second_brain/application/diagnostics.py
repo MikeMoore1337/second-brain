@@ -7,11 +7,17 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
+from pathlib import PurePosixPath
 from typing import Any, Final
 
 from second_brain.application.personal_memory import is_personal_memory_enrolled
 from second_brain.application.ports import VaultReader
-from second_brain.application.reports import Diagnostic, DiagnosticSeverity, ScanReport
+from second_brain.application.reports import (
+    Diagnostic,
+    DiagnosticSeverity,
+    ScanReport,
+    VaultSnapshot,
+)
 from second_brain.application.self_model import (
     DEFAULT_SELF_MODEL_POLICY,
     BuildSelfModel,
@@ -37,6 +43,19 @@ _CONTENT_ROOT_FAILURE_CODES: Final[frozenset[str]] = frozenset(
         "VAULT_OVERLAPPING_ROOTS",
         "VAULT_PATH_ESCAPE",
     }
+)
+_CONTENT_ROOT_FIELDS: Final[tuple[str, ...]] = (
+    "inbox",
+    "projects",
+    "areas",
+    "resources",
+    "zettelkasten",
+    "archive",
+)
+_ALL_MANIFEST_ROOT_FIELDS: Final[tuple[str, ...]] = (
+    *_CONTENT_ROOT_FIELDS,
+    "templates",
+    "attachments",
 )
 
 
@@ -196,6 +215,18 @@ class DoctorReport:
 
 
 @dataclass(frozen=True, slots=True)
+class _SnapshotReader:
+    """Replay the exact initial snapshot to derived read models."""
+
+    snapshot: VaultSnapshot
+
+    def scan(self) -> VaultSnapshot:
+        """Return the immutable snapshot captured for this doctor run."""
+
+        return self.snapshot
+
+
+@dataclass(frozen=True, slots=True)
 class BuildDoctorReport:
     """Build a safe doctor report from one configured read-only reader."""
 
@@ -215,20 +246,21 @@ class BuildDoctorReport:
             )
 
         try:
-            report = build_report(self.reader.scan())
+            snapshot = self.reader.scan()
+            report = build_report(snapshot)
         except Exception:
             return DoctorReport.unavailable(
                 generated_at=generated_at,
                 config_resolvable=True,
                 code="DOCTOR_SCAN_UNAVAILABLE",
             )
-        return _build_report(report, reader=self.reader, generated_at=generated_at)
+        return _build_report(report, snapshot=snapshot, generated_at=generated_at)
 
 
 def _build_report(
     report: ScanReport,
     *,
-    reader: VaultReader,
+    snapshot: VaultSnapshot,
     generated_at: datetime,
 ) -> DoctorReport:
     """Project one full internal report into safe counts and layer statuses."""
@@ -236,8 +268,9 @@ def _build_report(
     manifest_available = report.manifest is not None
     content_roots_available = _content_roots_available(report)
     diagnostics = _group_diagnostics(report.diagnostics)
-    timeline = _build_timeline_status(reader, generated_at=generated_at)
-    self_model = _build_self_model_status(reader, generated_at=generated_at)
+    snapshot_reader = _SnapshotReader(snapshot)
+    timeline = _build_timeline_status(snapshot_reader, generated_at=generated_at)
+    self_model = _build_self_model_status(snapshot_reader, generated_at=generated_at)
     self_retrieval = DoctorLayerStatus(
         DoctorStatus.UNAVAILABLE,
         False,
@@ -255,6 +288,7 @@ def _build_report(
         status = DoctorStatus.DEGRADED
 
     managed_notes = tuple(note for note in report.notes if note.managed is True)
+    counts_available = manifest_available and content_roots_available
     return DoctorReport(
         status=status,
         generated_at=generated_at,
@@ -262,12 +296,14 @@ def _build_report(
         manifest_available=manifest_available,
         content_roots_available=content_roots_available,
         manifest_schema_version=report.manifest.schema_version if report.manifest else None,
-        managed_note_count=len(managed_notes),
-        enrolled_personal_memory_count=sum(
-            is_personal_memory_enrolled(note.front_matter) for note in managed_notes
+        managed_note_count=len(managed_notes) if counts_available else None,
+        enrolled_personal_memory_count=(
+            sum(is_personal_memory_enrolled(note.front_matter) for note in managed_notes)
+            if counts_available
+            else None
         ),
-        valid_decision_count=len(report.decision_journals),
-        valid_outcome_count=len(report.outcome_observations),
+        valid_decision_count=len(report.decision_journals) if counts_available else None,
+        valid_outcome_count=len(report.outcome_observations) if counts_available else None,
         timeline=timeline,
         self_model=self_model,
         self_retrieval=self_retrieval,
@@ -328,8 +364,55 @@ def _content_roots_available(report: ScanReport) -> bool:
     return not any(
         item.severity is DiagnosticSeverity.ERROR
         and (item.code.startswith("VAULT_ROOT_") or item.code in _CONTENT_ROOT_FAILURE_CODES)
+        and _diagnostic_affects_content_scope(item, report)
         for item in report.diagnostics
     )
+
+
+def _diagnostic_affects_content_scope(item: Diagnostic, report: ScanReport) -> bool:
+    """Limit content-root health to declared content roots, not support roots."""
+
+    if report.manifest is None:
+        return True
+    if item.code == "VAULT_OVERLAPPING_ROOTS" and item.path is None:
+        return _manifest_has_content_root_overlap(report)
+    if item.path is None:
+        return True
+    candidate = PurePosixPath(item.path)
+    return any(
+        _is_path_under(candidate, getattr(report.manifest.paths, field))
+        for field in _CONTENT_ROOT_FIELDS
+    )
+
+
+def _manifest_has_content_root_overlap(report: ScanReport) -> bool:
+    """Recognize overlap only when a declared content root participates."""
+
+    manifest = report.manifest
+    if manifest is None:
+        return True
+    paths = {
+        field: PurePosixPath(getattr(manifest.paths, field).as_posix())
+        for field in _ALL_MANIFEST_ROOT_FIELDS
+    }
+    for content_field in _CONTENT_ROOT_FIELDS:
+        content_path = paths[content_field]
+        for other_field, other_path in paths.items():
+            if other_field == content_field:
+                continue
+            if _is_path_under(content_path, other_path) or _is_path_under(other_path, content_path):
+                return True
+    return False
+
+
+def _is_path_under(candidate: PurePosixPath, root: PurePosixPath) -> bool:
+    """Return whether one manifest-relative path is equal to or below another."""
+
+    try:
+        candidate.relative_to(root)
+    except ValueError:
+        return False
+    return True
 
 
 def _group_diagnostics(diagnostics: tuple[Diagnostic, ...]) -> tuple[DoctorDiagnosticCount, ...]:
