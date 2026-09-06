@@ -45,7 +45,7 @@ export function App(): ReactElement {
         <header className="border-b border-sb-line bg-sb-ink/85">
           <div className="mx-auto flex min-h-16 max-w-6xl items-center justify-between gap-6 px-5 py-3 sm:px-8">
             <a
-              className="font-mono text-sm font-semibold tracking-[0.16em] text-sb-text-primary"
+              className="brand-link font-mono text-sm font-semibold tracking-[0.16em] text-sb-text-primary"
               href="#signal"
             >
               SECOND BRAIN

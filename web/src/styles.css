@@ -52,10 +52,21 @@ input:focus-visible {
 }
 
 .route-link {
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
   text-decoration: underline;
   text-decoration-color: transparent;
   text-underline-offset: 0.25rem;
   transition: color 160ms ease-out, text-decoration-color 160ms ease-out;
+}
+
+.brand-link {
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
 }
 
 .signal-plane {
@@ -192,5 +203,10 @@ input:focus-visible {
   *::before,
   *::after {
     transition-duration: 0.01ms !important;
+  }
+
+  .primary-control:active:not(:disabled),
+  .secondary-control:active:not(:disabled) {
+    transform: none;
   }
 }
