@@ -22,6 +22,7 @@ from second_brain.entrypoints.web.app import (
     MAX_RAW_SEARCH_BODY_BYTES,
     MAX_RAW_SELF_MODEL_BODY_BYTES,
     MAX_RAW_SELF_RETRIEVAL_BODY_BYTES,
+    MAX_RAW_SIMULATE_ME_BODY_BYTES,
     MAX_RAW_TIMELINE_BODY_BYTES,
     MAX_RAW_TRANSCRIPTION_BODY_BYTES,
     SEARCH_REQUEST_HEADER_NAME,
@@ -30,6 +31,8 @@ from second_brain.entrypoints.web.app import (
     SELF_MODEL_REQUEST_HEADER_VALUE,
     SELF_RETRIEVAL_REQUEST_HEADER_NAME,
     SELF_RETRIEVAL_REQUEST_HEADER_VALUE,
+    SIMULATE_ME_REQUEST_HEADER_NAME,
+    SIMULATE_ME_REQUEST_HEADER_VALUE,
     TIMELINE_REQUEST_HEADER_NAME,
     TIMELINE_REQUEST_HEADER_VALUE,
     TRANSCRIPTION_REQUEST_HEADER_NAME,
@@ -42,6 +45,7 @@ from second_brain.entrypoints.web.saves import DraftSaveService
 from second_brain.entrypoints.web.search import SearchService
 from second_brain.entrypoints.web.self_model import SelfModelService
 from second_brain.entrypoints.web.self_retrieval import SelfRetrievalService
+from second_brain.entrypoints.web.simulate_me import SimulateMeService
 from second_brain.entrypoints.web.timeline import TimelineService
 from second_brain.entrypoints.web.transcriptions import TranscriptionService
 
@@ -288,6 +292,16 @@ PRIVATE_ROUTES: tuple[PrivateRoute, ...] = (
         content_too_large_code="SELF_RETRIEVAL_RESULT_TOO_LARGE",
         max_body_bytes=MAX_RAW_SELF_RETRIEVAL_BODY_BYTES,
     ),
+    PrivateRoute(
+        path="/api/simulate-me",
+        request_header_name=SIMULATE_ME_REQUEST_HEADER_NAME,
+        request_header_value=SIMULATE_ME_REQUEST_HEADER_VALUE,
+        content_type="application/json",
+        body=_json_body({"query": "boundary fixture", "options": [{"id": "a", "label": "A"}]}),
+        invalid_code="SIMULATE_ME_INVALID_REQUEST",
+        content_too_large_code="SIMULATE_ME_CONTENT_TOO_LARGE",
+        max_body_bytes=MAX_RAW_SIMULATE_ME_BODY_BYTES,
+    ),
 )
 
 
@@ -327,6 +341,7 @@ def _boundary_test_app() -> tuple[FastAPI, RecordingBoundaryService]:
         timeline_service=cast(TimelineService, service),
         self_model_service=cast(SelfModelService, service),
         self_retrieval_service=cast(SelfRetrievalService, service),
+        simulate_me_service=cast(SimulateMeService, service),
     )
     return application, service
 

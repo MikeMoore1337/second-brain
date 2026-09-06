@@ -54,6 +54,7 @@ from second_brain.application.self_retrieval import (
     SelfRetrievalError,
     validate_self_context_request,
 )
+from second_brain.application.simulate_me import SimulateMeError
 from second_brain.application.timeline import (
     PersonalTimelineRequest,
     TimelineError,
@@ -99,6 +100,18 @@ from .self_retrieval import (
     build_production_self_retrieval_service,
     self_retrieval_response,
 )
+from .simulate_me import (
+    SimulateMeContextualEvidenceRefPayload,
+    SimulateMeEvidenceRefPayload,
+    SimulateMeOptionPayload,
+    SimulateMeRequestPayload,
+    SimulateMeResponse,
+    SimulateMeService,
+    SimulateMeTemporalCaveatPayload,
+    build_production_simulate_me_service,
+    simulate_me_request,
+    simulate_me_response,
+)
 from .timeline import (
     TimelineRequestPayload,
     TimelineResponse,
@@ -122,6 +135,8 @@ SELF_MODEL_REQUEST_HEADER_NAME: Final[str] = DRAFT_REQUEST_HEADER_NAME
 SELF_MODEL_REQUEST_HEADER_VALUE: Final[str] = "self-model-v1"
 SELF_RETRIEVAL_REQUEST_HEADER_NAME: Final[str] = DRAFT_REQUEST_HEADER_NAME
 SELF_RETRIEVAL_REQUEST_HEADER_VALUE: Final[str] = "self-retrieval-v1"
+SIMULATE_ME_REQUEST_HEADER_NAME: Final[str] = DRAFT_REQUEST_HEADER_NAME
+SIMULATE_ME_REQUEST_HEADER_VALUE: Final[str] = "simulate-me-v1"
 MAX_RAW_DRAFT_BODY_BYTES: Final[int] = 512 * 1024
 MAX_RAW_TRANSCRIPTION_BODY_BYTES: Final[int] = MAX_TRANSCRIPTION_AUDIO_BYTES
 MAX_RAW_AUDIO_BODY_BYTES: Final[int] = MAX_RAW_TRANSCRIPTION_BODY_BYTES
@@ -129,11 +144,13 @@ MAX_RAW_SEARCH_BODY_BYTES: Final[int] = 64 * 1024
 MAX_RAW_TIMELINE_BODY_BYTES: Final[int] = 16 * 1024
 MAX_RAW_SELF_MODEL_BODY_BYTES: Final[int] = 16 * 1024
 MAX_RAW_SELF_RETRIEVAL_BODY_BYTES: Final[int] = 16 * 1024
+MAX_RAW_SIMULATE_ME_BODY_BYTES: Final[int] = 16 * 1024
 _TRANSCRIPTION_PATH: Final[str] = "/api/transcriptions/audio"
 _SEARCH_PATHS: Final[frozenset[str]] = frozenset({"/api/search", "/api/retrieval/note"})
 _TIMELINE_PATHS: Final[frozenset[str]] = frozenset({"/api/timeline"})
 _SELF_MODEL_PATHS: Final[frozenset[str]] = frozenset({"/api/self-model"})
 _SELF_RETRIEVAL_PATHS: Final[frozenset[str]] = frozenset({"/api/self-retrieval"})
+_SIMULATE_ME_PATHS: Final[frozenset[str]] = frozenset({"/api/simulate-me"})
 _DECISION_JOURNAL_PATHS: Final[frozenset[str]] = frozenset(
     {
         "/api/drafts/decision-journal/save/prepare",
@@ -623,6 +640,10 @@ _ERRORS: Final[dict[str, tuple[int, str]]] = {
     "SELF_RETRIEVAL_SELF_MODEL_UNAVAILABLE": (503, "self retrieval self model is unavailable"),
     "SELF_RETRIEVAL_RESULT_INVALID": (500, "self retrieval result failed validation"),
     "SELF_RETRIEVAL_RESULT_TOO_LARGE": (413, "self retrieval result is too large"),
+    "SIMULATE_ME_INVALID_REQUEST": (400, "simulate me request failed validation"),
+    "SIMULATE_ME_CONTENT_TOO_LARGE": (413, "simulate me request is too large"),
+    "SIMULATE_ME_VAULT_UNAVAILABLE": (503, "simulate me vault is unavailable"),
+    "SIMULATE_ME_RESULT_INVALID": (500, "simulate me result failed validation"),
 }
 _GENERIC_ERROR: Final[tuple[int, str, str]] = (
     500,
@@ -1019,11 +1040,20 @@ class SelfModelRequestBoundaryMiddleware:
 class SelfRetrievalRequestBoundaryMiddleware:
     """Scoped ASGI boundary for private Self Retrieval JSON requests."""
 
-    def __init__(self, app: ASGIApp, *, max_body_bytes: int) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        max_body_bytes: int,
+        paths: frozenset[str] = _SELF_RETRIEVAL_PATHS,
+        request_header_value: str = SELF_RETRIEVAL_REQUEST_HEADER_VALUE,
+    ) -> None:
         """Store the small raw-body cap before FastAPI JSON parsing."""
 
         self.app = app
         self.max_body_bytes = max_body_bytes
+        self.paths = paths
+        self.request_header_value = request_header_value
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         """Require self-retrieval-v1, loopback same-origin metadata and bounded JSON."""
@@ -1031,7 +1061,7 @@ class SelfRetrievalRequestBoundaryMiddleware:
         if (
             scope["type"] != "http"
             or scope.get("method") != "POST"
-            or scope.get("path") not in _SELF_RETRIEVAL_PATHS
+            or scope.get("path") not in self.paths
         ):
             await self.app(scope, receive, send)
             return
@@ -1048,7 +1078,7 @@ class SelfRetrievalRequestBoundaryMiddleware:
             or content_type is None
             or not _is_json_content_type(content_type)
             or not request_header_present
-            or request_header != SELF_RETRIEVAL_REQUEST_HEADER_VALUE
+            or request_header != self.request_header_value
             or not _trusted_request_host(scope)
             or (origin_present and (origin is None or not _origin_matches(scope, origin)))
         ):
@@ -1111,6 +1141,20 @@ class SelfRetrievalRequestBoundaryMiddleware:
             return {"type": "http.disconnect"}
 
         await self.app(scope, replay_receive, send)
+
+
+class SimulateMeRequestBoundaryMiddleware(SelfRetrievalRequestBoundaryMiddleware):
+    """Scoped ASGI boundary for the private Simulate Me JSON request."""
+
+    def __init__(self, app: ASGIApp, *, max_body_bytes: int) -> None:
+        """Require the Simulate Me purpose and its bounded raw JSON body."""
+
+        super().__init__(
+            app,
+            max_body_bytes=max_body_bytes,
+            paths=_SIMULATE_ME_PATHS,
+            request_header_value=SIMULATE_ME_REQUEST_HEADER_VALUE,
+        )
 
 
 class TranscriptionRequestBoundaryMiddleware:
@@ -1328,6 +1372,8 @@ def _loopback_host_port(value: str, scheme: str) -> tuple[str, int] | None:
 def _invalid_request_code(path: str) -> str:
     """Выбрать safe application code по private API route."""
 
+    if path in _SIMULATE_ME_PATHS:
+        return "SIMULATE_ME_INVALID_REQUEST"
     if path in _SELF_RETRIEVAL_PATHS:
         return "SELF_RETRIEVAL_INVALID_REQUEST"
     if path in _SELF_MODEL_PATHS:
@@ -1354,6 +1400,8 @@ def _invalid_request_code(path: str) -> str:
 def _content_too_large_code(path: str) -> str:
     """Выбрать bounded content-too-large code по private API route."""
 
+    if path in _SIMULATE_ME_PATHS:
+        return "SIMULATE_ME_CONTENT_TOO_LARGE"
     if path in _SELF_RETRIEVAL_PATHS:
         return "SELF_RETRIEVAL_RESULT_TOO_LARGE"
     if path in _SELF_MODEL_PATHS:
@@ -1380,6 +1428,7 @@ def create_app(
     timeline_service: TimelineService | None = None,
     self_model_service: SelfModelService | None = None,
     self_retrieval_service: SelfRetrievalService | None = None,
+    simulate_me_service: SimulateMeService | None = None,
     env_file: Path | None = None,
     vault_path_override: str | None = None,
 ) -> FastAPI:
@@ -1431,6 +1480,14 @@ def create_app(
             vault_path_override=vault_path_override,
         )
     )
+    simulate_me = (
+        simulate_me_service
+        if simulate_me_service is not None
+        else build_production_simulate_me_service(
+            env_file=env_file,
+            vault_path_override=vault_path_override,
+        )
+    )
     review_tokens = ReviewTokenCodec()
     app = FastAPI(
         title="Second Brain",
@@ -1466,6 +1523,10 @@ def create_app(
         SelfRetrievalRequestBoundaryMiddleware,
         max_body_bytes=MAX_RAW_SELF_RETRIEVAL_BODY_BYTES,
     )
+    app.add_middleware(
+        SimulateMeRequestBoundaryMiddleware,
+        max_body_bytes=MAX_RAW_SIMULATE_ME_BODY_BYTES,
+    )
 
     @app.middleware("http")
     async def add_security_headers(
@@ -1487,6 +1548,7 @@ def create_app(
                 "/api/timeline",
                 "/api/self-model",
                 "/api/self-retrieval",
+                "/api/simulate-me",
             )
         ):
             response.headers["Cache-Control"] = "no-store"
@@ -1867,6 +1929,25 @@ def create_app(
             return _error_response("SELF_RETRIEVAL_SEARCH_UNAVAILABLE")
         except Exception:
             return _error_response("SELF_RETRIEVAL_RESULT_INVALID")
+        return JSONResponse(
+            content=response.model_dump(mode="json"),
+            headers=_DRAFT_ERROR_HEADERS,
+        )
+
+    @app.post("/api/simulate-me", include_in_schema=False)
+    def simulate_me_route(payload: SimulateMeRequestPayload) -> Response:
+        """Return one thin read-only projection of the Simulate Me core result."""
+
+        try:
+            request = simulate_me_request(payload)
+            result = simulate_me.build(request)
+            response = simulate_me_response(result, request)
+        except SimulateMeError as error:
+            return _error_response(error.code)
+        except ConfigurationError, OSError:
+            return _error_response("SIMULATE_ME_VAULT_UNAVAILABLE")
+        except Exception:
+            return _error_response("SIMULATE_ME_RESULT_INVALID")
         return JSONResponse(
             content=response.model_dump(mode="json"),
             headers=_DRAFT_ERROR_HEADERS,
@@ -2349,7 +2430,14 @@ def _error_response_for_exception(error: Exception) -> JSONResponse:
 
     if isinstance(
         error,
-        (LlmError, ResearchError, TranscriptionError, SearchError, SelfRetrievalError),
+        (
+            LlmError,
+            ResearchError,
+            TranscriptionError,
+            SearchError,
+            SelfRetrievalError,
+            SimulateMeError,
+        ),
     ):
         return _error_response(error.code)
     return _error_response(_GENERIC_ERROR[1])
@@ -2364,6 +2452,7 @@ __all__ = [
     "MAX_RAW_SEARCH_BODY_BYTES",
     "MAX_RAW_SELF_MODEL_BODY_BYTES",
     "MAX_RAW_SELF_RETRIEVAL_BODY_BYTES",
+    "MAX_RAW_SIMULATE_ME_BODY_BYTES",
     "MAX_RAW_TIMELINE_BODY_BYTES",
     "MAX_RAW_TRANSCRIPTION_BODY_BYTES",
     "SEARCH_REQUEST_HEADER_NAME",
@@ -2372,6 +2461,8 @@ __all__ = [
     "SELF_MODEL_REQUEST_HEADER_VALUE",
     "SELF_RETRIEVAL_REQUEST_HEADER_NAME",
     "SELF_RETRIEVAL_REQUEST_HEADER_VALUE",
+    "SIMULATE_ME_REQUEST_HEADER_NAME",
+    "SIMULATE_ME_REQUEST_HEADER_VALUE",
     "TIMELINE_REQUEST_HEADER_NAME",
     "TIMELINE_REQUEST_HEADER_VALUE",
     "TRANSCRIPTION_REQUEST_HEADER_NAME",
@@ -2410,6 +2501,13 @@ __all__ = [
     "SelfRetrievalRequestBoundaryMiddleware",
     "SelfRetrievalRequestPayload",
     "SelfRetrievalResponse",
+    "SimulateMeContextualEvidenceRefPayload",
+    "SimulateMeEvidenceRefPayload",
+    "SimulateMeOptionPayload",
+    "SimulateMeRequestBoundaryMiddleware",
+    "SimulateMeRequestPayload",
+    "SimulateMeResponse",
+    "SimulateMeTemporalCaveatPayload",
     "SourceProvenancePayload",
     "TextDraftRequest",
     "TimelineRequestBoundaryMiddleware",
