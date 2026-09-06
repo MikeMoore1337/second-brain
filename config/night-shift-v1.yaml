@@ -1,0 +1,83 @@
+policy_version: night-shift-v1
+schema_version: 1
+enabled_by_default: false
+morning_cutoff_local: "08:00"
+timezone: Europe/Moscow
+
+task_states:
+  - queued
+  - in_progress
+  - pr_open
+  - fix_required
+  - ci_wait
+  - merge_ready
+  - merged
+  - human_required
+  - blocked
+
+risk_lanes:
+  GREEN:
+    auto_merge_allowed: true
+    human_merge_required: false
+    start_allowed: true
+  YELLOW:
+    auto_merge_allowed: false
+    human_merge_required: true
+    start_allowed: true
+  RED:
+    auto_merge_allowed: false
+    human_merge_required: true
+    start_allowed: false
+
+verdicts:
+  - "NIGHT_SHIFT: FIX_REQUIRED"
+  - "NIGHT_SHIFT: MERGE_READY"
+  - "NIGHT_SHIFT: HUMAN_REQUIRED"
+
+red_gates:
+  - canonical_schema_or_version
+  - evidence_kind
+  - self_kind
+  - canonical_migration
+  - inference_confidence
+  - inference_conflict
+  - inference_stale
+  - inference_supersede
+  - inference_preferences_values
+  - assistant_simulate_me_boundary
+  - provider_public_web_auth_privacy
+  - destructive_operation
+  - new_database
+  - new_vector_database
+  - new_graph_database
+  - new_redis_kafka_celery_event_store
+  - architecture_replacement
+  - roadmap_change
+  - unresolved_product_decision
+
+failure_budget:
+  max_tasks_per_night: 4
+  max_review_fix_cycles_per_task: 3
+  max_ci_fix_cycles_per_task: 3
+  max_scope_expansion: 0
+  flaky_ci_retry_requires_no_code_change: true
+
+dependency_policy:
+  satisfied_state: merged
+  blocking_states:
+    - blocked
+    - human_required
+
+task_selection:
+  order:
+    - current_explicitly_active
+    - overnight_queued
+    - roadmap_next
+  allow_roadmap_next_task: false
+  allow_create_next_issue: false
+
+merge_gate:
+  required_checks:
+    - quality
+    - windows-ssl-regression
+  method: squash
