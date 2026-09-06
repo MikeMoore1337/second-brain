@@ -664,7 +664,7 @@ a {
   padding: 11px 13px;
   border: 1px solid rgb(var(--sb-rgb-danger) / 0.45);
   border-radius: 12px;
-  background: rgb(var(--sb-rgb-danger) / 0.09);
+  background: var(--sb-gradient-surface-danger);
   color: var(--sb-color-danger);
   font-size: 13px;
   line-height: 1.5;
@@ -1170,9 +1170,9 @@ textarea#review-content {
 .timeline-surface {
   margin-top: 96px;
   padding: 30px;
-  border: 1px solid rgb(var(--sb-rgb-danger) / 0.28);
+  border: 1px solid rgb(var(--sb-rgb-violet-signal) / 0.28);
   border-radius: var(--sb-radius-lg);
-  background: var(--sb-gradient-surface-danger);
+  background: var(--sb-gradient-surface-violet);
 }
 
 .timeline-lede {
@@ -1258,7 +1258,7 @@ textarea#review-content {
   display: grid;
   gap: 15px;
   padding: 20px;
-  border: 1px solid rgb(var(--sb-rgb-danger) / 0.26);
+  border: 1px solid rgb(var(--sb-rgb-violet-signal) / 0.26);
   border-radius: var(--sb-radius-md);
   background: rgb(var(--sb-rgb-void) / 0.28);
 }
@@ -1269,7 +1269,7 @@ textarea#review-content {
 
 .timeline-item-title {
   margin: 0;
-  color: var(--sb-color-danger);
+  color: var(--sb-color-violet-signal);
   font-size: 18px;
   font-weight: 650;
   letter-spacing: -0.025em;
