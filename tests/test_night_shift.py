@@ -9,18 +9,21 @@ import pytest
 from second_brain.application.night_shift import (
     CheckConclusion,
     CheckRunEvidence,
+    CleanupLifecycle,
     FailureBudgetUsage,
     GateStatus,
     MergeGateEvidence,
     NightShiftConfigError,
     NightShiftPolicy,
     NightShiftVerdict,
+    PostTaskCleanupEvidence,
     RiskLane,
     TaskCandidate,
     TaskSelectionSource,
     TaskState,
     evaluate_failure_budget,
     evaluate_merge_gate,
+    evaluate_post_task_cleanup,
     evaluate_task_start,
     load_night_shift_policy,
     select_next_task,
@@ -48,6 +51,71 @@ def test_repository_policy_is_disabled_by_default_and_has_bounded_contract() -> 
     assert loaded.merge_method == "squash"
     assert loaded.allow_roadmap_next_task is False
     assert loaded.allow_create_next_issue is False
+    assert loaded.post_task_cleanup.enabled_after_verified_green_merge is True
+    assert loaded.post_task_cleanup.helper == "scripts/worktree_cleanup.py"
+    assert loaded.post_task_cleanup.prune_after_successful_removals is True
+    assert loaded.post_task_cleanup.allow_force is False
+    assert loaded.post_task_cleanup.allow_remote_branch_delete is False
+    assert loaded.post_task_cleanup.allow_local_branch_delete is False
+    assert loaded.post_task_cleanup.failure_is_task_failure is False
+
+
+@pytest.mark.parametrize(
+    ("evidence", "expected"),
+    (
+        (
+            PostTaskCleanupEvidence(
+                lifecycle=CleanupLifecycle.VERIFIED_GREEN_MERGE,
+                task_state=TaskState.MERGED.value,
+                pr_merged=True,
+                issue_completed=True,
+                main_sha="a" * 40,
+                worktree_registered=True,
+            ),
+            (GateStatus.READY, "verified_green_merge_cleanup_required"),
+        ),
+        (
+            PostTaskCleanupEvidence(
+                lifecycle=CleanupLifecycle.HISTORICAL_ORPHAN_PASS,
+                task_state=TaskState.MERGED.value,
+                pr_merged=True,
+                issue_completed=True,
+                main_sha="a" * 40,
+                worktree_registered=True,
+            ),
+            (GateStatus.READY, "verified_historical_cleanup_candidate"),
+        ),
+        (
+            PostTaskCleanupEvidence(
+                lifecycle=CleanupLifecycle.VERIFIED_GREEN_MERGE,
+                task_state=TaskState.HUMAN_REQUIRED.value,
+                pr_merged=True,
+                issue_completed=True,
+                main_sha="a" * 40,
+                worktree_registered=True,
+            ),
+            (GateStatus.BLOCKED, "task_is_not_merged"),
+        ),
+        (
+            PostTaskCleanupEvidence(
+                lifecycle=CleanupLifecycle.VERIFIED_GREEN_MERGE,
+                task_state=TaskState.MERGED.value,
+                pr_merged=False,
+                issue_completed=True,
+                main_sha="a" * 40,
+                worktree_registered=True,
+            ),
+            (GateStatus.BLOCKED, "pr_is_not_merged"),
+        ),
+    ),
+)
+def test_post_task_cleanup_requires_verified_completion(
+    evidence: PostTaskCleanupEvidence,
+    expected: tuple[GateStatus, str],
+) -> None:
+    result = evaluate_post_task_cleanup(evidence)
+    assert result.status is expected[0]
+    assert result.reasons == (expected[1],)
 
 
 def test_policy_rejects_unknown_status_and_risk_values(tmp_path: Path) -> None:

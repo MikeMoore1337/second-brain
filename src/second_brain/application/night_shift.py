@@ -63,6 +63,13 @@ class GateStatus(StrEnum):
     MERGE_READY = "merge_ready"
 
 
+class CleanupLifecycle(StrEnum):
+    """Bounded callers allowed to invoke the worktree cleanup helper."""
+
+    VERIFIED_GREEN_MERGE = "verified_green_merge"
+    HISTORICAL_ORPHAN_PASS = "historical_orphan_pass"
+
+
 class CheckConclusion(StrEnum):
     """CI conclusion values accepted by the merge gate."""
 
@@ -133,6 +140,19 @@ class FailureBudget:
 
 
 @dataclass(frozen=True, slots=True)
+class PostTaskCleanupPolicy:
+    """Versioned safety switches for post-task Git worktree cleanup."""
+
+    enabled_after_verified_green_merge: bool
+    helper: str
+    prune_after_successful_removals: bool
+    allow_force: bool
+    allow_remote_branch_delete: bool
+    allow_local_branch_delete: bool
+    failure_is_task_failure: bool
+
+
+@dataclass(frozen=True, slots=True)
 class NightShiftPolicy:
     """Validated immutable policy, not mutable runtime state."""
 
@@ -153,6 +173,7 @@ class NightShiftPolicy:
     allow_create_next_issue: bool
     required_checks: tuple[str, ...]
     merge_method: str
+    post_task_cleanup: PostTaskCleanupPolicy
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,6 +182,38 @@ class GateResult:
 
     status: GateStatus
     reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PostTaskCleanupEvidence:
+    """Orchestrator receipt needed before a completed task may be cleaned."""
+
+    lifecycle: CleanupLifecycle
+    task_state: str
+    pr_merged: bool
+    issue_completed: bool
+    main_sha: str
+    worktree_registered: bool
+
+
+def evaluate_post_task_cleanup(evidence: PostTaskCleanupEvidence) -> GateResult:
+    """Require a verified merged task before invoking native Git cleanup."""
+
+    if evidence.task_state != TaskState.MERGED.value:
+        return _blocked("task_is_not_merged")
+    if not evidence.pr_merged:
+        return _blocked("pr_is_not_merged")
+    if not evidence.issue_completed:
+        return _blocked("issue_is_not_completed")
+    if not _is_full_commit_sha(evidence.main_sha):
+        return _blocked("new_main_sha_is_not_verified")
+    if not evidence.worktree_registered:
+        return _blocked("worktree_is_not_registered")
+    if evidence.lifecycle is CleanupLifecycle.VERIFIED_GREEN_MERGE:
+        return _ready("verified_green_merge_cleanup_required")
+    if evidence.lifecycle is CleanupLifecycle.HISTORICAL_ORPHAN_PASS:
+        return _ready("verified_historical_cleanup_candidate")
+    return _blocked("unknown_cleanup_lifecycle")
 
 
 @dataclass(frozen=True, slots=True)
@@ -428,6 +481,7 @@ def _parse_policy(raw: object) -> NightShiftPolicy:
             "dependency_policy",
             "task_selection",
             "merge_gate",
+            "post_task_cleanup",
         },
         "policy",
     )
@@ -535,6 +589,53 @@ def _parse_policy(raw: object) -> NightShiftPolicy:
     if merge_method != "squash":
         raise NightShiftConfigError("merge_gate.method must be squash")
 
+    cleanup_data = _mapping(data["post_task_cleanup"], "post_task_cleanup")
+    _require_exact_keys(
+        cleanup_data,
+        {
+            "enabled_after_verified_green_merge",
+            "helper",
+            "prune_after_successful_removals",
+            "allow_force",
+            "allow_remote_branch_delete",
+            "allow_local_branch_delete",
+            "failure_is_task_failure",
+        },
+        "post_task_cleanup",
+    )
+    cleanup_policy = PostTaskCleanupPolicy(
+        enabled_after_verified_green_merge=_boolean(
+            cleanup_data["enabled_after_verified_green_merge"],
+            "post_task_cleanup.enabled_after_verified_green_merge",
+        ),
+        helper=_string(cleanup_data["helper"], "post_task_cleanup.helper"),
+        prune_after_successful_removals=_boolean(
+            cleanup_data["prune_after_successful_removals"],
+            "post_task_cleanup.prune_after_successful_removals",
+        ),
+        allow_force=_boolean(cleanup_data["allow_force"], "post_task_cleanup.allow_force"),
+        allow_remote_branch_delete=_boolean(
+            cleanup_data["allow_remote_branch_delete"],
+            "post_task_cleanup.allow_remote_branch_delete",
+        ),
+        allow_local_branch_delete=_boolean(
+            cleanup_data["allow_local_branch_delete"],
+            "post_task_cleanup.allow_local_branch_delete",
+        ),
+        failure_is_task_failure=_boolean(
+            cleanup_data["failure_is_task_failure"],
+            "post_task_cleanup.failure_is_task_failure",
+        ),
+    )
+    if cleanup_policy.allow_force:
+        raise NightShiftConfigError("post_task_cleanup.allow_force must be false")
+    if cleanup_policy.allow_remote_branch_delete:
+        raise NightShiftConfigError("post_task_cleanup.allow_remote_branch_delete must be false")
+    if cleanup_policy.allow_local_branch_delete:
+        raise NightShiftConfigError("post_task_cleanup.allow_local_branch_delete must be false")
+    if cleanup_policy.failure_is_task_failure:
+        raise NightShiftConfigError("post_task_cleanup.failure_is_task_failure must be false")
+
     return NightShiftPolicy(
         policy_version=policy_version,
         schema_version=schema_version,
@@ -557,6 +658,7 @@ def _parse_policy(raw: object) -> NightShiftPolicy:
         ),
         required_checks=required_checks,
         merge_method=merge_method,
+        post_task_cleanup=cleanup_policy,
     )
 
 
@@ -711,6 +813,7 @@ __all__ = [
     "SUPPORTED_SCHEMA_VERSION",
     "CheckConclusion",
     "CheckRunEvidence",
+    "CleanupLifecycle",
     "FailureBudget",
     "FailureBudgetUsage",
     "GateResult",
@@ -719,6 +822,8 @@ __all__ = [
     "NightShiftConfigError",
     "NightShiftPolicy",
     "NightShiftVerdict",
+    "PostTaskCleanupEvidence",
+    "PostTaskCleanupPolicy",
     "RiskLane",
     "RiskPolicy",
     "TaskCandidate",
@@ -726,6 +831,7 @@ __all__ = [
     "TaskState",
     "evaluate_failure_budget",
     "evaluate_merge_gate",
+    "evaluate_post_task_cleanup",
     "evaluate_task_start",
     "load_night_shift_policy",
     "select_next_task",
