@@ -56,7 +56,10 @@ jobs:
           tests/test_jina_reader.py::test_windows_sanitized_research_environment_runs_curl_version_without_network
 
   frontend:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     defaults:
       run:
         working-directory: web
