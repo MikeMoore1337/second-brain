@@ -101,3 +101,22 @@ def test_rebuild_cost_output_fails_closed_for_existing_files_and_vaults(
     (vault / "second-brain.yaml").write_text("schema_version: 1\n", encoding="utf-8")
     with pytest.raises(ValueError, match="managed vault"):
         main(["--output", str(vault / "artifacts" / "report.json")])
+
+
+def test_rebuild_cost_rejects_relative_output_from_nested_managed_vault(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    vault = tmp_path / "second-brain-vault"
+    nested = vault / "10 Projects" / "nested"
+    nested.mkdir(parents=True)
+    (vault / "second-brain.yaml").write_text(
+        "schema_version: 1\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(nested)
+
+    with pytest.raises(ValueError, match="managed vault"):
+        main(["--output", str(Path("artifacts") / "report.json")])
+
+    assert not (nested / "artifacts").exists()

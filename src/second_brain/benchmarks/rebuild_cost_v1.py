@@ -235,7 +235,11 @@ def _measure_operation(
 def _validate_artifact_output(path: Path) -> None:
     """Reject overwrite, link-like paths, and managed-vault ancestors."""
 
-    current = path
+    # Make relative CLI paths absolute without resolving symlinks.  The
+    # ancestor walk must reach the real cwd hierarchy, while link-like
+    # entries still need to be inspected with lstat before any write.
+    candidate = path.absolute()
+    current = candidate
     while True:
         try:
             current.lstat()
@@ -249,7 +253,7 @@ def _validate_artifact_output(path: Path) -> None:
         if exists:
             if _is_link_like(current):
                 raise ValueError("benchmark artifact output path contains a link-like entry")
-            if current == path:
+            if current == candidate:
                 raise ValueError("benchmark artifact output already exists")
             if not current.is_dir():
                 raise ValueError("benchmark artifact output parent is not a directory")

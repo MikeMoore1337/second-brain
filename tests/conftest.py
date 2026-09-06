@@ -396,13 +396,17 @@ def _isolate_test_boundaries(
             monkeypatch.setattr(subprocess, "Popen", guarded_popen)
             monkeypatch.setattr(subprocess, "run", guarded_run)
             monkeypatch.setattr(tempfile, "TemporaryDirectory", guarded_temporary_directory)
-            benchmark_module = sys.modules.get("second_brain.benchmarks.lexical_gap_v1")
-            if benchmark_module is not None:
-                monkeypatch.setattr(
-                    benchmark_module,
-                    "TemporaryDirectory",
-                    guarded_temporary_directory,
-                )
+            for benchmark_module_name in (
+                "second_brain.benchmarks.lexical_gap_v1",
+                "second_brain.benchmarks.rebuild_cost_v1",
+            ):
+                benchmark_module = sys.modules.get(benchmark_module_name)
+                if benchmark_module is not None:
+                    monkeypatch.setattr(
+                        benchmark_module,
+                        "TemporaryDirectory",
+                        guarded_temporary_directory,
+                    )
             monkeypatch.setattr(SubprocessWorkerRunner, "__init__", guarded_worker_runner_init)
             monkeypatch.setattr(socket.socket, "connect", _guard_socket_connect)
             monkeypatch.setattr(socket.socket, "connect_ex", _guard_socket_connect_ex)
