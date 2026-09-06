@@ -142,6 +142,24 @@ def test_web_serve_uses_fixed_loopback_and_fake_runner(
     assert getattr(calls[0]["application"], "title", None) == "Second Brain"
 
 
+def test_web_serve_defaults_to_second_brain_port(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, Any]] = []
+
+    def fake_run(application: object, **kwargs: Any) -> None:
+        calls.append({"application": application, **kwargs})
+
+    monkeypatch.setattr("second_brain.entrypoints.cli.app.uvicorn.run", fake_run)
+
+    result = runner.invoke(app, ["web", "serve"])
+
+    assert result.exit_code == 0
+    assert len(calls) == 1
+    assert calls[0]["host"] == "127.0.0.1"
+    assert calls[0]["port"] == 8123
+
+
 def test_web_serve_forwards_global_vault_options_to_app_object(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
