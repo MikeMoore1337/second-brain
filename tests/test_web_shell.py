@@ -52,6 +52,7 @@ def test_workspace_shell_has_bounded_responsive_layout_contract() -> None:
     assert "top: max(12px, env(safe-area-inset-top, 0px));" in css
     assert "left: max(12px, env(safe-area-inset-left, 0px));" in css
     assert "viewport-fit=cover" in _read("index.html")
+    assert "body {\n    min-width: 0;\n  }" in css
     assert ".workspace-content,\n.workspace-content main {\n  min-width: 0;\n}" in css
     assert "@media (max-width: 760px)" in css
     assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in css
@@ -65,6 +66,7 @@ def test_workspace_shell_keeps_touch_targets_and_no_new_motion_system() -> None:
     css = _read("app.css")
 
     assert "min-height: var(--sb-touch-target);" in css
+    assert "grid-template-columns: repeat(3, minmax(0, 1fr));" in css
     assert ".topnav a::before" in css
     assert "padding: 8px;" in css
     assert "transition: color var(--sb-duration-short) var(--sb-ease-out);" in css
