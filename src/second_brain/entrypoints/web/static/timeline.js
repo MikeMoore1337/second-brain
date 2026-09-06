@@ -29,6 +29,11 @@ if (timelineSurface) {
     status.textContent = "";
   };
 
+  const focusError = () => {
+    error.scrollIntoView({ block: "nearest" });
+    error.focus();
+  };
+
   const clearFeedback = () => {
     error.textContent = "";
     error.hidden = true;
@@ -37,6 +42,7 @@ if (timelineSurface) {
 
   const setBusy = (value) => {
     busy = value;
+    timelineSurface.setAttribute("aria-busy", String(value));
     orderSelect.disabled = value;
     refreshButton.disabled = value;
     refreshButton.setAttribute("aria-busy", String(value));
@@ -134,7 +140,7 @@ if (timelineSurface) {
     renderTotal(unknownTotal, payload.unknown_items.length, payload.unknown_total);
   };
 
-  const loadTimeline = async () => {
+  const loadTimeline = async (userInitiated = false) => {
     if (busy) {
       return;
     }
@@ -154,18 +160,24 @@ if (timelineSurface) {
       if (!response.ok) {
         const message = payload && payload.error && payload.error.message;
         setError(typeof message === "string" ? message : "Не удалось загрузить Timeline.");
+        if (userInitiated) {
+          focusError();
+        }
         return;
       }
       renderResponse(payload);
       status.textContent = "Показана текущая Timeline из vault.";
     } catch (_error) {
       setError("Сервис Timeline недоступен.");
+      if (userInitiated) {
+        focusError();
+      }
     } finally {
       setBusy(false);
     }
   };
 
-  refreshButton.addEventListener("click", loadTimeline);
-  orderSelect.addEventListener("change", loadTimeline);
+  refreshButton.addEventListener("click", () => loadTimeline(true));
+  orderSelect.addEventListener("change", () => loadTimeline(true));
   loadTimeline();
 }

@@ -383,6 +383,12 @@ a {
   box-shadow: 0 0 0 3px rgba(201, 242, 119, 0.12);
 }
 
+.capture-input:focus-visible,
+.review-input:focus-visible {
+  outline: 2px solid var(--lime);
+  outline-offset: 2px;
+}
+
 .capture-textarea {
   min-height: 145px;
   resize: vertical;
@@ -489,6 +495,8 @@ a {
 }
 
 .voice-file-label:focus-within {
+  outline: 2px solid var(--lime);
+  outline-offset: 2px;
   box-shadow: 0 0 0 3px rgba(201, 242, 119, 0.12);
 }
 
@@ -1901,6 +1909,8 @@ textarea#review-content {
   *,
   *::before,
   *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
 }

@@ -81,6 +81,8 @@ if (decisionJournalSurface) {
     target.textContent = typeof message === "string" && message ? message : "Не удалось выполнить операцию.";
     target.hidden = false;
     statusTarget.textContent = "";
+    target.scrollIntoView({ block: "nearest" });
+    target.focus();
   };
 
   const clearJournalError = (target) => {
@@ -98,6 +100,7 @@ if (decisionJournalSurface) {
 
   const setJournalBusy = (loading) => {
     journalBusy = loading;
+    decisionJournalSurface.setAttribute("aria-busy", String(loading));
     journalControls.forEach((control) => {
       const savedControl =
         (decisionSavedState && decisionForm.contains(control)) ||
@@ -282,6 +285,8 @@ if (decisionJournalSurface) {
     diff.textContent = payload.diff;
     plan.append(heading, fields, diffHeading, diff);
     plan.hidden = false;
+    plan.tabIndex = -1;
+    plan.scrollIntoView({ block: "nearest" });
   };
 
   const renderSavedJournalNote = (target, payload, label, addOutcome) => {
@@ -321,6 +326,8 @@ if (decisionJournalSurface) {
       target.append(button);
     }
     target.hidden = false;
+    target.tabIndex = -1;
+    target.focus({ preventScroll: true });
   };
 
   const responseError = (payload, fallback) =>
@@ -422,6 +429,7 @@ if (decisionJournalSurface) {
       decisionConfirmationToken = payload.confirmation_token;
       decisionConfirm.hidden = false;
       decisionConfirm.disabled = false;
+      decisionConfirm.focus({ preventScroll: true });
       decisionStatus.textContent = "Проверь полный diff и подтверди сохранение.";
     } catch (_error) {
       setJournalError(decisionError, decisionStatus, "Сервис Decision Journal недоступен.");
@@ -504,6 +512,7 @@ if (decisionJournalSurface) {
       outcomeConfirmationToken = payload.confirmation_token;
       outcomeConfirm.hidden = false;
       outcomeConfirm.disabled = false;
+      outcomeConfirm.focus({ preventScroll: true });
       outcomeStatus.textContent = "Проверь полный diff и подтверди сохранение.";
     } catch (_error) {
       setJournalError(outcomeError, outcomeStatus, "Сервис Outcome недоступен.");

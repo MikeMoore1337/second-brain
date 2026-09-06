@@ -65,7 +65,7 @@
                 <button class="mode-button" type="button" data-mode="text" aria-pressed="false">Text</button>
                 <button class="mode-button" type="button" data-mode="voice" aria-pressed="false">Voice</button>
               </div>
-              <form class="capture-form" data-draft-form>
+              <form class="capture-form" data-draft-form aria-describedby="add-description">
                 <label class="capture-label" for="source-input" data-url-label>Публичный URL</label>
                 <input
                   class="capture-input"
@@ -93,11 +93,16 @@
                   <span class="capture-status" data-status role="status" aria-live="polite"></span>
                 </div>
               </form>
-              <section class="voice-panel is-hidden" data-voice-panel aria-labelledby="voice-title">
+              <section
+                class="voice-panel is-hidden"
+                data-voice-panel
+                aria-labelledby="voice-title"
+                aria-describedby="voice-description"
+              >
                 <div>
                   <p class="voice-kicker">Голосовой вход</p>
                   <h3 id="voice-title">Скажи, что хочешь сохранить</h3>
-                  <p class="voice-description">Запиши короткую заметку или выбери audio-файл. После распознавания проверь текст перед созданием черновика.</p>
+                  <p id="voice-description" class="voice-description">Запиши короткую заметку или выбери audio-файл. После распознавания проверь текст перед созданием черновика.</p>
                 </div>
                 <div class="voice-actions">
                   <button class="voice-button voice-button-primary" type="button" data-record>Записать голос</button>
@@ -115,8 +120,8 @@
                 </div>
                 <p class="voice-status" data-voice-status role="status" aria-live="polite"></p>
               </section>
-              <p class="capture-error" data-error role="alert" hidden></p>
-              <div class="draft-result" data-result hidden></div>
+              <p class="capture-error" data-error role="alert" tabindex="-1" hidden></p>
+              <div class="draft-result" data-result tabindex="-1" hidden></div>
             </div>
           </div>
         </section>
@@ -142,17 +147,19 @@
                 class="mode-button is-active"
                 type="button"
                 data-journal-mode="decision"
+                aria-controls="decision-form"
                 aria-pressed="true"
               >Decision</button>
               <button
                 class="mode-button"
                 type="button"
                 data-journal-mode="outcome"
+                aria-controls="outcome-form"
                 aria-pressed="false"
               >Outcome</button>
             </div>
 
-            <form class="journal-form" data-decision-form>
+            <form id="decision-form" class="journal-form" data-decision-form>
               <p class="journal-form-intro">
                 Сначала запиши только ситуацию, варианты и ожидание. Поздние результаты
                 добавляются отдельной Outcome-записью позже.
@@ -239,12 +246,12 @@
                 <button class="review-button review-button-primary" type="button" data-decision-confirm hidden disabled>Подтвердить сохранение</button>
               </div>
               <p class="review-status" data-decision-status role="status" aria-live="polite"></p>
-              <p class="capture-error" data-decision-error role="alert" hidden></p>
+              <p class="capture-error" data-decision-error role="alert" tabindex="-1" hidden></p>
               <section class="save-plan journal-plan" data-decision-plan hidden></section>
               <section class="saved-note" data-decision-saved hidden></section>
             </form>
 
-            <form class="journal-form is-hidden" data-outcome-form>
+            <form id="outcome-form" class="journal-form is-hidden" data-outcome-form>
               <p class="journal-form-intro">
                 Outcome — отдельная заметка, связанная с current Decision Journal по UUIDv7.
               </p>
@@ -311,7 +318,7 @@
                 <button class="review-button review-button-primary" type="button" data-outcome-confirm hidden disabled>Подтвердить сохранение</button>
               </div>
               <p class="review-status" data-outcome-status role="status" aria-live="polite"></p>
-              <p class="capture-error" data-outcome-error role="alert" hidden></p>
+              <p class="capture-error" data-outcome-error role="alert" tabindex="-1" hidden></p>
               <section class="save-plan journal-plan" data-outcome-plan hidden></section>
               <section class="saved-note" data-outcome-saved hidden></section>
             </form>
@@ -347,7 +354,7 @@
               </button>
               <p class="timeline-status" data-timeline-status role="status" aria-live="polite"></p>
             </div>
-            <p class="capture-error timeline-error" data-timeline-error role="alert" hidden></p>
+            <p class="capture-error timeline-error" data-timeline-error role="alert" tabindex="-1" hidden></p>
 
             <section class="timeline-group" aria-labelledby="timeline-known-title">
               <div class="timeline-group-heading">
@@ -397,7 +404,7 @@
               </button>
               <p class="self-model-status" data-self-model-status role="status" aria-live="polite"></p>
             </div>
-            <p class="capture-error self-model-error" data-self-model-error role="alert" hidden></p>
+            <p class="capture-error self-model-error" data-self-model-error role="alert" tabindex="-1" hidden></p>
             <p class="self-model-summary" data-self-model-summary></p>
             <div class="self-model-list" data-self-model-list></div>
             <p class="self-model-empty" data-self-model-empty hidden>
@@ -438,7 +445,7 @@
             </div>
             <p class="self-retrieval-status" data-self-retrieval-status role="status" aria-live="polite"></p>
           </form>
-          <p class="capture-error self-retrieval-error" data-self-retrieval-error role="alert" hidden></p>
+          <p class="capture-error self-retrieval-error" data-self-retrieval-error role="alert" tabindex="-1" hidden></p>
           <p class="self-retrieval-summary" data-self-retrieval-summary></p>
           <p class="self-retrieval-empty" data-self-retrieval-empty hidden>
             По этому запросу текущий контекст не найден.
@@ -468,10 +475,16 @@
             </div>
             <p class="search-status" data-search-status role="status" aria-live="polite"></p>
           </form>
-          <p class="capture-error search-error" data-search-error role="alert" hidden></p>
+          <p class="capture-error search-error" data-search-error role="alert" tabindex="-1" hidden></p>
           <p class="search-empty" data-search-empty hidden>По этому запросу ничего не найдено.</p>
           <div class="search-results" data-search-results aria-live="polite"></div>
-          <section class="retrieved-note" data-retrieved-note aria-labelledby="retrieved-note-title" hidden></section>
+          <section
+            class="retrieved-note"
+            data-retrieved-note
+            aria-labelledby="retrieved-note-title"
+            tabindex="-1"
+            hidden
+          ></section>
         </section>
 
         <section class="pillars" aria-labelledby="pillars-title">
