@@ -202,6 +202,30 @@ def test_task_human_required_state_is_deferred_then_returned_without_ready_work(
     assert human.reasons == ("task_has_human_required_gate",)
 
 
+def test_selection_hard_stops_on_persisted_red_human_gate() -> None:
+    red_human_task = TaskCandidate(
+        issue_number=81,
+        state=TaskState.HUMAN_REQUIRED,
+        risk_lane=RiskLane.RED,
+        source=TaskSelectionSource.CURRENT_ACTIVE,
+        human_required=True,
+    )
+    independent_task = TaskCandidate(
+        issue_number=79,
+        state=TaskState.QUEUED,
+        risk_lane=RiskLane.GREEN,
+        source=TaskSelectionSource.OVERNIGHT_QUEUED,
+    )
+
+    selected, result = select_next_task(
+        policy(), (red_human_task, independent_task), night_mode_enabled=True
+    )
+
+    assert selected is None
+    assert result.status is GateStatus.HUMAN_REQUIRED
+    assert result.reasons == ("red_risk_lane",)
+
+
 def test_failure_budget_stops_review_loops_but_evidence_bound_flaky_retry_is_free() -> None:
     loaded = policy()
 

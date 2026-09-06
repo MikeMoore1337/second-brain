@@ -250,13 +250,13 @@ def evaluate_task_start(
 
     if not night_mode_enabled:
         return _human("night_mode_not_explicitly_enabled")
+    risk_policy = _risk_policy(policy, candidate.risk_lane)
+    if not risk_policy.start_allowed:
+        return _human("red_risk_lane")
     if candidate.human_required or candidate.state is TaskState.HUMAN_REQUIRED:
         return _human("task_has_human_required_gate")
     if candidate.scope_expansions > policy.failure_budget.max_scope_expansion:
         return _human("scope_expansion_exceeds_budget")
-    risk_policy = _risk_policy(policy, candidate.risk_lane)
-    if not risk_policy.start_allowed:
-        return _human("red_risk_lane")
 
     if candidate.source is TaskSelectionSource.CURRENT_ACTIVE:
         if candidate.state not in {TaskState.QUEUED, *_ACTIVE_STATES}:
