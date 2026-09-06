@@ -46,7 +46,11 @@ def test_workspace_shell_has_bounded_responsive_layout_contract() -> None:
 
     assert "grid-template-columns: minmax(160px, 196px) minmax(0, 1fr);" in css
     assert "min-height: calc(100dvh - 124px);" in css
+    assert "max-height: calc(100dvh - max(16px, env(safe-area-inset-top, 0px)) - 16px);" in css
+    assert "overflow-y: auto;" in css
     assert "env(safe-area-inset-top, 0px)" in css
+    assert "top: max(12px, env(safe-area-inset-top, 0px));" in css
+    assert "left: max(12px, env(safe-area-inset-left, 0px));" in css
     assert "viewport-fit=cover" in _read("index.html")
     assert ".workspace-content,\n.workspace-content main {\n  min-width: 0;\n}" in css
     assert "@media (max-width: 760px)" in css
