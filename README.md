@@ -96,6 +96,14 @@ uv run second-brain --env-file .env search "fastapi testing" --limit 20
 uv run second-brain --env-file .env search "тестирование" --format json
 ```
 
+Synthetic lexical-gap benchmark v1 запускается отдельно и не читает real
+vault/config:
+
+```powershell
+uv run python -m second_brain.benchmarks.lexical_gap_v1
+uv run python -m second_brain.benchmarks.lexical_gap_v1 --format json
+```
+
 Private Search/Retrieval API принимает только same-origin loopback `POST` с
 `X-Second-Brain-Request: search-v1` и `Content-Type: application/json`; для
 успешных и ошибочных ответов используется `Cache-Control: no-store`. Query —
