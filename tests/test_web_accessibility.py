@@ -111,8 +111,13 @@ def test_hidden_states_focus_contract_and_reduced_motion_are_explicit() -> None:
     assert ".journal-form[hidden] {\n  display: none !important;\n}" in css
     assert ".capture-input:focus-visible," in css
     assert ".review-input:focus-visible" in css
-    assert ".voice-file-label:focus-within {\n  outline: 2px solid var(--lime);" in css
-    assert ":focus-visible {\n  outline: 2px solid var(--lime);" in css
+    assert (
+        ".voice-file-label:focus-within {\n"
+        "  outline: var(--sb-focus-width) solid var(--sb-color-accent);"
+    ) in css
+    assert (
+        ":focus-visible {\n  outline: var(--sb-focus-width) solid var(--sb-color-accent);"
+    ) in css
     assert "@media (prefers-reduced-motion: reduce)" in css
     assert "animation-duration: 0.01ms !important;" in css
     assert "transition-duration: 0.01ms !important;" in css

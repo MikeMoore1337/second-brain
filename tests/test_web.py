@@ -69,7 +69,7 @@ def test_packaged_static_assets_are_cwd_independent(
 
     assert css.status_code == 200
     assert css.headers["content-type"].startswith("text/css")
-    assert "--lime" in css.text
+    assert "--sb-color-accent" in css.text
     assert javascript.status_code == 200
     assert javascript.headers["content-type"].startswith("text/javascript")
     assert "fetch(" in javascript.text
