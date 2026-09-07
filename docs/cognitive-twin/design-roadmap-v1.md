@@ -12,8 +12,9 @@ mechanical design contract в #100: provider-free exact-match
 prediction/abstention policy без confidence; runtime остаётся будущим slice.
 Для следующей Stage 7 boundary issue #162 зафиксирован design-only contract
 [Assistant v1](assistant-v1-contract.md): independent recommendation / analysis
-отделён от Simulate Me; runtime ожидает одно owner decision по provider-neutral
-reasoning boundary и пока не реализуется.
+отделён от Simulate Me; owner выбрал A — отдельный provider-neutral
+`AdvisorPort`, а provider/network/privacy integration и runtime пока не
+разрешены.
 
 Точный status snapshot перед этой docs reconciliation — current `main`:
 `30249d56d366c0688c451a45a7e0214114c7c197`.
@@ -1077,8 +1078,9 @@ context и derived explanation divergence.
 - **Статус:** Assistant v1 design-only contract зафиксирован в
   [assistant-v1-contract.md](assistant-v1-contract.md). Он задаёт отдельную
   independent recommendation / analysis branch и не принимает Simulate Me
-  prediction как input. `HUMAN_REQUIRED` остаётся одним bounded owner decision
-  по A/B/C reasoning boundary; Assistant runtime не начат.
+  prediction как input. Owner decision A принят; `HUMAN_REQUIRED: none` для
+  capability-boundary, а provider/network/privacy integration остаётся
+  отдельным future gate. Assistant runtime не начат.
 - **Цель:** сначала определить независимый bounded advice contract, затем в
   будущем сопоставить его с likely user choice и измерить, насколько текущая
   derivation policy воспроизводит исторические decisions.
@@ -1095,8 +1097,8 @@ context и derived explanation divergence.
   Calibration result reports replay sample/unknowns and derivation version.
 - **Risks:** recommendation contamination by prediction, actual-choice leakage
   into backtest, outcome selection bias, false precision from tiny sample.
-- **Explicit out-of-scope:** Assistant/Compare runtime before owner decision, ML
-  training pipeline, automatic goal changes, prospective calibration,
+- **Explicit out-of-scope:** Assistant/Compare runtime before отдельной
+  implementation/privacy approval, ML training pipeline, automatic goal changes, prospective calibration,
   policy-governed prediction audit record, optimization against a hidden reward
   and universal user score.
 - **Acceptance boundary:** Assistant never receives prediction; future Compare
@@ -1323,6 +1325,7 @@ prediction, inference write-back, canonical fields или изменения
 
 Stage 6 contract approved, но Stage 6 runtime и нижеследующие Stage 7–8
 остаются design/roadmap boundaries. Assistant v1 design contract добавляет
-только bounded Stage 7 documentation и один `HUMAN_REQUIRED` owner decision;
-этот status sync не объявляет runtime scope, не создаёт Stage 8 item и не
-меняет product semantics.
+только bounded Stage 7 documentation и фиксирует owner decision A;
+`HUMAN_REQUIRED: none` относится только к capability-boundary, а provider/
+network/privacy integration остаётся отдельным future gate. Этот status sync не
+объявляет runtime scope, не создаёт Stage 8 item и не меняет product semantics.

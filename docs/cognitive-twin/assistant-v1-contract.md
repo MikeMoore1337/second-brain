@@ -1,16 +1,18 @@
 # Assistant v1 — contract независимой рекомендации и analysis
 
-Статус: **DESIGN / HUMAN_REQUIRED**. Документ закрывает design-only часть
+Статус: **DESIGN / OWNER DECISION A APPROVED**. Для capability-boundary
+решения `HUMAN_REQUIRED: none`; owner выбрал отдельный provider-neutral
+`AdvisorPort`. Документ закрывает design-only часть
 issue [#162](https://github.com/MikeMoore1337/second-brain/issues/162) и не
 создаёт production runtime, provider integration, LLM operation, API или Web.
 
 Контрольная база для этой редакции: `main`, commit
 `30249d56d366c0688c451a45a7e0214114c7c197`.
 
-Ключевой verdict: до реализации Assistant core владелец должен принять один
-bounded decision memo из раздела 9. Причина не в форме DTO, а в том, что
-полезная независимая рекомендация требует reasoning boundary, которой нет у
-текущего `LlmPort`. До этого решения Assistant и зависящий от него Compare
+Ключевой verdict: capability-boundary decision закрыт вариантом A. Это не
+выбор нового provider и не разрешение credentials, network, retention,
+privacy-provider integration или runtime. Любая такая integration остаётся
+отдельным future approval gate; до него Assistant и зависящий от него Compare
 runtime не начинают реализацию.
 
 ## 1. Purpose и non-goals
@@ -66,9 +68,10 @@ Compare     = both outputs + explicit delta
 2. Assistant принимает нормативными только explicit constraints и explicit
    goals текущего request. Personal context из Self Model не получает
    normative authority автоматически.
-3. `preference` и `belief` могут быть только contextual information; `goal`
-   становится objective только когда он явно передан и принят как цель в
-   текущем request.
+3. `preference` и `belief` не входят автоматически в Stage 5 factual context;
+   если caller сам передал bounded contextual information, она остаётся
+   contextual information. `goal` становится objective только когда он явно
+   передан и принят как цель в текущем request.
 4. Каждый result должен иметь machine-readable label
    `independent_recommendation_analysis` и display label
    **Independent recommendation / analysis**. В Russian UI допустим текст
@@ -104,6 +107,7 @@ AssistantRequest {
   explicit_goals: tuple[string, ...] = ()
   explicit_context: tuple[AssistantExplicitContext, ...] = ()
   stage5_context_mode: "none" | "current_explicit_facts" = "none"
+  stage5_query: string | null = null
   max_context_bytes: int = 65536
   max_result_bytes: int = 65536
 }
@@ -130,8 +134,37 @@ C0/C1 controls, `DEL` и Unicode category `Cf`. Case folding, transliteration,
 | `explicit_goals` | 0..8 strings, каждый 1..512 bytes; общий budget 4096 bytes |
 | `explicit_context` | 0..16 entries; `text` 1..1024 bytes; общий budget 16384 bytes |
 | `stage5_context_mode` | только `none` или `current_explicit_facts`; default `none` |
+| `stage5_query` | `null` при `none`; required при `current_explicit_facts`; current literal Stage 5 query bounds |
 | `max_context_bytes` | exact `int`, 1..65536; default 65536; больше cap запрещено |
 | `max_result_bytes` | exact `int`, 1..65536; default 65536; больше cap запрещено |
+
+`stage5_context_mode` и `stage5_query` образуют exact pair:
+
+- при `stage5_context_mode="none"` `stage5_query` **MUST** быть `null`, и
+  Assistant не вызывает Stage 5;
+- при `stage5_context_mode="current_explicit_facts"` `stage5_query`
+  **MUST** быть non-null и проходит validation существующего
+  `SelfContextRequest.query`: non-blank `str`, 1..4096 UTF-8 bytes, без C0/C1,
+  `DEL` и Unicode `Cf`, с текущим literal Search bound в 32 terms;
+- `stage5_query` передаётся в Stage 5 как literal query без генерации из
+  `task`, hidden context, Self Model или LLM; case folding, fuzzy matching,
+  synonym expansion и semantic query rewriting запрещены;
+- candidate limit всегда равен существующему
+  `DEFAULT_SELF_CONTEXT_LIMIT` Stage 5 (`20`), а не caller-owned option или
+  implementation-specific value;
+- сначала вычисляется deterministic `explicit_envelope_bytes` по compact
+  UTF-8 serialization полей `task`, `options`, `explicit_constraints`,
+  `explicit_goals` и `explicit_context`; затем
+  `remaining_context_bytes = max_context_bytes - explicit_envelope_bytes`;
+- если `remaining_context_bytes <= 0`, возвращается
+  `ASSISTANT_INVALID_REQUEST` или `ASSISTANT_CONTEXT_UNAVAILABLE` по месту
+  обнаружения, без Stage 5 call и без silent dropping explicit inputs;
+- Stage 5 получает `max_content_bytes = min(remaining_context_bytes,
+  MAX_MAX_CONTENT_BYTES)`; он не может превысить ни оставшийся Assistant budget,
+  ни текущий Stage 5 cap `MAX_MAX_CONTENT_BYTES`;
+- если после current reread и typed classification не осталось ни одного
+  допустимого factual item, результатом является
+  `abstention/insufficient_current_context`, без heuristic body fallback.
 
 Combined explicit request text и assembled Stage 5 projection должны помещаться
 в `max_context_bytes`. Бюджет считается по UTF-8 text projection и separators,
@@ -150,9 +183,13 @@ Combined explicit request text и assembled Stage 5 projection должны по
   reported premise, а не externally verified truth; `kind="background"` может
   объяснять ситуацию, но не выбирает вариант.
 - `stage5_context_mode="none"` запрещает чтение Stage 5 для этой операции.
-  `current_explicit_facts` — явное разрешение caller получить только
-  current, validated factual projection; это не разрешение искать привычки,
-  preference или prediction.
+  `current_explicit_facts` — явное разрешение caller получить только current,
+  validated factual projection из exact allowlist `explicit_user_fact +
+  memory`; это не разрешение искать привычки, preference, belief, goal,
+  decision, outcome или prediction.
+- `stage5_query` — единственный caller-owned literal query для разрешённой
+  factual projection; Assistant не подменяет его `task` и не генерирует его
+  сам.
 
 Caller не может передать:
 
@@ -177,7 +214,45 @@ Assistant input допускается исключительно validated curr
 для `current_explicit_facts` нельзя доказать current UUID identity и exact
 context role, operation не заменяет его stale snippet или raw search result.
 
-### 4.1. Classification
+### 4.1. Future application-internal typed factual projection
+
+Текущий public `SelfContextItem` намеренно не расширяется в #162. Его полей
+недостаточно, чтобы отличить `explicit_user_fact` от `user_statement`, поэтому
+Assistant core не имеет права классифицировать item по body, title или
+`SelfModelDimension` постфактум.
+
+До передачи factual context future application composition строит internal-only
+projection над той же approved authority `Search -> current UUID reread`:
+
+```text
+AssistantStage5Fact {
+  canonical_note_id: UUIDv7       # internal validation only; never public
+  evidence_kind: "explicit_user_fact"
+  self_kind: "memory"
+  factual_text: string            # bounded current factual projection
+  evidence_at: aware datetime | "unknown"
+  stage5_search_rank: int         # deterministic current candidate order
+}
+```
+
+`AssistantStage5Fact` не является public Stage 5 DTO, не меняет
+`SelfContextResult` и не хранится. Он создаётся только после:
+
+1. deterministic Stage 5 request из `stage5_query`,
+   `DEFAULT_SELF_CONTEXT_LIMIT` и remaining budget;
+2. успешного current canonical UUID reread;
+3. exact Personal Memory validation с сохранением validated
+   `evidence_kind == explicit_user_fact` и `self_kind == memory`;
+4. построения bounded `factual_text` без front matter/path. Нельзя молча
+   обрезать body так, чтобы partial text выглядел complete; item превышающий
+   factual projection cap исключается.
+
+`canonical_note_id`, `evidence_at` и `stage5_search_rank` нужны только для
+internal integrity/provenance validation. Public Assistant result возвращает
+только ephemeral `stage5_current_context` ordinal и не раскрывает UUID, path,
+front matter или raw body.
+
+### 4.2. Classification
 
 | Источник | Роль в Assistant v1 | Ограничение |
 | --- | --- | --- |
@@ -185,23 +260,22 @@ context role, operation не заменяет его stale snippet или raw se
 | request `explicit_goals` | objective | goal relevant to this task только потому, что он явно принят/requested |
 | request `explicit_context(kind=fact)` | contextual reported fact | может быть premise, не external truth и не hidden score |
 | request `explicit_context(kind=background)` | contextual background | не может сам выбрать option |
-| current Stage 5 enrolled `explicit_user_fact` | factual context | только при `current_explicit_facts`; не становится universal fact или objective без explicit request |
-| current Stage 5 `SelfModelDimension.GOAL` | contextual candidate | не objective без повторного explicit goal в request |
-| current Stage 5 `preference` | contextual preference | не utility, weight, tie-break или automatic constraint |
-| current Stage 5 `belief` | contextual view | свидетельство взгляда владельца, не truth |
-| reviewed `observed_decision` / `outcome_later_observation` | historical context only | не извлекаются автоматически в `current_explicit_facts`; могут быть только явно переданным contextual input; никаких behavior/rule выводов |
-| ordinary `SelfContextItem` без typed role | background candidate | не authority; не используется автоматически для hidden objective |
+| current Stage 5 enrolled `explicit_user_fact` + `self_kind=memory` | **only automatic factual context** | exact allowlist; current reread + Personal Memory validation + bounded `AssistantStage5Fact` обязательны |
+| current Stage 5 `preference`, `belief` или `goal` | forbidden in `current_explicit_facts` | не передаются даже как factual context; future use требует отдельного named capability/mode |
+| current Stage 5 `user_statement` | forbidden in `current_explicit_facts` | не заменяет `explicit_user_fact`, даже если body похож |
+| reviewed `observed_decision` / `outcome_later_observation` | forbidden in `current_explicit_facts` | не извлекаются автоматически; caller может передать только свой bounded contextual input |
+| ordinary `SelfContextItem` без exact typed role | forbidden in `current_explicit_facts` | нет heuristic classification или hidden background retrieval |
 | `decision_rule`, `behavioral_pattern`, inferred habit/frequency/recency | forbidden | эти dimensions unavailable и не реконструируются |
 | `Simulate Me` prediction | forbidden | никогда не input для Assistant |
 | stale/missing UUID, snippet, path, cache, raw diagnostics | forbidden | safe error/abstention, не fallback |
 
 `current_explicit_facts` не превращает весь Stage 5 result в prompt. Будущая
-composition обязана отфильтровать current typed evidence до разрешённых factual
-items и передать их с explicit role labels. Если такой typed projection
-отсутствует, Assistant должен abstain или вернуть
+composition обязана отфильтровать ровно `explicit_user_fact + memory`, создать
+`AssistantStage5Fact` и передать только его с role `reported_fact`. Если такой
+typed projection отсутствует, Assistant должен abstain или вернуть
 `ASSISTANT_CONTEXT_UNAVAILABLE`, а не классифицировать body эвристикой.
 
-### 4.2. Как Self Model не становится authority
+### 4.3. Как Self Model не становится authority
 
 Self Model предоставляет explainability/evidence, а не policy выбора:
 
@@ -209,8 +283,9 @@ Self Model предоставляет explainability/evidence, а не policy в
   «лучший» вариант автоматически;
 - `belief` — evidence того, что владелец считает/утверждает; это не проверенная
   истина;
-- `goal` — допустимый objective только после explicit promotion в текущем
-  request; stored claim сам себя не активирует;
+- `goal` — в текущем Stage 5 factual mode не передаётся; допустимый objective
+  появляется только после explicit promotion в текущем request; stored claim
+  сам себя не активирует;
 - `memory` и обычные notes — контекст, не objective;
 - `decision`/`outcome` — отдельные reviewed historical facts, не decision rule;
 - `behavioral_pattern` и `decision_rule` остаются unavailable;
@@ -251,7 +326,8 @@ label и не делает hidden score table. При непреодолимой
    provider, network, log с context или write path.
 2. Сформировать labelled input envelope: `TASK`, `OPTIONS`, `EXPLICIT
    CONSTRAINTS`, `EXPLICIT OBJECTIVES`, `EXPLICIT CONTEXT` и, только при
-   explicit mode, `STAGE5 CURRENT FACTS`.
+   `stage5_context_mode="current_explicit_facts"`, `STAGE5 CURRENT FACTS`
+   from `AssistantStage5Fact`.
 3. Отдельно проверить current Stage 5 identity/role. Нельзя заменить current
    reread индексом, snippet, прошлым result или claim text.
 4. Исключить все `Simulate Me` values и недоступные Self Model dimensions.
@@ -295,8 +371,7 @@ AssistantInputRef {
 AssistantEvidenceRef {
   source: "stage5_current_context" | "explicit_context"
   ordinal: int              # request-local/current-result-local only
-  role: "reported_fact" | "contextual_preference" | "contextual_belief"
-         | "historical_context" | "background"
+  role: "reported_fact" | "background"
 }
 
 AssistantResult {
@@ -323,7 +398,7 @@ AssistantResult {
 | `recommendation` | 1..2048 UTF-8 bytes только для `kind=recommendation`; иначе `null` |
 | `selected_option` | `null` при no-options; иначе exact option из request или `null` |
 | `rationale` | 1..8 items, каждый 1..1024 bytes; bounded total |
-| `evidence_refs` | 0..32 unique request-local refs; no body, UUID, path or claim text |
+| `evidence_refs` | 0..32 unique request-local refs; Stage 5 role is only `reported_fact`; no body, UUID, path or claim text |
 | `constraints_used` | 0..16 refs; only valid explicit constraint ordinals |
 | `objectives_used` | 0..8 refs; only valid explicit goal ordinals |
 | `uncertainty` | 0..8 items, каждый 1..512 bytes; no numeric confidence |
@@ -400,9 +475,10 @@ AssistantErrorCode:
 | `ASSISTANT_RESULT_TOO_LARGE` | complete bounded result превышает cap |
 | `ASSISTANT_RESULT_INVALID` | assembled result нарушает exact invariants |
 
-До owner decision provider errors не могут возникнуть в production runtime
-#162, потому что runtime не реализуется. Если implementation после решения A/B
-добавляет mapping, raw provider exception всегда скрывается за этой taxonomy.
+Provider errors описаны только как будущая public mapping для отдельно
+одобренного reasoning boundary; production runtime #162 не реализуется. Если
+будущая implementation после отдельного provider approval добавляет mapping,
+raw provider exception всегда скрывается за этой taxonomy.
 Не допускаются retry, fallback, automatic model replacement, raw upstream text
 или network detail в public message.
 
@@ -429,7 +505,7 @@ Stage 5 projection, explicit reasoning result и disposable validation metadata.
 Текущий документ не даёт credentials, endpoint, model, retention policy или
 разрешение на сеть.
 
-## 9. Provider/port analysis и один HUMAN_REQUIRED memo
+## 9. Provider/port analysis и owner decision record
 
 ### 9.1. Фактический current `LlmPort`
 
@@ -470,11 +546,16 @@ independent-advice policy.
 semantics, safe abstention и граница между note drafting и reasoning. Молчаливо
 добавлять поля в `NoteDraft` или менять meaning `context` запрещено.
 
-### 9.2. HUMAN_REQUIRED: один owner decision memo
+### 9.2. Owner decision A — resolved
 
-**Вопрос для owner:** какой provider-neutral reasoning boundary разрешить для
-будущего Assistant core — A, B или C? Это одно решение о capability boundary,
-а не разрешение реализовывать provider/runtime.
+**Owner decision: A — ACCEPT.** Для будущего Assistant core выбран новый
+provider-neutral `AdvisorPort` / equivalent с отдельными typed
+`AdvisorRequest` и `AssistantResult` semantics.
+
+`HUMAN_REQUIRED: none for the Assistant v1 capability-boundary decision`.
+Решение разрешает только application-owned boundary и не разрешает provider,
+credentials, network, model, retention, privacy-provider integration или
+runtime. Любой такой следующий шаг остаётся отдельным explicit approval gate.
 
 **Известные факты:** текущий `LlmPort` typed только для одной `draft_note ->
 NoteDraft` operation; Assistant Result имеет другую семантику и требует
@@ -483,21 +564,19 @@ Stage 5/4 дают read-only context, но не reasoning provider.
 
 | Вариант | Плюсы | Минусы / complexity / coupling | Privacy impact | Рекомендация |
 | --- | --- | --- | --- | --- |
-| **A. Новый provider-neutral `AdvisorPort` / equivalent** с отдельными typed `AdvisorRequest` и `AssistantResult` | Interface segregation; NoteDraft остаётся backwards-safe; отдельная cancellation/error/privacy boundary; existing configured adapter потенциально может реализовать его позже | отдельный port, validator, adapter capability и deterministic no-network tests; средняя/высокая implementation complexity; появляется новая reasoning surface | явная новая передача personal context через approved boundary; можно независимо запретить raw context, retention, fallback и network до approval | **Предпочтительный вариант, если нужен полноценный model-backed independent advice** |
-| **B. Второй operation в существующем `LlmPort`** (`advise(...)`) при сохранении `draft_note` | можно повторно использовать часть transport/config; меньше номинальных port types | port начинает объединять note drafting и advice; выше coupling adapters/callers/error semantics; backwards-safe только при явном capability segregation и отдельной typed operation; provider implementation всё равно нужна | те же новые privacy risks, но они легче скрываются внутри уже существующего LLM boundary | не выбирать без отдельного подтверждения interface segregation; не является текущим default |
-| **C. Assistant без LLM/provider** | no network, no credentials, минимальный privacy risk; низкая complexity; полностью deterministic | полезен только как узкий constraint satisfiability/explicit trade-off analysis; не может честно обещать общий ответ «что объективно разумнее»; больше abstentions и no recommendation | минимальный: только request и approved in-memory context | безопасный fallback, если owner не разрешает новую reasoning capability; scope нужно сузить до mechanical analysis |
+| **A. Новый provider-neutral `AdvisorPort` / equivalent** с отдельными typed `AdvisorRequest` и `AssistantResult` | Interface segregation; NoteDraft остаётся backwards-safe; отдельная cancellation/error/privacy boundary; existing configured adapter потенциально может реализовать его позже | отдельный port, validator, adapter capability и deterministic no-network tests; средняя/высокая implementation complexity; появляется новая reasoning surface | явная новая передача personal context через approved boundary; можно независимо запретить raw context, retention, fallback и network до approval | **ACCEPT — owner выбрал A** |
+| **B. Второй operation в существующем `LlmPort`** (`advise(...)`) при сохранении `draft_note` | можно повторно использовать часть transport/config; меньше номинальных port types | port начинает объединять note drafting и advice; выше coupling adapters/callers/error semantics; backwards-safe только при явном capability segregation и отдельной typed operation; provider implementation всё равно нужна | те же новые privacy risks, но они легче скрываются внутри уже существующего LLM boundary | **DEFER / not selected for v1** |
+| **C. Assistant без LLM/provider** | no network, no credentials, минимальный privacy risk; низкая complexity; полностью deterministic | полезен только как узкий constraint satisfiability/explicit trade-off analysis; не может честно обещать общий ответ «что объективно разумнее»; больше abstentions и no recommendation | минимальный: только request и approved in-memory context | **DEFER / fallback only if separately selected** |
 
-**Решение:** `HUMAN_REQUIRED`. Для ожидаемого полноценного Assistant
-рекомендуется owner-решение **A**, но этот документ сам его не принимает и не
-выбирает provider. Если owner не разрешает новую reasoning boundary, допустим
-только явно суженный **C**; нельзя назвать его полноценным model-backed advice.
-**B** не является разрешённым по умолчанию. До owner decision не менять
-`LlmPort`, provider implementation, config, dependencies или privacy surface.
+Таким образом, A принят как capability boundary, B отклонён для v1, C остаётся
+только возможным deterministic fallback. Existing `LlmPort`, provider
+implementation, config, dependencies и privacy surface в #162 не меняются.
 
 ## 10. Testing strategy
 
-В #162 production tests не добавляются. После принятия A или C будущий core
-должен иметь deterministic no-network matrix:
+В #162 production tests не добавляются. После фиксации A будущий core
+должен иметь deterministic no-network matrix; C потребует отдельного сужения
+scope, если owner когда-либо выберет этот fallback:
 
 ### Request и boundary
 
@@ -508,15 +587,23 @@ Stage 5/4 дают read-only context, но не reasoning provider.
 - options 0..8, unique IDs, caller order and exact selected option preserved;
 - explicit constraints/goals/context budgets and max caps checked before any
   Stage 5/provider/read/write call;
-- `stage5_context_mode=none` proves zero Self Retrieval/read side effects;
-- `current_explicit_facts` rejects stale snippet, missing UUID, malformed role,
-  path leak and unvalidated body fallback.
+- `stage5_context_mode=none` requires `stage5_query=null` and proves zero Stage 5
+  read side effects;
+- `stage5_context_mode=current_explicit_facts` requires a validated
+  `stage5_query`, passes the current literal query unchanged, uses exactly
+  `DEFAULT_SELF_CONTEXT_LIMIT`, and derives the remaining content cap with
+  `min(remaining_context_bytes, MAX_MAX_CONTENT_BYTES)`;
+- `current_explicit_facts` accepts only internal `AssistantStage5Fact` with
+  `evidence_kind=explicit_user_fact` and `self_kind=memory`; stale snippets,
+  missing UUIDs, malformed roles, path leaks, unvalidated bodies and empty
+  factual projections fail closed without heuristic fallback.
 
 ### Independence and Self Model safety
 
 - injected `SimulateMeResult`/prediction is never requested, read or accepted;
-- preference never selects or weights an option automatically;
-- belief can appear only contextual and cannot be treated as truth;
+- preference, belief and stored goal never enter the automatic Stage 5 factual
+  projection; any future use requires a separately named capability/mode;
+- caller-provided context remains contextual and cannot be treated as truth;
 - stored goal does not become objective until explicit current goal is present;
 - `behavioral_pattern`/`decision_rule`, frequency, recency and numeric
   confidence cannot enter reasoning input;
@@ -565,10 +652,13 @@ Required current foundations:
 3. Stage 6 [Simulate Me contract](simulate-me-v1-contract.md) only as a
    separate peer boundary, never as Assistant input;
 4. existing `CancellationToken`/application safe-error conventions;
-5. owner choice from the single A/B/C decision memo;
-6. after that choice, a dedicated implementation task covering the selected
-   port, privacy boundary, provider/no-provider behavior and deterministic
-   tests.
+5. owner-approved separate typed `AdvisorPort` boundary; current `LlmPort`
+   remains unchanged;
+6. future application-internal `AssistantStage5Fact` projection over the same
+   Stage 5 Search -> current UUID reread -> Personal Memory validation
+   authority;
+7. a dedicated implementation task covering the approved port, privacy
+   boundary, provider/no-provider behavior and deterministic tests.
 
 Не требуется и не разрешается добавлять в этот dependency list новый provider,
 adapter, schema field, persistence, Web/API, `second-brain-vault` change или
@@ -579,9 +669,9 @@ Assistant runtime issue.
 | Dimension | Assistant | Simulate Me |
 | --- | --- | --- |
 | Question | independent recommendation / analysis | likely owner choice |
-| Normative inputs | explicit current constraints/goals + allowed facts | current direct `preference`/`goal` evidence under exact-match policy |
-| Preference/belief | preference contextual only; belief contextual-only | belief contextual-only; preference may support exact option prediction |
-| Goal | objective only when explicit in current request | eligible direct evidence under Stage 6 policy, still prediction only |
+| Normative inputs | explicit current constraints/goals only; exact typed `explicit_user_fact`/`memory` facts are contextual evidence | current direct `preference`/`goal` evidence under exact-match policy |
+| Preference/belief | not automatic Stage 5 factual inputs; caller context remains contextual | belief contextual-only; preference may support exact option prediction |
+| Goal | Stage 5 goal is not automatic input; objective only when explicit in current request | eligible direct evidence under Stage 6 policy, still prediction only |
 | Options | optional; may recommend open action or selected caller option | caller-owned bounded options are required |
 | Output label | `independent_recommendation_analysis` | `prediction` / `abstention`, display **ПРОГНОЗ** |
 | Input from other mode | never reads Simulate Me result | does not read Assistant result |
@@ -601,18 +691,24 @@ the Simulate Me input.
 | --- | --- |
 | Caller-owned bounded `AssistantRequest` with optional options | **ACCEPT** |
 | Explicit constraints/goals/context and request-local authority rules | **ACCEPT** |
-| Stage 5 current UUID context with explicit factual scope only | **ACCEPT as design boundary** |
+| Stage 5 current UUID context with exact typed `explicit_user_fact` + `memory` projection | **ACCEPT as design boundary** |
+| Deterministic `stage5_query` / limit / remaining-budget mapping | **ACCEPT as design boundary** |
+| Internal `AssistantStage5Fact` over current reread + Personal Memory validation | **ACCEPT as future core dependency** |
 | Self Model preference/belief/goal treatment without normative leakage | **ACCEPT** |
 | Closed recommendation/analysis/abstention Result DTO and safe taxonomy | **ACCEPT as design** |
 | Independent output label and no Simulate Me input | **ACCEPT** |
 | Bounded privacy, no-write, no-persistence and no-hidden-network boundary | **ACCEPT** |
 | Testing strategy and future dependency gate | **ACCEPT** |
-| LLM/provider operation and production reasoning runtime | **DEFER** |
+| Separate typed `AdvisorPort` capability boundary | **ACCEPT — owner decision A** |
+| Extension of existing `LlmPort` (B) | **DEFER / not selected** |
+| Deterministic-only Assistant (C) | **DEFER / fallback only** |
+| LLM/provider operation and production reasoning runtime | **DEFER / separate future implementation gate** |
 | Web/API/CLI projection, Compare implementation and calibration | **DEFER** |
-| C deterministic-only Assistant runtime | **DEFER until owner chooses C and narrows scope** |
-| A new `AdvisorPort` or B extension of `LlmPort` | **HUMAN_REQUIRED: one owner decision memo** |
-| New provider, credentials, paid dependency, privacy retention or network | **HUMAN_REQUIRED in a later approved implementation boundary; not selected here** |
+| A/B/C capability-boundary decision | **RESOLVED — `HUMAN_REQUIRED: none`** |
+| New provider, credentials, paid dependency, privacy retention or network | **DEFER / separate explicit future approval gate** |
 
-Итог: **HUMAN_REQUIRED** с одним bounded A/B/C memo в разделе 9. Этот verdict
-не блокирует независимые Stage 5/6 maintenance tasks, но блокирует Assistant
-core/runtime и любой Compare runtime, который требует Assistant output.
+Итог: **Owner decision A**, `HUMAN_REQUIRED: none for the Assistant v1
+capability-boundary decision`. Это не разрешение provider/network/privacy
+integration и не блокирует независимые Stage 5/6 maintenance tasks; Assistant
+core/runtime и любой Compare runtime, который требует Assistant output, остаются
+отдельным future implementation scope.
