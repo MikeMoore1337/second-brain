@@ -325,6 +325,19 @@ Assistant input допускается исключительно validated curr
 для `current_explicit_facts` нельзя доказать current UUID identity и exact
 context role, operation не заменяет его stale snippet или raw search result.
 
+Для `stage5_context_mode="current_explicit_facts"` future Assistant composition
+обязана использовать fact-only Stage 5 source: bounded Search с literal
+`stage5_query` и `DEFAULT_SELF_CONTEXT_LIMIT`, затем current UUID reread и
+classification только для этого candidate window. Она **не вызывает** общий
+`BuildSelfContext` как opaque composition, если тот перед этим безусловно
+вызывает `_read_self_model()`/`BuildSelfModel` и сканирует preference, belief или
+goal claims. Self Model derivation и такие claims не должны быть прочитаны или
+обработаны до Assistant allowlist. Это design constraint будущего core, а не
+изменение существующего Stage 5 source в #162. Если fact-only source нельзя
+получить или нельзя доказать отсутствие такого Self Model read, возвращается
+`ASSISTANT_CONTEXT_UNAVAILABLE`; post-filtering уже прочитанного запрещённого
+материала не является эквивалентом fact-only path.
+
 ### 4.1. Future application-internal typed factual projection
 
 Текущий public `SelfContextItem` намеренно не расширяется в #162. Его полей
@@ -351,10 +364,12 @@ AssistantStage5Fact {
 
 1. deterministic Stage 5 request из `stage5_query`,
    `DEFAULT_SELF_CONTEXT_LIMIT` и remaining budget;
-2. успешного current canonical UUID reread;
-3. exact Personal Memory validation с сохранением validated
+2. fact-only Search/candidate composition без `BuildSelfModel` или
+   `_read_self_model()` и без чтения Self Model claims;
+3. успешного current canonical UUID reread;
+4. exact Personal Memory validation с сохранением validated
    `evidence_kind == explicit_user_fact` и `self_kind == memory`;
-4. построения полного bounded `factual_text` по exact projection из §4.1.1.
+5. построения полного bounded `factual_text` по exact projection из §4.1.1.
    Нельзя молча обрезать body так, чтобы partial text выглядел complete. Если
    complete eligible projection не может быть построен или помещён в
    upstream/final budget, это `ASSISTANT_CONTEXT_UNAVAILABLE`, а не исключение
@@ -426,7 +441,9 @@ substitutes или передавать partial projection.
 Exact factual allowlist применяется только если Stage 5 result valid,
 `truncated == false`, нет exclusion с `context_budget_exceeded`, и current
 reread/classification для всего возвращённого bounded candidate window
-завершены. Окно ограничено approved `DEFAULT_SELF_CONTEXT_LIMIT` (`20`), а не
+завершены (либо candidate получил только existing valid
+`candidate_not_found` exclusion). Окно ограничено approved
+`DEFAULT_SELF_CONTEXT_LIMIT` (`20`), а не
 обещанием exhaustive vault-wide search. Existing `candidate_not_found`
 semantics сохраняются: такая exclusion сама по себе не делает result
 truncated и не расширяет scope этой задачи. Только после этого полного gate
@@ -448,13 +465,16 @@ zero usable eligible facts даёт нормальный abstention
 | ordinary `SelfContextItem` без exact typed role | forbidden in `current_explicit_facts` | нет heuristic classification или hidden background retrieval |
 | `decision_rule`, `behavioral_pattern`, inferred habit/frequency/recency | forbidden | эти dimensions unavailable и не реконструируются |
 | `Simulate Me` prediction | forbidden | никогда не input для Assistant |
-| stale/missing UUID, snippet, path, cache, raw diagnostics | forbidden | `ASSISTANT_CONTEXT_UNAVAILABLE`, не `insufficient_current_context` и не fallback |
+| valid Stage 5 `candidate_not_found` exclusion | normal existing Stage 5 exclusion | сама по себе не `truncated` и не `ASSISTANT_CONTEXT_UNAVAILABLE`; после полного gate может вести к `insufficient_current_context` |
+| missing/mismatched UUID in a purported `AssistantStage5Fact`, identity conflict, stale snippet/path/cache или raw diagnostics used as authority | forbidden | `ASSISTANT_CONTEXT_UNAVAILABLE`, не `insufficient_current_context` и не fallback |
 
-`current_explicit_facts` не превращает весь Stage 5 result в prompt. Будущая
-composition обязана отфильтровать ровно `explicit_user_fact + memory`, создать
-`AssistantStage5Fact` и передать только его с role `reported_fact`. Если такой
-typed projection отсутствует или pipeline не может доказать/построить полный
-projection, возвращается `ASSISTANT_CONTEXT_UNAVAILABLE`. Если pipeline
+`current_explicit_facts` не превращает общий Stage 5 result в prompt и не делает
+post-filter уже прочитанных Self Model claims. Будущая composition обязана
+получить candidates через fact-only source, проверить ровно
+`explicit_user_fact + memory`, создать `AssistantStage5Fact` и передать только
+его с role `reported_fact`. Если такой fact-only typed projection отсутствует
+или pipeline не может доказать/построить полный projection, возвращается
+`ASSISTANT_CONTEXT_UNAVAILABLE`. Если pipeline
 успешен, integrity validation прошла, но после exact allowlist не осталось
 facts, возвращается ровно `abstention/insufficient_current_context`; это
 разные outcomes и они не взаимозаменяемы.
@@ -1085,6 +1105,10 @@ scope, если owner когда-либо выберет этот fallback:
   missing UUIDs, malformed roles, path leaks, unvalidated bodies and incomplete
   factual projections return `ASSISTANT_CONTEXT_UNAVAILABLE` without heuristic
   fallback;
+- fact-only `current_explicit_facts` proves that `BuildSelfModel`/
+  `_read_self_model()` and forbidden preference/belief/goal claims are not read
+  before the allowlist; a general Stage 5 composition that cannot prove this is
+  unavailable for the mode;
 - after successful retrieval/reread/allowlist validation, zero candidates or
   zero eligible facts always produce the exact abstention
   `kind=abstention`, `recommendation=null`, `selected_option=null`,
@@ -1163,7 +1187,9 @@ scope, если owner когда-либо выберет этот fallback:
   with some included eligible facts, an explicit
   `context_budget_exceeded` exclusion, and the non-truncated complete cases:
   zero eligible facts gives `insufficient_current_context`, eligible facts give
-  normal projection, and no heuristic fallback is allowed.
+  normal projection, a valid `candidate_not_found`-only result preserves the
+  same empty-set abstention semantics, and no heuristic fallback is allowed;
+  the fact-only source also proves no Self Model read.
 
 ### Independence and Self Model safety
 
@@ -1263,7 +1289,7 @@ the Simulate Me input.
 | --- | --- |
 | Caller-owned bounded `AssistantRequest` with optional options | **ACCEPT** |
 | Explicit constraints/goals/context and request-local authority rules | **ACCEPT** |
-| Stage 5 current UUID context with exact typed `explicit_user_fact` + `memory` projection | **ACCEPT as design boundary** |
+| Stage 5 fact-only current UUID context with exact typed `explicit_user_fact` + `memory` projection | **ACCEPT as design boundary** |
 | Deterministic `stage5_query` / limit / remaining-budget mapping | **ACCEPT as design boundary** |
 | Empty eligible Stage 5 facts vs context retrieval/projection failure outcomes | **ACCEPT as exact split** |
 | Stage 5 `truncated` / `context_budget_exceeded` completeness gate before factual allowlist | **ACCEPT as exact design boundary** |
