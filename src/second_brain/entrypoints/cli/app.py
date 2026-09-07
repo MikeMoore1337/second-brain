@@ -953,18 +953,29 @@ def _run_doctor(options: CliOptions, output_format: OutputFormat) -> None:
     try:
         config = load_config(env_file=options.env_file, vault_path_override=options.vault_path)
     except ConfigurationError as exc:
-        report = DoctorVault(None, config_resolvable=False).execute()
+        report = DoctorVault(
+            None,
+            config_resolvable=False,
+            search_index_factory=SqliteFts5SearchIndex,
+        ).execute()
         _echo_doctor_report(report, output_format)
         hint = _safe_configuration_hint(exc)
         if hint is not None:
             typer.echo(f"Ошибка конфигурации: {hint}", err=True)
         raise typer.Exit(code=report.exit_code) from None
     except OSError:
-        report = DoctorVault(None, config_resolvable=False).execute()
+        report = DoctorVault(
+            None,
+            config_resolvable=False,
+            search_index_factory=SqliteFts5SearchIndex,
+        ).execute()
         _echo_doctor_report(report, output_format)
         raise typer.Exit(code=report.exit_code) from None
 
-    report = DoctorVault(FileSystemVaultReader(config.vault_path)).execute()
+    report = DoctorVault(
+        FileSystemVaultReader(config.vault_path),
+        search_index_factory=SqliteFts5SearchIndex,
+    ).execute()
     _echo_doctor_report(report, output_format)
     raise typer.Exit(code=report.exit_code)
 

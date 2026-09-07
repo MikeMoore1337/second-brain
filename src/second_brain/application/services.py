@@ -17,7 +17,11 @@ from second_brain.application.decision_journal import (
     validate_decision_journal_draft,
     validate_outcome_observation_draft,
 )
-from second_brain.application.diagnostics import BuildDoctorReport, DoctorReport
+from second_brain.application.diagnostics import (
+    BuildDoctorReport,
+    DoctorReport,
+    SearchIndexFactory,
+)
 from second_brain.application.llm import MAX_MAX_OUTPUT_BYTES, validate_note_draft
 from second_brain.application.personal_memory import (
     PersonalMemoryDraftError,
@@ -61,6 +65,7 @@ class DoctorVault:
 
     reader: VaultReader | None
     config_resolvable: bool = True
+    search_index_factory: SearchIndexFactory | None = None
 
     def execute(self) -> DoctorReport:
         """Оркестрировать один scan и вернуть безопасный doctor report."""
@@ -68,6 +73,7 @@ class DoctorVault:
         return BuildDoctorReport(
             self.reader,
             config_resolvable=self.config_resolvable,
+            search_index_factory=self.search_index_factory,
         ).execute()
 
 

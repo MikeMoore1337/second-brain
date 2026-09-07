@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
+from second_brain.adapters.search import SqliteFts5SearchIndex
 from second_brain.adapters.vault import FileSystemVaultReader
 from second_brain.application.diagnostics import BuildDoctorReport, DoctorReport, DoctorStatus
 from second_brain.application.reports import VaultRootRole, VaultSnapshot
@@ -88,6 +89,7 @@ def _doctor(vault: Path) -> DoctorReport:
         FileSystemVaultReader(vault),
         config_resolvable=True,
         clock=lambda: GENERATED_AT,
+        search_index_factory=SqliteFts5SearchIndex,
     ).execute()
 
 
@@ -150,6 +152,19 @@ def test_doctor_reports_counts_and_statuses_from_one_safe_projection(tmp_path: P
     assert "vault_path" not in payload
     assert "paths" not in payload["manifest"]
     assert "second-brain.yaml" not in serialized
+
+
+def test_warning_only_diagnostics_make_doctor_degraded(tmp_path: Path) -> None:
+    vault = create_vault(tmp_path / "vault")
+    write_note(vault, "00 Inbox/Unmanaged.md", "# Черновик без managed-полей.\n")
+
+    report = _doctor(vault)
+
+    assert report.warning_count == 1
+    assert report.error_count == 0
+    assert report.status is DoctorStatus.DEGRADED
+    assert report.exit_code == 1
+    assert report.managed_note_count == 0
 
 
 def test_missing_content_root_makes_content_counts_and_required_layers_unavailable(
@@ -353,6 +368,7 @@ def test_doctor_uses_one_underlying_scan_snapshot(tmp_path: Path) -> None:
         reader,
         config_resolvable=True,
         clock=lambda: GENERATED_AT,
+        search_index_factory=SqliteFts5SearchIndex,
     ).execute()
 
     assert report.status is DoctorStatus.HEALTHY
@@ -443,6 +459,7 @@ def test_doctor_snapshot_validation_failure_is_safe(tmp_path: Path) -> None:
         BrokenReader(),
         config_resolvable=True,
         clock=lambda: GENERATED_AT,
+        search_index_factory=SqliteFts5SearchIndex,
     ).execute()
 
     assert report.status is DoctorStatus.UNAVAILABLE

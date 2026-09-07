@@ -11,9 +11,8 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, Final
 
-from second_brain.adapters.search import SqliteFts5SearchIndex
 from second_brain.application.personal_memory import is_personal_memory_enrolled
-from second_brain.application.ports import VaultReader
+from second_brain.application.ports import SearchIndexPort, VaultReader
 from second_brain.application.reports import (
     Diagnostic,
     DiagnosticSeverity,
@@ -42,6 +41,7 @@ from second_brain.application.timeline import (
 from second_brain.application.validation import build_report
 
 type DiagnosticsClock = Callable[[], datetime]
+type SearchIndexFactory = Callable[[], SearchIndexPort]
 
 _CONTENT_ROOT_AVAILABILITY_CODES: Final[frozenset[str]] = frozenset(
     {
@@ -248,6 +248,7 @@ class BuildDoctorReport:
     reader: VaultReader | None
     config_resolvable: bool
     clock: DiagnosticsClock = lambda: datetime.now(UTC)
+    search_index_factory: SearchIndexFactory | None = None
 
     def execute(self) -> DoctorReport:
         """Return a complete report or a safe unavailable result."""
@@ -267,7 +268,12 @@ class BuildDoctorReport:
             report = build_report(snapshot)
             if type(report) is not ScanReport:
                 raise TypeError
-            return _build_report(report, snapshot=snapshot, generated_at=generated_at)
+            return _build_report(
+                report,
+                snapshot=snapshot,
+                generated_at=generated_at,
+                search_index_factory=self.search_index_factory,
+            )
         except Exception:
             return DoctorReport.unavailable(
                 generated_at=generated_at,
@@ -281,6 +287,7 @@ def _build_report(
     *,
     snapshot: VaultSnapshot,
     generated_at: datetime,
+    search_index_factory: SearchIndexFactory | None,
 ) -> DoctorReport:
     """Project one full internal report into safe counts and layer statuses."""
 
@@ -299,12 +306,13 @@ def _build_report(
     self_retrieval = _build_self_retrieval_status(
         snapshot_reader,
         generated_at=generated_at,
+        search_index_factory=search_index_factory,
     )
 
     status = DoctorStatus.HEALTHY
     if not manifest_available or not content_roots_available:
         status = DoctorStatus.UNAVAILABLE
-    elif report.error_count:
+    elif report.error_count or report.warning_count:
         status = DoctorStatus.DEGRADED
     if timeline.status is DoctorStatus.UNAVAILABLE or self_model.status is DoctorStatus.UNAVAILABLE:
         status = DoctorStatus.UNAVAILABLE
@@ -389,12 +397,16 @@ def _build_self_retrieval_status(
     reader: VaultReader,
     *,
     generated_at: datetime,
+    search_index_factory: SearchIndexFactory | None,
 ) -> DoctorLayerStatus:
     """Exercise the merged Stage 5 core against the same snapshot."""
 
-    index: SqliteFts5SearchIndex | None = None
+    if search_index_factory is None:
+        return DoctorLayerStatus(DoctorStatus.UNAVAILABLE, False, "SELF_RETRIEVAL_NOT_CONFIGURED")
+
+    index: SearchIndexPort | None = None
     try:
-        index = SqliteFts5SearchIndex()
+        index = search_index_factory()
         BuildSelfContext(
             reader,
             index,
@@ -406,8 +418,10 @@ def _build_self_retrieval_status(
         return DoctorLayerStatus(DoctorStatus.UNAVAILABLE, False, "SELF_RETRIEVAL_UNAVAILABLE")
     finally:
         if index is not None:
-            with suppress(Exception):
-                index.close()
+            close = getattr(index, "close", None)
+            if callable(close):
+                with suppress(Exception):
+                    close()
     return DoctorLayerStatus(DoctorStatus.HEALTHY, False)
 
 
@@ -477,4 +491,5 @@ __all__ = [
     "DoctorLayerStatus",
     "DoctorReport",
     "DoctorStatus",
+    "SearchIndexFactory",
 ]
