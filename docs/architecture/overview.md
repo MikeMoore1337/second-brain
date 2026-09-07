@@ -190,7 +190,11 @@ Foundation не пишет в vault, не вызывает Git, сеть или 
 env-файла. Неявный fallback на process `cwd` запрещён.
 
 Scanner не следует symlink/junction, проверяет resolved path containment и
-пропускает linked entries с diagnostic. Inbox может временно содержать unmanaged
+пропускает linked entries с diagnostic. Scanner diagnostics несут typed
+`VaultRootRole`; root-owned failures называют ровно declared role, а overlap
+использует explicit global provenance и bounded pair of involved roles. Nested
+declared roots изолируются и сканируются только своим role, поэтому downstream
+read models не восстанавливают availability по path spelling. Inbox может временно содержать unmanaged
 Markdown; частично заполненная schema считается ошибкой.
 
 `note create` по умолчанию только формирует dry-run/diff. Только `--apply`
