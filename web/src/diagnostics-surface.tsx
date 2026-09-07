@@ -168,13 +168,13 @@ function DiagnosticsReport({ report }: { report: DiagnosticsResponse }): ReactEl
       <section className="diagnostics-group" aria-labelledby="diagnostics-signals-title">
         <div className="diagnostics-group-heading">
           <div>
-            <p className="eyebrow">Сигналы проверки</p>
-            <h3 id="diagnostics-signals-title">Сгруппированные коды</h3>
+            <p className="eyebrow">Сигналы сканирования хранилища</p>
+            <h3 id="diagnostics-signals-title">Коды сканирования хранилища</h3>
           </div>
-          <p className="diagnostics-signal-total">Ошибки: {formatCount(report.errors)} · предупреждения: {formatCount(report.warnings)}</p>
+          <p className="diagnostics-signal-total">Ошибки сканирования хранилища: {formatCount(report.errors)} · предупреждения сканирования хранилища: {formatCount(report.warnings)}</p>
         </div>
         {report.diagnostics.length === 0 ? (
-          <p className="diagnostics-empty">Сигналы не обнаружены.</p>
+          <p className="diagnostics-empty">Сигналы сканирования хранилища не обнаружены.</p>
         ) : (
           <ul className="diagnostics-signal-list">
             {report.diagnostics.map((item) => (

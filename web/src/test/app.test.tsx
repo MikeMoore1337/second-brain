@@ -85,7 +85,23 @@ describe("React Web parity shell", () => {
     expect(host.querySelector("[data-diagnostics-status='healthy']")).not.toBeNull();
     expect(host.textContent).toContain("Стабильно");
     expect(host.textContent).toContain("Последний сформированный отчёт");
-    expect(host.textContent).toContain("Сигналы не обнаружены");
+    expect(host.textContent).toContain("Сигналы сканирования хранилища не обнаружены");
+  });
+
+  it("labels scanner diagnostics separately from derived-layer status", async () => {
+    const load = vi.spyOn(api, "loadDiagnostics").mockResolvedValue({
+      ...healthyDiagnostics,
+      status: "degraded",
+      self_retrieval: { status: "unavailable", required: false, code: "SELF_RETRIEVAL_SEARCH_UNAVAILABLE" },
+    });
+    const host = await renderDiagnostics();
+    const button = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find((item) => item.textContent?.includes("Обновить"));
+    await act(async () => button?.click());
+
+    expect(load).toHaveBeenCalledOnce();
+    expect(host.textContent).toContain("SELF_RETRIEVAL_SEARCH_UNAVAILABLE");
+    expect(host.textContent).toContain("Ошибки сканирования хранилища: 0");
+    expect(host.textContent).toContain("Сигналы сканирования хранилища не обнаружены.");
   });
 
   it.each([
