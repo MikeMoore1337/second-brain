@@ -70,6 +70,8 @@ def load_config(
         resolved = candidate.resolve(strict=True)
     except OSError as exc:
         raise ConfigurationError(f"vault path cannot be resolved: {candidate}: {exc}") from exc
+    except ValueError:
+        raise ConfigurationError("vault path cannot be resolved") from None
     if not resolved.is_dir():
         raise ConfigurationError(f"vault path is not a directory: {resolved}")
     return AppConfig(resolved, config_root, selected_env)

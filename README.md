@@ -351,6 +351,11 @@ Workflow не выполняет pull, rebase, merge, reset, force push или a
 
 ## Коды завершения CLI
 
+- Для `doctor` код `0` означает `healthy` (все проверенные слои доступны), `1` —
+  `degraded` (есть bounded diagnostics или необязательный/частичный слой), `2` —
+  `unavailable` (конфигурация, manifest, content scope или обязательный derived
+  layer недоступны). `doctor` работает только на чтение; attachment total
+  показывается только после полного attachment scan.
 - `0`: сканирование завершено без validation errors;
 - `1`: сканирование завершено и обнаружило validation errors;
 - `2`: ошибка конфигурации или runtime не позволила выполнить корректное scan.

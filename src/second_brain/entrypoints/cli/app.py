@@ -21,6 +21,7 @@ from second_brain.adapters.research.rss import PublicRssAdapter
 from second_brain.adapters.research.youtube import PublicYouTubeAdapter
 from second_brain.adapters.search import SqliteFts5SearchIndex
 from second_brain.adapters.vault import FileSystemVaultReader, FileSystemVaultWriter
+from second_brain.application.diagnostics import DoctorReport
 from second_brain.application.draft_files import DraftFileError, read_note_draft_file
 from second_brain.application.llm import (
     DEFAULT_MAX_OUTPUT_BYTES,
@@ -924,10 +925,14 @@ def _render_research_text(source: ResearchSource) -> str:
 
 def _run(ctx: typer.Context, output_format: OutputFormat, *, use_doctor: bool) -> None:
     options = _root_options(ctx)
+    if use_doctor:
+        _run_doctor(options, output_format)
+        return
+
     try:
         config = load_config(env_file=options.env_file, vault_path_override=options.vault_path)
         reader = FileSystemVaultReader(config.vault_path)
-        report = (DoctorVault(reader) if use_doctor else ValidateVault(reader)).execute()
+        report = ValidateVault(reader).execute()
     except ConfigurationError as exc:
         typer.echo(f"Ошибка конфигурации: {exc}", err=True)
         raise typer.Exit(code=2) from exc
@@ -940,6 +945,67 @@ def _run(ctx: typer.Context, output_format: OutputFormat, *, use_doctor: bool) -
     else:
         typer.echo(_render_text(report))
     raise typer.Exit(code=1 if report.error_count else 0)
+
+
+def _run_doctor(options: CliOptions, output_format: OutputFormat) -> None:
+    """Run doctor with a safe report even when configuration cannot be loaded."""
+
+    try:
+        config = load_config(env_file=options.env_file, vault_path_override=options.vault_path)
+    except ConfigurationError as exc:
+        report = DoctorVault(
+            None,
+            config_resolvable=False,
+            search_index_factory=SqliteFts5SearchIndex,
+        ).execute()
+        _echo_doctor_report(report, output_format)
+        hint = _safe_configuration_hint(exc)
+        if hint is not None:
+            typer.echo(f"Ошибка конфигурации: {hint}", err=True)
+        raise typer.Exit(code=report.exit_code) from None
+    except OSError:
+        report = DoctorVault(
+            None,
+            config_resolvable=False,
+            search_index_factory=SqliteFts5SearchIndex,
+        ).execute()
+        _echo_doctor_report(report, output_format)
+        raise typer.Exit(code=report.exit_code) from None
+    except UnicodeError:
+        report = DoctorVault(
+            None,
+            config_resolvable=False,
+            search_index_factory=SqliteFts5SearchIndex,
+        ).execute()
+        _echo_doctor_report(report, output_format)
+        raise typer.Exit(code=report.exit_code) from None
+
+    report = DoctorVault(
+        FileSystemVaultReader(config.vault_path),
+        search_index_factory=SqliteFts5SearchIndex,
+    ).execute()
+    _echo_doctor_report(report, output_format)
+    raise typer.Exit(code=report.exit_code)
+
+
+def _echo_doctor_report(report: DoctorReport, output_format: OutputFormat) -> None:
+    """Render only the bounded doctor projection."""
+
+    if output_format is OutputFormat.JSON:
+        typer.echo(json.dumps(report.as_dict(), ensure_ascii=False, indent=2))
+    else:
+        typer.echo(_render_doctor_text(report))
+
+
+def _safe_configuration_hint(error: ConfigurationError) -> str | None:
+    """Map known config failures to a short message without paths or exceptions."""
+
+    message = str(error)
+    if "relative SECOND_BRAIN_VAULT_PATH" in message:
+        return "requires an explicit env file/config root"
+    if "SECOND_BRAIN_VAULT_PATH is required" in message:
+        return "SECOND_BRAIN_VAULT_PATH is required"
+    return None
 
 
 def _root_options(ctx: typer.Context) -> CliOptions:
@@ -1105,6 +1171,41 @@ def _render_text(report: ScanReport) -> str:
             )
     result = "ОШИБКА" if report.error_count else "УСПЕХ"
     lines.append(f"Результат: {result}")
+    return "\n".join(lines)
+
+
+def _render_doctor_text(report: DoctorReport) -> str:
+    """Render doctor status without vault paths, note bodies or raw diagnostics."""
+
+    def availability(value: bool) -> str:
+        return "доступен" if value else "недоступен"
+
+    def count(value: int | None) -> str:
+        return str(value) if value is not None else "недоступно"
+
+    lines = [
+        f"Состояние: {report.status.value}",
+        f"Сгенерировано: {report.generated_at.isoformat()}",
+        f"Конфигурация: {availability(report.config_resolvable)}",
+        f"Manifest: {availability(report.manifest_available)}",
+        f"Content roots: {availability(report.content_roots_available)}",
+        f"Managed notes: {count(report.managed_note_count)}",
+        f"Personal Memory: {count(report.enrolled_personal_memory_count)}",
+        f"Decision Journal: {count(report.valid_decision_count)}",
+        f"Outcome Observation: {count(report.valid_outcome_count)}",
+        f"Attachments: {count(report.attachment_bytes)} bytes",
+        f"Personal Timeline: {report.timeline.status.value}",
+        f"Self Model: {report.self_model.status.value}",
+        f"Self Retrieval: {report.self_retrieval.status.value}",
+        f"Ошибки: {report.error_count}; предупреждения: {report.warning_count}",
+    ]
+    if report.diagnostics:
+        lines.append("Диагностика:")
+        for diagnostic in report.diagnostics:
+            lines.append(
+                f"  [{diagnostic.severity.value.upper()}] {diagnostic.code}: {diagnostic.count}"
+            )
+    lines.append(f"Код завершения: {report.exit_code}")
     return "\n".join(lines)
 
 
