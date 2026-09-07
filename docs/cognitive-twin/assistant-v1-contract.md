@@ -479,18 +479,26 @@ valid v1 roles; caller может передать bounded text о такой т
 
 Result validation выполняется строго в таком порядке:
 
-1. Validate result object/type, closed enums и per-field bounds.
-2. Validate `selected_option` и request-local input references.
-3. Validate exact evidence source/role bindings по §6.3.
+1. Validate structural DTO shape: object-ness, required/unknown fields,
+   scalar/container types, closed enums и per-field bounds. Failure на этом
+   шаге даёт `ASSISTANT_MALFORMED_RESULT`.
+2. Validate semantic invariants: `selected_option`, request-local input
+   references и cross-field consistency. Failure даёт
+   `ASSISTANT_RESULT_INVALID`.
+3. Validate exact evidence source/role bindings по §6.3. Failure даёт
+   `ASSISTANT_RESULT_INVALID`.
 4. Canonically serialize exact `AssistantResultEnvelopeV1` общим
    `AssistantCanonicalJsonEncoderV1`.
 5. Compare `result_bytes` с `request.max_result_bytes`; exact boundary accepted,
-   strict overflow даёт `ASSISTANT_RESULT_TOO_LARGE`.
+   strict overflow даёт `ASSISTANT_RESULT_TOO_LARGE`. Это единственный
+   result-budget error и он проверяется после structural/semantic validation.
 
-Любая invalid result semantics даёт `ASSISTANT_RESULT_INVALID`; offending text
-не возвращается и не логируется. Нельзя делать truncation, dropping rationale,
-uncertainty или refs, alternate serialization, retry, automatic model
-replacement или hidden provider fallback.
+Эти три result errors mutually exclusive: structural/type failure не является
+semantic invalidity или size overflow; semantic invariant failure не является
+size overflow; canonical overflow не переименовывается в `INVALID`. Offending
+text не возвращается и не логируется. Нельзя делать truncation, dropping
+rationale, uncertainty или refs, alternate serialization, retry, automatic
+model replacement или hidden provider fallback.
 
 ## 7. Typed abstention и safe error taxonomy
 
@@ -525,9 +533,9 @@ AssistantErrorCode:
 | `ASSISTANT_TIMEOUT` | bounded approved reasoning operation превысила deadline |
 | `ASSISTANT_PROVIDER_UNAVAILABLE` | approved Advisor boundary недоступна |
 | `ASSISTANT_PROVIDER_FAILURE` | approved Advisor boundary вернула failure |
-| `ASSISTANT_MALFORMED_RESULT` | Advisor/provider не дал exact Assistant DTO |
+| `ASSISTANT_MALFORMED_RESULT` | result не может быть разобран как exact DTO: отсутствуют или добавлены поля, неверны object/scalar/container types, closed enum или per-field bounds |
 | `ASSISTANT_RESULT_TOO_LARGE` | canonical result превышает `max_result_bytes` |
-| `ASSISTANT_RESULT_INVALID` | result нарушает exact DTO, source/role, budget или safety invariant |
+| `ASSISTANT_RESULT_INVALID` | структурно корректный result нарушает semantic cross-field, input-reference, source/role или safety invariant |
 
 `ASSISTANT_CONTEXT_UNAVAILABLE` из прежнего private-context draft не является
 ошибкой accepted explicit-only v1. Он может появиться только в отдельной
