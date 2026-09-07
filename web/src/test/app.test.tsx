@@ -104,6 +104,22 @@ describe("React Web parity shell", () => {
     expect(host.textContent).toContain("Сигналы сканирования хранилища не обнаружены.");
   });
 
+  it("renders informational scanner diagnostics distinctly", async () => {
+    const load = vi.spyOn(api, "loadDiagnostics").mockResolvedValue({
+      ...healthyDiagnostics,
+      diagnostics: [{ code: "SCAN_NOTE", severity: "info", count: 1 }],
+    });
+    const host = await renderDiagnostics();
+    const button = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find((item) => item.textContent?.includes("Обновить"));
+    await act(async () => button?.click());
+
+    expect(load).toHaveBeenCalledOnce();
+    expect(host.textContent).toContain("Информация");
+    expect(host.textContent).toContain("SCAN_NOTE");
+    expect(host.querySelector(".diagnostics-severity-info")).not.toBeNull();
+    expect(host.textContent).not.toContain("Предупреждение");
+  });
+
   it.each([
     ["degraded", "Требует внимания", "UNSAFE_DIAGNOSTIC"],
     ["unavailable", "Недоступна", "CONFIG_UNAVAILABLE"],

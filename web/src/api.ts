@@ -204,7 +204,7 @@ export interface DiagnosticsLayer {
 
 export interface DiagnosticsCount {
   readonly code: string;
-  readonly severity: "error" | "warning";
+  readonly severity: "error" | "warning" | "info";
   readonly count: number;
 }
 

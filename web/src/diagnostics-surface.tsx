@@ -180,7 +180,7 @@ function DiagnosticsReport({ report }: { report: DiagnosticsResponse }): ReactEl
             {report.diagnostics.map((item) => (
               <li className="diagnostics-signal-row" key={`${item.severity}-${item.code}`}>
                 <span className={`diagnostics-severity diagnostics-severity-${item.severity}`}>
-                  {item.severity === "error" ? "Ошибка" : "Предупреждение"}
+                  {item.severity === "error" ? "Ошибка" : item.severity === "warning" ? "Предупреждение" : "Информация"}
                 </span>
                 <code className="diagnostics-code" title={`Код: ${item.code}`}>{item.code}</code>
                 <span className="diagnostics-signal-count">{formatCount(item.count)}</span>

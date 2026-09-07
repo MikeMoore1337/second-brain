@@ -502,6 +502,10 @@ input:focus-visible {
   color: var(--sb-color-warning);
 }
 
+.diagnostics-severity-info {
+  color: var(--sb-color-violet-signal);
+}
+
 .diagnostics-signal-count {
   color: var(--sb-color-text-primary);
   font-family: var(--sb-font-mono);
