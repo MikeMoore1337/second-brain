@@ -23,6 +23,10 @@ canonical/private note text и не требует reconstructive private-echo D
 переданными ограничениями, явно принятыми целями и caller-provided context»,
 но не пытается воспроизвести выбор владельца.
 
+Это semantic purpose и output label, а не free-text DLP guarantee: caller может
+явно передать текст о preference, а accepted v1 не классифицирует такой текст
+для автоматического обнаружения behavioral copying.
+
 В этом документе слово «объективнее» означает только прозрачное рассуждение
 относительно явно объявленных входов и границ. Оно не означает universal truth,
 медицинскую, юридическую или финансовую certainty и не превращает личный
@@ -41,8 +45,9 @@ canonical/private note text и не требует reconstructive private-echo D
 - передача `AssistantStage5Fact.factual_text`, note body, title, tags, front
   matter, path, UUID, Self Model claim text или Search snippet в `AdvisorPort`;
 - передача `Simulate Me` prediction в Assistant;
-- prediction владельца, фраза «так бы выбрал пользователь» и поведенческое
-  копирование;
+- semantics owner prediction, фраза «так бы выбрал пользователь» и
+  behavioral copying не являются поддержанным v1 meaning; v1 не заявляет
+  free-text classifier для их автоматического обнаружения;
 - hidden objective score из habits, frequency, recency или observed decisions;
 - `behavioral_pattern`, `decision_rule`, personality, diagnosis или sensitive
   trait inference;
@@ -80,7 +85,8 @@ Accepted Assistant v1 имеет следующие invariants:
    `independent_recommendation_analysis` и display label
    **Independent recommendation / analysis**. В Russian UI допустим текст
    **Независимая рекомендация / анализ**, но нельзя показывать его как
-   `prediction`, `ПРОГНОЗ`, canonical fact, `best` или `optimal`.
+   `prediction`, `ПРОГНОЗ`, canonical fact, `best` или `optimal`; это
+   presentation contract, а не обещание semantic text classifier.
 6. Result — ephemeral bounded DTO. Он не является history, canonical evidence,
    access token или заменой `second-brain-vault`.
 
@@ -142,7 +148,11 @@ C0/C1 controls, `DEL` и Unicode category `Cf`. Case folding, transliteration,
 
 `explicit_context(kind="fact")` — caller-reported premise, а не externally
 verified truth. `explicit_context(kind="background")` может объяснять
-ситуацию, но не получает normative authority и не выбирает option сам.
+ситуацию и маркируется как non-normative. Accepted v1 проверяет эту label и
+source/role binding, но не интерпретирует free-text и не заявляет, что
+application-owned validator обнаружит использование background как единственной
+опоры для выбора option; такая deterministic support rule относится к future
+versioned capability.
 
 `MIN_MAX_RESULT_BYTES_V1` — не arbitrary safety number. Это contract-derived
 constant из exact canonical `AssistantResultEnvelopeV1` serializer: берётся
@@ -411,6 +421,12 @@ Unicode NFC и `strip()` только по краям, с запретом contr
 значение после этой normalization, включая whitespace-only input, даёт
 `ASSISTANT_MALFORMED_RESULT`; normalized value используется в canonical bytes.
 
+Все result ordinals (`evidence_refs[*].ordinal`,
+`constraints_used[*].ordinal`, `objectives_used[*].ordinal`) принимают только
+exact `int`; `bool` не является допустимым ordinal, даже в языках, где `bool`
+наследует integer type. Boolean, fractional, exponent или отрицательный ordinal
+даёт `ASSISTANT_MALFORMED_RESULT` до evidence/reference binding.
+
 Exact invariants:
 
 - `kind=recommendation` требует non-null `recommendation`, valid rationale и
@@ -484,13 +500,15 @@ escaping и alternate result serializer не допускаются.
 В Assistant v1 `AssistantEvidenceRef` ссылается только на request-local
 `explicit_context`:
 
-| `source` | Referenced item | Обязательная `role` | Любая другая role/source |
+| `source` | Referenced item | Обязательная `role` | Valid closed-value mismatch |
 | --- | --- | --- | --- |
 | `explicit_context` | request entry с `kind="fact"` | `reported_fact` | `ASSISTANT_RESULT_INVALID` |
 | `explicit_context` | request entry с `kind="background"` | `background` | `ASSISTANT_RESULT_INVALID` |
 
 `ordinal` обязан быть 1-based и ссылаться на существующий item соответствующего
-source.
+source. Unknown/wrong-type `source` или `role` не являются valid closed enum и
+отклоняются на structural step как `ASSISTANT_MALFORMED_RESULT`; таблица выше
+описывает только mismatch между уже валидными closed values и request item.
 Provider/AdvisorPort не может повысить background до reported fact, создать
 automatic personal role или добавить Self Model/Stage 5 source. Значения
 `contextual_preference`, `contextual_belief` и `historical_context` не являются
@@ -761,6 +779,8 @@ tests относятся только к отдельной future capability.
   with `ambiguous_or_incomparable_options` exactly 304 bytes;
 - exact result boundary equals `max_result_bytes`, strict `+1` yields
   `ASSISTANT_RESULT_TOO_LARGE`; nullable fields remain present as JSON `null`;
+- boolean, fractional, exponent, negative or otherwise non-exact result
+  ordinals are rejected as `ASSISTANT_MALFORMED_RESULT`;
 - `selected_option.id`/`label` is caller-owned and exact; input refs and
   explicit-context source/role pairs cannot be promoted or renamed;
 - no result test expects `stage5_current_context`, `AssistantStage5Fact`,
@@ -773,6 +793,8 @@ tests относятся только к отдельной future capability.
 - closed abstention codes and exact envelopes are tested; no v1 test claims
   automatic detection of conflicting free-text constraints, unsupported task,
   ambiguous options or high-stakes safety;
+- background-only recommendation support and behavioral-copying detection are
+  not application-enforced v1 guarantees;
 - raw body/path/UUID/provider details never appear in errors or logs;
 - option A uses a fake `AdvisorPort` with cancellation, bounded explicit-only
   request/result and no real network;
