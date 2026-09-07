@@ -9,8 +9,8 @@ Self Retrieval также реализован bounded core/Web/CLI slices из 
 Owner-approved v1 contracts фиксируют conservative direct-assertion и
 current-UUID retrieval policies. Stage 6 Simulate Me получил approved
 mechanical design contract в #100 и provider-free exact-match
-prediction/abstention runtime/core и Web projection; confidence и provider
-runtime отсутствуют. Для Stage 7 boundary issue #162 зафиксирован design-only
+prediction/abstention runtime/core и Web projection; confidence, provider
+runtime и persistence отсутствуют. Для Stage 7 boundary issue #162 зафиксирован design-only
 contract [Assistant v1](assistant-v1-contract.md): independent recommendation /
 analysis отделён от Simulate Me; owner выбрал A — отдельный provider-neutral
 `AdvisorPort` с explicit-context-only payload. Automatic Personal Memory
@@ -19,9 +19,11 @@ context, provider/network/privacy integration и real Advisor runtime пока �
 [Compare v1 contract](compare-v1-contract.md): три зоны остаются раздельными,
 а Delta сравнивает только typed terminal states и exact request-local option
 IDs.
+Retrospective Calibration v1 остаётся отдельным design-only, current-vault и
+pre-choice-only contract, tracked by issue #164.
 
 Точный status snapshot перед этой docs reconciliation — current `main`:
-`eec05429c277f5e544ffa74b060d06dec9b2dce4`.
+`8e8a6d8a92d4933404195fcd84cadad8642f61bc`.
 
 Issue #66 задаёт исходную архитектурную границу roadmap. Для текущего Stage 4
 Self Model scope и contract source of truth — issue #81 и
@@ -773,19 +775,75 @@ mechanical Delta и остаются deferred.
 
 ## 15. Prediction & Calibration v1
 
-В v1 retrospective/rebuildable calibration остаётся отдельной pending-задачей
-Stage 7, tracked by issue #164. Её bounded contract ведётся в deliverable
-`retrospective-calibration-v1-contract.md`; этот roadmap намеренно не дублирует
-нормативную механику калибровки.
+В v1 calibration — **только retrospective/rebuildable**. ML training pipeline
+не нужен. Нормативные masking, cutoff, current-vault limitation и aggregate
+metrics зафиксированы в
+[retrospective-calibration-v1-contract.md](retrospective-calibration-v1-contract.md).
+Нужен lifecycle:
 
-До принятия #164 eligibility, pre-choice masking, temporal cutoff,
-current-vault limitation, request projection, execution/work budgets, result
-metrics и policy identity определяются только в contract этой задачи.
-Calibration не является частью Assistant или Compare; implementation не начата.
+```text
+current canonical Decision Journal
+  -> current-vault temporal projection (not a historical snapshot)
+  -> current Simulate Me derivation without chosen option/outcome
+  -> predicted choice or bounded abstention
+  -> compare with canonical observed decision
+  -> rebuildable calibration aggregate
+```
 
-Compare v1 остаётся mechanical composition approved typed Simulate Me/Assistant
-branch outputs. Этот roadmap entry не вводит provider, LLM, prospective
-logging/persistence, training/tuning или automatic Personal Memory write-back.
+Для каждого eligible Journal строится bounded current-vault pre-choice
+projection (не historical snapshot) из:
+
+- `Situation`;
+- `Available options`;
+- `Information known at decision time`;
+- `Criteria`;
+- canonical evidence с known exact `evidence_at`, не позже decision; unknown,
+  later и post-cutoff-edited evidence исключаются с caveat.
+
+В Simulate Me input **не входят** `Chosen option`, `Reasons`, `Expected result`,
+`Actual result`, `Reassessment`, поздние notes или сам expected answer. Это
+explicit anti-leakage boundary. После replay predicted choice сравнивается с
+canonical `observed_decision` choice из Journal. Поэтому calibration отвечает
+на вопрос: «насколько текущая версия Cognitive Twin моделирует исторические
+решения пользователя?», а не «насколько система когда-то предсказала их в
+production».
+
+Derived replay state существует только во время rebuild и содержит:
+
+- validated predicted choice или abstention;
+- current-vault reconstruction mode и decision cutoff;
+- bounded internal refs только до завершения case, без публикации UUID/body;
+- exact `derivation_version` и policy fingerprint.
+
+Actual choice берётся только после replay из reviewed `observed_decision`.
+Если Journal не проходит exact eligibility, sample исключается с fixed code, а
+не получает неправильный prediction. Valid no-match/multiple-support остаются
+bounded Simulate Me abstention; unavailable и invalid replay не маскируются под
+mismatch.
+
+Calibration v1 показывает только bounded counts, exact option match/mismatch,
+predicted/abstained/unavailable/invalid, coverage и exact non-abstained
+accuracy numerator/denominator. Confidence, probability, Brier/ECE, bins,
+calibration gap, tuning и small-sample personal trait claims не входят.
+
+Retrospective replay и calibration полностью derived: удаление derived state не
+теряет никаких данных, а aggregate снова вычисляется из current vault той же
+или новой derivation policy. При смене `derivation_version` результат честно
+является метрикой новой версии; current-vault projection не притворяется
+historical snapshot или production prediction.
+
+Prospective extension (`prediction now -> actual choice later`) в v1 не входит.
+Чтобы такой режим когда-либо имел rebuildable historical calibration, сначала
+потребуется policy-governed immutable canonical audit record факта операции:
+
+```text
+system predicted X at T with confidence C using derivation V
+```
+
+Это не user fact, не `evidence_kind`, не подтверждение inference и не claim о
+пользователе. Такой audit record нельзя подменить текущим Self Model после
+удаления derived state. Его storage, retention и privacy policy потребуют
+отдельного design; новую DB/event store для этого сейчас не добавляем.
 
 ## 16. Active Personal Learning v1
 
@@ -1025,9 +1083,11 @@ context и derived explanation divergence.
 ### Stage 7 — Assistant v1; Compare v1 + Prediction & Calibration v1
 
 - **Статус:** Assistant v1 design-only contract зафиксирован в
-  [assistant-v1-contract.md](assistant-v1-contract.md), а Compare v1
-  mechanical composition contract — в
-  [compare-v1-contract.md](compare-v1-contract.md). Assistant задаёт отдельную
+  [assistant-v1-contract.md](assistant-v1-contract.md), Compare v1 mechanical
+  composition contract — в [compare-v1-contract.md](compare-v1-contract.md), а retrospective
+   calibration design-only contract — в
+   [retrospective-calibration-v1-contract.md](retrospective-calibration-v1-contract.md).
+  Assistant задаёт отдельную
   explicit-context-only independent recommendation / analysis branch и не
   принимает Simulate Me prediction как input. Compare сохраняет оба typed
   wrappers и structural Delta по exact request-local option IDs. Owner decision A
@@ -1046,8 +1106,8 @@ context и derived explanation divergence.
 - **Canonical changes:** only user-reviewed actual decisions/outcomes; no
   calibration fields or prediction history in user notes.
 - **Derived state:** в будущем две independent outputs, structural comparisons,
-  retrospective pre-choice predictions и rebuildable calibration aggregates;
-  Assistant result сам остаётся ephemeral.
+  retrospective pre-choice predictions и rebuildable calibration aggregates with
+  bounded counts/coverage; Assistant result сам остаётся ephemeral.
 - **Public/application contracts:** Compare result always contains both branch
   wrappers и deterministic structural Delta; Assistant result явно labelled
   independent recommendation / analysis; Calibration result reports replay
@@ -1285,7 +1345,8 @@ prediction, inference write-back, canonical fields или изменения
 
 Stage 6 contract approved, а provider-free application/Web runtime и core
 находятся в current `main`; confidence, provider runtime и persistence
-отсутствуют. Assistant v1 и Compare v1 остаются design-only contracts:
+отсутствуют. Assistant v1, Compare v1 и retrospective calibration остаются
+design-only contracts:
 `HUMAN_REQUIRED: none` относится только к capability-boundary, а provider/
 network/privacy integration и runtime остаются отдельными future gates. Этот
 status sync не объявляет Stage 8 runtime scope, не создаёт Stage 8 item и не
