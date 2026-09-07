@@ -76,6 +76,11 @@ from second_brain.application.writes import (
 from second_brain.config import ConfigurationError
 from second_brain.domain.models import NoteType, parse_uuid7
 
+from .diagnostics import (
+    DiagnosticsRequestPayload,
+    DiagnosticsService,
+    build_production_diagnostics_service,
+)
 from .drafts import DraftService, build_production_draft_service
 from .preview import (
     PreviewContentTooLargeError,
@@ -138,6 +143,8 @@ SELF_RETRIEVAL_REQUEST_HEADER_NAME: Final[str] = DRAFT_REQUEST_HEADER_NAME
 SELF_RETRIEVAL_REQUEST_HEADER_VALUE: Final[str] = "self-retrieval-v1"
 SIMULATE_ME_REQUEST_HEADER_NAME: Final[str] = DRAFT_REQUEST_HEADER_NAME
 SIMULATE_ME_REQUEST_HEADER_VALUE: Final[str] = "simulate-me-v1"
+DIAGNOSTICS_REQUEST_HEADER_NAME: Final[str] = DRAFT_REQUEST_HEADER_NAME
+DIAGNOSTICS_REQUEST_HEADER_VALUE: Final[str] = "diagnostics-v1"
 MAX_RAW_DRAFT_BODY_BYTES: Final[int] = 512 * 1024
 MAX_RAW_TRANSCRIPTION_BODY_BYTES: Final[int] = MAX_TRANSCRIPTION_AUDIO_BYTES
 MAX_RAW_AUDIO_BODY_BYTES: Final[int] = MAX_RAW_TRANSCRIPTION_BODY_BYTES
@@ -146,12 +153,14 @@ MAX_RAW_TIMELINE_BODY_BYTES: Final[int] = 16 * 1024
 MAX_RAW_SELF_MODEL_BODY_BYTES: Final[int] = 16 * 1024
 MAX_RAW_SELF_RETRIEVAL_BODY_BYTES: Final[int] = 16 * 1024
 MAX_RAW_SIMULATE_ME_BODY_BYTES: Final[int] = 16 * 1024
+MAX_RAW_DIAGNOSTICS_BODY_BYTES: Final[int] = 4 * 1024
 _TRANSCRIPTION_PATH: Final[str] = "/api/transcriptions/audio"
 _SEARCH_PATHS: Final[frozenset[str]] = frozenset({"/api/search", "/api/retrieval/note"})
 _TIMELINE_PATHS: Final[frozenset[str]] = frozenset({"/api/timeline"})
 _SELF_MODEL_PATHS: Final[frozenset[str]] = frozenset({"/api/self-model"})
 _SELF_RETRIEVAL_PATHS: Final[frozenset[str]] = frozenset({"/api/self-retrieval"})
 _SIMULATE_ME_PATHS: Final[frozenset[str]] = frozenset({"/api/simulate-me"})
+_DIAGNOSTICS_PATHS: Final[frozenset[str]] = frozenset({"/api/diagnostics"})
 _DECISION_JOURNAL_PATHS: Final[frozenset[str]] = frozenset(
     {
         "/api/drafts/decision-journal/save/prepare",
@@ -645,6 +654,10 @@ _ERRORS: Final[dict[str, tuple[int, str]]] = {
     "SIMULATE_ME_CONTENT_TOO_LARGE": (413, "Запрос прогноза слишком велик"),
     "SIMULATE_ME_VAULT_UNAVAILABLE": (503, "Хранилище прогноза недоступно"),
     "SIMULATE_ME_RESULT_INVALID": (500, "Результат прогноза не прошёл проверку"),
+    "DIAGNOSTICS_INVALID_REQUEST": (400, "Запрос диагностики не прошёл проверку"),
+    "DIAGNOSTICS_CONTENT_TOO_LARGE": (413, "Запрос диагностики слишком велик"),
+    "DIAGNOSTICS_UNAVAILABLE": (503, "Диагностика рабочего пространства недоступна"),
+    "DIAGNOSTICS_INTERNAL_ERROR": (500, "Не удалось получить диагностику рабочего пространства"),
 }
 _GENERIC_ERROR: Final[tuple[int, str, str]] = (
     500,
@@ -1158,6 +1171,20 @@ class SimulateMeRequestBoundaryMiddleware(SelfRetrievalRequestBoundaryMiddleware
         )
 
 
+class DiagnosticsRequestBoundaryMiddleware(SelfRetrievalRequestBoundaryMiddleware):
+    """Scoped ASGI boundary for the private Diagnostics JSON request."""
+
+    def __init__(self, app: ASGIApp, *, max_body_bytes: int) -> None:
+        """Require the diagnostics purpose and its bounded raw JSON body."""
+
+        super().__init__(
+            app,
+            max_body_bytes=max_body_bytes,
+            paths=_DIAGNOSTICS_PATHS,
+            request_header_value=DIAGNOSTICS_REQUEST_HEADER_VALUE,
+        )
+
+
 class TranscriptionRequestBoundaryMiddleware:
     """Scoped ASGI boundary для raw audio, voice headers, Origin и byte cap."""
 
@@ -1375,6 +1402,8 @@ def _invalid_request_code(path: str) -> str:
 
     if path in _SIMULATE_ME_PATHS:
         return "SIMULATE_ME_INVALID_REQUEST"
+    if path in _DIAGNOSTICS_PATHS:
+        return "DIAGNOSTICS_INVALID_REQUEST"
     if path in _SELF_RETRIEVAL_PATHS:
         return "SELF_RETRIEVAL_INVALID_REQUEST"
     if path in _SELF_MODEL_PATHS:
@@ -1403,6 +1432,8 @@ def _content_too_large_code(path: str) -> str:
 
     if path in _SIMULATE_ME_PATHS:
         return "SIMULATE_ME_CONTENT_TOO_LARGE"
+    if path in _DIAGNOSTICS_PATHS:
+        return "DIAGNOSTICS_CONTENT_TOO_LARGE"
     if path in _SELF_RETRIEVAL_PATHS:
         return "SELF_RETRIEVAL_RESULT_TOO_LARGE"
     if path in _SELF_MODEL_PATHS:
@@ -1430,6 +1461,7 @@ def create_app(
     self_model_service: SelfModelService | None = None,
     self_retrieval_service: SelfRetrievalService | None = None,
     simulate_me_service: SimulateMeService | None = None,
+    diagnostics_service: DiagnosticsService | None = None,
     env_file: Path | None = None,
     vault_path_override: str | None = None,
 ) -> FastAPI:
@@ -1489,6 +1521,14 @@ def create_app(
             vault_path_override=vault_path_override,
         )
     )
+    doctor = (
+        diagnostics_service
+        if diagnostics_service is not None
+        else build_production_diagnostics_service(
+            env_file=env_file,
+            vault_path_override=vault_path_override,
+        )
+    )
     review_tokens = ReviewTokenCodec()
     app = FastAPI(
         title="Second Brain",
@@ -1528,6 +1568,10 @@ def create_app(
         SimulateMeRequestBoundaryMiddleware,
         max_body_bytes=MAX_RAW_SIMULATE_ME_BODY_BYTES,
     )
+    app.add_middleware(
+        DiagnosticsRequestBoundaryMiddleware,
+        max_body_bytes=MAX_RAW_DIAGNOSTICS_BODY_BYTES,
+    )
 
     @app.middleware("http")
     async def add_security_headers(
@@ -1550,6 +1594,7 @@ def create_app(
                 "/api/self-model",
                 "/api/self-retrieval",
                 "/api/simulate-me",
+                "/api/diagnostics",
             )
         ):
             response.headers["Cache-Control"] = "no-store"
@@ -1953,6 +1998,18 @@ def create_app(
             content=response.model_dump(mode="json"),
             headers=_DRAFT_ERROR_HEADERS,
         )
+
+    @app.post("/api/diagnostics", include_in_schema=False)
+    def diagnostics(payload: DiagnosticsRequestPayload) -> Response:
+        """Return the exact safe DoctorReport projection on explicit refresh."""
+
+        del payload
+        try:
+            report = doctor.build()
+            response = report.as_dict()
+        except Exception:
+            return _error_response("DIAGNOSTICS_INTERNAL_ERROR")
+        return JSONResponse(content=response, headers=_DRAFT_ERROR_HEADERS)
 
     @app.post("/api/search", include_in_schema=False)
     def search(payload: SearchRequestPayload) -> Response:

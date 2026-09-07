@@ -16,8 +16,11 @@ from fastapi.testclient import TestClient
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from second_brain.entrypoints.web.app import (
+    DIAGNOSTICS_REQUEST_HEADER_NAME,
+    DIAGNOSTICS_REQUEST_HEADER_VALUE,
     DRAFT_REQUEST_HEADER_NAME,
     DRAFT_REQUEST_HEADER_VALUE,
+    MAX_RAW_DIAGNOSTICS_BODY_BYTES,
     MAX_RAW_DRAFT_BODY_BYTES,
     MAX_RAW_SEARCH_BODY_BYTES,
     MAX_RAW_SELF_MODEL_BODY_BYTES,
@@ -40,6 +43,7 @@ from second_brain.entrypoints.web.app import (
     TranscriptionRequestBoundaryMiddleware,
     create_app,
 )
+from second_brain.entrypoints.web.diagnostics import DiagnosticsService
 from second_brain.entrypoints.web.drafts import DraftService
 from second_brain.entrypoints.web.saves import DraftSaveService
 from second_brain.entrypoints.web.search import SearchService
@@ -302,6 +306,16 @@ PRIVATE_ROUTES: tuple[PrivateRoute, ...] = (
         content_too_large_code="SIMULATE_ME_CONTENT_TOO_LARGE",
         max_body_bytes=MAX_RAW_SIMULATE_ME_BODY_BYTES,
     ),
+    PrivateRoute(
+        path="/api/diagnostics",
+        request_header_name=DIAGNOSTICS_REQUEST_HEADER_NAME,
+        request_header_value=DIAGNOSTICS_REQUEST_HEADER_VALUE,
+        content_type="application/json",
+        body=b"{}",
+        invalid_code="DIAGNOSTICS_INVALID_REQUEST",
+        content_too_large_code="DIAGNOSTICS_CONTENT_TOO_LARGE",
+        max_body_bytes=MAX_RAW_DIAGNOSTICS_BODY_BYTES,
+    ),
 )
 
 
@@ -342,6 +356,7 @@ def _boundary_test_app() -> tuple[FastAPI, RecordingBoundaryService]:
         self_model_service=cast(SelfModelService, service),
         self_retrieval_service=cast(SelfRetrievalService, service),
         simulate_me_service=cast(SimulateMeService, service),
+        diagnostics_service=cast(DiagnosticsService, service),
     )
     return application, service
 

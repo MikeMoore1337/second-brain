@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
 import * as api from "../api";
+import { DiagnosticsSurface } from "../diagnostics-surface";
 import { CaptureSurface } from "../parity";
 import { presentValue } from "../presentation";
 
@@ -36,7 +37,116 @@ async function renderCapture(): Promise<HTMLDivElement> {
   return host;
 }
 
+async function renderDiagnostics(): Promise<HTMLDivElement> {
+  const host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  await act(async () => {
+    root?.render(<DiagnosticsSurface />);
+  });
+  return host;
+}
+
+const healthyDiagnostics: api.DiagnosticsResponse = {
+  status: "healthy",
+  generated_at: "2026-09-07T12:00:00+00:00",
+  config: { resolvable: true },
+  vault: { manifest_available: true, content_roots_available: true, attachments_scan_complete: true },
+  manifest: { available: true, schema_version: 1 },
+  counts: { managed_notes: 4, enrolled_personal_memory: 2, valid_decision_journals: 1, valid_outcome_observations: 1 },
+  notes: 4,
+  enrolled_personal_memory: 2,
+  valid_decision_journals: 1,
+  valid_outcome_observations: 1,
+  attachments: { scan_complete: true, count: 3, total_bytes: 512 },
+  attachment_total: 512,
+  attachment_bytes: 512,
+  timeline: { status: "healthy", required: true, code: null },
+  self_model: { status: "healthy", required: true, code: null },
+  self_retrieval: { status: "healthy", required: false, code: null },
+  errors: 0,
+  warnings: 0,
+  diagnostics: [],
+  exit_code: 0,
+};
+
 describe("React Web parity shell", () => {
+  it("keeps diagnostics explicit-refresh-only and renders a healthy report safely", async () => {
+    const load = vi.spyOn(api, "loadDiagnostics").mockResolvedValue(healthyDiagnostics);
+    const host = await renderDiagnostics();
+
+    expect(load).not.toHaveBeenCalled();
+    expect(host.textContent).toContain("Нажми «Обновить»");
+    const button = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find((item) => item.textContent?.includes("Обновить"));
+    expect(button).not.toBeUndefined();
+    await act(async () => button?.click());
+
+    expect(load).toHaveBeenCalledOnce();
+    expect(host.querySelector("[data-diagnostics-status='healthy']")).not.toBeNull();
+    expect(host.textContent).toContain("Стабильно");
+    expect(host.textContent).toContain("Последний сформированный отчёт");
+    expect(host.textContent).toContain("Сигналы сканирования хранилища не обнаружены");
+  });
+
+  it("labels scanner diagnostics separately from derived-layer status", async () => {
+    const load = vi.spyOn(api, "loadDiagnostics").mockResolvedValue({
+      ...healthyDiagnostics,
+      status: "degraded",
+      self_retrieval: { status: "unavailable", required: false, code: "SELF_RETRIEVAL_SEARCH_UNAVAILABLE" },
+    });
+    const host = await renderDiagnostics();
+    const button = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find((item) => item.textContent?.includes("Обновить"));
+    await act(async () => button?.click());
+
+    expect(load).toHaveBeenCalledOnce();
+    expect(host.textContent).toContain("SELF_RETRIEVAL_SEARCH_UNAVAILABLE");
+    expect(host.textContent).toContain("Ошибки сканирования хранилища: 0");
+    expect(host.textContent).toContain("Сигналы сканирования хранилища не обнаружены.");
+  });
+
+  it("renders informational scanner diagnostics distinctly", async () => {
+    const load = vi.spyOn(api, "loadDiagnostics").mockResolvedValue({
+      ...healthyDiagnostics,
+      diagnostics: [{ code: "SCAN_NOTE", severity: "info", count: 1 }],
+    });
+    const host = await renderDiagnostics();
+    const button = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find((item) => item.textContent?.includes("Обновить"));
+    await act(async () => button?.click());
+
+    expect(load).toHaveBeenCalledOnce();
+    expect(host.textContent).toContain("без ошибок и предупреждений");
+    expect(host.textContent).toContain("Информация");
+    expect(host.textContent).toContain("SCAN_NOTE");
+    expect(host.querySelector(".diagnostics-severity-info")).not.toBeNull();
+    expect(host.textContent).not.toContain("Предупреждение");
+  });
+
+  it.each([
+    ["degraded", "Требует внимания", "UNSAFE_DIAGNOSTIC"],
+    ["unavailable", "Недоступна", "CONFIG_UNAVAILABLE"],
+  ] as const)("renders %s diagnostics without raw error details", async (status, label, code) => {
+    const load = vi.spyOn(api, "loadDiagnostics").mockResolvedValue({
+      ...healthyDiagnostics,
+      status,
+      config: { resolvable: status !== "unavailable" },
+      diagnostics: [{ code, severity: "error", count: 1 }],
+      errors: 1,
+      warnings: 0,
+      exit_code: status === "unavailable" ? 2 : 1,
+      timeline: { status, required: true, code },
+      self_model: { status, required: true, code },
+    });
+    const host = await renderDiagnostics();
+    const button = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find((item) => item.textContent?.includes("Обновить"));
+    await act(async () => button?.click());
+
+    expect(load).toHaveBeenCalledOnce();
+    expect(host.textContent).toContain(label);
+    expect(host.textContent).toContain(code);
+    expect(host.textContent).not.toContain("traceback");
+    expect(host.querySelector(`[data-diagnostics-status='${status}']`)).not.toBeNull();
+  });
+
   it("presents machine values with Russian labels", () => {
     expect(presentValue("note")).toBe("Заметка");
     expect(presentValue("not_assessed")).toBe("Не оценивалось");

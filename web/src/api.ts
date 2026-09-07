@@ -194,6 +194,59 @@ export interface SimulateMeResponse {
   readonly temporal_caveats: readonly { readonly code?: string; readonly claim_id?: string }[];
 }
 
+export type DiagnosticsStatus = "healthy" | "degraded" | "unavailable";
+
+export interface DiagnosticsLayer {
+  readonly status: DiagnosticsStatus;
+  readonly required: boolean;
+  readonly code: string | null;
+}
+
+export interface DiagnosticsCount {
+  readonly code: string;
+  readonly severity: "error" | "warning" | "info";
+  readonly count: number;
+}
+
+export interface DiagnosticsResponse {
+  readonly status: DiagnosticsStatus;
+  readonly generated_at: string;
+  readonly config: { readonly resolvable: boolean };
+  readonly vault: {
+    readonly manifest_available: boolean;
+    readonly content_roots_available: boolean;
+    readonly attachments_scan_complete: boolean;
+  };
+  readonly manifest: {
+    readonly available: boolean;
+    readonly schema_version: number | null;
+  };
+  readonly counts: {
+    readonly managed_notes: number | null;
+    readonly enrolled_personal_memory: number | null;
+    readonly valid_decision_journals: number | null;
+    readonly valid_outcome_observations: number | null;
+  };
+  readonly notes: number | null;
+  readonly enrolled_personal_memory: number | null;
+  readonly valid_decision_journals: number | null;
+  readonly valid_outcome_observations: number | null;
+  readonly attachments: {
+    readonly scan_complete: boolean;
+    readonly count: number | null;
+    readonly total_bytes: number | null;
+  };
+  readonly attachment_total: number | null;
+  readonly attachment_bytes: number | null;
+  readonly timeline: DiagnosticsLayer;
+  readonly self_model: DiagnosticsLayer;
+  readonly self_retrieval: DiagnosticsLayer;
+  readonly errors: number;
+  readonly warnings: number;
+  readonly diagnostics: readonly DiagnosticsCount[];
+  readonly exit_code: number;
+}
+
 export interface DecisionPayload {
   readonly title: string;
   readonly note_type: string;
@@ -351,6 +404,10 @@ export function loadSelfRetrieval(query: string, fetcher: FetchLike = fetchDefau
 
 export function simulateMe(query: string, options: readonly SimulateMeOption[], fetcher: FetchLike = fetchDefault): Promise<SimulateMeResponse> {
   return requestJson("/api/simulate-me", "simulate-me-v1", { query, options }, fetcher, "Не удалось получить прогноз.");
+}
+
+export function loadDiagnostics(fetcher: FetchLike = fetchDefault): Promise<DiagnosticsResponse> {
+  return requestJson("/api/diagnostics", "diagnostics-v1", {}, fetcher, "Не удалось получить диагностику рабочего пространства.");
 }
 
 export function searchNotes(query: string, fetcher: FetchLike = fetchDefault): Promise<SearchResponse> {
