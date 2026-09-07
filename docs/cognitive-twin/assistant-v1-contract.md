@@ -338,6 +338,18 @@ goal claims. Self Model derivation и такие claims не должны быт
 `ASSISTANT_CONTEXT_UNAVAILABLE`; post-filtering уже прочитанного запрещённого
 материала не является эквивалентом fact-only path.
 
+Fact-only source также обязан построить metadata-filtered candidate corpus
+**до** body indexing и Search query: в него попадают только current managed
+Personal Memory entries, для которых validated metadata допускает
+`evidence_kind="explicit_user_fact"` и `self_kind="memory"`. Preference,
+belief, goal, `user_statement`, historical и прочие forbidden entries должны
+быть исключены до индексации и query; их body нельзя сначала индексировать, а
+потом отфильтровать на Assistant boundary. Metadata filter не заменяет current
+UUID reread и Personal Memory validation. Если существующий Search boundary не
+умеет доказуемо использовать такой filtered corpus, `current_explicit_facts`
+возвращает `ASSISTANT_CONTEXT_UNAVAILABLE` до factual projection; heuristic
+classification по body запрещена.
+
 ### 4.1. Future application-internal typed factual projection
 
 Текущий public `SelfContextItem` намеренно не расширяется в #162. Его полей
@@ -977,6 +989,24 @@ primary aggregate сохраняет требуемую exact empty-separator se
 view создаётся только на время проверки одного bounded result candidate и не
 создаёт unbounded state.
 
+Primary aggregate и boundary view используют actual DTO order. Дополнительно
+guard выполняет bounded order-invariant reconstruction check, чтобы privacy
+гарантия не зависела от provider-controlled перестановки generated fields:
+для каждого protected fact он ищет, существует ли contiguous sequence из
+одного или нескольких distinct `generated_parts` в **любом** порядке, чья
+empty-separator либо one-ASCII-space concatenation после `echo_compare` равна
+protected или содержит exact contiguous common substring длиной не менее 32
+UTF-8 bytes. Это supplemental validation-only check: он не меняет normative
+DTO order и не сортирует/переставляет result fields.
+
+Matcher не перебирает unbounded text или состояние: schema ограничивает число
+generated parts максимумом 17 (`recommendation` плюс 8 `rationale` и 8
+`uncertainty`), protected `factual_text` — 1024 UTF-8 bytes, а candidate result
+— текущим `max_result_bytes`. Реализация может использовать bounded
+bitmask/backtracking и early exit, не сохраняя permutations или matched text
+между проверками; при любом match применяется тот же whole-result
+`ASSISTANT_RESULT_INVALID`.
+
 `selected_option.id`, `selected_option.label`, `evidence_refs` и input refs не
 входят в `generated_parts`: option text принадлежит caller, а refs не являются
 generated prose. Aggregate — ephemeral derived view одного уже bounded
@@ -1109,6 +1139,8 @@ scope, если owner когда-либо выберет этот fallback:
   `_read_self_model()` and forbidden preference/belief/goal claims are not read
   before the allowlist; a general Stage 5 composition that cannot prove this is
   unavailable for the mode;
+- fact-only Search is backed by a metadata-filtered corpus before indexing and
+  query, so forbidden note bodies never enter the Search candidate set;
 - after successful retrieval/reread/allowlist validation, zero candidates or
   zero eligible facts always produce the exact abstention
   `kind=abstention`, `recommendation=null`, `selected_option=null`,
@@ -1153,6 +1185,9 @@ scope, если owner когда-либо выберет этот fallback:
   items, across `recommendation` plus `rationale`, and across `rationale` plus
   `uncertainty`; it catches split text across whitespace boundaries after
   `echo_compare`, including the validation-only one-space boundary view;
+- the bounded order-invariant matcher rejects the same full/substantial fact
+  when generated parts arrive in a different provider-controlled order, while
+  unrelated permutations remain valid;
 - per-field spans of at least 32 bytes remain invalid; unrelated generated
   fields whose empty-separator concatenation does not match the fact remain
   valid; caller-owned `selected_option.id`/`label` text is excluded from the
@@ -1189,7 +1224,8 @@ scope, если owner когда-либо выберет этот fallback:
   zero eligible facts gives `insufficient_current_context`, eligible facts give
   normal projection, a valid `candidate_not_found`-only result preserves the
   same empty-set abstention semantics, and no heuristic fallback is allowed;
-  the fact-only source also proves no Self Model read.
+  the fact-only source also proves no Self Model read and excludes forbidden
+  notes before Search indexing/query.
 
 ### Independence and Self Model safety
 
@@ -1289,7 +1325,7 @@ the Simulate Me input.
 | --- | --- |
 | Caller-owned bounded `AssistantRequest` with optional options | **ACCEPT** |
 | Explicit constraints/goals/context and request-local authority rules | **ACCEPT** |
-| Stage 5 fact-only current UUID context with exact typed `explicit_user_fact` + `memory` projection | **ACCEPT as design boundary** |
+| Stage 5 fact-only current UUID context with metadata-filtered corpus and exact typed `explicit_user_fact` + `memory` projection | **ACCEPT as design boundary** |
 | Deterministic `stage5_query` / limit / remaining-budget mapping | **ACCEPT as design boundary** |
 | Empty eligible Stage 5 facts vs context retrieval/projection failure outcomes | **ACCEPT as exact split** |
 | Stage 5 `truncated` / `context_budget_exceeded` completeness gate before factual allowlist | **ACCEPT as exact design boundary** |
