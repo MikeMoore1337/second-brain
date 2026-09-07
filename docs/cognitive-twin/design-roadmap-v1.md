@@ -1326,7 +1326,7 @@ write-back, schema bump, new dependencies, new note type, domain registry,
 psychological profiling, live smoke, production deployment, issue creation и
 любые изменения `second-brain-vault`.
 
-## Current implementation status after Stage 5
+## Current implementation status after Stage 6
 
 Stage 1–3 core, Stage 4 Self Model core/Web projection и Stage 5
 Self Retrieval core/Web/CLI (#89/#90/#91) находятся в current `main`.
@@ -1335,9 +1335,10 @@ exact supporting UUID links и safe errors; он не добавляет embeddi
 prediction, inference write-back, canonical fields или изменения
 `second-brain-vault`.
 
-Stage 6 contract approved, но Stage 6 runtime и нижеследующие Stage 7–8
-остаются design/roadmap boundaries. Assistant v1 design contract добавляет
-только bounded Stage 7 documentation и фиксирует owner decision A;
+Stage 6 contract approved, а provider-free application/Web runtime и core
+находятся в current `main`; confidence, provider runtime и persistence
+отсутствуют. Assistant v1 и Compare v1 остаются design-only contracts:
 `HUMAN_REQUIRED: none` относится только к capability-boundary, а provider/
-network/privacy integration остаётся отдельным future gate. Этот status sync не
-объявляет runtime scope, не создаёт Stage 8 item и не меняет product semantics.
+network/privacy integration и runtime остаются отдельными future gates. Этот
+status sync не объявляет Stage 8 runtime scope, не создаёт Stage 8 item и не
+меняет product semantics.

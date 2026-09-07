@@ -140,8 +140,12 @@ Unknown fields, missing required fields, wrong scalar/container types,
 duplicate IDs, bounds overflow и invalid controls дают
 COMPARE_INVALID_REQUEST до любого branch call. Валидация не читает current
 context, vault или provider. Значение
-max_result_bytes < MIN_MAX_RESULT_BYTES_V1 также даёт
-COMPARE_INVALID_REQUEST до любого branch call.
+max_result_bytes < MIN_MAX_RESULT_BYTES_V1 или меньше contract-derived
+minimum_compare_result_bytes(validated option_ids) также даёт
+COMPARE_INVALID_REQUEST до любого branch call. Второе сравнение выполняется
+после validation option IDs, но до любого branch call; labels в этот minimum
+не входят, поскольку минимальный error/error result содержит только root
+option_ids из request namespace.
 
 До branch calls Compare обязан построить ровно один canonical
 AssistantReasoningEnvelopeV1 из validated task, options,
@@ -516,7 +520,8 @@ Policy fingerprint вычисляется как SHA-256 UTF-8 bytes exact canon
 
     sha256:f0619ea1034ac29a5800866d47cd8a8d2758b8ca3cdbe549b6494df084cd48a9
 
-Для outer result budget используется contract-derived constant:
+Для outer result budget используется contract-derived floor и request-specific
+minimum:
 
     MIN_MAX_RESULT_BYTES_V1 = 824
 
@@ -524,10 +529,13 @@ Policy fingerprint вычисляется как SHA-256 UTF-8 bytes exact canon
 option_ids=["a"], двумя bounded branch errors с наиболее короткой фиксированной
 парой COMPARE_BRANCH_FAILURE / compare branch failed, structural relation
 both_error, пустыми nullable/list fields где это разрешено и фиксированными
-Compare policy identifiers. Exact fixture определяется полями §6, fixed
+Compare policy identifiers. Для каждого validated request вычисляется
+`minimum_compare_result_bytes(option_ids)` как длина того же canonical
+error/error fixture с фактическим `option_ids` в request order. Например,
+minimum для option_ids=["a","b"] равен 828 bytes, поэтому max_result_bytes
+824 отклоняется до branch calls. Exact fixture определяется полями §6, fixed
 messages §5.3, result key order ниже и обеими branch error wrappers; значение
-не является оценкой и должно быть пересчитано при изменении любого из этих
-полей. Поэтому request с max_result_bytes < 824 отклоняется до branch calls.
+не является оценкой и пересчитывается при изменении любого из этих полей.
 
 Canonical CompareResultV1 serialization имеет следующие правила:
 
