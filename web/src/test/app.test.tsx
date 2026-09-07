@@ -123,6 +123,81 @@ describe("React Web parity shell", () => {
     expect(host.querySelector("[data-self-retrieval-surface]")?.getAttribute("aria-busy")).toBe("false");
   });
 
+  it("keeps skip-link focus target and toggle relationships explicit", async () => {
+    vi.spyOn(window, "fetch").mockImplementation((input) => {
+      const path = String(input);
+      const payload = path.endsWith("/api/timeline")
+        ? { known_items: [], unknown_items: [], known_total: 0, unknown_total: 0 }
+        : { claims: [], eligible_evidence_count: 0, represented_evidence_count: 0 };
+      return Promise.resolve(new Response(JSON.stringify(payload), { status: 200 }));
+    });
+    const host = await renderApp();
+
+    const main = host.querySelector("main#main-content");
+    const skipLink = host.querySelector<HTMLAnchorElement>(".skip-link");
+    expect(main?.getAttribute("tabindex")).toBe("-1");
+    expect(skipLink?.getAttribute("href")).toBe("#main-content");
+    skipLink?.click();
+    expect(document.activeElement).toBe(main);
+    expect(host.querySelectorAll("#capture-panel")).toHaveLength(1);
+    expect([...host.querySelectorAll("[aria-label='Режим добавления'] button")].every((button) => button.getAttribute("aria-controls") === "capture-panel")).toBe(true);
+    expect([...host.querySelectorAll("[aria-label='Режим журнала решений'] button")].every((button) => button.getAttribute("aria-controls") === "decision-journal-content")).toBe(true);
+  });
+
+  it("preserves Decision Journal input when switching modes", async () => {
+    vi.spyOn(window, "fetch").mockImplementation((input) => {
+      const path = String(input);
+      const payload = path.endsWith("/api/timeline")
+        ? { known_items: [], unknown_items: [], known_total: 0, unknown_total: 0 }
+        : { claims: [], eligible_evidence_count: 0, represented_evidence_count: 0 };
+      return Promise.resolve(new Response(JSON.stringify(payload), { status: 200 }));
+    });
+    const host = await renderApp();
+    const title = host.querySelector<HTMLInputElement>("#decision-form input");
+    const modes = host.querySelectorAll<HTMLButtonElement>("#decision-journal .mode-button");
+    expect(title).not.toBeNull();
+    expect(modes).toHaveLength(2);
+    if (!title || modes.length !== 2) return;
+
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(title, "Сохранить выбор");
+      title.dispatchEvent(new Event("input", { bubbles: true }));
+      modes[1]?.click();
+      modes[0]?.click();
+    });
+    expect(title.value).toBe("Сохранить выбор");
+  });
+
+  it("moves focus to a retrieved Search note", async () => {
+    vi.spyOn(window, "fetch").mockImplementation((input) => {
+      const path = String(input);
+      const payload = path.endsWith("/api/timeline")
+        ? { known_items: [], unknown_items: [], known_total: 0, unknown_total: 0 }
+        : { claims: [], eligible_evidence_count: 0, represented_evidence_count: 0 };
+      return Promise.resolve(new Response(JSON.stringify(payload), { status: 200 }));
+    });
+    vi.spyOn(api, "searchNotes").mockResolvedValue({ hits: [{ id: "note-1", title: "Заметка", type: "resource", relative_path: "10 Projects/note.md", snippet: "Фрагмент", tags: [] }] });
+    vi.spyOn(api, "retrieveNote").mockResolvedValue({ id: "note-1", title: "Заметка", type: "resource", relative_path: "10 Projects/note.md", created: "2026-01-01T00:00:00Z", updated: undefined, content: "Содержание" });
+    const host = await renderApp();
+    const input = host.querySelector<HTMLInputElement>("#search-input");
+    const form = host.querySelector<HTMLFormElement>(".search-form");
+    expect(input).not.toBeNull();
+    expect(form).not.toBeNull();
+    if (!input || !form) return;
+
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(input, "проверка");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    const open = host.querySelector<HTMLButtonElement>("#search .search-hit button");
+    expect(open).not.toBeNull();
+    await act(async () => open?.click());
+    expect(document.activeElement).toBe(host.querySelector(".retrieved-note"));
+  });
+
   it("keeps Personal Memory opt-in only for source-free drafts", async () => {
     vi.spyOn(api, "createUrlDraft").mockResolvedValue({
       review_token: "review",
