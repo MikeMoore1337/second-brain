@@ -46,8 +46,8 @@ runtime не начинают реализацию.
 - vault write, Safe Write, canonical evidence creation, Self Model mutation;
 - conversation/history/recommendation persistence, embeddings, RAG, vector DB,
   cache, training и automatic calibration;
-- raw private context, absolute paths, secrets, provider payloads или raw
-  exceptions в result/logs;
+- unprojected raw private context, complete/substantial verbatim Stage 5 spans,
+  absolute paths, secrets, provider payloads или raw exceptions в result/logs;
 - самостоятельный runtime issue, #163, Compare runtime или изменение
   `second-brain-vault`.
 
@@ -209,9 +209,12 @@ envelope и единственный источник расчёта `max_contex
 В envelope не входят orchestration-only controls и private metadata:
 `stage5_context_mode`, `stage5_query`, `max_context_bytes`,
 `max_result_bytes`, internal UUID, search rank, `evidence_kind`, `self_kind`,
-paths, raw front matter и raw body. `stage5_facts` содержит только bounded
-factual text из validated `AssistantStage5Fact`; `ordinal` — integer, начиная
-с 1, в текущем deterministic search order.
+paths, raw front matter и unprojected raw body. `stage5_facts` содержит только
+bounded exact body-derived `factual_text` из validated `AssistantStage5Fact`.
+Каждый reasoning-visible item имеет ровно форму
+`{ordinal: int, role: "reported_fact", text: factual_text}`; `ordinal`
+присваивается только после успешной projection, является integer, начиная с 1,
+в текущем deterministic search order.
 
 Canonical encoding:
 
@@ -302,7 +305,7 @@ AssistantStage5Fact {
   canonical_note_id: UUIDv7       # internal validation only; never public
   evidence_kind: "explicit_user_fact"
   self_kind: "memory"
-  factual_text: string            # bounded current factual projection
+  factual_text: string            # exact current RetrievedNote.body projection; §4.1.1, 1..1024 UTF-8 bytes
   evidence_at: aware datetime | "unknown"
   stage5_search_rank: int         # deterministic current candidate order
 }
@@ -316,11 +319,47 @@ AssistantStage5Fact {
 2. успешного current canonical UUID reread;
 3. exact Personal Memory validation с сохранением validated
    `evidence_kind == explicit_user_fact` и `self_kind == memory`;
-4. построения полного bounded `factual_text` без front matter/path. Нельзя
-   молча обрезать body так, чтобы partial text выглядел complete. Если complete
-   eligible projection не может быть построен или помещён в upstream/final
-   budget, это `ASSISTANT_CONTEXT_UNAVAILABLE`, а не исключение item или выбор
-   arbitrary subset.
+4. построения полного bounded `factual_text` по exact projection из §4.1.1.
+   Нельзя молча обрезать body так, чтобы partial text выглядел complete. Если
+   complete eligible projection не может быть построен или помещён в
+   upstream/final budget, это `ASSISTANT_CONTEXT_UNAVAILABLE`, а не исключение
+   item или выбор arbitrary subset.
+
+### 4.1.1. Exact `factual_text` projection
+
+После последовательности `Search candidate -> current UUID reread -> managed-
+note validation -> Personal Memory validation -> exact allowlist`
+`AssistantStage5Fact.factual_text` строится **только** из exact current
+`RetrievedNote.body`.
+
+В него не входят `title`, `tags`, `note_type`, relative/absolute path, front
+matter, UUID, search snippet, `Self Model` claim, source URL, metadata или
+`stage5_search_rank`. Internal projection может хранить UUID, rank и validated
+Personal Memory metadata только для integrity/provenance; reasoning-visible
+`stage5_facts[].text` и private-echo guard используют только этот body-derived
+text.
+
+Трансформация строго последовательна:
+
+1. CRLF нормализуется в LF;
+2. оставшийся CR нормализуется в LF;
+3. применяется Unicode NFC;
+4. обрезается leading/trailing Unicode whitespace;
+5. внутренний текст не изменяется: нет whitespace collapsing, Markdown
+   stripping, HTML conversion, heading extraction, title prepend, tag append,
+   punctuation rewrite, case normalization, LLM summarization или paraphrase;
+6. LF и TAB допустимы как internal whitespace; другие C0/C1 controls, DEL и
+   Unicode `Cf` дают `ASSISTANT_CONTEXT_UNAVAILABLE`;
+7. после transformation text обязан быть non-empty и иметь 1..1024 UTF-8 bytes;
+8. пустой после trim qualifying item считается non-usable/non-eligible; если
+   после успешного pipeline usable eligible facts ровно ноль, применяется
+   `abstention/insufficient_current_context`;
+9. qualifying fact с body-derived text больше 1024 bytes или forbidden controls
+   нельзя безопасно представить полностью: возвращается
+   `ASSISTANT_CONTEXT_UNAVAILABLE`;
+10. `factual_text` никогда не truncate-ится, не заменяется title/tags/snippet и
+    не подменяется другим arbitrary fact. Нельзя скрыть unrepresentable
+    qualifying fact выбором partial projection.
 
 `canonical_note_id`, `evidence_at` и `stage5_search_rank` нужны только для
 internal integrity/provenance validation. Public Assistant result возвращает
@@ -460,7 +499,7 @@ AssistantEvidenceRef {
   role: "reported_fact" | "background"
 }
 
-AssistantResult {
+AssistantResultEnvelopeV1 {
   output_label: "independent_recommendation_analysis"
   kind: "recommendation" | "analysis" | "abstention"
   recommendation: string | null
@@ -484,18 +523,19 @@ AssistantResult {
 | `recommendation` | 1..2048 UTF-8 bytes только для `kind=recommendation`; иначе `null` |
 | `selected_option` | `null` при no-options; иначе exact option из request или `null` |
 | `rationale` | 1..8 items, каждый 1..1024 bytes; bounded total |
-| `evidence_refs` | 0..32 unique request-local refs; Stage 5 role is only `reported_fact`; no body, UUID, path or claim text |
+| `evidence_refs` | 0..32 unique source/ordinal refs; exact source/role binding по §6.2; no body, UUID, path or claim text |
 | `constraints_used` | 0..16 refs; only valid explicit constraint ordinals |
 | `objectives_used` | 0..8 refs; only valid explicit goal ordinals |
 | `uncertainty` | 0..8 items, каждый 1..512 bytes; no numeric confidence |
 | `abstention_code` | required only for `kind=abstention`; otherwise `null` |
-| complete result | must fit fixed `max_result_bytes`; no silent truncation |
+| complete result | canonical `AssistantResultEnvelopeV1` must fit fixed `max_result_bytes`; no silent truncation |
 
 `AssistantEvidenceRef.ordinal` — ephemeral ordinal into the current labelled
 context, не canonical identity. Public result намеренно не содержит `note_id`,
-`relative_path`, title/body, raw `SelfModelClaim.claim`, YAML, query или provider
-metadata. A future UI can show a separately authorized current context view;
-this DTO не становится history или access token.
+`relative_path`, unprojected title/body, raw `SelfModelClaim.claim`, YAML, query
+или provider metadata. A future UI can show a separately authorized current
+context view; this DTO не становится history или access token. Body-derived
+output text остаётся subject to `AssistantPrivateEchoGuardV1`.
 
 Exact invariants:
 
@@ -537,6 +577,87 @@ item соответствующего source. Provider/AdvisorPort не може
 valid v1 enum values; их возможное будущее использование — отдельная named
 capability и отдельный `DEFER`.
 
+### 6.3. Canonical result serialization и validation order
+
+`AssistantResultEnvelopeV1` — единственная canonical serialization для
+`max_result_bytes`. Это exact provider-result semantic DTO; все поля всегда
+присутствуют, а nullable fields сериализуются как JSON `null`, не опускаются:
+
+```text
+{
+  "output_label": string,
+  "kind": string,
+  "recommendation": string | null,
+  "selected_option": null | {
+    "id": string,
+    "label": string
+  },
+  "rationale": [string],
+  "evidence_refs": [
+    {
+      "source": string,
+      "ordinal": int,
+      "role": string
+    }
+  ],
+  "constraints_used": [
+    {
+      "source": "explicit_constraint",
+      "ordinal": int
+    }
+  ],
+  "objectives_used": [
+    {
+      "source": "explicit_goal",
+      "ordinal": int
+    }
+  ],
+  "uncertainty": [string],
+  "abstention_code": string | null,
+  "contract_version": "assistant-v1"
+}
+```
+
+Root key order ровно такой, как в структуре выше. Nested key order также
+фиксирован: `selected_option` — `id`, затем `label`; `evidence_ref` —
+`source`, `ordinal`, `role`; `AssistantInputRef` — `source`, `ordinal`.
+Arrays сохраняют validated DTO tuple order; canonical serializer не сортирует,
+не удаляет и не переставляет items. Результат принимается при
+`result_bytes <= request.max_result_bytes`; только строгое превышение даёт
+`ASSISTANT_RESULT_TOO_LARGE`. `result_bytes` определяется ровно как:
+
+```text
+result_bytes = len(canonical_AssistantResultEnvelopeV1_utf8)
+```
+
+Encoding использует **точно те же** RFC 8259 / UTF-8 / no-BOM / no-trailing-
+newline / direct-non-ASCII (the `ensure_ascii=False` equivalent) /
+mandatory-JSON-escaping / no-whitespace /
+`,`-and-`:` separators rules и запрет alternate serializer, что и
+`AssistantReasoningEnvelopeV1` в §3.3. В частности, `ensure_ascii=True`,
+pretty JSON и incidental Python dict ordering не допускаются. Другого result
+serializer или budget calculator для `max_result_bytes` нет. Размер raw
+transport response provider, если он когда-либо будет ограничен, является
+отдельным future adapter cap и не заменяет этот semantic DTO budget.
+
+Result validation выполняется строго в таком порядке:
+
+1. Validate result object/type, closed enums и per-field bounds.
+2. Validate `selected_option` и request-local input references.
+3. Validate exact evidence `source`/`role` bindings по §6.2.
+4. Run `AssistantPrivateEchoGuardV1` для всех validated
+   `AssistantStage5Fact.factual_text` и provider-generated output fields.
+5. Canonically serialize exact `AssistantResultEnvelopeV1`.
+6. Compare `result_bytes` с `request.max_result_bytes`.
+7. Если `result_bytes > max_result_bytes`, вернуть
+   `ASSISTANT_RESULT_TOO_LARGE`.
+
+Guard violation или любая другая invalid result semantics отклоняет весь
+result с `ASSISTANT_RESULT_INVALID`; offending text не возвращается и не
+логируется. Ни при guard violation, ни при oversized canonical result нельзя
+делать truncation, dropping rationale/uncertainty/evidence refs, alternate
+pretty/escaped serialization, retry или provider fallback.
+
 ## 7. Abstention и safe error taxonomy
 
 ### 7.1. Typed abstention codes
@@ -557,7 +678,7 @@ eligible factual items ровно ноль (в том числе при zero sea
 результат всегда является нормальным domain outcome:
 
 ```text
-AssistantResult {
+AssistantResultEnvelopeV1 {
   kind = "abstention"
   recommendation = null
   selected_option = null
@@ -591,15 +712,15 @@ AssistantErrorCode:
 
 | Code | Safe meaning |
 | --- | --- |
-| `ASSISTANT_INVALID_REQUEST` | request не прошёл exact type/text/bounds validation |
+| `ASSISTANT_INVALID_REQUEST` | request или base context envelope не прошли exact type/text/bounds/fit validation |
 | `ASSISTANT_CONTEXT_UNAVAILABLE` | requested current context нельзя получить, доказать или полностью представить; zero eligible facts после успешного pipeline сюда не относится |
 | `ASSISTANT_CANCELLED` | operation отменена до безопасного завершения |
 | `ASSISTANT_TIMEOUT` | bounded approved reasoning operation превысила deadline |
 | `ASSISTANT_PROVIDER_UNAVAILABLE` | approved reasoning boundary недоступна |
 | `ASSISTANT_PROVIDER_FAILURE` | approved reasoning boundary вернула failure |
 | `ASSISTANT_MALFORMED_RESULT` | provider/deterministic operation не дал exact Assistant DTO |
-| `ASSISTANT_RESULT_TOO_LARGE` | complete bounded result превышает cap |
-| `ASSISTANT_RESULT_INVALID` | assembled result нарушает exact invariants |
+| `ASSISTANT_RESULT_TOO_LARGE` | canonical `AssistantResultEnvelopeV1` превышает `max_result_bytes` |
+| `ASSISTANT_RESULT_INVALID` | assembled result нарушает exact invariants, source/role binding или PrivateEchoGuard |
 
 Provider errors описаны только как будущая public mapping для отдельно
 одобренного reasoning boundary; production runtime #162 не реализуется. Если
@@ -623,13 +744,72 @@ Stage 5 projection, explicit reasoning result и disposable validation metadata.
   provider response;
 - выполнять hidden network/provider call, embeddings, RAG, vector search,
   training или background operation;
-- возвращать raw private context. Rationale может быть bounded paraphrase, но
-  не full body dump или absolute path.
+- возвращать unprojected raw private context, full canonical factual text или
+  substantial verbatim span из защищённого Stage 5 projection; bounded
+  paraphrase, вывод по факту и короткое atomic value могут быть допустимы по
+  правилам `AssistantPrivateEchoGuardV1` ниже;
 
 Если provider boundary когда-либо будет approved, personal context можно
 передавать только по explicit request mode и после отдельной privacy review.
 Текущий документ не даёт credentials, endpoint, model, retention policy или
 разрешение на сеть.
+
+### 8.1. `AssistantPrivateEchoGuardV1`
+
+`AssistantPrivateEchoGuardV1` — application-owned deterministic post-provider
+validator. Он защищает **только** каждый validated
+`AssistantStage5Fact.factual_text`. `task`, `options`,
+`explicit_constraints`, `explicit_goals` и `explicit_context` — caller-owned
+inputs текущей operation и не являются canonical-vault protected text для этого
+guard; отдельные no-log/no-persistence правила для них всё равно действуют.
+Protected value — ровно тот же body-derived `factual_text` после §4.1.1, который
+попадает в `stage5_facts[].text` и участвует в `AssistantReasoningEnvelopeV1`;
+title, tags, metadata и unprojected raw body guard не получает.
+
+Проверяются только provider-generated text fields:
+
+- `recommendation`, если он non-null;
+- каждый item `rationale`;
+- каждый item `uncertainty`.
+
+Guard не проверяет fixed labels/enums, `selected_option.id`,
+`selected_option.label` (это exact caller-owned option), `evidence_refs` или
+input refs.
+
+Единственная canonical comparison form — `echo_compare(text)`:
+
+1. Unicode NFC;
+2. CRLF и CR нормализуются в LF;
+3. каждая последовательность Unicode whitespace (Unicode `White_Space`
+   code points: U+0009..U+000D, U+0020, U+0085, U+00A0, U+1680,
+   U+2000..U+200A, U+2028, U+2029, U+202F, U+205F, U+3000) заменяется на один
+   ASCII SPACE U+0020;
+4. leading/trailing ASCII SPACE обрезаются;
+5. casefold, lower, transliteration, stemming, punctuation stripping и
+   semantic/fuzzy matching **не выполняются**.
+
+Для каждой пары `protected factual_text` и проверяемого output field
+вычисляется `echo_compare`. Guard fail closed, если выполняется хотя бы одно:
+
+- output после `echo_compare` целиком равен protected fact после
+  `echo_compare`, независимо от длины;
+- существует exact contiguous common substring в двух normalized strings,
+  для которого `common_substring_utf8_bytes = len(substring.encode("utf-8"))`
+  после `echo_compare` не меньше 32 bytes. Substring сравнивается буквально
+  как последовательность Unicode code points; никаких semantic similarity и
+  fuzzy matching нет.
+
+При violation весь Assistant result отклоняется с единственным safe error
+`ASSISTANT_RESULT_INVALID`. Matched source text и offending output не входят в
+error message и не логируются. Automatic redaction, retry, provider fallback и
+partial result запрещены, потому что redaction может изменить смысл
+recommendation.
+
+Guard предотвращает complete/substantial verbatim echo canonical Stage 5
+`factual_text`, но не является semantic DLP: он не гарантирует, что
+model-generated paraphrase не раскроет смысл разрешённого факта. Использование
+external provider с private context требует отдельного future
+privacy/provider approval gate.
 
 ## 9. Provider/port analysis и owner decision record
 
@@ -676,7 +856,7 @@ semantics, safe abstention и граница между note drafting и reasoni
 
 **Owner decision: A — ACCEPT.** Для будущего Assistant core выбран новый
 provider-neutral `AdvisorPort` / equivalent с отдельными typed
-`AdvisorRequest` и `AssistantResult` semantics.
+`AdvisorRequest` и `AssistantResultEnvelopeV1` semantics.
 
 `HUMAN_REQUIRED: none for the Assistant v1 capability-boundary decision`.
 Решение разрешает только application-owned boundary и не разрешает provider,
@@ -689,15 +869,16 @@ independent recommendation, evidence refs, abstention и privacy labeling.
 Stage 5/4 дают read-only context, но не reasoning provider.
 
 Будущая отдельная `AdvisorPort` boundary принимает только validated
-`AssistantReasoningEnvelopeV1` и возвращает exact `AssistantResult`. Application
-validator владеет canonical serialization, source/role binding и abstention/error
-mapping до и после provider call; provider/reasoner не может менять evidence
-roles, добавлять personal metadata или превращать `ASSISTANT_CONTEXT_UNAVAILABLE`
-в `insufficient_current_context` либо обратно.
+`AssistantReasoningEnvelopeV1` и возвращает exact `AssistantResultEnvelopeV1`. Application
+validator владеет canonical serialization, source/role binding,
+`AssistantPrivateEchoGuardV1`, result-size check и abstention/error mapping до и
+после provider call; provider/reasoner не может менять evidence roles, добавлять
+personal metadata, bypass-ить echo guard или превращать
+`ASSISTANT_CONTEXT_UNAVAILABLE` в `insufficient_current_context` либо обратно.
 
 | Вариант | Плюсы | Минусы / complexity / coupling | Privacy impact | Рекомендация |
 | --- | --- | --- | --- | --- |
-| **A. Новый provider-neutral `AdvisorPort` / equivalent** с отдельными typed `AdvisorRequest` и `AssistantResult` | Interface segregation; NoteDraft остаётся backwards-safe; отдельная cancellation/error/privacy boundary; existing configured adapter потенциально может реализовать его позже | отдельный port, validator, adapter capability и deterministic no-network tests; средняя/высокая implementation complexity; появляется новая reasoning surface | явная новая передача personal context через approved boundary; можно независимо запретить raw context, retention, fallback и network до approval | **ACCEPT — owner выбрал A** |
+| **A. Новый provider-neutral `AdvisorPort` / equivalent** с отдельными typed `AdvisorRequest` и `AssistantResultEnvelopeV1` semantics | Interface segregation; NoteDraft остаётся backwards-safe; отдельная cancellation/error/privacy boundary; existing configured adapter потенциально может реализовать его позже | отдельный port, validator, adapter capability и deterministic no-network tests; средняя/высокая implementation complexity; появляется новая reasoning surface | явная новая передача personal context через approved boundary; можно независимо запретить raw context, retention, fallback и network до approval | **ACCEPT — owner выбрал A** |
 | **B. Второй operation в существующем `LlmPort`** (`advise(...)`) при сохранении `draft_note` | можно повторно использовать часть transport/config; меньше номинальных port types | port начинает объединять note drafting и advice; выше coupling adapters/callers/error semantics; backwards-safe только при явном capability segregation и отдельной typed operation; provider implementation всё равно нужна | те же новые privacy risks, но они легче скрываются внутри уже существующего LLM boundary | **DEFER / not selected for v1** |
 | **C. Assistant без LLM/provider** | no network, no credentials, минимальный privacy risk; низкая complexity; полностью deterministic | полезен только как узкий constraint satisfiability/explicit trade-off analysis; не может честно обещать общий ответ «что объективно разумнее»; больше abstentions и no recommendation | минимальный: только request и approved in-memory context | **DEFER / fallback only if separately selected** |
 
@@ -756,6 +937,33 @@ scope, если owner когда-либо выберет этот fallback:
 - Stage 5 typed fact + `reported_fact` is valid, Stage 5 typed fact +
   `background` is invalid; `contextual_preference`, `contextual_belief` and
   `historical_context` are invalid v1 roles.
+
+### Private echo, result budget и factual projection tests
+
+- `AssistantPrivateEchoGuardV1` rejects a short full fact and a long full fact,
+  any embedded exact contiguous verbatim span of at least 32 UTF-8 bytes, and a
+  substantial Cyrillic span of the same size;
+- the guard catches CRLF/CR, Unicode-whitespace and edge-space variations after
+  `echo_compare`; case-changed text and semantic paraphrase are not treated as
+  verbatim by this guard;
+- a short atomic fragment below the 32-byte threshold inside a larger answer is
+  allowed, as is repetition of a caller-owned `selected_option.label`;
+- guard violation exposes only `ASSISTANT_RESULT_INVALID`, never matched source
+  text or offending output, and never produces redaction, retry, fallback or a
+  partial result;
+- result-budget tests cover empty/null fields with every key present,
+  recommendation, analysis, abstention, `selected_option` null/object,
+  Cyrillic direct UTF-8, quote/backslash escaping and multiple evidence refs;
+- exact `result_bytes == max_result_bytes` is accepted and `+1` yields
+  `ASSISTANT_RESULT_TOO_LARGE`; `ensure_ascii=True`, pretty JSON, omitted nulls,
+  incidental dict ordering and alternate result serializers are rejected;
+- factual projection tests verify body-only input, CRLF/CR normalization, NFC,
+  edge Unicode-whitespace trim, preserved internal whitespace/Markdown, and
+  exclusion of title/tags/note_type/path/front matter/UUID/snippet/metadata;
+- empty projected body produces the empty-set abstention, while forbidden
+  controls or a body-derived projection over 1024 UTF-8 bytes produces
+  `ASSISTANT_CONTEXT_UNAVAILABLE`; neither case truncates, substitutes or
+  selects an arbitrary fact.
 
 ### Independence and Self Model safety
 
@@ -859,11 +1067,15 @@ the Simulate Me input.
 | Deterministic `stage5_query` / limit / remaining-budget mapping | **ACCEPT as design boundary** |
 | Empty eligible Stage 5 facts vs context retrieval/projection failure outcomes | **ACCEPT as exact split** |
 | Canonical `AssistantReasoningEnvelopeV1` JSON and sole context budget calculator | **ACCEPT as exact design boundary** |
+| Exact body-only `factual_text` projection and reasoning-visible Stage 5 item shape | **ACCEPT as exact design boundary** |
 | Internal `AssistantStage5Fact` over current reread + Personal Memory validation | **ACCEPT as future core dependency** |
 | Exact `AssistantEvidenceRef` source/role binding | **ACCEPT as exact result invariant** |
 | `contextual_preference` / `contextual_belief` / `historical_context` evidence roles | **DEFER / invalid in v1** |
 | Self Model preference/belief/goal treatment without normative leakage | **ACCEPT** |
 | Closed recommendation/analysis/abstention Result DTO and safe taxonomy | **ACCEPT as design** |
+| Canonical `AssistantResultEnvelopeV1`, exact key order and result byte budget | **ACCEPT as exact design boundary** |
+| Result validation order, including source/role checks and `AssistantPrivateEchoGuardV1` | **ACCEPT as exact design boundary** |
+| `AssistantPrivateEchoGuardV1` complete/substantial verbatim comparison | **ACCEPT as bounded guard; not semantic DLP** |
 | Independent output label and no Simulate Me input | **ACCEPT** |
 | Bounded privacy, no-write, no-persistence and no-hidden-network boundary | **ACCEPT** |
 | Testing strategy and future dependency gate | **ACCEPT** |
