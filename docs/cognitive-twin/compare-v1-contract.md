@@ -118,7 +118,7 @@ labels, а затем передаёт validated copies в обе ветки:
 | assistant.explicit_constraints | 0..16 strings, каждый 1..512 bytes, общий budget 8192 bytes |
 | assistant.explicit_goals | 0..8 strings, каждый 1..512 bytes, общий budget 4096 bytes |
 | assistant.explicit_context | 0..16 entries; text 1..1024 bytes, общий budget 16384 bytes |
-| assistant.max_context_bytes | exact int, 1..65536; bool запрещён |
+| assistant.max_context_bytes | exact int, 115..65536; bool запрещён; фактический envelope fit проверяется до branch calls |
 | assistant.max_result_bytes | exact int, 304..65536; bool запрещён |
 | max_result_bytes | exact int, 824..131072; bool запрещён |
 
@@ -142,6 +142,25 @@ COMPARE_INVALID_REQUEST до любого branch call. Валидация не �
 context, vault или provider. Значение
 max_result_bytes < MIN_MAX_RESULT_BYTES_V1 также даёт
 COMPARE_INVALID_REQUEST до любого branch call.
+
+До branch calls Compare обязан построить ровно один canonical
+AssistantReasoningEnvelopeV1 из validated task, options,
+explicit_constraints, explicit_goals и explicit_context, используя
+AssistantCanonicalJsonEncoderV1 и exact key/order rules Assistant v1. Если
+context_bytes этого envelope больше assistant.max_context_bytes, request
+получает COMPARE_INVALID_REQUEST до вызова Assistant или Simulate Me; silent
+dropping explicit input и branch-local error вместо preflight запрещены.
+
+Для обязательного в Compare списка хотя бы из одного минимального option
+contract-derived lower bound равен:
+
+    MIN_ASSISTANT_CONTEXT_BYTES_V1 = 115
+
+Это canonical UTF-8 размер envelope с task="x", option {id="a", label="x"} и
+тремя пустыми Assistant arrays. Значение 115 — только нижняя bound; для каждого
+реального request всё равно проверяется полный context_bytes. При изменении
+Assistant envelope schema, key order или Compare minimum options значение
+пересчитывается до изменения request bound.
 
 ## 4. Exact construction и execution independence
 
@@ -528,14 +547,18 @@ Canonical CompareResultV1 serialization имеет следующие прави
     DTO: kind, selected_option, evidence_refs,
     contextual_evidence_refs, temporal_caveats, abstention_code,
     derivation_version, policy_id, policy_fingerprint;
-11. nullable fields всегда присутствуют как JSON null; arrays всегда
+11. nested SimulateMeOption key order ровно id, label;
+12. nested SimulateMeEvidenceRef и SimulateMeContextualEvidenceRef key order
+    ровно claim_id, dimension, note_ids, evidence_at;
+13. nested SimulateMeTemporalCaveat key order ровно code, claim_id;
+14. nullable fields всегда присутствуют как JSON null; arrays всегда
     присутствуют и сохраняют approved branch order;
-12. UUID сериализуются как lowercase canonical str(UUID);
-13. aware datetime сначала переводится в UTC и сериализуется ровно как
+15. UUID сериализуются как lowercase canonical str(UUID);
+16. aware datetime сначала переводится в UTC и сериализуется ровно как
     YYYY-MM-DDTHH:MM:SS.ffffffZ: год всегда 4 цифры, fractional seconds всегда
     ровно 6 цифр, включая trailing zeros, без удаления fractional part и без
     альтернативного offset notation; unknown остаётся literal string unknown;
-14. result_bytes равен длине canonical UTF-8 bytes. Exact boundary
+17. result_bytes равен длине canonical UTF-8 bytes. Exact boundary
     result_bytes == request.max_result_bytes принимается, overflow даёт
     COMPARE_RESULT_TOO_LARGE.
 
