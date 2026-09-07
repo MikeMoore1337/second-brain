@@ -554,10 +554,14 @@ Canonical CompareResultV1 serialization имеет следующие прави
 14. nullable fields всегда присутствуют как JSON null; arrays всегда
     присутствуют и сохраняют approved branch order;
 15. UUID сериализуются как lowercase canonical str(UUID);
-16. aware datetime сначала переводится в UTC и сериализуется ровно как
-    YYYY-MM-DDTHH:MM:SS.ffffffZ: год всегда 4 цифры, fractional seconds всегда
-    ровно 6 цифр, включая trailing zeros, без удаления fractional part и без
-    альтернативного offset notation; unknown остаётся literal string unknown;
+16. aware datetime сначала обязан успешно переводиться в UTC в
+    representable range year 0001..9999; failure такого conversion (включая
+    `OverflowError`/`ValueError` на границе диапазона) делает branch result
+    invalid и не допускается до canonical serialization. После успешного
+    conversion datetime сериализуется ровно как YYYY-MM-DDTHH:MM:SS.ffffffZ:
+    год всегда 4 цифры, fractional seconds всегда ровно 6 цифр, включая
+    trailing zeros, без удаления fractional part и без альтернативного offset
+    notation; unknown остаётся literal string unknown;
 17. result_bytes равен длине canonical UTF-8 bytes. Exact boundary
     result_bytes == request.max_result_bytes принимается, overflow даёт
     COMPARE_RESULT_TOO_LARGE.

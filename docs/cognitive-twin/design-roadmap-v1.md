@@ -1091,9 +1091,10 @@ context и derived explanation divergence.
   derivation policy воспроизводит исторические decisions.
 - **Входные зависимости:** caller-owned Assistant request с explicit task,
   options, constraints, goals и context; Stage 6 Simulate Me derivation и,
-  для Compare/Calibration, canonical Stage 2 Decision Journal с pre-choice
-  information и actual `observed_decision`. Automatic Stage 5/Personal Memory
-  context в Assistant v1 не входит.
+  для Calibration, canonical Stage 2 Decision Journal с pre-choice
+  information и actual `observed_decision`. Compare получает только
+  caller-owned branch inputs и не читает Decision Journal. Automatic Stage
+  5/Personal Memory context в Assistant v1 не входит.
 - **Canonical changes:** only user-reviewed actual decisions/outcomes; no
   calibration fields or prediction history in user notes.
 - **Derived state:** в будущем две independent outputs, structural comparisons,
