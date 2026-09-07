@@ -120,7 +120,7 @@ labels, а затем передаёт validated copies в обе ветки:
 | assistant.explicit_context | 0..16 entries; text 1..1024 bytes, общий budget 16384 bytes |
 | assistant.max_context_bytes | exact int, 1..65536; bool запрещён |
 | assistant.max_result_bytes | exact int, 304..65536; bool запрещён |
-| max_result_bytes | exact int, 1..131072; bool запрещён |
+| max_result_bytes | exact int, 824..131072; bool запрещён |
 
 Для text применяется только уже approved normalization:
 
@@ -139,7 +139,9 @@ synonyms или server-owned IDs.
 Unknown fields, missing required fields, wrong scalar/container types,
 duplicate IDs, bounds overflow и invalid controls дают
 COMPARE_INVALID_REQUEST до любого branch call. Валидация не читает current
-context, vault или provider.
+context, vault или provider. Значение
+max_result_bytes < MIN_MAX_RESULT_BYTES_V1 также даёт
+COMPARE_INVALID_REQUEST до любого branch call.
 
 ## 4. Exact construction и execution independence
 
@@ -464,11 +466,10 @@ Top-level error применяется ровно в следующих случ
 - COMPARE_INVALID_REQUEST: Compare DTO не прошёл pre-branch validation;
 - COMPARE_CANCELLED: global Compare cancellation обнаружена до безопасного
   завершения обеих branch attempts; completed branch не возвращается отдельно;
-- COMPARE_COMPOSITION_INVALID: сам wrapper/composition нарушает closed Compare
-  invariant и его нельзя безопасно представить как typed branch error,
-  например state/result/error shape противоречит друг другу, policy identity
-  ветки повреждена или selected pair нельзя доказуемо связать с request
-  namespace;
+- COMPARE_COMPOSITION_INVALID: Compare-owned wrapper/composition нарушает
+  closed Compare invariant после того, как branch output уже был принят
+  соответствующим branch validator. Это касается только дефекта самой
+  composition shape, а не содержимого branch result;
 - COMPARE_RESULT_TOO_LARGE: canonical full Compare result превышает
   request.max_result_bytes.
 
@@ -496,6 +497,19 @@ Policy fingerprint вычисляется как SHA-256 UTF-8 bytes exact canon
 
     sha256:f0619ea1034ac29a5800866d47cd8a8d2758b8ca3cdbe549b6494df084cd48a9
 
+Для outer result budget используется contract-derived constant:
+
+    MIN_MAX_RESULT_BYTES_V1 = 824
+
+Это длина canonical UTF-8 bytes минимального valid CompareResultV1 с
+option_ids=["a"], двумя bounded branch errors с наиболее короткой фиксированной
+парой COMPARE_BRANCH_FAILURE / compare branch failed, structural relation
+both_error, пустыми nullable/list fields где это разрешено и фиксированными
+Compare policy identifiers. Exact fixture определяется полями §6, fixed
+messages §5.3, result key order ниже и обеими branch error wrappers; значение
+не является оценкой и должно быть пересчитано при изменении любого из этих
+полей. Поэтому request с max_result_bytes < 824 отклоняется до branch calls.
+
 Canonical CompareResultV1 serialization имеет следующие правила:
 
 1. JSON UTF-8, без BOM и trailing newline;
@@ -517,8 +531,10 @@ Canonical CompareResultV1 serialization имеет следующие прави
 11. nullable fields всегда присутствуют как JSON null; arrays всегда
     присутствуют и сохраняют approved branch order;
 12. UUID сериализуются как lowercase canonical str(UUID);
-13. aware datetime сериализуется как UTC RFC3339 с Z; unknown остаётся
-    literal string unknown;
+13. aware datetime сначала переводится в UTC и сериализуется ровно как
+    YYYY-MM-DDTHH:MM:SS.ffffffZ: год всегда 4 цифры, fractional seconds всегда
+    ровно 6 цифр, включая trailing zeros, без удаления fractional part и без
+    альтернативного offset notation; unknown остаётся literal string unknown;
 14. result_bytes равен длине canonical UTF-8 bytes. Exact boundary
     result_bytes == request.max_result_bytes принимается, overflow даёт
     COMPARE_RESULT_TOO_LARGE.
@@ -604,7 +620,8 @@ owner-gated задачей. Compare v1 design не предполагает, ч�
 | neither branch selected | neither_selected; exact abstention/result states preserved |
 | one branch typed error, other result/abstention | partial result; successful other branch preserved |
 | both typed errors | bounded structural result with both wrappers and both_error |
-| invalid selected pair, wrong branch policy, impossible wrapper shape | safe branch error or COMPARE_COMPOSITION_INVALID as §8.2 defines |
+| invalid selected pair or wrong branch policy from a branch | corresponding safe branch result-invalid error; sibling branch is preserved |
+| Compare-owned impossible wrapper/composition shape | COMPARE_COMPOSITION_INVALID |
 | provider/Search/vault/Self Model seam observed by Delta | no call; test fails |
 | rationale, UUID, note IDs, claim text or evidence list differ | branches stay separate; no content comparison or union |
 | deterministic template text | exact table text; no confidence, bias, personality, risk or advice |
