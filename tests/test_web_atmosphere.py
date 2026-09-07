@@ -39,3 +39,8 @@ def test_react_atmosphere_has_mobile_and_reduced_motion_fallbacks() -> None:
     assert ".hero::before" in mobile
     assert ".hero::after" in mobile
     assert "opacity: 0.2" in mobile
+
+    assert "@media (max-width: 1024px)" in styles
+    tablet = styles.split("@media (max-width: 1024px)", 1)[1]
+    assert "body::before" in tablet
+    assert "animation: none" in tablet

@@ -293,16 +293,16 @@ input:focus-visible {
   textarea {
     font-size: 16px;
   }
-}
 
-@media (max-width: 760px) {
-  /* Decorative drift is static on small GPUs; content and state remain unchanged. */
+  /* Keep the full-screen ambient layer static on tablet GPUs as well. */
   body::before {
     animation: none;
     opacity: 0.28;
     transform: none;
   }
+}
 
+@media (max-width: 760px) {
   .hero::before,
   .hero::after {
     opacity: 0.2;
