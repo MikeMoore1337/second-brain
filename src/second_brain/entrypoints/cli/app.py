@@ -971,6 +971,14 @@ def _run_doctor(options: CliOptions, output_format: OutputFormat) -> None:
         ).execute()
         _echo_doctor_report(report, output_format)
         raise typer.Exit(code=report.exit_code) from None
+    except UnicodeError:
+        report = DoctorVault(
+            None,
+            config_resolvable=False,
+            search_index_factory=SqliteFts5SearchIndex,
+        ).execute()
+        _echo_doctor_report(report, output_format)
+        raise typer.Exit(code=report.exit_code) from None
 
     report = DoctorVault(
         FileSystemVaultReader(config.vault_path),

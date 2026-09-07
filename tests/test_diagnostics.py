@@ -446,6 +446,25 @@ def test_unavailable_config_is_reported_without_private_path(tmp_path: Path) -> 
     ]
 
 
+def test_invalid_env_encoding_is_reported_without_traceback_or_path(tmp_path: Path) -> None:
+    env_file = tmp_path / "private-config" / ".env"
+    env_file.parent.mkdir()
+    env_file.write_bytes(b"SECOND_BRAIN_VAULT_PATH=C:/private-vault/\xff\n")
+
+    result = runner.invoke(app, ["--env-file", str(env_file), "doctor", "--format", "json"])
+
+    assert result.exit_code == 2
+    assert str(env_file) not in result.stdout
+    assert str(env_file) not in result.stderr
+    assert "Traceback" not in result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "unavailable"
+    assert payload["config"] == {"resolvable": False}
+    assert payload["diagnostics"] == [
+        {"code": "CONFIG_UNAVAILABLE", "severity": "error", "count": 1}
+    ]
+
+
 def test_doctor_snapshot_validation_failure_is_safe(tmp_path: Path) -> None:
     vault = create_vault(tmp_path / "vault")
     snapshot = FileSystemVaultReader(vault).scan()
