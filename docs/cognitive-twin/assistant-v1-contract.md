@@ -152,27 +152,100 @@ C0/C1 controls, `DEL` и Unicode category `Cf`. Case folding, transliteration,
 - candidate limit всегда равен существующему
   `DEFAULT_SELF_CONTEXT_LIMIT` Stage 5 (`20`), а не caller-owned option или
   implementation-specific value;
-- сначала вычисляется deterministic `explicit_envelope_bytes` по compact
-  UTF-8 serialization полей `task`, `options`, `explicit_constraints`,
-  `explicit_goals` и `explicit_context`; затем
-  `remaining_context_bytes = max_context_bytes - explicit_envelope_bytes`;
-- если `remaining_context_bytes <= 0`, возвращается
-  `ASSISTANT_INVALID_REQUEST` или `ASSISTANT_CONTEXT_UNAVAILABLE` по месту
-  обнаружения, без Stage 5 call и без silent dropping explicit inputs;
-- Stage 5 получает `max_content_bytes = min(remaining_context_bytes,
+- единственный budget calculator — canonical
+  `AssistantReasoningEnvelopeV1`, описанный в §3.3 ниже;
+- `base_context_bytes` — byte length canonical serialization того же полного
+  envelope, но с `stage5_facts=[]`;
+- при `stage5_context_mode="none"` `base_context_bytes` одновременно является
+  final context envelope; если он больше `max_context_bytes`, возвращается
+  `ASSISTANT_INVALID_REQUEST` без Stage 5 call;
+- при `stage5_context_mode="current_explicit_facts"`
+  `remaining_context_bytes = max_context_bytes - base_context_bytes`; если
+  `remaining_context_bytes <= 0`, возвращается `ASSISTANT_INVALID_REQUEST` до
+  Stage 5 call, без silent dropping explicit inputs;
+- при `stage5_context_mode="current_explicit_facts"` Stage 5 получает
+  `max_content_bytes = min(remaining_context_bytes,
   MAX_MAX_CONTENT_BYTES)`; он не может превысить ни оставшийся Assistant budget,
-  ни текущий Stage 5 cap `MAX_MAX_CONTENT_BYTES`;
-- если после current reread и typed classification не осталось ни одного
-  допустимого factual item, результатом является
+  ни текущий Stage 5 cap `MAX_MAX_CONTENT_BYTES`. Это upstream conservative cap,
+  но не доказательство final Assistant JSON budget;
+- после internal projection обязательно строится exact canonical
+  `AssistantReasoningEnvelopeV1` и проверяется
+  `canonical_context_bytes <= max_context_bytes`;
+- если complete eligible factual projection нельзя безопасно представить в
+  этом envelope, возвращается `ASSISTANT_CONTEXT_UNAVAILABLE`: нельзя молча
+  обрезать factual text или выбирать arbitrary subset;
+- если Stage 5/search/current-reread/allowlist pipeline успешно завершён,
+  integrity validation прошла, но eligible factual items ровно ноль,
+  результатом **всегда** является нормальный domain outcome
   `abstention/insufficient_current_context`, без heuristic body fallback.
 
-Combined explicit request text и assembled Stage 5 projection должны помещаться
-в `max_context_bytes`. Бюджет считается по UTF-8 text projection и separators,
-но не разрешает выводить raw body. При невозможности безопасно представить
-полный context возвращается bounded error или abstention; молча выбрасывать
-часть explicit constraint/goal нельзя.
+### 3.3. Canonical reasoning-visible envelope и budget
 
-### 3.3. Authority входов
+`AssistantReasoningEnvelopeV1` — единственный provider/reasoning-visible
+envelope и единственный источник расчёта `max_context_bytes`. Его логическая
+структура и порядок ключей фиксированы:
+
+```text
+{
+  "task": string,
+  "options": [
+    {"id": string, "label": string}
+  ],
+  "explicit_constraints": [string],
+  "explicit_goals": [string],
+  "explicit_context": [
+    {"kind": "fact" | "background", "text": string}
+  ],
+  "stage5_facts": [
+    {
+      "ordinal": int,
+      "role": "reported_fact",
+      "text": string
+    }
+  ]
+}
+```
+
+В envelope не входят orchestration-only controls и private metadata:
+`stage5_context_mode`, `stage5_query`, `max_context_bytes`,
+`max_result_bytes`, internal UUID, search rank, `evidence_kind`, `self_kind`,
+paths, raw front matter и raw body. `stage5_facts` содержит только bounded
+factual text из validated `AssistantStage5Fact`; `ordinal` — integer, начиная
+с 1, в текущем deterministic search order.
+
+Canonical encoding:
+
+1. JSON syntax согласно RFC 8259;
+2. UTF-8, без BOM и без trailing newline;
+3. strings уже прошли documented NFC validation;
+4. non-ASCII символы сериализуются непосредственно в UTF-8, не через
+   `\uXXXX`, если escaping не требуется JSON syntax;
+5. mandatory escaping — только JSON escaping для quotation mark, reverse
+   solidus и required control escapes;
+6. insignificant spaces и newlines отсутствуют;
+7. separators ровно `,` и `:`;
+8. object key order ровно такой, как в структуре выше;
+9. option key order ровно `id`, затем `label`;
+10. explicit-context key order ровно `kind`, затем `text`;
+11. Stage 5 fact key order ровно `ordinal`, затем `role`, затем `text`;
+12. arrays сохраняют caller order либо current deterministic search order;
+13. `context_bytes = len(canonical_json_utf8_bytes)`.
+
+`base_context_bytes` вычисляется canonical serialization с теми же validated
+`task`, `options`, `explicit_constraints`, `explicit_goals` и
+`explicit_context`, но с `"stage5_facts":[]`. При `none` это final envelope.
+При `current_explicit_facts` только эта величина вычитается из
+`max_context_bytes`; никаких query/mode/budget полей в расчёт не добавляется.
+После добавления полного Stage 5 projection Assistant повторно сериализует
+тот же canonical envelope и проверяет его полный byte length. Если complete
+eligible projection не помещается, это `ASSISTANT_CONTEXT_UNAVAILABLE`, а не
+silent truncation или выбор части фактов. Другого serializer или budget
+calculator для этого контракта нет.
+
+При успешно завершённых Stage 5/current-reread/allowlist шагах, когда eligible
+facts нет, применяется ровно domain outcome из §7.1; это не context error.
+
+### 3.4. Authority входов
 
 - `explicit_constraints` — ограничения текущей задачи. Сам факт передачи в
   request делает их explicit, но не исправляет противоречия между ними.
@@ -243,9 +316,11 @@ AssistantStage5Fact {
 2. успешного current canonical UUID reread;
 3. exact Personal Memory validation с сохранением validated
    `evidence_kind == explicit_user_fact` и `self_kind == memory`;
-4. построения bounded `factual_text` без front matter/path. Нельзя молча
-   обрезать body так, чтобы partial text выглядел complete; item превышающий
-   factual projection cap исключается.
+4. построения полного bounded `factual_text` без front matter/path. Нельзя
+   молча обрезать body так, чтобы partial text выглядел complete. Если complete
+   eligible projection не может быть построен или помещён в upstream/final
+   budget, это `ASSISTANT_CONTEXT_UNAVAILABLE`, а не исключение item или выбор
+   arbitrary subset.
 
 `canonical_note_id`, `evidence_at` и `stage5_search_rank` нужны только для
 internal integrity/provenance validation. Public Assistant result возвращает
@@ -267,13 +342,16 @@ front matter или raw body.
 | ordinary `SelfContextItem` без exact typed role | forbidden in `current_explicit_facts` | нет heuristic classification или hidden background retrieval |
 | `decision_rule`, `behavioral_pattern`, inferred habit/frequency/recency | forbidden | эти dimensions unavailable и не реконструируются |
 | `Simulate Me` prediction | forbidden | никогда не input для Assistant |
-| stale/missing UUID, snippet, path, cache, raw diagnostics | forbidden | safe error/abstention, не fallback |
+| stale/missing UUID, snippet, path, cache, raw diagnostics | forbidden | `ASSISTANT_CONTEXT_UNAVAILABLE`, не `insufficient_current_context` и не fallback |
 
 `current_explicit_facts` не превращает весь Stage 5 result в prompt. Будущая
 composition обязана отфильтровать ровно `explicit_user_fact + memory`, создать
 `AssistantStage5Fact` и передать только его с role `reported_fact`. Если такой
-typed projection отсутствует, Assistant должен abstain или вернуть
-`ASSISTANT_CONTEXT_UNAVAILABLE`, а не классифицировать body эвристикой.
+typed projection отсутствует или pipeline не может доказать/построить полный
+projection, возвращается `ASSISTANT_CONTEXT_UNAVAILABLE`. Если pipeline
+успешен, integrity validation прошла, но после exact allowlist не осталось
+facts, возвращается ровно `abstention/insufficient_current_context`; это
+разные outcomes и они не взаимозаменяемы.
 
 ### 4.3. Как Self Model не становится authority
 
@@ -324,10 +402,11 @@ label и не делает hidden score table. При непреодолимой
 
 1. Validate exact `AssistantRequest`; invalid request не вызывает Stage 5,
    provider, network, log с context или write path.
-2. Сформировать labelled input envelope: `TASK`, `OPTIONS`, `EXPLICIT
-   CONSTRAINTS`, `EXPLICIT OBJECTIVES`, `EXPLICIT CONTEXT` и, только при
-   `stage5_context_mode="current_explicit_facts"`, `STAGE5 CURRENT FACTS`
-   from `AssistantStage5Fact`.
+2. Сформировать единственный canonical `AssistantReasoningEnvelopeV1` из
+   `TASK`, `OPTIONS`, `EXPLICIT CONSTRAINTS`, `EXPLICIT OBJECTIVES`, `EXPLICIT
+   CONTEXT` и, только при `stage5_context_mode="current_explicit_facts"`,
+   `STAGE5 CURRENT FACTS` from `AssistantStage5Fact`; его exact JSON bytes —
+   единственный input для context budget и reasoning boundary.
 3. Отдельно проверить current Stage 5 identity/role. Нельзя заменить current
    reread индексом, snippet, прошлым result или claim text.
 4. Исключить все `Simulate Me` values и недоступные Self Model dimensions.
@@ -352,10 +431,17 @@ Assistant обязан abstain, если:
   incomparable без дополнительной цели;
 - результат потребовал бы hidden preference, behavior inference, prediction,
   invented fact или claim о universal optimality;
-- для разрешённого `stage5_context_mode` current context отсутствует,
-  malformed или не проходит integrity validation;
+- при успешно завершённых Stage 5/current-reread/allowlist шагах не осталось ни
+  одного eligible factual item — вернуть ровно
+  `abstention/insufficient_current_context`;
 - запрос просит medical/legal/financial certainty, diagnosis или иной вывод,
   который нельзя дать в bounded ordinary-assistant safety boundary.
+
+Failure получить или доказать requested current context (Search/Self Retrieval,
+current UUID reread, integrity/classification или complete bounded projection)
+не является abstention: он возвращается как
+`ASSISTANT_CONTEXT_UNAVAILABLE`. В частности, zero search candidates после
+успешного bounded pipeline — это `insufficient_current_context`, а не error.
 
 Uncertainty/caveats описывают известные ограничения, но не заменяют
 abstention. Numeric confidence, probability и automatic calibration запрещены.
@@ -425,8 +511,31 @@ Exact invariants:
 - `constraints_used` и `objectives_used` не могут ссылаться на Stage 5,
   Self Model или Simulate Me; contextual evidence не повышается в objective
   через result serialization.
+- `evidence_refs` проходят application-owned source/role validation по §6.2 до
+  того, как result считается valid; provider/reasoner не может изменить эту
+  связь.
 - DTO не имеет полей `prediction`, `confidence`, `score`, `probability`,
   `best`, `optimal`, `canonical`, `provider`, `model` или `write_receipt`.
+
+### 6.2. Exact evidence source/role binding
+
+В Assistant v1 `AssistantEvidenceRef.role` — closed enum только из
+`reported_fact` и `background`, но допустимость определяется не одной role, а
+парой `source` + referenced item:
+
+| `source` | Что именно referenced | Обязательная `role` | Любая другая role |
+| --- | --- | --- | --- |
+| `explicit_context` | request entry с `kind="fact"` | `reported_fact` | `ASSISTANT_RESULT_INVALID` |
+| `explicit_context` | request entry с `kind="background"` | `background` | `ASSISTANT_RESULT_INVALID` |
+| `stage5_current_context` | current typed `AssistantStage5Fact` | `reported_fact` | `ASSISTANT_RESULT_INVALID` |
+
+`ordinal` обязан ссылаться на существующий request-local либо current-result-local
+item соответствующего source. Provider/AdvisorPort не может повысить
+`background` до `reported_fact`, понизить typed Stage 5 fact в `background` или
+переименовать его в personal/history role. Значения
+`contextual_preference`, `contextual_belief` и `historical_context` не являются
+valid v1 enum values; их возможное будущее использование — отдельная named
+capability и отдельный `DEFER`.
 
 ## 7. Abstention и safe error taxonomy
 
@@ -441,6 +550,23 @@ AssistantAbstentionCode:
   unsupported_task
   insufficient_current_context
 ```
+
+Если `stage5_context_mode="current_explicit_facts"` и Stage 5/search/current
+reread/allowlist pipeline успешно завершён, integrity validation прошла, но
+eligible factual items ровно ноль (в том числе при zero search candidates),
+результат всегда является нормальным domain outcome:
+
+```text
+AssistantResult {
+  kind = "abstention"
+  recommendation = null
+  selected_option = null
+  abstention_code = "insufficient_current_context"
+}
+```
+
+Это не application error. Остальные поля результата обязаны соответствовать
+общему Result DTO; raw context и fabricated recommendation не добавляются.
 
 Это результат, а не exception: он не содержит raw error, path, provider,
 private body или fabricated recommendation.
@@ -466,7 +592,7 @@ AssistantErrorCode:
 | Code | Safe meaning |
 | --- | --- |
 | `ASSISTANT_INVALID_REQUEST` | request не прошёл exact type/text/bounds validation |
-| `ASSISTANT_CONTEXT_UNAVAILABLE` | requested current context отсутствует или не доказал integrity/role |
+| `ASSISTANT_CONTEXT_UNAVAILABLE` | requested current context нельзя получить, доказать или полностью представить; zero eligible facts после успешного pipeline сюда не относится |
 | `ASSISTANT_CANCELLED` | operation отменена до безопасного завершения |
 | `ASSISTANT_TIMEOUT` | bounded approved reasoning operation превысила deadline |
 | `ASSISTANT_PROVIDER_UNAVAILABLE` | approved reasoning boundary недоступна |
@@ -562,6 +688,13 @@ NoteDraft` operation; Assistant Result имеет другую семантик�
 independent recommendation, evidence refs, abstention и privacy labeling.
 Stage 5/4 дают read-only context, но не reasoning provider.
 
+Будущая отдельная `AdvisorPort` boundary принимает только validated
+`AssistantReasoningEnvelopeV1` и возвращает exact `AssistantResult`. Application
+validator владеет canonical serialization, source/role binding и abstention/error
+mapping до и после provider call; provider/reasoner не может менять evidence
+roles, добавлять personal metadata или превращать `ASSISTANT_CONTEXT_UNAVAILABLE`
+в `insufficient_current_context` либо обратно.
+
 | Вариант | Плюсы | Минусы / complexity / coupling | Privacy impact | Рекомендация |
 | --- | --- | --- | --- | --- |
 | **A. Новый provider-neutral `AdvisorPort` / equivalent** с отдельными typed `AdvisorRequest` и `AssistantResult` | Interface segregation; NoteDraft остаётся backwards-safe; отдельная cancellation/error/privacy boundary; existing configured adapter потенциально может реализовать его позже | отдельный port, validator, adapter capability и deterministic no-network tests; средняя/высокая implementation complexity; появляется новая reasoning surface | явная новая передача personal context через approved boundary; можно независимо запретить raw context, retention, fallback и network до approval | **ACCEPT — owner выбрал A** |
@@ -595,8 +728,34 @@ scope, если owner когда-либо выберет этот fallback:
   `min(remaining_context_bytes, MAX_MAX_CONTENT_BYTES)`;
 - `current_explicit_facts` accepts only internal `AssistantStage5Fact` with
   `evidence_kind=explicit_user_fact` and `self_kind=memory`; stale snippets,
-  missing UUIDs, malformed roles, path leaks, unvalidated bodies and empty
-  factual projections fail closed without heuristic fallback.
+  missing UUIDs, malformed roles, path leaks, unvalidated bodies and incomplete
+  factual projections return `ASSISTANT_CONTEXT_UNAVAILABLE` without heuristic
+  fallback;
+- after successful retrieval/reread/allowlist validation, zero candidates or
+  zero eligible facts always produce the exact abstention
+  `kind=abstention`, `recommendation=null`, `selected_option=null`,
+  `abstention_code=insufficient_current_context`;
+- explicit/base envelope overflow returns `ASSISTANT_INVALID_REQUEST` before
+  Stage 5/provider call; a complete eligible projection that cannot fit returns
+  `ASSISTANT_CONTEXT_UNAVAILABLE`, never a silent partial context or arbitrary
+  subset.
+
+### Canonical envelope and exact role tests
+
+- canonical byte tests cover Cyrillic/non-ASCII, quotation marks, backslashes,
+  required control escapes, empty arrays, one/multiple options,
+  one/multiple explicit context entries and one/multiple Stage 5 facts;
+- exact boundary `canonical_context_bytes == max_context_bytes` is accepted
+  when the applicable mode permits it, while `+1` byte overflow is rejected;
+- repeated serialization is stable regardless of incidental Python dict order;
+  `ensure_ascii=True`, pretty JSON, extra spaces, newlines, BOM and alternate
+  serializers are invalid;
+- explicit fact + `reported_fact` is valid, explicit fact + `background` is
+  invalid; explicit background + `background` is valid, explicit background +
+  `reported_fact` is invalid;
+- Stage 5 typed fact + `reported_fact` is valid, Stage 5 typed fact +
+  `background` is invalid; `contextual_preference`, `contextual_belief` and
+  `historical_context` are invalid v1 roles.
 
 ### Independence and Self Model safety
 
@@ -618,8 +777,13 @@ scope, если owner когда-либо выберет этот fallback:
 - rationale/uncertainty/result caps fail closed without partial raw context;
 - all abstention/error codes are closed, typed and free of query/body/path/
   provider details;
-- high-stakes, conflicting constraints, unsupported task and insufficient
-  context produce the documented abstentions;
+- high-stakes, conflicting constraints, unsupported task and zero eligible
+  current facts produce the documented abstentions;
+- retrieval, current-reread, integrity, classification or complete-projection
+  failures produce `ASSISTANT_CONTEXT_UNAVAILABLE`, not the empty-facts
+  abstention;
+- `AssistantEvidenceRef` source/role pairs are revalidated exactly as in §6.2;
+  the provider cannot promote background or rename a typed Stage 5 fact;
 - no vault, Safe Write, Self Model mutation, persistence, network, cache,
   embeddings, RAG or logging side effect.
 
@@ -693,7 +857,11 @@ the Simulate Me input.
 | Explicit constraints/goals/context and request-local authority rules | **ACCEPT** |
 | Stage 5 current UUID context with exact typed `explicit_user_fact` + `memory` projection | **ACCEPT as design boundary** |
 | Deterministic `stage5_query` / limit / remaining-budget mapping | **ACCEPT as design boundary** |
+| Empty eligible Stage 5 facts vs context retrieval/projection failure outcomes | **ACCEPT as exact split** |
+| Canonical `AssistantReasoningEnvelopeV1` JSON and sole context budget calculator | **ACCEPT as exact design boundary** |
 | Internal `AssistantStage5Fact` over current reread + Personal Memory validation | **ACCEPT as future core dependency** |
+| Exact `AssistantEvidenceRef` source/role binding | **ACCEPT as exact result invariant** |
+| `contextual_preference` / `contextual_belief` / `historical_context` evidence roles | **DEFER / invalid in v1** |
 | Self Model preference/belief/goal treatment without normative leakage | **ACCEPT** |
 | Closed recommendation/analysis/abstention Result DTO and safe taxonomy | **ACCEPT as design** |
 | Independent output label and no Simulate Me input | **ACCEPT** |
