@@ -341,9 +341,7 @@ Assistant обязан abstain, если:
 - options невозможно безопасно сопоставить с вопросом или они genuinely
   incomparable без дополнительной цели;
 - результат потребовал бы hidden preference, behavior inference, prediction,
-  invented fact или claim о universal optimality;
-- запрос просит medical/legal/financial certainty, diagnosis или иной вывод,
-  который нельзя дать в bounded ordinary-assistant safety boundary.
+  invented fact или claim о universal optimality.
 
 `insufficient_current_context` из прежнего private-context draft не является
 accepted Assistant v1 abstention code: current v1 не запрашивает automatic
@@ -510,7 +508,7 @@ model replacement или hidden provider fallback.
 
 ### 7.1. Domain abstention
 
-Accepted v1 использует только пять codes из §6.2. Abstention — обычный domain
+Accepted v1 использует только четыре codes из §6.2. Abstention — обычный domain
 result, а не exception; raw provider, request или caller context в него не
 добавляются. `insufficient_current_context` намеренно отсутствует: отсутствие
 automatic Stage 5 read не является ошибкой и не создаёт empty-context branch.
