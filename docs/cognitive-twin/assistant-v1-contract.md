@@ -538,29 +538,46 @@ label и не делает hidden score table. При непреодолимой
 
 Будущая application orchestration должна выполнять следующие явные шаги:
 
-1. Validate exact `AssistantRequest`; invalid request не вызывает Stage 5,
-   provider, network, log с context или write path.
-2. Сформировать единственный canonical `AssistantReasoningEnvelopeV1` из
-   `TASK`, `OPTIONS`, `EXPLICIT CONSTRAINTS`, `EXPLICIT OBJECTIVES`, `EXPLICIT
-   CONTEXT` и, только при `stage5_context_mode="current_explicit_facts"`,
-   `STAGE5 CURRENT FACTS` from `AssistantStage5Fact`; его exact JSON bytes —
-   единственный input для context budget и reasoning boundary.
-3. После успешной валидации формы Stage 5 result выполнить completeness gate:
-   `truncated` обязан быть `false`, и ни одна exclusion не может иметь
-   `reason="context_budget_exceeded"`; иначе вернуть
-   `ASSISTANT_CONTEXT_UNAVAILABLE` до factual allowlist и zero-context
-   decision. Этот bounded check относится к окну `DEFAULT_SELF_CONTEXT_LIMIT`,
-   а не к exhaustive vault search.
-4. Отдельно проверить current Stage 5 identity/role для полного возвращённого
-   candidate window. Нельзя заменить current reread индексом, snippet,
-   прошлым result или claim text.
-5. Исключить все `Simulate Me` values и недоступные Self Model dimensions.
-6. Выполнить только approved option A — отдельную typed provider-neutral
+1. Validate exact `AssistantRequest`, включая все request bounds и
+   `max_result_bytes >= MIN_MAX_RESULT_BYTES_V1`; одновременно рассчитать
+   `base_context_bytes` для envelope с `stage5_facts=[]`. Любая ошибка не
+   вызывает Stage 5, provider, network, log с context или write path.
+2. Если `stage5_context_mode="none"`, зафиксировать отсутствие Stage 5 read и
+   перейти к построению финального envelope после шага 5. Если mode=
+   `current_explicit_facts`, вызвать только fact-only Stage 5 source с
+   metadata-filtered corpus, literal query, `DEFAULT_SELF_CONTEXT_LIMIT` и
+   remaining content budget. На этом шаге финальный Assistant envelope ещё не
+   строится.
+3. Только для `current_explicit_facts`, после успешной валидации формы Stage 5
+   result выполнить completeness gate: `truncated` обязан быть `false`, и ни
+   одна exclusion не может иметь `reason="context_budget_exceeded"`; иначе
+   вернуть `ASSISTANT_CONTEXT_UNAVAILABLE` до factual allowlist и zero-context
+   decision. Этот bounded check относится к окну
+   `DEFAULT_SELF_CONTEXT_LIMIT`, а не к exhaustive vault search.
+4. Только для `current_explicit_facts`, для каждого candidate в полном returned
+   window проверить current UUID reread, identity и exact role/metadata.
+   `candidate_not_found` допускается только как existing valid exclusion; нельзя
+   заменить current reread индексом, snippet, прошлым result или claim text.
+5. Только для `current_explicit_facts`, после этих проверок построить полный
+   internal `AssistantStage5Fact` из exact allowlist `explicit_user_fact +
+   memory`, исключить все `Simulate Me` values и недоступные Self Model
+   dimensions, не читать широкий Self Model и не делать heuristic
+   classification.
+6. Для `current_explicit_facts`, если complete pipeline оставил zero usable
+   eligible facts, вернуть canonical abstention
+   `insufficient_current_context` без Advisor call. Иначе (а для mode=`none`
+   сразу после доказанного отсутствия Stage 5 read) сформировать единственный
+   полный canonical `AssistantReasoningEnvelopeV1` из validated request inputs
+   и validated `AssistantStage5Fact` items. Если полный envelope не помещается
+   в `max_context_bytes`, вернуть `ASSISTANT_CONTEXT_UNAVAILABLE` без partial
+   projection; только его exact JSON bytes являются input для context
+   budget/reasoning boundary.
+7. Выполнить только approved option A — отдельную typed provider-neutral
    `AdvisorPort` / equivalent boundary. Deterministic C-вариант не входит в
    текущий Assistant v1 execution path; если owner когда-либо выберет его
    отдельно, это потребует новой named capability, отдельного решения и
    отдельного контракта. Результат проходит exact Result DTO validation.
-7. При отсутствии safe basis, конфликте hard constraints, high-stakes
+8. При отсутствии safe basis, конфликте hard constraints, high-stakes
    certainty или ambiguous options вернуть abstention, а не убедительный
    guess.
 
@@ -990,22 +1007,43 @@ view создаётся только на время проверки одног
 создаёт unbounded state.
 
 Primary aggregate и boundary view используют actual DTO order. Дополнительно
-guard выполняет bounded order-invariant reconstruction check, чтобы privacy
-гарантия не зависела от provider-controlled перестановки generated fields:
-для каждого protected fact он ищет, существует ли contiguous sequence из
-одного или нескольких distinct `generated_parts` в **любом** порядке, чья
-empty-separator либо one-ASCII-space concatenation после `echo_compare` равна
-protected или содержит exact contiguous common substring длиной не менее 32
-UTF-8 bytes. Это supplemental validation-only check: он не меняет normative
-DTO order и не сортирует/переставляет result fields.
+guard выполняет bounded order-invariant **coverage-check**, чтобы privacy
+гарантия не зависела от provider-controlled перестановки generated fields.
+Проверка не перебирает порядок частей: после одного `echo_compare` она ищет
+все exact occurrences каждого непустого `generated_part` внутри
+`protected`, представляет их disposable intervals по индексам protected
+code points и строит union покрытых позиций. Overlap считается один раз.
+Поэтому provider-controlled order вообще не участвует в сравнении: части
+сопоставляются с естественным порядком protected text, а не с порядком полей
+в DTO. Это supplemental validation-only check: он не меняет normative DTO
+order и не сортирует/переставляет result fields.
 
-Matcher не перебирает unbounded text или состояние: schema ограничивает число
-generated parts максимумом 17 (`recommendation` плюс 8 `rationale` и 8
-`uncertainty`), protected `factual_text` — 1024 UTF-8 bytes, а candidate result
-— текущим `max_result_bytes`. Реализация может использовать bounded
-bitmask/backtracking и early exit, не сохраняя permutations или matched text
-между проверками; при любом match применяется тот же whole-result
-`ASSISTANT_RESULT_INVALID`.
+Coverage разбивается на runs. Uncovered code point между двумя покрытыми
+позициями может продолжить тот же run только если это Unicode `White_Space`
+либо code point из Unicode General Category `P*`; любой другой uncovered
+code point разрывает run. Для каждого run суммируются UTF-8 bytes уникальных
+покрытых позиций; если сумма достигает 32 bytes, result отклоняется. Таким
+образом supplemental check ловит и full/substantial fact, split на части в
+любом provider order, и два 31-byte spans по разные стороны punctuation или
+whitespace. Punctuation не становится separator в обязательном
+`generated_aggregate_raw`, а буквы, цифры и прочие symbols не могут быть
+пропущенным gap. Overlapping occurrences, совпадающие с одной и той же
+protected позицией, не искусственно увеличивают coverage.
+
+Алгоритм — один bounded exact-search pass по каждой части (например,
+KMP/эквивалент), bounded interval-difference update и один left-to-right
+coverage scan; permutation enumeration, bitmask, recursion и backtracking
+запрещены. Для одного protected fact действует
+`ASSISTANT_ECHO_WORK_LIMIT_V1 = 1_000_000`: work unit — exact code-point
+comparison, emitted interval, interval update или scan transition; операция
+с номером выше лимита не выполняется. При максимуме 17 generated parts
+(`recommendation` плюс 8 `rationale` и 8 `uncertainty`) и protected
+`factual_text` максимум 1024 UTF-8 bytes interval records ограничены
+`17 * 1024 = 17,408`, а coverage state — 1024 positions; candidate result
+ограничен текущим `max_result_bytes`. При исчерпании work/state limit,
+allocation failure или любом matcher error guard fail closed: весь result
+получает `ASSISTANT_RESULT_INVALID`, без matched/offending text, retry,
+fallback или partial result.
 
 `selected_option.id`, `selected_option.label`, `evidence_refs` и input refs не
 входят в `generated_parts`: option text принадлежит caller, а refs не являются
@@ -1125,6 +1163,9 @@ scope, если owner когда-либо выберет этот fallback:
   `stage5_query`, passes the current literal query unchanged, uses exactly
   `DEFAULT_SELF_CONTEXT_LIMIT`, and derives the remaining content cap with
   `min(remaining_context_bytes, MAX_MAX_CONTENT_BYTES)`;
+- orchestration tests prove that no final full Assistant envelope or Advisor
+  call is possible before Stage 5 retrieval, completeness, current identity/
+  role validation and exact factual projection have all succeeded;
 - `max_result_bytes=MIN_MAX_RESULT_BYTES_V1-1` is rejected as
   `ASSISTANT_INVALID_REQUEST`, `max_result_bytes=MIN_MAX_RESULT_BYTES_V1` is
   accepted, every current minimal abstention fits at that bound, and a valid
@@ -1183,11 +1224,15 @@ scope, если owner когда-либо выберет этот fallback:
   substantial Cyrillic span of the same size;
 - the aggregate rejects a full fact split across four sub-32-byte `rationale`
   items, across `recommendation` plus `rationale`, and across `rationale` plus
-  `uncertainty`; it catches split text across whitespace boundaries after
-  `echo_compare`, including the validation-only one-space boundary view;
-- the bounded order-invariant matcher rejects the same full/substantial fact
-  when generated parts arrive in a different provider-controlled order, while
-  unrelated permutations remain valid;
+  `uncertainty`; it catches split text across whitespace and punctuation
+  boundaries after `echo_compare`, including the validation-only one-space
+  boundary view and two 31-byte spans separated by punctuation;
+- the bounded order-invariant coverage matcher rejects the same
+  full/substantial fact when generated parts arrive in a different
+  provider-controlled order, while unrelated generated text with no such exact
+  coverage remains valid;
+  it uses no permutation enumeration, and a synthetic work/state-limit
+  exhaustion returns whole-result `ASSISTANT_RESULT_INVALID`;
 - per-field spans of at least 32 bytes remain invalid; unrelated generated
   fields whose empty-separator concatenation does not match the fact remain
   valid; caller-owned `selected_option.id`/`label` text is excluded from the
@@ -1329,6 +1374,7 @@ the Simulate Me input.
 | Deterministic `stage5_query` / limit / remaining-budget mapping | **ACCEPT as design boundary** |
 | Empty eligible Stage 5 facts vs context retrieval/projection failure outcomes | **ACCEPT as exact split** |
 | Stage 5 `truncated` / `context_budget_exceeded` completeness gate before factual allowlist | **ACCEPT as exact design boundary** |
+| Retrieval/completeness/identity/role/projection gates before final Assistant envelope and Advisor call | **ACCEPT as exact orchestration order** |
 | Canonical `AssistantReasoningEnvelopeV1` JSON and sole context budget calculator | **ACCEPT as exact design boundary** |
 | Shared `AssistantCanonicalJsonEncoderV1` exact control escapes for context and result | **ACCEPT as exact design boundary** |
 | Exact body-only `factual_text` projection and reasoning-visible Stage 5 item shape | **ACCEPT as exact design boundary** |
@@ -1339,7 +1385,7 @@ the Simulate Me input.
 | Closed recommendation/analysis/abstention Result DTO and safe taxonomy | **ACCEPT as design** |
 | Canonical `AssistantResultEnvelopeV1`, exact key order, minimum 304-byte bound and result byte budget | **ACCEPT as exact design boundary** |
 | Result validation order, including source/role checks and `AssistantPrivateEchoGuardV1` | **ACCEPT as exact design boundary** |
-| `AssistantPrivateEchoGuardV1` per-field plus no-separator aggregate and bounded boundary-view complete/substantial verbatim comparison | **ACCEPT as bounded guard; not semantic DLP** |
+| `AssistantPrivateEchoGuardV1` per-field plus no-separator aggregate, boundary view and capped order-independent coverage comparison | **ACCEPT as bounded guard; not semantic DLP** |
 | Independent output label and no Simulate Me input | **ACCEPT** |
 | Bounded privacy, no-write, no-persistence and no-hidden-network boundary | **ACCEPT** |
 | Testing strategy and future dependency gate | **ACCEPT** |
