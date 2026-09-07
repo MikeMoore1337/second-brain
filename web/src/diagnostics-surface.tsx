@@ -16,7 +16,7 @@ const STATUS_COPY: Readonly<Record<DiagnosticsStatus, {
 }>> = {
   healthy: {
     label: "Стабильно",
-    description: "Обязательные локальные слои отвечают без диагностических сигналов.",
+    description: "Обязательные локальные слои отвечают без ошибок и предупреждений.",
     icon: "success",
   },
   degraded: {

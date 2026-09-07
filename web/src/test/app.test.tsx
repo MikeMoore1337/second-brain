@@ -114,6 +114,7 @@ describe("React Web parity shell", () => {
     await act(async () => button?.click());
 
     expect(load).toHaveBeenCalledOnce();
+    expect(host.textContent).toContain("без ошибок и предупреждений");
     expect(host.textContent).toContain("Информация");
     expect(host.textContent).toContain("SCAN_NOTE");
     expect(host.querySelector(".diagnostics-severity-info")).not.toBeNull();
