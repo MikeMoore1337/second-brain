@@ -1,7 +1,11 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactElement } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactElement, type ReactNode } from "react";
 
 import { retrieveNote, searchNotes } from "./api";
-import { displayValue, SectionHeading } from "./parity";
+import { presentValue } from "./presentation";
+
+function displayValue(value: unknown, fallback = "—"): string {
+  return presentValue(value, fallback);
+}
 
 function responseError(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
@@ -14,6 +18,10 @@ function Field({ label, value }: { label: string; value: unknown }): ReactElemen
       <dd className="draft-field-value">{displayValue(value)}</dd>
     </div>
   );
+}
+
+function SectionHeading({ eyebrow, title, children, id }: { eyebrow: string; title: string; children?: ReactNode; id: string }): ReactElement {
+  return <div className="section-heading"><div><p className="eyebrow">{eyebrow}</p><h2 id={id}>{title}</h2></div>{children ? <p className="timeline-lede">{children}</p> : null}</div>;
 }
 
 export function SearchSurface(): ReactElement {
