@@ -39,7 +39,7 @@
 
 :root {
   color-scheme: dark;
-  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--sb-font-sans);
   background: #07070a;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -306,5 +306,15 @@ input:focus-visible {
   .hero::before,
   .hero::after {
     opacity: 0.2;
+  }
+}
+
+/* Reduced motion keeps short state feedback while removing movement above. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 160ms !important;
+    transition-duration: 160ms !important;
   }
 }

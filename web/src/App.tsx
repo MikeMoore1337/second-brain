@@ -26,7 +26,12 @@ const navigation = [
 export function App(): ReactElement {
   return (
     <MotionConfig reducedMotion="user">
-      <a className="skip-link" href="#main-content">К содержанию</a>
+      <a className="skip-link" href="#main-content" onClick={(event) => {
+        event.preventDefault();
+        const target = document.getElementById("main-content");
+        target?.focus();
+        target?.scrollIntoView?.({ block: "start" });
+      }}>К содержанию</a>
       <div className="page-shell" data-shell>
         <header className="topbar">
           <a className="brand" href="#main-content" aria-label="Second Brain — начало">
@@ -41,7 +46,7 @@ export function App(): ReactElement {
             <span className="status-pill"><span aria-hidden="true" /> Локальная основа</span>
           </aside>
           <div className="workspace-content">
-            <main id="main-content">
+            <main id="main-content" tabIndex={-1}>
               <section className="hero" aria-labelledby="hero-title">
                 <div className="hero-copy"><p className="eyebrow">Память <span aria-hidden="true">+</span> развитие</p><h1 id="hero-title">Сохраняй идеи.<br /><em>Развивай<br className="hero-mobile-break" /> понимание.</em></h1><p className="hero-lede">Локальная точка входа в личную систему знаний — спокойное место, где память становится опорой для роста.</p></div>
                 <div className="hero-orbit" aria-hidden="true"><div className="orbit orbit-outer" /><div className="orbit orbit-inner" /><div className="orbit-core"><span>SB</span></div><span className="orbit-label orbit-label-top">помни</span><span className="orbit-label orbit-label-bottom">развивай</span></div>

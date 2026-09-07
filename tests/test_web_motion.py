@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 STATIC_DIR = Path(__file__).parents[1] / "src" / "second_brain" / "entrypoints" / "web" / "static"
+REACT_STYLES = Path(__file__).parents[1] / "web" / "src" / "styles.css"
 
 
 def _read(name: str) -> str:
@@ -115,3 +116,12 @@ def test_motion_consumers_match_existing_dynamic_dom_contracts() -> None:
         assert selector in html
 
     assert "retrievedNote.hidden = false" in _read("app.js")
+
+
+def test_react_motion_keeps_font_tokens_and_short_reduced_motion_feedback() -> None:
+    """The production React layer must honor the shared type and motion contracts."""
+
+    css = REACT_STYLES.read_text(encoding="utf-8")
+    assert "font-family: var(--sb-font-sans);" in css
+    assert "animation-duration: 160ms !important;" in css
+    assert "transition-duration: 160ms !important;" in css
