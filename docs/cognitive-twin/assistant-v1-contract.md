@@ -523,8 +523,11 @@ label и не делает hidden score table. При непреодолимой
    candidate window. Нельзя заменить current reread индексом, snippet,
    прошлым result или claim text.
 5. Исключить все `Simulate Me` values и недоступные Self Model dimensions.
-6. Выполнить approved reasoning operation или deterministic C-вариант из
-   decision memo. Результат проходит exact Result DTO validation.
+6. Выполнить только approved option A — отдельную typed provider-neutral
+   `AdvisorPort` / equivalent boundary. Deterministic C-вариант не входит в
+   текущий Assistant v1 execution path; если owner когда-либо выберет его
+   отдельно, это потребует новой named capability, отдельного решения и
+   отдельного контракта. Результат проходит exact Result DTO validation.
 7. При отсутствии safe basis, конфликте hard constraints, high-stakes
    certainty или ambiguous options вернуть abstention, а не убедительный
    guess.
@@ -935,6 +938,25 @@ contiguous common substring длиной не менее 32 UTF-8 bytes посл
 `echo_compare`. Поэтому private fact, разбитый между `recommendation`,
 `rationale` и/или `uncertainty`, не может обойти порог отдельных полей.
 
+Empty-separator `generated_aggregate` выше остаётся обязательной primary
+проверкой и не заменяется. Дополнительно для boundary case, когда внешний
+рендер результата сам показывает whitespace между двумя полями, строится
+отдельная validation-only view:
+
+```text
+generated_boundary_raw = concatenate(generated_parts, separator=" ")
+generated_boundary = echo_compare(generated_boundary_raw)
+```
+
+Один ASCII SPACE в этой второй view моделирует только field-boundary delimiter;
+он не вставляется в `generated_aggregate_raw`, canonical result или
+reasoning-visible envelope. К `generated_boundary` применяются те же full-
+equality и exact contiguous common-substring `>=32` bytes rules. Поэтому fact,
+разделённый на два 31-byte spans с boundary whitespace, также отклоняется, но
+primary aggregate сохраняет требуемую exact empty-separator semantics. Эта
+view создаётся только на время проверки одного bounded result candidate и не
+создаёт unbounded state.
+
 `selected_option.id`, `selected_option.label`, `evidence_refs` и input refs не
 входят в `generated_parts`: option text принадлежит caller, а refs не являются
 generated prose. Aggregate — ephemeral derived view одного уже bounded
@@ -1026,9 +1048,11 @@ personal metadata, bypass-ить echo guard или превращать
 | **B. Второй operation в существующем `LlmPort`** (`advise(...)`) при сохранении `draft_note` | можно повторно использовать часть transport/config; меньше номинальных port types | port начинает объединять note drafting и advice; выше coupling adapters/callers/error semantics; backwards-safe только при явном capability segregation и отдельной typed operation; provider implementation всё равно нужна | те же новые privacy risks, но они легче скрываются внутри уже существующего LLM boundary | **DEFER / not selected for v1** |
 | **C. Assistant без LLM/provider** | no network, no credentials, минимальный privacy risk; низкая complexity; полностью deterministic | полезен только как узкий constraint satisfiability/explicit trade-off analysis; не может честно обещать общий ответ «что объективно разумнее»; больше abstentions и no recommendation | минимальный: только request и approved in-memory context | **DEFER / fallback only if separately selected** |
 
-Таким образом, A принят как capability boundary, B отклонён для v1, C остаётся
-только возможным deterministic fallback. Existing `LlmPort`, provider
-implementation, config, dependencies и privacy surface в #162 не меняются.
+Таким образом, A принят как capability boundary, B отклонён для v1, а C
+остаётся deferred и не входит в текущий Assistant execution path. Его возможное
+будущее использование потребует отдельного owner decision, named capability и
+контракта. Existing `LlmPort`, provider implementation, config, dependencies и
+privacy surface в #162 не меняются.
 
 ## 10. Testing strategy
 
@@ -1104,7 +1128,7 @@ scope, если owner когда-либо выберет этот fallback:
 - the aggregate rejects a full fact split across four sub-32-byte `rationale`
   items, across `recommendation` plus `rationale`, and across `rationale` plus
   `uncertainty`; it catches split text across whitespace boundaries after
-  `echo_compare`;
+  `echo_compare`, including the validation-only one-space boundary view;
 - per-field spans of at least 32 bytes remain invalid; unrelated generated
   fields whose empty-separator concatenation does not match the fact remain
   valid; caller-owned `selected_option.id`/`label` text is excluded from the
@@ -1253,7 +1277,7 @@ the Simulate Me input.
 | Closed recommendation/analysis/abstention Result DTO and safe taxonomy | **ACCEPT as design** |
 | Canonical `AssistantResultEnvelopeV1`, exact key order, minimum 304-byte bound and result byte budget | **ACCEPT as exact design boundary** |
 | Result validation order, including source/role checks and `AssistantPrivateEchoGuardV1` | **ACCEPT as exact design boundary** |
-| `AssistantPrivateEchoGuardV1` per-field plus no-separator aggregate complete/substantial verbatim comparison | **ACCEPT as bounded guard; not semantic DLP** |
+| `AssistantPrivateEchoGuardV1` per-field plus no-separator aggregate and bounded boundary-view complete/substantial verbatim comparison | **ACCEPT as bounded guard; not semantic DLP** |
 | Independent output label and no Simulate Me input | **ACCEPT** |
 | Bounded privacy, no-write, no-persistence and no-hidden-network boundary | **ACCEPT** |
 | Testing strategy and future dependency gate | **ACCEPT** |
