@@ -300,9 +300,16 @@ objective. Compare runtime в #162 не создаётся.
 4. Провести application-owned exact Result DTO validation, canonical
    serialization и result-byte check. Provider не может добавить private
    context, prediction fields, hidden score, raw metadata или write receipt.
-5. При отсутствии safe basis, конфликте hard constraints, high-stakes
-   certainty или genuinely incomparable options вернуть typed abstention, а не
-   убедительный guess.
+5. При отсутствии safe basis, конфликте hard constraints или genuinely
+   incomparable options вернуть typed abstention, а не убедительный guess.
+
+High-stakes safety не является application-enforced guarantee accepted v1.
+Точный v1 `AssistantRequest` не содержит safety classification, а этот design
+slice не определяет deterministic pre/post-Advisor classifier. Поэтому v1 не
+представляется как подходящий boundary для medical/legal/financial certainty,
+diagnosis или эквивалентных safety-sensitive задач. `unsafe_high_stakes` не
+входит в accepted v1 abstention enum; deterministic safety rule и её tests
+требуют отдельной versioned capability, owner decision и safety/privacy gate.
 
 Deterministic C-вариант не входит в текущий Assistant v1 execution path; его
 возможное будущее использование требует нового named capability, owner
@@ -353,7 +360,7 @@ AssistantInputRef {
 
 AssistantEvidenceRef {
   source: "explicit_context"
-  ordinal: int              # request-local ordinal
+  ordinal: int              # 1-based ordinal inside explicit_context
   role: "reported_fact" | "background"
 }
 
@@ -414,7 +421,6 @@ AssistantAbstentionCode:
   insufficient_basis
   conflicting_explicit_constraints
   ambiguous_or_incomparable_options
-  unsafe_high_stakes
   unsupported_task
 ```
 
@@ -448,7 +454,6 @@ values обязательны:
 | `insufficient_basis` | 289 |
 | `conflicting_explicit_constraints` | 303 |
 | `ambiguous_or_incomparable_options` | **304** |
-| `unsafe_high_stakes` | 289 |
 | `unsupported_task` | 287 |
 
 Таким образом, текущий exact contract-derived lower bound равен **304 bytes**.
@@ -468,7 +473,8 @@ escaping и alternate result serializer не допускаются.
 | `explicit_context` | request entry с `kind="fact"` | `reported_fact` | `ASSISTANT_RESULT_INVALID` |
 | `explicit_context` | request entry с `kind="background"` | `background` | `ASSISTANT_RESULT_INVALID` |
 
-`ordinal` обязан ссылаться на существующий item соответствующего source.
+`ordinal` обязан быть 1-based и ссылаться на существующий item соответствующего
+source.
 Provider/AdvisorPort не может повысить background до reported fact, создать
 automatic personal role или добавить Self Model/Stage 5 source. Значения
 `contextual_preference`, `contextual_belief` и `historical_context` не являются
@@ -734,7 +740,7 @@ tests относятся только к отдельной future capability.
   result envelopes; repeated serialization is stable regardless of incidental
   dict order;
 - exact context boundary equals `max_context_bytes`, strict `+1` overflows;
-- all five accepted abstention codes are recomputed from the minimal envelope,
+- all four accepted abstention codes are recomputed from the minimal envelope,
   with `ambiguous_or_incomparable_options` exactly 304 bytes;
 - exact result boundary equals `max_result_bytes`, strict `+1` yields
   `ASSISTANT_RESULT_TOO_LARGE`; nullable fields remain present as JSON `null`;
@@ -747,8 +753,9 @@ tests относятся только к отдельной future capability.
 ### Abstention, errors and port seam
 
 - recommendation, analysis and abstention invariants are closed and typed;
-- high-stakes, conflicting constraints, unsupported task and ambiguous options
-  produce the documented accepted abstentions;
+- conflicting constraints, unsupported task and ambiguous options produce the
+  documented accepted abstentions; high-stakes safety classification is not an
+  accepted v1 guarantee and remains a separate future capability;
 - raw body/path/UUID/provider details never appear in errors or logs;
 - option A uses a fake `AdvisorPort` with cancellation, bounded explicit-only
   request/result and no real network;
