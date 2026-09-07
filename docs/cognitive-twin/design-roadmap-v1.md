@@ -13,8 +13,8 @@ prediction/abstention policy без confidence; runtime остаётся буд�
 Для следующей Stage 7 boundary issue #162 зафиксирован design-only contract
 [Assistant v1](assistant-v1-contract.md): independent recommendation / analysis
 отделён от Simulate Me; owner выбрал A — отдельный provider-neutral
-`AdvisorPort`, а provider/network/privacy integration и runtime пока не
-разрешены.
+`AdvisorPort` с explicit-context-only payload. Automatic Personal Memory
+context, provider/network/privacy integration и runtime пока не разрешены.
 
 Точный status snapshot перед этой docs reconciliation — current `main`:
 `30249d56d366c0688c451a45a7e0214114c7c197`.
@@ -1077,16 +1077,19 @@ context и derived explanation divergence.
 
 - **Статус:** Assistant v1 design-only contract зафиксирован в
   [assistant-v1-contract.md](assistant-v1-contract.md). Он задаёт отдельную
-  independent recommendation / analysis branch и не принимает Simulate Me
-  prediction как input. Owner decision A принят; `HUMAN_REQUIRED: none` для
-  capability-boundary, а provider/network/privacy integration остаётся
-  отдельным future gate. Assistant runtime не начат.
+  explicit-context-only independent recommendation / analysis branch и не
+  принимает Simulate Me prediction как input. Owner decision A принят;
+  `HUMAN_REQUIRED: none` для capability-boundary, а automatic Personal Memory,
+  provider/network/privacy integration и runtime остаются отдельными future
+  gates. Assistant runtime не начат.
 - **Цель:** сначала определить независимый bounded advice contract, затем в
   будущем сопоставить его с likely user choice и измерить, насколько текущая
   derivation policy воспроизводит исторические decisions.
-- **Входные зависимости:** Stage 5 current-UUID context, Stage 6 Simulate Me
-  derivation и, для Compare/Calibration, canonical Stage 2 Decision Journal с
-  pre-choice information и actual `observed_decision`.
+- **Входные зависимости:** caller-owned Assistant request с explicit task,
+  options, constraints, goals и context; Stage 6 Simulate Me derivation и,
+  для Compare/Calibration, canonical Stage 2 Decision Journal с pre-choice
+  information и actual `observed_decision`. Automatic Stage 5/Personal Memory
+  context в Assistant v1 не входит.
 - **Canonical changes:** only user-reviewed actual decisions/outcomes; no
   calibration fields or prediction history in user notes.
 - **Derived state:** в будущем две independent outputs, retrospective
@@ -1098,13 +1101,15 @@ context и derived explanation divergence.
 - **Risks:** recommendation contamination by prediction, actual-choice leakage
   into backtest, outcome selection bias, false precision from tiny sample.
 - **Explicit out-of-scope:** Assistant/Compare runtime before отдельной
-  implementation/privacy approval, ML training pipeline, automatic goal changes, prospective calibration,
-  policy-governed prediction audit record, optimization against a hidden reward
-  and universal user score.
-- **Acceptance boundary:** Assistant never receives prediction; future Compare
-  keeps both branches and explicit delta; chosen option, reasons and later
-  outcome are masked from historical Simulate Me input; calibration can be
-  deleted and rebuilt from current vault without losing user data.
+  implementation/privacy approval, automatic Stage 5/Personal Memory context,
+  private-context transmission, ML training pipeline, automatic goal changes,
+  prospective calibration, policy-governed prediction audit record,
+  optimization against a hidden reward and universal user score.
+- **Acceptance boundary:** Assistant receives only caller-explicit inputs and
+  never receives prediction or automatic private context; future Compare keeps
+  both branches and explicit delta; chosen option, reasons and later outcome
+  are masked from historical Simulate Me input; calibration can be deleted and
+  rebuilt from current vault without losing user data.
 
 ### Stage 8 — Active Personal Learning v1
 
