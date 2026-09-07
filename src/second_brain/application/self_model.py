@@ -23,6 +23,7 @@ from second_brain.application.ports import VaultReader
 from second_brain.application.reports import (
     DiagnosticSeverity,
     ScanReport,
+    diagnostic_affects_content,
 )
 from second_brain.application.validation import build_report
 from second_brain.domain.models import (
@@ -65,14 +66,6 @@ _FINGERPRINT_POLICY_FIELDS: Final[tuple[str, ...]] = (
     "stale_policy",
     "status_policy",
     "supersede_policy",
-)
-_CONTENT_ROOT_FIELDS: Final[tuple[str, ...]] = (
-    "inbox",
-    "projects",
-    "areas",
-    "resources",
-    "zettelkasten",
-    "archive",
 )
 _SAFE_RELATIVE_PATH_PARTS: Final[frozenset[str]] = frozenset({"", ".", ".."})
 _SCOPED_SCAN_DIAGNOSTIC_CODES: Final[frozenset[str]] = frozenset(
@@ -585,10 +578,10 @@ def _validate_scan_completeness(report: ScanReport) -> None:
             "NOTE_READ_ERROR",
             "VAULT_DIRECTORY_READ_ERROR",
             "VAULT_OVERLAPPING_ROOTS",
-        }:
+        } and diagnostic_affects_content(diagnostic):
             raise SelfModelVaultUnavailableError()
-        if diagnostic.code in _SCOPED_SCAN_DIAGNOSTIC_CODES and _diagnostic_affects_content_scope(
-            diagnostic.path, report
+        if diagnostic.code in _SCOPED_SCAN_DIAGNOSTIC_CODES and diagnostic_affects_content(
+            diagnostic
         ):
             raise SelfModelVaultUnavailableError()
         if (
@@ -598,20 +591,6 @@ def _validate_scan_completeness(report: ScanReport) -> None:
             raise SelfModelVaultUnavailableError()
 
     _validate_evidence_integrity(report)
-
-
-def _diagnostic_affects_content_scope(path: str | None, report: ScanReport) -> bool:
-    if path is None or report.manifest is None:
-        return True
-    candidate = PurePosixPath(path)
-    return any(
-        _is_path_under(candidate, getattr(report.manifest.paths, field))
-        for field in _CONTENT_ROOT_FIELDS
-    )
-
-
-def _is_path_under(path: PurePosixPath, root: PurePosixPath) -> bool:
-    return path == root or root in path.parents
 
 
 def _validate_evidence_integrity(report: ScanReport) -> None:
