@@ -6,11 +6,11 @@ import {
   DecisionJournalSurface,
   SelfModelSurface,
   SelfRetrievalSurface,
-  SearchSurface,
   SimulateMeSurface,
   TimelineSurface,
 } from "./parity";
 import { Icon, type IconName } from "./icons";
+import { SearchSurface } from "./search-surface";
 
 const navigation = [
   ["#decision-journal", "Журнал решений", "decision"],
