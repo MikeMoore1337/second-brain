@@ -10,9 +10,13 @@ Owner-approved v1 contracts фиксируют conservative direct-assertion и
 current-UUID retrieval policies. Stage 6 Simulate Me получил approved
 mechanical design contract в #100: provider-free exact-match
 prediction/abstention policy без confidence; runtime остаётся будущим slice.
+Для следующей Stage 7 boundary issue #162 зафиксирован design-only contract
+[Assistant v1](assistant-v1-contract.md): independent recommendation / analysis
+отделён от Simulate Me; runtime ожидает одно owner decision по provider-neutral
+reasoning boundary и пока не реализуется.
 
 Точный status snapshot перед этой docs reconciliation — current `main`:
-`3cc06db5b3490a0af9ebb9a1e14aac659b6e44f9`.
+`30249d56d366c0688c451a45a7e0214114c7c197`.
 
 Issue #66 задаёт исходную архитектурную границу roadmap. Для текущего Stage 4
 Self Model scope и contract source of truth — issue #81 и
@@ -716,8 +720,9 @@ FileSystemVaultReader
   -> current canonical RetrievedNote
 ```
 
-Будущий Self Retrieval добавляет semantic filtering/evidence assembly после
-этой границы:
+Историческая rationale ниже описывает semantic filtering/evidence assembly
+после этой границы; текущий merged Self Retrieval contract и его exact DTO
+остаются нормативными:
 
 1. принять bounded query и режим (`Assistant`, `Simulate Me` или `Compare`);
 2. получить Search/будущие semantic candidates;
@@ -1067,29 +1072,37 @@ context и derived explanation divergence.
   `preference`/`goal` могут выбрать ровно один distinct option, а missing или
   ambiguous evidence даёт bounded abstention; canonical write отсутствует.
 
-### Stage 7 — Compare v1 + Prediction & Calibration v1
+### Stage 7 — Assistant v1; Compare v1 + Prediction & Calibration v1
 
-- **Цель:** сопоставить likely user choice с independent recommendation и
-  измерить, насколько текущая derivation policy воспроизводит исторические
-  decisions.
-- **Входные зависимости:** Stage 5 context, Stage 6 Simulate Me derivation,
-  canonical Stage 2 Decision Journal с pre-choice information и actual
-  `observed_decision`.
+- **Статус:** Assistant v1 design-only contract зафиксирован в
+  [assistant-v1-contract.md](assistant-v1-contract.md). Он задаёт отдельную
+  independent recommendation / analysis branch и не принимает Simulate Me
+  prediction как input. `HUMAN_REQUIRED` остаётся одним bounded owner decision
+  по A/B/C reasoning boundary; Assistant runtime не начат.
+- **Цель:** сначала определить независимый bounded advice contract, затем в
+  будущем сопоставить его с likely user choice и измерить, насколько текущая
+  derivation policy воспроизводит исторические decisions.
+- **Входные зависимости:** Stage 5 current-UUID context, Stage 6 Simulate Me
+  derivation и, для Compare/Calibration, canonical Stage 2 Decision Journal с
+  pre-choice information и actual `observed_decision`.
 - **Canonical changes:** only user-reviewed actual decisions/outcomes; no
   calibration fields or prediction history in user notes.
-- **Derived state:** two independent outputs, retrospective pre-choice
-  predictions, divergence reasons, comparisons, confidence buckets and
-  rebuildable calibration aggregates.
+- **Derived state:** в будущем две independent outputs, retrospective
+  pre-choice predictions, divergence reasons, comparisons, confidence buckets и
+  rebuildable calibration aggregates; Assistant result сам остаётся ephemeral.
 - **Public/application contracts:** Compare result always contains both branches;
+  Assistant result явно labelled independent recommendation / analysis;
   Calibration result reports replay sample/unknowns and derivation version.
 - **Risks:** recommendation contamination by prediction, actual-choice leakage
   into backtest, outcome selection bias, false precision from tiny sample.
-- **Explicit out-of-scope:** ML training pipeline, automatic goal changes,
-  prospective calibration, policy-governed prediction audit record,
-  optimization against a hidden reward and universal user score.
-- **Acceptance boundary:** chosen option, reasons and later outcome are masked
-  from historical Simulate Me input; calibration can be deleted and rebuilt
-  from current vault without losing user data.
+- **Explicit out-of-scope:** Assistant/Compare runtime before owner decision, ML
+  training pipeline, automatic goal changes, prospective calibration,
+  policy-governed prediction audit record, optimization against a hidden reward
+  and universal user score.
+- **Acceptance boundary:** Assistant never receives prediction; future Compare
+  keeps both branches and explicit delta; chosen option, reasons and later
+  outcome are masked from historical Simulate Me input; calibration can be
+  deleted and rebuilt from current vault without losing user data.
 
 ### Stage 8 — Active Personal Learning v1
 
@@ -1309,5 +1322,7 @@ prediction, inference write-back, canonical fields или изменения
 `second-brain-vault`.
 
 Stage 6 contract approved, но Stage 6 runtime и нижеследующие Stage 7–8
-остаются design/roadmap boundaries. Этот status sync не объявляет новый
-implementation scope и не меняет product semantics.
+остаются design/roadmap boundaries. Assistant v1 design contract добавляет
+только bounded Stage 7 documentation и один `HUMAN_REQUIRED` owner decision;
+этот status sync не объявляет runtime scope, не создаёт Stage 8 item и не
+меняет product semantics.
