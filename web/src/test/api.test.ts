@@ -5,6 +5,7 @@ import {
   applySave,
   createTextDraft,
   loadSelfRetrieval,
+  loadDiagnostics,
   prepareDecision,
   prepareSave,
   searchNotes,
@@ -25,6 +26,22 @@ function ok(payload: unknown): Response {
 }
 
 describe("same-origin API seam", () => {
+  it("uses the explicit diagnostics refresh contract", async () => {
+    const fetcher = vi.fn<FetchLike>().mockResolvedValue(ok({ status: "healthy" }));
+
+    await loadDiagnostics(fetcher);
+
+    expect(fetcher).toHaveBeenCalledWith("/api/diagnostics", {
+      body: JSON.stringify({}),
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "X-Second-Brain-Request": "diagnostics-v1",
+      },
+      method: "POST",
+    });
+  });
+
   it("uses the existing Search request contract", async () => {
     const fetcher = vi.fn<FetchLike>().mockResolvedValue(ok({ hits: [] }));
 
