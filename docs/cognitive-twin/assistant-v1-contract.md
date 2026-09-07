@@ -136,7 +136,17 @@ C0/C1 controls, `DEL` и Unicode category `Cf`. Case folding, transliteration,
 | `stage5_context_mode` | только `none` или `current_explicit_facts`; default `none` |
 | `stage5_query` | `null` при `none`; required при `current_explicit_facts`; current literal Stage 5 query bounds |
 | `max_context_bytes` | exact `int`, 1..65536; default 65536; больше cap запрещено |
-| `max_result_bytes` | exact `int`, 1..65536; default 65536; больше cap запрещено |
+| `max_result_bytes` | exact `int`, `MIN_MAX_RESULT_BYTES_V1`..65536; default 65536; больше cap запрещено |
+
+`MIN_MAX_RESULT_BYTES_V1` — не arbitrary safety number. Это contract-derived
+constant из exact canonical `AssistantResultEnvelopeV1` serializer: берётся
+максимальный UTF-8 byte size минимального valid abstention envelope для каждого
+текущего значения `AssistantAbstentionCode` по формуле и таблице в §6.3. Для
+текущей схемы доказанное значение — **304 bytes**. Поэтому
+`max_result_bytes < MIN_MAX_RESULT_BYTES_V1` даёт
+`ASSISTANT_INVALID_REQUEST` на request-validation boundary, до base/context
+serialization, Stage 5, `AdvisorPort` или provider operation; такой запрос не
+может просить физически невозможный обязательный abstention.
 
 `stage5_context_mode` и `stage5_query` образуют exact pair:
 
@@ -168,6 +178,9 @@ C0/C1 controls, `DEL` и Unicode category `Cf`. Case folding, transliteration,
   MAX_MAX_CONTENT_BYTES)`; он не может превысить ни оставшийся Assistant budget,
   ни текущий Stage 5 cap `MAX_MAX_CONTENT_BYTES`. Это upstream conservative cap,
   но не доказательство final Assistant JSON budget;
+- до любого Stage 5/provider call проверяется также нижняя граница
+  `max_result_bytes >= MIN_MAX_RESULT_BYTES_V1`; значение ниже неё всегда
+  является `ASSISTANT_INVALID_REQUEST`;
 - после internal projection обязательно строится exact canonical
   `AssistantReasoningEnvelopeV1` и проверяется
   `canonical_context_bytes <= max_context_bytes`;
@@ -223,8 +236,8 @@ Canonical encoding:
 3. strings уже прошли documented NFC validation;
 4. non-ASCII символы сериализуются непосредственно в UTF-8, не через
    `\uXXXX`, если escaping не требуется JSON syntax;
-5. mandatory escaping — только JSON escaping для quotation mark, reverse
-   solidus и required control escapes;
+5. каждая JSON string кодируется только общим
+   `AssistantCanonicalJsonEncoderV1`, а не serializer-specific escaping;
 6. insignificant spaces и newlines отсутствуют;
 7. separators ровно `,` и `:`;
 8. object key order ровно такой, как в структуре выше;
@@ -233,6 +246,28 @@ Canonical encoding:
 11. Stage 5 fact key order ровно `ordinal`, затем `role`, затем `text`;
 12. arrays сохраняют caller order либо current deterministic search order;
 13. `context_bytes = len(canonical_json_utf8_bytes)`.
+
+`AssistantCanonicalJsonEncoderV1` — единственный string encoder одновременно
+для `AssistantReasoningEnvelopeV1` и `AssistantResultEnvelopeV1`. Его exact
+escape table:
+
+```text
+U+0022 QUOTATION MARK  -> `\"`
+U+005C REVERSE SOLIDUS -> `\\`
+U+0008 BACKSPACE       -> `\b`
+U+0009 TAB             -> `\t`
+U+000A LINE FEED       -> `\n`
+U+000C FORM FEED       -> `\f`
+U+000D CARRIAGE RETURN -> `\r`
+```
+
+Для каждого другого code point U+0000..U+001F используется только
+lowercase-hex форма `\u00xx`: например, U+0000 -> `\u0000`, U+000B ->
+`\u000b`, U+001F -> `\u001f`. `U+002F /` не escape-ится. Запрещены
+`\u000A`/`\u0009` вместо short escapes, uppercase hex, escaped `/` и
+ненужный `\uXXXX` для обычного Unicode. Все остальные разрешённые non-ASCII
+символы идут напрямую в UTF-8. Альтернативные RFC 8259 byte sequences не
+являются canonical и не используются в context или result budget calculation.
 
 `base_context_bytes` вычисляется canonical serialization с теми же validated
 `task`, `options`, `explicit_constraints`, `explicit_goals` и
@@ -366,6 +401,38 @@ internal integrity/provenance validation. Public Assistant result возвращ
 только ephemeral `stage5_current_context` ordinal и не раскрывает UUID, path,
 front matter или raw body.
 
+### 4.1.2. Stage 5 completeness gate
+
+`BuildSelfContext` возвращает bounded `SelfContextResult`, в котором
+`truncated` и `exclusions[].reason` являются частью integrity boundary. После
+успешной валидации формы Stage 5 result, но **до** factual allowlist и до
+решения «eligible facts ровно ноль», application composition обязана выполнить
+этот gate:
+
+- если `SelfContextResult.truncated == true`, вернуть
+  `ASSISTANT_CONTEXT_UNAVAILABLE`;
+- если хотя бы одна exclusion имеет
+  `reason == "context_budget_exceeded"`, вернуть
+  `ASSISTANT_CONTEXT_UNAVAILABLE`.
+
+Это completeness/integrity failure, а не
+`abstention/insufficient_current_context`: после budget overflow оставшиеся
+Search candidates могли не пройти current UUID reread и classification, так что
+по одному `included` нельзя доказать отсутствие eligible fact. Нельзя считать
+только included items complete, игнорировать budget-excluded candidates,
+выводить их body/metadata эвристически, rerank-ить, читать arbitrary
+substitutes или передавать partial projection.
+
+Exact factual allowlist применяется только если Stage 5 result valid,
+`truncated == false`, нет exclusion с `context_budget_exceeded`, и current
+reread/classification для всего возвращённого bounded candidate window
+завершены. Окно ограничено approved `DEFAULT_SELF_CONTEXT_LIMIT` (`20`), а не
+обещанием exhaustive vault-wide search. Existing `candidate_not_found`
+semantics сохраняются: такая exclusion сама по себе не делает result
+truncated и не расширяет scope этой задачи. Только после этого полного gate
+zero usable eligible facts даёт нормальный abstention
+`insufficient_current_context`; отсутствие heuristic fallback обязательно.
+
 ### 4.2. Classification
 
 | Источник | Роль в Assistant v1 | Ограничение |
@@ -446,12 +513,19 @@ label и не делает hidden score table. При непреодолимой
    CONTEXT` и, только при `stage5_context_mode="current_explicit_facts"`,
    `STAGE5 CURRENT FACTS` from `AssistantStage5Fact`; его exact JSON bytes —
    единственный input для context budget и reasoning boundary.
-3. Отдельно проверить current Stage 5 identity/role. Нельзя заменить current
-   reread индексом, snippet, прошлым result или claim text.
-4. Исключить все `Simulate Me` values и недоступные Self Model dimensions.
-5. Выполнить approved reasoning operation или deterministic C-вариант из
+3. После успешной валидации формы Stage 5 result выполнить completeness gate:
+   `truncated` обязан быть `false`, и ни одна exclusion не может иметь
+   `reason="context_budget_exceeded"`; иначе вернуть
+   `ASSISTANT_CONTEXT_UNAVAILABLE` до factual allowlist и zero-context
+   decision. Этот bounded check относится к окну `DEFAULT_SELF_CONTEXT_LIMIT`,
+   а не к exhaustive vault search.
+4. Отдельно проверить current Stage 5 identity/role для полного возвращённого
+   candidate window. Нельзя заменить current reread индексом, snippet,
+   прошлым result или claim text.
+5. Исключить все `Simulate Me` values и недоступные Self Model dimensions.
+6. Выполнить approved reasoning operation или deterministic C-вариант из
    decision memo. Результат проходит exact Result DTO validation.
-6. При отсутствии safe basis, конфликте hard constraints, high-stakes
+7. При отсутствии safe basis, конфликте hard constraints, high-stakes
    certainty или ambiguous options вернуть abstention, а не убедительный
    guess.
 
@@ -470,6 +544,10 @@ Assistant обязан abstain, если:
   incomparable без дополнительной цели;
 - результат потребовал бы hidden preference, behavior inference, prediction,
   invented fact или claim о universal optimality;
+- Stage 5 result имеет `truncated=true` либо exclusion с
+  `reason="context_budget_exceeded"` — вернуть
+  `ASSISTANT_CONTEXT_UNAVAILABLE` до factual allowlist, а не считать included
+  facts полным контекстом;
 - при успешно завершённых Stage 5/current-reread/allowlist шагах не осталось ни
   одного eligible factual item — вернуть ровно
   `abstention/insufficient_current_context`;
@@ -477,10 +555,12 @@ Assistant обязан abstain, если:
   который нельзя дать в bounded ordinary-assistant safety boundary.
 
 Failure получить или доказать requested current context (Search/Self Retrieval,
-current UUID reread, integrity/classification или complete bounded projection)
-не является abstention: он возвращается как
-`ASSISTANT_CONTEXT_UNAVAILABLE`. В частности, zero search candidates после
-успешного bounded pipeline — это `insufficient_current_context`, а не error.
+current UUID reread, integrity/classification, Stage 5 completeness или complete
+bounded projection) не является abstention: он возвращается как
+`ASSISTANT_CONTEXT_UNAVAILABLE`. В частности, `truncated=true` либо
+`exclusions[].reason="context_budget_exceeded"` — это context error до
+allowlist/zero-context decision, а zero search candidates после успешного
+полного bounded pipeline — это `insufficient_current_context`, а не error.
 
 Uncertainty/caveats описывают известные ограничения, но не заменяют
 abstention. Numeric confidence, probability и automatic calibration запрещены.
@@ -630,13 +710,40 @@ Arrays сохраняют validated DTO tuple order; canonical serializer не �
 result_bytes = len(canonical_AssistantResultEnvelopeV1_utf8)
 ```
 
-Encoding использует **точно те же** RFC 8259 / UTF-8 / no-BOM / no-trailing-
-newline / direct-non-ASCII (the `ensure_ascii=False` equivalent) /
-mandatory-JSON-escaping / no-whitespace /
-`,`-and-`:` separators rules и запрет alternate serializer, что и
-`AssistantReasoningEnvelopeV1` в §3.3. В частности, `ensure_ascii=True`,
-pretty JSON и incidental Python dict ordering не допускаются. Другого result
-serializer или budget calculator для `max_result_bytes` нет. Размер raw
+`MIN_MAX_RESULT_BYTES_V1` вычисляется из этой же exact serialization, а не
+задаётся вручную:
+
+```text
+MIN_MAX_RESULT_BYTES_V1 = max(
+  len(canonical_AssistantResultEnvelopeV1_utf8(minimal_abstention(code)))
+  for code in AssistantAbstentionCode
+) = 304
+```
+
+`minimal_abstention(code)` — это ровно следующий envelope с единственной
+заменяемой строкой `abstention_code`; `rationale=["x"]` — shortest valid
+rationale, все поля и их `null`/empty values обязательны:
+
+```json
+{"output_label":"independent_recommendation_analysis","kind":"abstention","recommendation":null,"selected_option":null,"rationale":["x"],"evidence_refs":[],"constraints_used":[],"objectives_used":[],"uncertainty":[],"abstention_code":"<current-code>","contract_version":"assistant-v1"}
+```
+
+| `AssistantAbstentionCode` | Canonical UTF-8 bytes |
+| --- | ---: |
+| `insufficient_basis` | 289 |
+| `conflicting_explicit_constraints` | 303 |
+| `ambiguous_or_incomparable_options` | **304** |
+| `unsafe_high_stakes` | 289 |
+| `unsupported_task` | 287 |
+| `insufficient_current_context` | 299 |
+
+Таким образом, текущий exact contract-derived lower bound равен **304 bytes**;
+наиболее длинный обязательный abstention — `ambiguous_or_incomparable_options`.
+При изменении schema, key order, required fields, rationale minimum или closed
+enum это значение MUST быть пересчитано и задокументировано до изменения
+request bound. `AssistantCanonicalJsonEncoderV1` из §3.3 — общий encoder для
+обоих envelope; `ensure_ascii=True`, pretty JSON, incidental dict ordering,
+alternate escaping и alternate result serializer не допускаются. Размер raw
 transport response provider, если он когда-либо будет ограничен, является
 отдельным future adapter cap и не заменяет этот semantic DTO budget.
 
@@ -646,7 +753,8 @@ Result validation выполняется строго в таком порядк
 2. Validate `selected_option` и request-local input references.
 3. Validate exact evidence `source`/`role` bindings по §6.2.
 4. Run `AssistantPrivateEchoGuardV1` для всех validated
-   `AssistantStage5Fact.factual_text` и provider-generated output fields.
+   `AssistantStage5Fact.factual_text` и provider-generated output fields,
+   включая per-field и aggregate checks из §8.1.
 5. Canonically serialize exact `AssistantResultEnvelopeV1`.
 6. Compare `result_bytes` с `request.max_result_bytes`.
 7. Если `result_bytes > max_result_bytes`, вернуть
@@ -676,6 +784,12 @@ AssistantAbstentionCode:
 reread/allowlist pipeline успешно завершён, integrity validation прошла, но
 eligible factual items ровно ноль (в том числе при zero search candidates),
 результат всегда является нормальным domain outcome:
+
+Здесь «успешно завершён» означает также, что пройден §4.1.2 completeness
+gate: `truncated == false` и нет exclusion с
+`reason="context_budget_exceeded"`. Иначе применяется
+`ASSISTANT_CONTEXT_UNAVAILABLE`, даже если `items` пуст или среди included
+items уже есть eligible fact.
 
 ```text
 AssistantResultEnvelopeV1 {
@@ -712,15 +826,15 @@ AssistantErrorCode:
 
 | Code | Safe meaning |
 | --- | --- |
-| `ASSISTANT_INVALID_REQUEST` | request или base context envelope не прошли exact type/text/bounds/fit validation |
-| `ASSISTANT_CONTEXT_UNAVAILABLE` | requested current context нельзя получить, доказать или полностью представить; zero eligible facts после успешного pipeline сюда не относится |
+| `ASSISTANT_INVALID_REQUEST` | request или base context envelope не прошли exact type/text/bounds/fit validation, включая `max_result_bytes < MIN_MAX_RESULT_BYTES_V1` |
+| `ASSISTANT_CONTEXT_UNAVAILABLE` | requested current context нельзя получить, доказать или полностью представить, включая Stage 5 `truncated` или `context_budget_exceeded`; zero eligible facts после полного успешного pipeline сюда не относится |
 | `ASSISTANT_CANCELLED` | operation отменена до безопасного завершения |
 | `ASSISTANT_TIMEOUT` | bounded approved reasoning operation превысила deadline |
 | `ASSISTANT_PROVIDER_UNAVAILABLE` | approved reasoning boundary недоступна |
 | `ASSISTANT_PROVIDER_FAILURE` | approved reasoning boundary вернула failure |
 | `ASSISTANT_MALFORMED_RESULT` | provider/deterministic operation не дал exact Assistant DTO |
 | `ASSISTANT_RESULT_TOO_LARGE` | canonical `AssistantResultEnvelopeV1` превышает `max_result_bytes` |
-| `ASSISTANT_RESULT_INVALID` | assembled result нарушает exact invariants, source/role binding или PrivateEchoGuard |
+| `ASSISTANT_RESULT_INVALID` | assembled result нарушает exact invariants, source/role binding, per-field или aggregate PrivateEchoGuard |
 
 Provider errors описаны только как будущая public mapping для отдельно
 одобренного reasoning boundary; production runtime #162 не реализуется. Если
@@ -798,6 +912,36 @@ input refs.
   после `echo_compare` не меньше 32 bytes. Substring сравнивается буквально
   как последовательность Unicode code points; никаких semantic similarity и
   fuzzy matching нет.
+
+Per-field checks остаются обязательными, но их недостаточно. Для каждого
+protected fact дополнительно строится один aggregate только из generated text
+в exact DTO order:
+
+```text
+generated_parts =
+  [recommendation if recommendation is not null]
+  + rationale
+  + uncertainty
+
+generated_aggregate_raw = concatenate(generated_parts, separator="")
+generated_aggregate = echo_compare(generated_aggregate_raw)
+protected = echo_compare(AssistantStage5Fact.factual_text)
+```
+
+Между частями **не вставляется separator**: ни пробел, ни newline, ни другой
+маркер. Для каждой пары `protected` и `generated_aggregate` применяются те же
+два fail-closed правила: полное равенство независимо от длины либо exact
+contiguous common substring длиной не менее 32 UTF-8 bytes после
+`echo_compare`. Поэтому private fact, разбитый между `recommendation`,
+`rationale` и/или `uncertainty`, не может обойти порог отдельных полей.
+
+`selected_option.id`, `selected_option.label`, `evidence_refs` и input refs не
+входят в `generated_parts`: option text принадлежит caller, а refs не являются
+generated prose. Aggregate — ephemeral derived view одного уже bounded
+Assistant result candidate, ограниченный текущим `max_result_bytes` и
+validated result-field bounds; он не накапливается между полями, запросами или
+операциями и не хранится отдельно. Никакого unbounded buffer/state для guard
+нет.
 
 При violation весь Assistant result отклоняется с единственным safe error
 `ASSISTANT_RESULT_INVALID`. Matched source text и offending output не входят в
@@ -907,6 +1051,11 @@ scope, если owner когда-либо выберет этот fallback:
   `stage5_query`, passes the current literal query unchanged, uses exactly
   `DEFAULT_SELF_CONTEXT_LIMIT`, and derives the remaining content cap with
   `min(remaining_context_bytes, MAX_MAX_CONTENT_BYTES)`;
+- `max_result_bytes=MIN_MAX_RESULT_BYTES_V1-1` is rejected as
+  `ASSISTANT_INVALID_REQUEST`, `max_result_bytes=MIN_MAX_RESULT_BYTES_V1` is
+  accepted, every current minimal abstention fits at that bound, and a valid
+  larger result can still produce `ASSISTANT_RESULT_TOO_LARGE`; exact `bool` is
+  rejected and values above 65536 are rejected;
 - `current_explicit_facts` accepts only internal `AssistantStage5Fact` with
   `evidence_kind=explicit_user_fact` and `self_kind=memory`; stale snippets,
   missing UUIDs, malformed roles, path leaks, unvalidated bodies and incomplete
@@ -916,6 +1065,9 @@ scope, если owner когда-либо выберет этот fallback:
   zero eligible facts always produce the exact abstention
   `kind=abstention`, `recommendation=null`, `selected_option=null`,
   `abstention_code=insufficient_current_context`;
+- `truncated=true` or any `context_budget_exceeded` exclusion produces
+  `ASSISTANT_CONTEXT_UNAVAILABLE` before allowlist/zero-context classification;
+  it is never treated as a complete empty result;
 - explicit/base envelope overflow returns `ASSISTANT_INVALID_REQUEST` before
   Stage 5/provider call; a complete eligible projection that cannot fit returns
   `ASSISTANT_CONTEXT_UNAVAILABLE`, never a silent partial context or arbitrary
@@ -924,8 +1076,14 @@ scope, если owner когда-либо выберет этот fallback:
 ### Canonical envelope and exact role tests
 
 - canonical byte tests cover Cyrillic/non-ASCII, quotation marks, backslashes,
-  required control escapes, empty arrays, one/multiple options,
+  exact `\b`, `\t`, `\n`, `\f`, `\r` and lowercase `\u00xx` control
+  escapes for BS/TAB/LF/FF/CR/NUL/VT/U+001F, unescaped slash, empty arrays,
+  one/multiple options,
   one/multiple explicit context entries and one/multiple Stage 5 facts;
+- exact byte assertions reject `\u000A`/`\u0009`, uppercase hex, escaped `/`,
+  unnecessary `\uXXXX` for ordinary Unicode and any other alternate string
+  representation; the same `AssistantCanonicalJsonEncoderV1` is exercised for
+  both reasoning and result envelopes;
 - exact boundary `canonical_context_bytes == max_context_bytes` is accepted
   when the applicable mode permits it, while `+1` byte overflow is rejected;
 - repeated serialization is stable regardless of incidental Python dict order;
@@ -943,17 +1101,30 @@ scope, если owner когда-либо выберет этот fallback:
 - `AssistantPrivateEchoGuardV1` rejects a short full fact and a long full fact,
   any embedded exact contiguous verbatim span of at least 32 UTF-8 bytes, and a
   substantial Cyrillic span of the same size;
+- the aggregate rejects a full fact split across four sub-32-byte `rationale`
+  items, across `recommendation` plus `rationale`, and across `rationale` plus
+  `uncertainty`; it catches split text across whitespace boundaries after
+  `echo_compare`;
+- per-field spans of at least 32 bytes remain invalid; unrelated generated
+  fields whose empty-separator concatenation does not match the fact remain
+  valid; caller-owned `selected_option.id`/`label` text is excluded from the
+  aggregate;
 - the guard catches CRLF/CR, Unicode-whitespace and edge-space variations after
   `echo_compare`; case-changed text and semantic paraphrase are not treated as
   verbatim by this guard;
-- a short atomic fragment below the 32-byte threshold inside a larger answer is
-  allowed, as is repetition of a caller-owned `selected_option.label`;
+- a short atomic fragment below the 32-byte threshold that is not part of an
+  aggregate full/substantial match is allowed, as is repetition of a
+  caller-owned `selected_option.label`;
 - guard violation exposes only `ASSISTANT_RESULT_INVALID`, never matched source
   text or offending output, and never produces redaction, retry, fallback or a
   partial result;
 - result-budget tests cover empty/null fields with every key present,
   recommendation, analysis, abstention, `selected_option` null/object,
   Cyrillic direct UTF-8, quote/backslash escaping and multiple evidence refs;
+- result-budget tests cover every current abstention code in the minimal
+  envelope, prove `ambiguous_or_incomparable_options` is exactly 304 bytes,
+  prove `insufficient_current_context` fits the same minimum, and recompute the
+  documented constant when the contract version/schema changes;
 - exact `result_bytes == max_result_bytes` is accepted and `+1` yields
   `ASSISTANT_RESULT_TOO_LARGE`; `ensure_ascii=True`, pretty JSON, omitted nulls,
   incidental dict ordering and alternate result serializers are rejected;
@@ -964,6 +1135,11 @@ scope, если owner когда-либо выберет этот fallback:
   controls or a body-derived projection over 1024 UTF-8 bytes produces
   `ASSISTANT_CONTEXT_UNAVAILABLE`; neither case truncates, substitutes or
   selects an arbitrary fact.
+- Stage 5 tests cover `truncated=true` with zero included eligible facts and
+  with some included eligible facts, an explicit
+  `context_budget_exceeded` exclusion, and the non-truncated complete cases:
+  zero eligible facts gives `insufficient_current_context`, eligible facts give
+  normal projection, and no heuristic fallback is allowed.
 
 ### Independence and Self Model safety
 
@@ -1066,16 +1242,18 @@ the Simulate Me input.
 | Stage 5 current UUID context with exact typed `explicit_user_fact` + `memory` projection | **ACCEPT as design boundary** |
 | Deterministic `stage5_query` / limit / remaining-budget mapping | **ACCEPT as design boundary** |
 | Empty eligible Stage 5 facts vs context retrieval/projection failure outcomes | **ACCEPT as exact split** |
+| Stage 5 `truncated` / `context_budget_exceeded` completeness gate before factual allowlist | **ACCEPT as exact design boundary** |
 | Canonical `AssistantReasoningEnvelopeV1` JSON and sole context budget calculator | **ACCEPT as exact design boundary** |
+| Shared `AssistantCanonicalJsonEncoderV1` exact control escapes for context and result | **ACCEPT as exact design boundary** |
 | Exact body-only `factual_text` projection and reasoning-visible Stage 5 item shape | **ACCEPT as exact design boundary** |
 | Internal `AssistantStage5Fact` over current reread + Personal Memory validation | **ACCEPT as future core dependency** |
 | Exact `AssistantEvidenceRef` source/role binding | **ACCEPT as exact result invariant** |
 | `contextual_preference` / `contextual_belief` / `historical_context` evidence roles | **DEFER / invalid in v1** |
 | Self Model preference/belief/goal treatment without normative leakage | **ACCEPT** |
 | Closed recommendation/analysis/abstention Result DTO and safe taxonomy | **ACCEPT as design** |
-| Canonical `AssistantResultEnvelopeV1`, exact key order and result byte budget | **ACCEPT as exact design boundary** |
+| Canonical `AssistantResultEnvelopeV1`, exact key order, minimum 304-byte bound and result byte budget | **ACCEPT as exact design boundary** |
 | Result validation order, including source/role checks and `AssistantPrivateEchoGuardV1` | **ACCEPT as exact design boundary** |
-| `AssistantPrivateEchoGuardV1` complete/substantial verbatim comparison | **ACCEPT as bounded guard; not semantic DLP** |
+| `AssistantPrivateEchoGuardV1` per-field plus no-separator aggregate complete/substantial verbatim comparison | **ACCEPT as bounded guard; not semantic DLP** |
 | Independent output label and no Simulate Me input | **ACCEPT** |
 | Bounded privacy, no-write, no-persistence and no-hidden-network boundary | **ACCEPT** |
 | Testing strategy and future dependency gate | **ACCEPT** |
