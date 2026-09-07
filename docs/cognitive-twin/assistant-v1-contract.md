@@ -300,8 +300,9 @@ objective. Compare runtime в #162 не создаётся.
 4. Провести application-owned exact Result DTO validation, canonical
    serialization и result-byte check. Provider не может добавить private
    context, prediction fields, hidden score, raw metadata или write receipt.
-5. При отсутствии safe basis, конфликте hard constraints или genuinely
-   incomparable options вернуть typed abstention, а не убедительный guess.
+5. Preserve a typed abstention when the Advisor returns one; accepted v1 не
+   выводит safe basis, конфликт constraints, ambiguity или task support из
+   free-text через несуществующий application classifier.
 
 High-stakes safety не является application-enforced guarantee accepted v1.
 Точный v1 `AssistantRequest` не содержит safety classification, а этот design
@@ -331,17 +332,24 @@ Recommendation — bounded conclusion независимого анализа п
 быть bounded action proposal. Если options присутствуют, `selected_option`
 может быть только exact caller-owned парой `{id, label}`.
 
-### 5.2. Обязательный abstain
+### 5.2. Typed domain abstentions без application classifier
 
-Assistant обязан abstain, если:
+`AssistantAbstentionCode` — закрытый vocabulary для domain outcome, который
+Advisor может вернуть в exact Result DTO. Accepted v1 application-owned
+validation проверяет только closed code, DTO shape, references, roles, bounds и
+declared cross-field invariants; она не интерпретирует свободный текст task,
+constraint или option и не гарантирует автоматическое обнаружение:
 
-- task не даёт понятного bounded вопроса или action scope;
-- explicit constraints противоречат друг другу и caller не указал способ
-  разрешения конфликта;
-- options невозможно безопасно сопоставить с вопросом или они genuinely
-  incomparable без дополнительной цели;
-- результат потребовал бы hidden preference, behavior inference, prediction,
-  invented fact или claim о universal optimality.
+- отсутствия понятного bounded вопроса или action scope;
+- конфликта между двумя free-text constraints;
+- genuinely incomparable options без дополнительной цели;
+- unsupported task или отсутствия safe basis.
+
+Поэтому v1 не обещает mandatory abstention для этих semantic conditions и не
+может рекламироваться как safety/classification layer. Advisor может выбрать
+соответствующий typed code, но callers, которым нужна детерминированная
+semantic enforcement, должны использовать отдельную versioned capability с
+явными входами и pre/post-Advisor rule.
 
 `insufficient_current_context` из прежнего private-context draft не является
 accepted Assistant v1 abstention code: current v1 не запрашивает automatic
@@ -383,15 +391,21 @@ AssistantResultEnvelopeV1 {
 | --- | --- |
 | `output_label` | exact fixed value; display text is Independent recommendation / analysis |
 | `kind` | closed enum из трёх значений |
-| `recommendation` | 1..2048 UTF-8 bytes только для `kind=recommendation`; иначе `null` |
+| `recommendation` | non-blank `str`, 1..2048 UTF-8 bytes только для `kind=recommendation`; иначе `null` |
 | `selected_option` | `null` при no-options; иначе exact option из request или `null` |
-| `rationale` | 1..8 items, каждый 1..1024 bytes; bounded total |
+| `rationale` | 1..8 non-blank strings, каждый 1..1024 bytes; bounded total |
 | `evidence_refs` | 0..32 unique request-local refs; exact source/role binding; no body, UUID, path or claim text |
 | `constraints_used` | 0..16 refs; only valid explicit constraint ordinals |
 | `objectives_used` | 0..8 refs; only valid explicit goal ordinals |
-| `uncertainty` | 0..8 items, каждый 1..512 bytes; no numeric confidence |
+| `uncertainty` | 0..8 non-blank strings, каждый 1..512 bytes; no numeric confidence |
 | `abstention_code` | required only for `kind=abstention`; otherwise `null` |
 | complete result | canonical `AssistantResultEnvelopeV1` must fit fixed `max_result_bytes`; no silent truncation |
+
+Все result strings (`recommendation`, `rationale[*]`, `uncertainty[*]`) проходят
+ту же exact normalization, что и request text в §3.2: strict UTF-8 encode,
+Unicode NFC и `strip()` только по краям, с запретом control characters. Пустое
+значение после этой normalization, включая whitespace-only input, даёт
+`ASSISTANT_MALFORMED_RESULT`; normalized value используется в canonical bytes.
 
 Exact invariants:
 
@@ -539,7 +553,7 @@ AssistantErrorCode:
 | `ASSISTANT_PROVIDER_FAILURE` | approved Advisor boundary вернула failure |
 | `ASSISTANT_MALFORMED_RESULT` | result не может быть разобран как exact DTO: отсутствуют или добавлены поля, неверны object/scalar/container types, closed enum или per-field bounds |
 | `ASSISTANT_RESULT_TOO_LARGE` | canonical result превышает `max_result_bytes` |
-| `ASSISTANT_RESULT_INVALID` | структурно корректный result нарушает semantic cross-field, input-reference, source/role или safety invariant |
+| `ASSISTANT_RESULT_INVALID` | структурно корректный result нарушает semantic cross-field, input-reference, source/role или declared safety invariant |
 
 `ASSISTANT_CONTEXT_UNAVAILABLE` из прежнего private-context draft не является
 ошибкой accepted explicit-only v1. Он может появиться только в отдельной
@@ -751,9 +765,9 @@ tests относятся только к отдельной future capability.
 ### Abstention, errors and port seam
 
 - recommendation, analysis and abstention invariants are closed and typed;
-- conflicting constraints, unsupported task and ambiguous options produce the
-  documented accepted abstentions; high-stakes safety classification is not an
-  accepted v1 guarantee and remains a separate future capability;
+- closed abstention codes and exact envelopes are tested; no v1 test claims
+  automatic detection of conflicting free-text constraints, unsupported task,
+  ambiguous options or high-stakes safety;
 - raw body/path/UUID/provider details never appear in errors or logs;
 - option A uses a fake `AdvisorPort` with cancellation, bounded explicit-only
   request/result and no real network;
