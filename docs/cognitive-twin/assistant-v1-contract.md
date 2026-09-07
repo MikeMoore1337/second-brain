@@ -195,7 +195,11 @@ Canonical encoding:
 9. option key order ровно `id`, затем `label`;
 10. explicit-context key order ровно `kind`, затем `text`;
 11. arrays сохраняют caller order;
-12. `context_bytes = len(canonical_json_utf8_bytes)`.
+12. integer lexemes that appear in the envelopes (в частности, result
+    ordinals) используют minimal unsigned base-10 form: только decimal digits,
+    без sign, fraction, exponent или leading zero; `0` допускается только для
+    нулевого значения;
+13. `context_bytes = len(canonical_json_utf8_bytes)`.
 
 `AssistantCanonicalJsonEncoderV1` — единственный string encoder одновременно
 для `AssistantReasoningEnvelopeV1` и `AssistantResultEnvelopeV1`. Его exact
@@ -747,7 +751,8 @@ tests относятся только к отдельной future capability.
   context;
 - exact byte assertions reject `\u000A`/`\u0009`, uppercase hex, escaped `/`,
   unnecessary `\uXXXX` for ordinary Unicode, pretty JSON, BOM, trailing
-  newline and alternate serializers;
+  newline, alternate serializers and non-minimal integer lexemes such as
+  `1e0`, `+1` or `01`;
 - the same `AssistantCanonicalJsonEncoderV1` is exercised for reasoning and
   result envelopes; repeated serialization is stable regardless of incidental
   dict order;
