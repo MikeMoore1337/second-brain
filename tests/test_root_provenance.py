@@ -88,10 +88,32 @@ def test_support_only_overlap_is_bounded_and_does_not_block_content(tmp_path: Pa
     )
     assert diagnostic_affects_content(overlap) is False
     assert report.content_scan_complete is True
-    assert report.attachments_scan_complete is True
+    assert report.attachments_scan_complete is False
     assert [item.relative_path for item in report.attachments] == ["support/asset.bin"]
     assert not any(note.relative_path.startswith("support/") for note in report.notes)
     assert str(vault) not in str(overlap.as_dict())
+
+
+@pytest.mark.skipif(
+    os.name != "nt", reason="case-insensitive support-root identity is Windows-specific"
+)
+def test_windows_same_support_root_identity_marks_attachments_incomplete(tmp_path: Path) -> None:
+    vault = create_vault(tmp_path / "vault")
+    support_root = vault / "support"
+    support_root.mkdir()
+    (support_root / "asset.bin").write_bytes(b"asset")
+    _set_manifest_path(vault, "templates", "SUPPORT")
+    _set_manifest_path(vault, "attachments", "support")
+
+    snapshot = FileSystemVaultReader(vault).scan()
+    overlap = next(item for item in snapshot.diagnostics if item.code == "VAULT_OVERLAPPING_ROOTS")
+    report = build_report(snapshot)
+
+    assert overlap.involved_root_roles == (
+        VaultRootRole.TEMPLATES,
+        VaultRootRole.ATTACHMENTS,
+    )
+    assert report.attachments_scan_complete is False
 
 
 def test_nested_support_roots_are_isolated_from_content_scan(tmp_path: Path) -> None:
@@ -122,6 +144,27 @@ def test_nested_support_roots_are_isolated_from_content_scan(tmp_path: Path) -> 
         (VaultRootRole.PROJECTS, VaultRootRole.TEMPLATES),
         (VaultRootRole.PROJECTS, VaultRootRole.ATTACHMENTS),
     }
+    assert report.content_scan_complete is False
+    assert report.attachments_scan_complete is False
+
+
+def test_overlap_without_attachments_does_not_mark_attachment_scan_incomplete(
+    tmp_path: Path,
+) -> None:
+    vault = create_vault(tmp_path / "vault")
+    templates_root = vault / "10 Projects" / "_templates"
+    templates_root.mkdir()
+    _set_manifest_path(vault, "templates", "10 Projects/_templates")
+
+    report = build_report(FileSystemVaultReader(vault).scan())
+    overlap = next(item for item in report.diagnostics if item.code == "VAULT_OVERLAPPING_ROOTS")
+
+    assert overlap.involved_root_roles == (
+        VaultRootRole.PROJECTS,
+        VaultRootRole.TEMPLATES,
+    )
+    assert report.content_scan_complete is False
+    assert report.attachments_scan_complete is True
 
 
 @pytest.mark.parametrize(
