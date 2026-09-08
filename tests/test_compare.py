@@ -429,6 +429,68 @@ def test_cancellation_after_first_branch_discards_partial_result() -> None:
     assert simulate_me.calls == []
 
 
+def test_deadline_after_assistant_exception_overrides_branch_failure() -> None:
+    clock_state = [0.0]
+
+    class LateFailingAssistant(_FakeAssistant):
+        def advise(
+            self,
+            request: AssistantReasoningEnvelopeV1,
+            *,
+            execution: CompareExecutionContextV1,
+        ) -> AssistantResultEnvelopeV1:
+            self.calls.append((request, execution))
+            clock_state[0] = 10.0
+            raise RuntimeError("late failure")
+
+    assistant = LateFailingAssistant(_assistant_result())
+    simulate_me = _FakeSimulateMe(_simulate_result())
+    cancellation = CancellationTokenSource()
+    service = BuildCompare(assistant, simulate_me, clock=lambda: clock_state[0])
+
+    result = _execute(service, cancellation=cancellation, deadline=10.0)
+
+    assert isinstance(result, CompareResultV1)
+    assert isinstance(result.assistant, CompareAssistantErrorBranchV1)
+    assert result.assistant.error is not None
+    assert result.assistant.error.code is CompareBranchErrorCodeV1.TIMEOUT
+    assert isinstance(result.simulate_me, CompareSimulateMeErrorBranchV1)
+    assert result.simulate_me.error is not None
+    assert result.simulate_me.error.code is CompareBranchErrorCodeV1.TIMEOUT
+    assert len(assistant.calls) == 1
+    assert len(simulate_me.calls) == 0
+
+
+def test_deadline_after_simulate_me_exception_overrides_branch_failure() -> None:
+    clock_state = [0.0]
+
+    class LateFailingSimulateMe(_FakeSimulateMe):
+        def execute(
+            self,
+            request: SimulateMeRequest,
+            *,
+            execution: CompareExecutionContextV1,
+        ) -> SimulateMeResult:
+            self.calls.append((request, execution))
+            clock_state[0] = 10.0
+            raise RuntimeError("late failure")
+
+    assistant = _FakeAssistant(_assistant_result())
+    simulate_me = LateFailingSimulateMe(_simulate_result())
+    cancellation = CancellationTokenSource()
+    service = BuildCompare(assistant, simulate_me, clock=lambda: clock_state[0])
+
+    result = _execute(service, cancellation=cancellation, deadline=10.0)
+
+    assert isinstance(result, CompareResultV1)
+    assert isinstance(result.assistant, CompareAssistantResultBranchV1)
+    assert isinstance(result.simulate_me, CompareSimulateMeErrorBranchV1)
+    assert result.simulate_me.error is not None
+    assert result.simulate_me.error.code is CompareBranchErrorCodeV1.TIMEOUT
+    assert len(assistant.calls) == 1
+    assert len(simulate_me.calls) == 1
+
+
 def test_simulate_me_temporal_mismatch_becomes_branch_result_invalid() -> None:
     claim_id = _uuid(1)
     ref = SimulateMeEvidenceRef(

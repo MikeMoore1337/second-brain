@@ -1444,6 +1444,13 @@ class BuildCompare:
 
         return self._clock() >= execution.deadline
 
+    def _post_adapter_checkpoint(self, execution: CompareExecutionContextV1) -> bool:
+        """Prioritize cancellation, then deadline, after every adapter exit."""
+
+        if execution.cancellation.is_cancelled():
+            raise CompareCancelledError()
+        return self._expired(execution)
+
     def _run_assistant(
         self,
         prepared: _PreparedCompare,
@@ -1464,20 +1471,33 @@ class BuildCompare:
                 execution=execution,
             )
         except AssistantError as error:
+            if self._post_adapter_checkpoint(execution):
+                return CompareAssistantErrorBranchV1(
+                    state=CompareBranchStateV1.ERROR,
+                    error=_branch_error(CompareBranchErrorCodeV1.TIMEOUT),
+                )
             return _assistant_branch_error(error)
         except TimeoutError:
+            if self._post_adapter_checkpoint(execution):
+                return CompareAssistantErrorBranchV1(
+                    state=CompareBranchStateV1.ERROR,
+                    error=_branch_error(CompareBranchErrorCodeV1.TIMEOUT),
+                )
             return CompareAssistantErrorBranchV1(
                 state=CompareBranchStateV1.ERROR,
                 error=_branch_error(CompareBranchErrorCodeV1.TIMEOUT),
             )
         except Exception:
+            if self._post_adapter_checkpoint(execution):
+                return CompareAssistantErrorBranchV1(
+                    state=CompareBranchStateV1.ERROR,
+                    error=_branch_error(CompareBranchErrorCodeV1.TIMEOUT),
+                )
             return CompareAssistantErrorBranchV1(
                 state=CompareBranchStateV1.ERROR,
                 error=_branch_error(CompareBranchErrorCodeV1.FAILURE),
             )
-        if execution.cancellation.is_cancelled():
-            raise CompareCancelledError()
-        if self._expired(execution):
+        if self._post_adapter_checkpoint(execution):
             return CompareAssistantErrorBranchV1(
                 state=CompareBranchStateV1.ERROR,
                 error=_branch_error(CompareBranchErrorCodeV1.TIMEOUT),
@@ -1516,20 +1536,33 @@ class BuildCompare:
                 execution=execution,
             )
         except SimulateMeError as error:
+            if self._post_adapter_checkpoint(execution):
+                return CompareSimulateMeErrorBranchV1(
+                    state=CompareBranchStateV1.ERROR,
+                    error=_branch_error(CompareBranchErrorCodeV1.TIMEOUT),
+                )
             return _simulate_me_branch_error(error)
         except TimeoutError:
+            if self._post_adapter_checkpoint(execution):
+                return CompareSimulateMeErrorBranchV1(
+                    state=CompareBranchStateV1.ERROR,
+                    error=_branch_error(CompareBranchErrorCodeV1.TIMEOUT),
+                )
             return CompareSimulateMeErrorBranchV1(
                 state=CompareBranchStateV1.ERROR,
                 error=_branch_error(CompareBranchErrorCodeV1.TIMEOUT),
             )
         except Exception:
+            if self._post_adapter_checkpoint(execution):
+                return CompareSimulateMeErrorBranchV1(
+                    state=CompareBranchStateV1.ERROR,
+                    error=_branch_error(CompareBranchErrorCodeV1.TIMEOUT),
+                )
             return CompareSimulateMeErrorBranchV1(
                 state=CompareBranchStateV1.ERROR,
                 error=_branch_error(CompareBranchErrorCodeV1.FAILURE),
             )
-        if execution.cancellation.is_cancelled():
-            raise CompareCancelledError()
-        if self._expired(execution):
+        if self._post_adapter_checkpoint(execution):
             return CompareSimulateMeErrorBranchV1(
                 state=CompareBranchStateV1.ERROR,
                 error=_branch_error(CompareBranchErrorCodeV1.TIMEOUT),
