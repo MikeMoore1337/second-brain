@@ -83,13 +83,19 @@ Calibration сканирует current canonical report и рассматрив�
 3. current note body проходит existing `parse_decision_journal_body`;
 4. `evidence_at` — aware RFC3339 datetime с
    `evidence_at_precision=exact`; `unknown` не становится replay case;
-5. current note identity (UUID, path и uniqueness) валидна;
-6. `available_options` содержит от 2 до 8 items. Stage 2 разрешает до 20,
+5. если у самой Journal note присутствует валидный `updated`, то
+   `updated <= D`, где `D = evidence_at` этой note; `updated > D` означает
+   post-choice mutation current body и немедленно исключает case с code
+   `decision_body_edited_after_cutoff`. Отсутствующий `updated` или
+   `updated <= D` не доказывает historical bytes, но сам по себе case не
+   исключает;
+6. current note identity (UUID, path и uniqueness) валидна;
+7. `available_options` содержит от 2 до 8 items. Stage 2 разрешает до 20,
    но Stage 6 Simulate Me принимает максимум 8; options не выбираются,
    сортируются или усекaются для fit;
-7. `chosen_option` после exact Stage 2 whitespace comparison соответствует
+8. `chosen_option` после exact Stage 2 whitespace comparison соответствует
    ровно одному item `available_options`;
-8. нет malformed/duplicate section, hidden extra body или current diagnostic,
+9. нет malformed/duplicate section, hidden extra body или current diagnostic,
    делающего эту Journal note недостоверной.
 
 Case с unknown decision time, invalid body, invalid choice mapping, duplicate
@@ -103,14 +109,20 @@ Outcome всегда обрабатывается как post-choice data и п�
 для replay. Malformed Journal body или malformed Journal identity, наоборот,
 делают сам case ineligible.
 
+Проверка `updated > D` относится к самой Decision Journal note, а не только к
+Self Model source context: такой case не получает target, не строит `E` query и
+не читает current context. Это fail-closed защита от добавления выбранного
+option или outcome в allowed Journal field после выбора.
+
 Классификация исключений является взаимоисключающей: одна classified Journal
 note увеличивает не более одного counter в `excluded_decisions`. До replay
 проверки выполняются в таком first-match order:
-`decision_identity_invalid_or_duplicate`, `decision_body_invalid`,
-`decision_time_unknown`, `decision_time_not_exact_or_invalid`,
+`decision_identity_invalid_or_duplicate`, `decision_time_unknown`,
+`decision_time_not_exact_or_invalid`, `decision_body_edited_after_cutoff`,
+`decision_body_invalid`,
 `decision_option_count_unsupported`, затем `decision_option_identity_invalid`.
 Побеждает первая failing check; последующие applicable failures не считаются.
-Note, прошедшая все шесть checks, становится eligible, а eligible case никогда
+Note, прошедшая все семь checks, становится eligible, а eligible case никогда
 не получает code из `excluded_decisions`.
 
 Чтобы operation оставалась bounded, одна run обрабатывает не более
@@ -149,7 +161,8 @@ summary.
 `confidence`, `expected_result`, outcome и post-choice evidence не могут влиять
 ни на selection, ни на branch availability, ни на metrics category. Изменение
 masked section, которое до этой границы делает Journal body невалидным,
-меняет eligibility и переводит case в fixed excluded category; это не является
+меняет eligibility и переводит case в соответствующий fixed excluded code;
+`updated > D` получает `decision_body_edited_after_cutoff`. Это не является
 leakage и не может считаться mismatch. Наличие masked data в current storage
 не является разрешением на retrospective leakage.
 
@@ -429,12 +442,13 @@ made; `eligible_decisions` and exact denominators remain visible.
 `excluded_decisions`:
 
 ```text
+decision_identity_invalid_or_duplicate
 decision_time_unknown
 decision_time_not_exact_or_invalid
+decision_body_edited_after_cutoff
 decision_body_invalid
 decision_option_count_unsupported
 decision_option_identity_invalid
-decision_identity_invalid_or_duplicate
 ```
 
 `replay_unavailable`:
@@ -510,6 +524,7 @@ Per-case semantics preserve progress of other cases inside the final aggregate:
 | Case condition | Classification | Other cases |
 | --- | --- | --- |
 | Missing/unknown/non-exact decision time or malformed Journal | excluded before replay | remain eligible for processing and counted by code |
+| Journal `updated > decision_at` | `decision_body_edited_after_cutoff` before target/query/context construction | case остаётся в `decision_notes_seen` и учитывается своим code |
 | Safe empty filtered context; no exact support | validated abstention | preserved |
 | Multiple distinct supported options | validated abstention | preserved |
 | Current context cannot be safely projected | `prechoice_context_unavailable` per §8.3 | preserved |
@@ -534,13 +549,13 @@ Fingerprint input is exactly this one-line ASCII JSON, encoded as UTF-8 with
 `sort_keys=true`, separators `,` and `:`, no BOM and no trailing newline:
 
 ```json
-{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","diagnostics":"exclusive-phase-mapped-code-sums-v1","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","temporal_caveat_counting":"per-eligible-case-independent-codes-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
+{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","diagnostics":"exclusive-phase-mapped-code-sums-v2","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","journal_body_cutoff":"updated-after-decision-excluded-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","temporal_caveat_counting":"per-eligible-case-independent-codes-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
 ```
 
 Expected fingerprint:
 
 ```text
-sha256:4e353355521919b0d5253cb76dd6baec27d3f94467b940068c9be7603112439c
+sha256:174e43853583a3c56e478d80844399afbcbfc3bfcc56cd7dbec7d3a0c35c2c6b
 ```
 
 Fingerprint changes when any eligibility, masking, cutoff, execution, option
@@ -611,6 +626,7 @@ database or write path.
 | Valid no-match | Stage 6 `no_matching_evidence` is `abstentions=1`, not unavailable or mismatch. |
 | Valid multiple-support ambiguity | `multiple_options_supported` is abstention; no count/recency tie-break. |
 | Mismatch | Valid prediction with different request-local ID increments mismatch only. |
+| Изменение Journal body после cutoff | `updated > decision_at` исключает case до target/query/context construction с `decision_body_edited_after_cutoff`; это никогда не mismatch и не temporal caveat. |
 | Linked Outcome present | `actual_result`, `reassessment`, `notes` never enter query/context/metrics. |
 | Later evidence | `evidence_at > decision_at` is excluded; `later_evidence_excluded` is counted once per eligible case if any such source exists, and it cannot make a prediction. |
 | Unknown-time evidence | `unknown` is excluded; `unknown_evidence_excluded` is counted once per eligible case if any such source exists, with no assumption that it pre-existed choice. |
