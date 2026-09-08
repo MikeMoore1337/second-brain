@@ -8,16 +8,20 @@ Self Retrieval также реализован bounded core/Web/CLI slices из 
 поверх approved contract issue #88; он остаётся read-only и current-UUID based.
 Owner-approved v1 contracts фиксируют conservative direct-assertion и
 current-UUID retrieval policies. Stage 6 Simulate Me получил approved
-mechanical design contract в #100: provider-free exact-match
-prediction/abstention policy без confidence; runtime остаётся будущим slice.
-Для следующей Stage 7 boundary issue #162 зафиксирован design-only contract
-[Assistant v1](assistant-v1-contract.md): independent recommendation / analysis
-отделён от Simulate Me; owner выбрал A — отдельный provider-neutral
+mechanical design contract в #100 и provider-free exact-match
+prediction/abstention runtime/core и Web projection; confidence и provider
+runtime отсутствуют. Для Stage 7 boundary issue #162 зафиксирован design-only
+contract [Assistant v1](assistant-v1-contract.md): independent recommendation /
+analysis отделён от Simulate Me; owner выбрал A — отдельный provider-neutral
 `AdvisorPort` с explicit-context-only payload. Automatic Personal Memory
-context, provider/network/privacy integration и runtime пока не разрешены.
+context, provider/network/privacy integration и real Advisor runtime пока не
+разрешены. Issue #163 получает отдельный mechanical
+[Compare v1 contract](compare-v1-contract.md): три зоны остаются раздельными,
+а Delta сравнивает только typed terminal states и exact request-local option
+IDs.
 
 Точный status snapshot перед этой docs reconciliation — current `main`:
-`30249d56d366c0688c451a45a7e0214114c7c197`.
+`eec05429c277f5e544ffa74b060d06dec9b2dce4`.
 
 Issue #66 задаёт исходную архитектурную границу roadmap. Для текущего Stage 4
 Self Model scope и contract source of truth — issue #81 и
@@ -749,23 +753,19 @@ vector DB, embedding provider и RAG в #66 не добавляются.
 | Режим | Что он оптимизирует | Выход | Чего он не делает |
 | --- | --- | --- | --- |
 | `Assistant` | Независимый рекомендательный анализ задачи, constraints и явно заданных criteria | Recommendation, rationale, uncertainty и trade-offs | Не подменяет recommendation наиболее привычным выбором пользователя |
-| `Simulate Me` | Prediction того, что пользователь вероятнее всего выбрал бы сам сейчас | Predicted choice, confidence, supporting/contradicting evidence и temporal caveats | Не называет prediction объективно лучшим решением |
-| `Compare` | Одновременное сопоставление двух независимых outputs | Вероятный пользовательский выбор + independent recommendation + reasons for divergence | Не схлопывает disagreement в один ответ |
+| `Simulate Me` | Prediction того, что пользователь вероятнее всего выбрал бы сам сейчас | Predicted choice, typed evidence refs и temporal caveats либо abstention | Не называет prediction объективно лучшим решением |
+| `Compare` | Одновременная композиция двух независимых outputs | Assistant zone + Simulate Me zone + structural Delta | Не схлопывает disagreement, evidence или prediction в один ответ |
 
 Independent `Assistant` branch не получает уже готовый predicted choice как
 скрытую подсказку и не обучается на результате `Simulate Me` внутри того же
 запроса. Если personal context нужен для анализа, он подаётся как явно
 помеченная evidence, а criteria независимой рекомендации остаются видимыми.
 
-`Compare` должен уметь показать:
-
-- preference против stated goal;
-- stale evidence против свежего утверждения;
-- weak confidence и маленький sample;
-- competing interpretations одного набора notes;
-- disagreement между habitual choice и growth-optimal/independent
-  recommendation;
-- missing evidence, из-за которого не следует делать сильный вывод.
+`Compare` v1 должен показать только typed branch states, exact request-local
+option-ID relation и branch-local evidence shapes. Preference против stated goal,
+stale/fresh interpretation, competing meanings одного набора notes, confidence,
+behavioral explanation и growth-optimal semantic reasoning не входят в
+mechanical Delta и остаются deferred.
 
 Это anti-echo-chamber boundary: «похоже на прошлое поведение» не означает
 «надо так же советовать», а «independent recommendation отличается» не означает
@@ -773,71 +773,19 @@ Independent `Assistant` branch не получает уже готовый predi
 
 ## 15. Prediction & Calibration v1
 
-В v1 calibration — **только retrospective/rebuildable**. ML training pipeline
-не нужен. Нужен lifecycle:
+В v1 retrospective/rebuildable calibration остаётся отдельной pending-задачей
+Stage 7, tracked by issue #164. Её bounded contract ведётся в deliverable
+`retrospective-calibration-v1-contract.md`; этот roadmap намеренно не дублирует
+нормативную механику калибровки.
 
-```text
-canonical historical Decision Journal
-  -> pre-choice snapshot
-  -> current Simulate Me derivation without chosen option/outcome
-  -> predicted choice + confidence
-  -> compare with canonical observed decision
-  -> rebuildable calibration aggregate
-```
+До принятия #164 eligibility, pre-choice masking, temporal cutoff,
+current-vault limitation, request projection, execution/work budgets, result
+metrics и policy identity определяются только в contract этой задачи.
+Calibration не является частью Assistant или Compare; implementation не начата.
 
-Для каждого historical Journal строится pre-choice snapshot из:
-
-- `Situation`;
-- `Available options`;
-- `Information known at decision time`;
-- `Criteria`;
-- canonical evidence, доступного не позже `evidence_at` decision.
-
-В Simulate Me input **не входят** `Chosen option`, `Reasons`, `Expected result`,
-`Actual result`, `Reassessment`, поздние notes или сам expected answer. Это
-explicit anti-leakage boundary. После replay predicted choice сравнивается с
-canonical `observed_decision` choice из Journal. Поэтому calibration отвечает
-на вопрос: «насколько текущая версия Cognitive Twin моделирует исторические
-решения пользователя?», а не «насколько система когда-то предсказала их в
-production».
-
-Derived historical prediction существует только во время rebuild и содержит:
-
-- predicted choice и bounded confidence;
-- historical context fingerprint и decision cutoff;
-- supporting и contradicting canonical UUIDs;
-- `generated_at` и `derivation_version`.
-
-Actual choice берётся только после replay из reviewed `observed_decision`.
-Если в Journal нет canonical chosen option или pre-choice information, sample
-получает `unobserved/insufficient_input`, а не неправильный prediction.
-Comparison различает как минимум `match`, `mismatch`, `partial/ambiguous` и
-`unobserved`.
-
-Calibration v1 показывает количество replayable samples, confidence bins,
-empirical hit rate и calibration gap. Brier score или другая proper scoring
-metric может быть добавлена только если choice space достаточно определён;
-отсутствие достаточного sample должно показываться явно. Нельзя выдавать
-маленькую выборку за validated personal trait.
-
-Retrospective prediction и calibration полностью derived: удаление derived
-state не теряет никаких данных и не сбрасывает historical calibration — она
-снова вычисляется из vault той же или новой derivation policy. При смене
-`derivation_version` результат честно является метрикой новой версии, а не
-притворяется историческим production prediction.
-
-Prospective extension (`prediction now -> actual choice later`) в v1 не входит.
-Чтобы такой режим когда-либо имел rebuildable historical calibration, сначала
-потребуется policy-governed immutable canonical audit record факта операции:
-
-```text
-system predicted X at T with confidence C using derivation V
-```
-
-Это не user fact, не `evidence_kind`, не подтверждение inference и не claim о
-пользователе. Такой audit record нельзя подменить текущим Self Model после
-удаления derived state. Его storage, retention и privacy policy потребуют
-отдельного design; новую DB/event store для этого сейчас не добавляем.
+Compare v1 остаётся mechanical composition approved typed Simulate Me/Assistant
+branch outputs. Этот roadmap entry не вводит provider, LLM, prospective
+logging/persistence, training/tuning или automatic Personal Memory write-back.
 
 ## 16. Active Personal Learning v1
 
@@ -1048,7 +996,8 @@ context и derived explanation divergence.
 
 ### Stage 6 — Simulate Me v1
 
-- **Статус:** approved mechanical design; runtime implementation не начата.
+- **Статус:** approved mechanical design и provider-free application/Web
+  runtime/core; provider, confidence и persistence отсутствуют.
   Нормативный contract находится в
   [simulate-me-v1-contract.md](simulate-me-v1-contract.md),
   `HUMAN_REQUIRED = none`.
@@ -1076,28 +1025,33 @@ context и derived explanation divergence.
 ### Stage 7 — Assistant v1; Compare v1 + Prediction & Calibration v1
 
 - **Статус:** Assistant v1 design-only contract зафиксирован в
-  [assistant-v1-contract.md](assistant-v1-contract.md). Он задаёт отдельную
+  [assistant-v1-contract.md](assistant-v1-contract.md), а Compare v1
+  mechanical composition contract — в
+  [compare-v1-contract.md](compare-v1-contract.md). Assistant задаёт отдельную
   explicit-context-only independent recommendation / analysis branch и не
-  принимает Simulate Me prediction как input. Owner decision A принят;
-  `HUMAN_REQUIRED: none` для capability-boundary, а automatic Personal Memory,
-  provider/network/privacy integration и runtime остаются отдельными future
-  gates. Assistant runtime не начат.
+  принимает Simulate Me prediction как input. Compare сохраняет оба typed
+  wrappers и structural Delta по exact request-local option IDs. Owner decision A
+  принят; `HUMAN_REQUIRED: none` для capability-boundary, а automatic Personal
+  Memory, provider/network/privacy integration и runtime остаются отдельными
+  future gates. Assistant и Compare runtime не начаты.
 - **Цель:** сначала определить независимый bounded advice contract, затем в
   будущем сопоставить его с likely user choice и измерить, насколько текущая
   derivation policy воспроизводит исторические decisions.
 - **Входные зависимости:** caller-owned Assistant request с explicit task,
   options, constraints, goals и context; Stage 6 Simulate Me derivation и,
-  для Compare/Calibration, canonical Stage 2 Decision Journal с pre-choice
-  information и actual `observed_decision`. Automatic Stage 5/Personal Memory
-  context в Assistant v1 не входит.
+  для Calibration, canonical Stage 2 Decision Journal с pre-choice
+  information и actual `observed_decision`. Compare получает только
+  caller-owned branch inputs и не читает Decision Journal. Automatic Stage
+  5/Personal Memory context в Assistant v1 не входит.
 - **Canonical changes:** only user-reviewed actual decisions/outcomes; no
   calibration fields or prediction history in user notes.
-- **Derived state:** в будущем две independent outputs, retrospective
-  pre-choice predictions, divergence reasons, comparisons, confidence buckets и
-  rebuildable calibration aggregates; Assistant result сам остаётся ephemeral.
-- **Public/application contracts:** Compare result always contains both branches;
-  Assistant result явно labelled independent recommendation / analysis;
-  Calibration result reports replay sample/unknowns and derivation version.
+- **Derived state:** в будущем две independent outputs, structural comparisons,
+  retrospective pre-choice predictions и rebuildable calibration aggregates;
+  Assistant result сам остаётся ephemeral.
+- **Public/application contracts:** Compare result always contains both branch
+  wrappers и deterministic structural Delta; Assistant result явно labelled
+  independent recommendation / analysis; Calibration result reports replay
+  sample/unknowns and derivation version.
 - **Risks:** recommendation contamination by prediction, actual-choice leakage
   into backtest, outcome selection bias, false precision from tiny sample.
 - **Explicit out-of-scope:** Assistant/Compare runtime before отдельной
@@ -1106,10 +1060,11 @@ context и derived explanation divergence.
   prospective calibration, policy-governed prediction audit record,
   optimization against a hidden reward and universal user score.
 - **Acceptance boundary:** Assistant receives only caller-explicit inputs and
-  never receives prediction or automatic private context; future Compare keeps
-  both branches and explicit delta; chosen option, reasons and later outcome
-  are masked from historical Simulate Me input; calibration can be deleted and
-  rebuilt from current vault without losing user data.
+  never receives prediction or automatic private context; Compare keeps both
+  branches and an exact structural Delta without semantic cross-branch
+  inference; chosen option, reasons and later outcome are masked from
+  historical Simulate Me input; calibration can be deleted and rebuilt from
+  current vault without losing user data.
 
 ### Stage 8 — Active Personal Learning v1
 
@@ -1319,7 +1274,7 @@ write-back, schema bump, new dependencies, new note type, domain registry,
 psychological profiling, live smoke, production deployment, issue creation и
 любые изменения `second-brain-vault`.
 
-## Current implementation status after Stage 5
+## Current implementation status after Stage 6
 
 Stage 1–3 core, Stage 4 Self Model core/Web projection и Stage 5
 Self Retrieval core/Web/CLI (#89/#90/#91) находятся в current `main`.
@@ -1328,9 +1283,10 @@ exact supporting UUID links и safe errors; он не добавляет embeddi
 prediction, inference write-back, canonical fields или изменения
 `second-brain-vault`.
 
-Stage 6 contract approved, но Stage 6 runtime и нижеследующие Stage 7–8
-остаются design/roadmap boundaries. Assistant v1 design contract добавляет
-только bounded Stage 7 documentation и фиксирует owner decision A;
+Stage 6 contract approved, а provider-free application/Web runtime и core
+находятся в current `main`; confidence, provider runtime и persistence
+отсутствуют. Assistant v1 и Compare v1 остаются design-only contracts:
 `HUMAN_REQUIRED: none` относится только к capability-boundary, а provider/
-network/privacy integration остаётся отдельным future gate. Этот status sync не
-объявляет runtime scope, не создаёт Stage 8 item и не меняет product semantics.
+network/privacy integration и runtime остаются отдельными future gates. Этот
+status sync не объявляет Stage 8 runtime scope, не создаёт Stage 8 item и не
+меняет product semantics.
