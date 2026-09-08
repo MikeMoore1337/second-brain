@@ -166,6 +166,44 @@ contract-derived lower bound равен:
 Assistant envelope schema, key order или Compare minimum options значение
 пересчитывается до изменения request bound.
 
+### 3.3. Operation control boundary
+
+`CompareRequestV1` намеренно содержит только immutable semantic input. Для каждой
+execution application boundary обязана получить explicit control context:
+
+    CompareExecutionContextV1 {
+      cancellation: CancellationToken
+      deadline:    float  # finite absolute reading from monotonic clock
+    }
+
+    CompareExecutorV1.execute(
+        request: CompareRequestV1,
+        *,
+        execution: CompareExecutionContextV1,
+    ) -> CompareResultV1 | CompareErrorV1
+
+`deadline` — finite absolute value одной injected monotonic clock, а не wall-clock,
+user text или branch input; default/unbounded execution запрещён. Context создаётся
+один раз на Compare operation, тот же cancellation token и deadline передаются
+обоим branch adapters, а context не попадает в canonical request/result/policy
+JSON.
+
+Coordinator обязан проверить cancellation и deadline до preflight, перед каждым
+branch invocation, во время ожидания branch и после её возврата. Adapter должен
+делать underlying operation interruptible: наблюдать оба сигнала во время
+блокирующего чтения/вычисления, остановить работу и вернуть typed
+cancellation/timeout mapping. Adapter, который может вызвать только
+`BuildSimulateMe.execute(SimulateMeRequest)` без этих controls, не является
+валидной Compare dependency. Нельзя оставлять thread/task работающим после
+deadline, retry или hidden fallback.
+
+Если cancellation token замечен до завершения обеих веток, после bounded adapter
+cleanup применяется top-level `COMPARE_CANCELLED` из §8.2; completed branch не
+возвращается отдельно. Если истёк deadline, in-flight branch получает
+`COMPARE_BRANCH_TIMEOUT`; ещё не начатая branch не вызывается и получает тот же
+typed timeout wrapper. Уже завершённая другая branch сохраняется по §8.1.
+Если наблюдаются оба сигнала, cancellation имеет приоритет.
+
 ## 4. Exact construction и execution independence
 
 После успешной Compare request validation строятся две независимые typed copies:
@@ -197,21 +235,25 @@ Simulate Me, либо безопасно параллельно, если сох
 
 - at-most-once invocation каждой ветки;
 - отсутствие shared mutable branch state;
-- одинаковая cancellation/deadline policy;
+- один и тот же immutable `CompareExecutionContextV1` с общей cancellation/
+  deadline policy;
 - сохранение branch result в свой wrapper;
 - отсутствие retry, fallback, hidden provider replacement или short-circuit
   из-за содержания результата первой ветки.
 
 Даже если одна ветка вернула abstention или error, вторая ветка выполняется,
-если top-level operation не отменена. Execution order не является evidence и
-не меняет Delta.
+если top-level operation не отменена и deadline ещё не истёк. После deadline
+вторая branch не вызывается и получает typed timeout wrapper по §3.3. Execution
+order не является evidence и не меняет Delta.
 
 Текущий Stage 6 executor для Simulate Me — application-level
-BuildSimulateMe.execute(SimulateMeRequest). Compare не должен зависеть от Web
-SimulateMeRequestPayload, FastAPI, browser или raw HTTP body. Его approved
-current-context read выполняется только внутри существующего Stage 6
-boundary; failure/invalid current context остаётся typed SimulateMeResult
-abstention согласно текущему контракту.
+`BuildSimulateMe.execute(SimulateMeRequest)`. Compare не должен зависеть от Web
+`SimulateMeRequestPayload`, FastAPI, browser или raw HTTP body. Однако прямой
+вызов этого метода без control seam недостаточен: будущий Compare adapter
+обязан передать `CompareExecutionContextV1` и сделать interruptible approved
+current-context read и matching operation. Без этого adapter Stage 6 executor
+не является валидной Compare dependency; failure/invalid current context
+остаётся typed SimulateMeResult abstention согласно текущему контракту.
 
 ## 5. Typed branch wrappers
 
@@ -498,6 +540,9 @@ Top-level error применяется ровно в следующих случ
 - COMPARE_INVALID_REQUEST: Compare DTO не прошёл pre-branch validation;
 - COMPARE_CANCELLED: global Compare cancellation обнаружена до безопасного
   завершения обеих branch attempts; completed branch не возвращается отдельно;
+- истёкший operation deadline не становится top-level cancellation: in-flight или
+  not-yet-started branch получает `COMPARE_BRANCH_TIMEOUT` по §3.3, а completed
+  sibling сохраняется по branch outcome matrix;
 - COMPARE_COMPOSITION_INVALID: Compare-owned wrapper/composition нарушает
   closed Compare invariant после того, как branch output уже был принят
   соответствующим branch validator. Это касается только дефекта самой
@@ -523,11 +568,11 @@ serialization, silent option removal, hidden fallback или повторная 
 Policy fingerprint вычисляется как SHA-256 UTF-8 bytes exact canonical JSON
 ниже, без завершающего newline:
 
-    {"branch_inputs":"shared-task-options-only-v1","branch_invocation":"one-independent-attempt-each-v1","branch_output":"typed-result-abstention-error-v1","delta_evidence":"preserve-namespaces-no-cross-comparison-v1","delta_human_text":"fixed-templates-v1","delta_option_equality":"exact-request-local-id-v1","delta_relation_codes":["same_selected_option","different_selected_options","assistant_only_selected","simulate_me_only_selected","neither_selected","assistant_error","simulate_me_error","both_error"],"execution_context":"assistant-explicit-only;simulate-me-current-approved-context-only","no_side_effects":"ephemeral-read-only-v1","version":"1"}
+    {"branch_inputs":"shared-task-options-only-v1","branch_invocation":"one-independent-attempt-each-unless-operation-cancelled-or-deadline-expires-v2","branch_output":"typed-result-abstention-error-v1","delta_evidence":"preserve-namespaces-no-cross-comparison-v1","delta_human_text":"fixed-templates-v1","delta_option_equality":"exact-request-local-id-v1","delta_relation_codes":["same_selected_option","different_selected_options","assistant_only_selected","simulate_me_only_selected","neither_selected","assistant_error","simulate_me_error","both_error"],"execution_context":"assistant-explicit-only;simulate-me-current-approved-context-only","execution_control":"shared-monotonic-deadline-and-cancellation-token-v1","no_side_effects":"ephemeral-read-only-v1","version":"1"}
 
 Ожидаемый fingerprint:
 
-    sha256:f0619ea1034ac29a5800866d47cd8a8d2758b8ca3cdbe549b6494df084cd48a9
+    sha256:518da5bb49968fb22ba956b9291588c6e90fb32cd0d4458f6c17f6f26a40694e
 
 Для outer result budget используется contract-derived floor и request-specific
 minimum:
@@ -630,8 +675,9 @@ production enablement.
    SimulateMeRequest, SimulateMeOption, SimulateMeResult,
    SimulateMeResultKind, SimulateMeAbstentionCode, SimulateMeError,
    validate_simulate_me_request, validate_simulate_me_result, BuildSimulateMe;
-3. standard-library immutable DTO/serialization, cancellation и bounded
-   deadline seams, если они уже существуют в application boundary.
+3. standard-library immutable DTO/serialization и explicit
+   `CompareExecutionContextV1` с `CancellationToken` и injected monotonic clock;
+   оба branch adapter обязаны propagate context и быть interruptible.
 
 Не входят dependency list:
 
@@ -648,32 +694,34 @@ owner-gated задачей. Compare v1 design не предполагает, ч�
 
 ## 12. Deterministic test matrix для будущего runtime
 
-| Case | Required result |
+| Сценарий | Обязательный результат |
 | --- | --- |
-| valid shared task/options и valid Assistant inputs | обе typed branch requests построены из immutable copies |
-| missing/extra field, wrong type, empty options, 9 options, duplicate/bad ID | COMPARE_INVALID_REQUEST; ни одна ветка не вызвана |
-| text controls, invalid UTF-8, blank, NFC/edge-strip, per-field/aggregate overflow | exact validation; no branch call; no raw input in error |
-| Assistant receives Simulate Me context/result | impossible by request construction; regression test fails if observed |
-| Simulate Me receives Assistant constraints/goals/context | impossible by request construction; regression test fails if observed |
-| branch output passed to other branch | no call/order may observe it |
-| both selected with equal IDs | same_selected_option; no label/semantic comparison |
-| both selected with different IDs | different_selected_options, even if labels look similar |
-| Assistant selected, Simulate Me abstained | assistant_only_selected; Sim abstention preserved |
-| Simulate Me selected, Assistant abstained | simulate_me_only_selected; Assistant abstention preserved |
-| Assistant recommendation/analysis without selection, Sim prediction | simulate_me_only_selected; Assistant kind preserved |
-| neither branch selected | neither_selected; exact abstention/result states preserved |
-| one branch typed error, other result/abstention | partial result; successful other branch preserved |
-| both typed errors | bounded structural result with both wrappers and both_error |
-| invalid selected pair or wrong branch policy from a branch | corresponding safe branch result-invalid error; sibling branch is preserved |
-| Compare-owned impossible wrapper/composition shape | COMPARE_COMPOSITION_INVALID |
-| provider/Search/vault/Self Model seam observed by Delta | no call; test fails |
-| rationale, UUID, note IDs, claim text or evidence list differ | branches stay separate; no content comparison or union |
-| deterministic template text | exact table text; no confidence, bias, personality, risk or advice |
-| result exactly at outer byte cap | accepted |
-| result above outer byte cap | COMPARE_RESULT_TOO_LARGE; no truncation/retry |
-| policy canonical JSON | exact policy_id, version and fingerprint |
-| global cancellation before completion | COMPARE_CANCELLED; no partial outward result |
-| no provider/network/write/persistence | deterministic no-side-effect test |
+| корректные shared task/options и корректные Assistant inputs | обе typed branch requests построены из immutable copies |
+| отсутствующее/лишнее поле, неверный тип, пустой options, 9 options, duplicate/bad ID | `COMPARE_INVALID_REQUEST`; ни одна ветка не вызвана |
+| text controls, invalid UTF-8, blank, NFC/edge-strip, per-field/aggregate overflow | exact validation; branch не вызывается; raw input отсутствует в error |
+| Assistant получает Simulate Me context/result | невозможно по construction rule; regression test падает при обнаружении |
+| Simulate Me получает Assistant constraints/goals/context | невозможно по construction rule; regression test падает при обнаружении |
+| output одной branch передан другой branch | ни один call/order не может его наблюдать |
+| обе ветки выбрали равные IDs | `same_selected_option`; labels и semantics не сравниваются |
+| обе ветки выбрали разные IDs | `different_selected_options`, даже если labels выглядят похоже |
+| Assistant selected, Simulate Me abstained | `assistant_only_selected`; Simulate Me abstention сохраняется |
+| Simulate Me selected, Assistant abstained | `simulate_me_only_selected`; Assistant abstention сохраняется |
+| Assistant recommendation/analysis без выбора, Simulate Me prediction | `simulate_me_only_selected`; Assistant kind сохраняется |
+| ни одна branch не выбрала option | `neither_selected`; exact abstention/result states сохраняются |
+| одна branch typed error, другая result/abstention | partial result; успешная другая branch сохраняется |
+| обе branch typed errors | bounded structural result с обоими wrappers и `both_error` |
+| invalid selected pair или неверная branch policy | соответствующий safe branch result-invalid error; sibling branch сохраняется |
+| невозможная Compare-owned wrapper/composition shape | `COMPARE_COMPOSITION_INVALID` |
+| Delta наблюдает provider/Search/vault/Self Model seam | call отсутствует; test падает |
+| различаются rationale, UUID, note IDs, claim text или evidence list | branches остаются раздельными; content не сравнивается и не union-ится |
+| deterministic template text | exact table text; confidence, bias, personality, risk и advice отсутствуют |
+| operation deadline истёк до branch invocation | branch call не выполняется; affected branch получает `COMPARE_BRANCH_TIMEOUT`, completed sibling сохраняется |
+| deadline истёк во время branch execution | interruptible adapter прекращает operation; branch получает `COMPARE_BRANCH_TIMEOUT` |
+| global cancellation до завершения обеих branches | `COMPARE_CANCELLED`; partial outward result отсутствует |
+| result точно на outer byte cap | accepted |
+| result выше outer byte cap | `COMPARE_RESULT_TOO_LARGE`; truncation/retry отсутствуют |
+| policy canonical JSON | exact policy_id, version и fingerprint |
+| нет provider/network/write/persistence | deterministic no-side-effect test |
 
 Эта матрица описывает acceptance для будущей implementation task; в #163
 runtime code и runtime tests не добавляются.
