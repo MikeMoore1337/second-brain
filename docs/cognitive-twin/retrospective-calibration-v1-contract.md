@@ -208,17 +208,28 @@ Simulate Me может честно вернуть `abstention/no_matching_evide
 ### 5.2.1 Детерминированный подсчёт temporal caveats
 
 Единица подсчёта для всех `temporal_caveats` — один eligible Decision Journal
-case, а не source note, claim или отдельный reference. Для каждого eligible
-case каждый applicable code увеличивается не более одного раза: наличие одного
-или нескольких соответствующих sources даёт один increment. Conditions
-считаются независимо и могут co-occur: например, один source с
-`evidence_at > D` и `updated > D` увеличивает и
-`later_evidence_excluded`, и `edited_after_cutoff_excluded`, по одному разу.
-`unknown_evidence_excluded` увеличивается, если хотя бы один candidate source
-имеет `evidence_at=unknown`; аналогично `later_evidence_excluded` — если есть
-source с `evidence_at > D`, а `edited_after_cutoff_excluded` — если есть
-source с `updated > D`. У excluded до §3 cases temporal caveats не считаются:
-их состояние представляется через `excluded_decisions`.
+case, который достиг deterministic boundary проверки current context sources
+(см. §7, шаг 4), а не source note, claim или отдельный reference. Eligible
+case, завершившийся до этой boundary, получает нулевые temporal caveats. Это
+включает `prechoice_request_invalid` (в том числе слишком большой или
+невалидный query) и любой другой terminal failure, назначенный до начала
+проверки context sources; его состояние всё равно представляется через
+соответствующий `replay_invalid` или `replay_unavailable` code. Для такого
+case operation не читает current context только ради подсчёта caveats.
+
+Для eligible case, достигшего context-source boundary, каждый applicable code
+увеличивается не более одного раза: наличие одного или нескольких
+соответствующих sources даёт один increment. Conditions считаются независимо и
+могут co-occur: например, один source с `evidence_at > D` и `updated > D`
+увеличивает и `later_evidence_excluded`, и `edited_after_cutoff_excluded`, по
+одному разу. `unknown_evidence_excluded` увеличивается, если хотя бы один
+candidate source имеет `evidence_at=unknown`; аналогично
+`later_evidence_excluded` — если есть source с `evidence_at > D`, а
+`edited_after_cutoff_excluded` — если есть source с `updated > D`.
+`historical_snapshot_unavailable` также увеличивается не более одного раза за
+такой case, когда context-source boundary достигнута. У excluded до §3 cases
+temporal caveats не считаются: их состояние представляется через
+`excluded_decisions`.
 
 Если текущий vault не позволяет доказать нужную source identity, contract не
 делает вид, что восстановил прошлое. В v1 допускается только current valid
@@ -310,17 +321,31 @@ current context передаётся только через approved applicatio
 
 Для одной run порядок следующий:
 
-1. Выполнить один current canonical scan; не читать Search index и не писать
-   vault. Classified Journal cases ограничить `MAX_DECISION_CASES_V1` без
-   sampling.
+1. Выполнить один current canonical scan и построить typed `ScanReport`; не
+   читать Search index и не писать vault. До любой классификации Journal cases
+   применить scan-completeness gate существующей report boundary: manifest
+   должен быть валиден, а `report.content_scan_complete` должен быть true.
+   Gate fail-closed срабатывает при любом content-affecting completeness
+   diagnostic, включая `NOTE_READ_ERROR`,
+   `VAULT_DIRECTORY_READ_ERROR`, `VAULT_ENTRY_RESOLVE_ERROR`,
+   `VAULT_LINKED_DIRECTORY`, `VAULT_OVERLAPPING_ROOTS`, `VAULT_PATH_ESCAPE`,
+   `VAULT_ROOT_MISSING` или `VAULT_ROOT_NOT_DIRECTORY`, когда diagnostic
+   относится к content root. При false gate вернуть
+   `RETROSPECTIVE_CALIBRATION_SOURCE_UNAVAILABLE` без `decision_notes_seen`,
+   частичного aggregate или silent omission unreadable documents.
+   Classified Journal cases ограничить `MAX_DECISION_CASES_V1` без sampling.
 2. Отсортировать cases по `(decision_at UTC, lowercase canonical note UUID,
    safe relative path)`; unknown-time и ineligible cases не входят в replay
    order, но остаются в exclusion counts.
 3. Для каждого eligible case проверить §4 mask, построить options и query,
-   определить target отдельно и проверить exact request bounds.
+   определить target отдельно и проверить exact request bounds. Если request
+   validation завершается до context-source boundary, case получает mapping из
+   §8.3 и temporal caveats для него не считаются.
 4. Построить filtered current-vault context по §5; каждый current UUID и
-   metadata проверить заново. Unknown/later/edited source claims exclude;
-   untrusted context boundary даёт `unavailable`.
+   metadata проверить заново. С началом проверки context sources достигается
+   temporal-caveat boundary §5.2.1. Unknown/later/edited source claims
+   exclude; untrusted context boundary даёт `unavailable`. Если boundary не
+   достигнута из-за pre-context failure, temporal caveats остаются нулевыми.
 5. Выполнить ровно одну independent provider-free Simulate Me attempt. Нет
    retry, fallback, alternate model, short-circuit или call к unfiltered
    current context.
@@ -482,7 +507,7 @@ historical_snapshot_unavailable
 
 | Условие first-match | Exact code | Counter и effect на branch |
 | --- | --- | --- |
-| `SimulateMeRequest` нельзя построить или он не проходит existing strict request validation, включая byte bound percent-encoded query | `prechoice_request_invalid` | `invalid_count += 1`; context не читается, branch не вызывается. |
+| `SimulateMeRequest` нельзя построить или он не проходит existing strict request validation, включая byte bound percent-encoded query | `prechoice_request_invalid` | `invalid_count += 1`; context не читается, branch не вызывается, temporal caveats для case равны нулю. |
 | Approved Stage 6 policy ID или fingerprint не совпадает с exact v1 identity на request/branch boundary, либо returned policy identity отличается | `simulate_me_policy_mismatch` | `invalid_count += 1`; scoring и fallback запрещены. |
 | Approved context seam сообщает, что для решения pre-choice eligibility нужны historical bytes или edit history, но v1 не имеет historical snapshot input | `historical_context_unreconstructable` | `unavailable_count += 1`; historical fallback и branch invocation запрещены. Простое исключение later/unknown evidence по §5 не является этим code. |
 | Approved filtered current context нельзя построить или revalidate из-за сбоя current report, projection, type, metadata или trust boundary; либо validated branch result равен `insufficient_or_invalid_current_context` | `prechoice_context_unavailable` | `unavailable_count += 1`; prediction и artificial abstention запрещены. |
@@ -502,10 +527,13 @@ invalid_count = sum(count(code) for code in replay_invalid)
 ```
 
 `query_too_large_or_invalid` является deterministic pre-branch request failure и
-поэтому считается только как `prechoice_request_invalid`; Simulate Me не
-вызывается. `historical_snapshot_unavailable` увеличивается один раз на
-eligible case, чтобы показать limitation отсутствия snapshot; это temporal
-caveat, который не меняет selection или unavailable/invalid counts.
+поэтому считается только как `prechoice_request_invalid`; Simulate Me и
+context-source inspection не вызываются, а temporal caveats для case не
+увеличиваются. То же правило применяется к любому terminal failure до
+context-source boundary. Для eligible case, достигшего этой boundary,
+`historical_snapshot_unavailable` увеличивается не более одного раза, чтобы
+показать limitation отсутствия snapshot; это temporal caveat, который не
+меняет selection или unavailable/invalid counts.
 
 ## 9. Error and partial-result taxonomy
 
@@ -515,7 +543,7 @@ Top-level errors return only fixed `{code, message}` and no aggregate:
 | --- | --- | --- |
 | `RETROSPECTIVE_CALIBRATION_INVALID_REQUEST` | `retrospective calibration request failed validation` | Invalid bounded operation input or unsupported configuration before scan. |
 | `RETROSPECTIVE_CALIBRATION_CANCELLED` | `retrospective calibration operation cancelled` | Global cancellation before aggregate completion. |
-| `RETROSPECTIVE_CALIBRATION_SOURCE_UNAVAILABLE` | `retrospective calibration source unavailable` | Current canonical scan cannot produce a trusted report at all. |
+| `RETROSPECTIVE_CALIBRATION_SOURCE_UNAVAILABLE` | `retrospective calibration source unavailable` | Scan/build_report не создал валидный manifest/report или content-completeness gate обнаружил content-affecting diagnostic (например, `NOTE_READ_ERROR`); aggregate не строится, unreadable document нельзя молча пропустить. |
 | `RETROSPECTIVE_CALIBRATION_TOO_LARGE` | `retrospective calibration input exceeds its case limit` | More than 512 classified cases; no sampling or partial result. |
 | `RETROSPECTIVE_CALIBRATION_RESULT_TOO_LARGE` | `retrospective calibration result exceeds its byte limit` | Full canonical aggregate exceeds 65536 bytes; no truncation. |
 
@@ -549,13 +577,13 @@ Fingerprint input is exactly this one-line ASCII JSON, encoded as UTF-8 with
 `sort_keys=true`, separators `,` and `:`, no BOM and no trailing newline:
 
 ```json
-{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","diagnostics":"exclusive-phase-mapped-code-sums-v2","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","journal_body_cutoff":"updated-after-decision-excluded-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","result_size_guard":"internal-canonical-utf8-byte-length-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","temporal_caveat_counting":"per-eligible-case-independent-codes-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
+{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","diagnostics":"exclusive-phase-mapped-code-sums-v2","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","journal_body_cutoff":"updated-after-decision-excluded-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","result_size_guard":"internal-canonical-utf8-byte-length-v1","scan_completeness":"content-affecting-diagnostics-abort-before-classification-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","temporal_caveat_counting":"per-eligible-case-independent-codes-v1","temporal_caveat_scope":"after-request-validation-context-source-inspection-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
 ```
 
 Expected fingerprint:
 
 ```text
-sha256:4899d302ac32ab6a999daae29481fb3f07964c5951807c1ba6c4685ba1413043
+sha256:68aea1ac41e3acba50526905b07554d27c46096e4d64993cca14f1ebe0cebc4f
 ```
 
 Fingerprint changes when any eligibility, masking, cutoff, execution, option
@@ -636,6 +664,8 @@ database or write path.
 | Deleted/missing evidence | UUID miss is excluded/unavailable; Search/path/created does not recover it. |
 | Journal with 9–20 options | excluded as unsupported Stage 6 option count; no truncation or option selection. |
 | Invalid choice, body, duplicate identity or time | excluded with fixed code; never scored as mismatch. |
+| Неполный content scan, включая `NOTE_READ_ERROR` | top-level `RETROSPECTIVE_CALIBRATION_SOURCE_UNAVAILABLE`; aggregate и partial counters не выдаются, unreadable document нельзя молча пропустить. |
+| Invalid/too-large request до context inspection | `prechoice_request_invalid`; context и branch не вызываются, temporal caveats для case остаются нулевыми. |
 | Exact cutoff boundary | evidence at exactly `decision_at` is included; later instant is excluded after UTC conversion. |
 | Malformed filtered context | unavailable/invalid safe category; never unfiltered current prediction. |
 | Stage 6 wrong policy or malformed result | invalid; sibling cases remain in aggregate. |
