@@ -95,6 +95,11 @@ _ADVISOR_BEGIN_MARKER = "<BEGIN_ASSISTANT_EXPLICIT_ENVELOPE>"
 _ADVISOR_END_MARKER = "<END_ASSISTANT_EXPLICIT_ENVELOPE>"
 _ADVISOR_ESCAPED_BEGIN_MARKER = r"\u003CBEGIN_ASSISTANT_EXPLICIT_ENVELOPE>"
 _ADVISOR_ESCAPED_END_MARKER = r"\u003CEND_ASSISTANT_EXPLICIT_ENVELOPE>"
+_ADVISOR_WORST_CASE_TEXT = '"'
+# The outer ensure_ascii JSON layer expands any canonical UTF-8 byte by at most 3x.
+_ADVISOR_ASCII_JSON_EXPANSION_FACTOR = 3
+# One escaped marker adds six bytes after the outer JSON layer escapes its slash.
+_ADVISOR_ESCAPED_MARKER_EXTRA_BYTES = 6
 _ADVISOR_SYSTEM_MESSAGE = (
     "Ты выполняешь независимую рекомендацию или анализ, а не Simulate Me и не "
     "прогноз выбора пользователя. Используй только текущий переданный explicit "
@@ -285,27 +290,40 @@ def _advisor_request_payload(canonical_envelope: bytes) -> dict[str, object]:
 def _maximum_reasoning_envelope() -> AssistantReasoningEnvelopeV1:
     """Construct the global-max envelope used to derive the request wire cap."""
 
-    return AssistantReasoningEnvelopeV1(
-        task="я" * (MAX_TASK_BYTES // 2),
-        options=tuple(
-            AssistantOption(
-                f"{index:02d}" + "a" * (MAX_OPTION_ID_BYTES - 2),
-                "я" * (MAX_OPTION_LABEL_BYTES // 2),
-            )
-            for index in range(MAX_OPTIONS)
-        ),
-        explicit_constraints=tuple(
-            "я" * (MAX_CONSTRAINT_BYTES // 2) for _ in range(MAX_CONSTRAINTS)
-        ),
-        explicit_goals=tuple("я" * (MAX_GOAL_BYTES // 2) for _ in range(MAX_GOALS)),
-        explicit_context=tuple(
-            AssistantExplicitContext(
-                AssistantContextKind.FACT,
-                "я" * (MAX_CONTEXT_TEXT_BYTES // 2),
-            )
-            for _ in range(MAX_CONTEXT_ENTRIES)
-        ),
-    )
+    def make(task_bytes: int) -> AssistantReasoningEnvelopeV1:
+        return AssistantReasoningEnvelopeV1(
+            task=_ADVISOR_WORST_CASE_TEXT * task_bytes,
+            options=tuple(
+                AssistantOption(
+                    f"{index:02d}" + "a" * (MAX_OPTION_ID_BYTES - 2),
+                    _ADVISOR_WORST_CASE_TEXT * MAX_OPTION_LABEL_BYTES,
+                )
+                for index in range(MAX_OPTIONS)
+            ),
+            explicit_constraints=tuple(
+                _ADVISOR_WORST_CASE_TEXT * MAX_CONSTRAINT_BYTES for _ in range(MAX_CONSTRAINTS)
+            ),
+            explicit_goals=tuple(
+                _ADVISOR_WORST_CASE_TEXT * MAX_GOAL_BYTES for _ in range(MAX_GOALS)
+            ),
+            explicit_context=tuple(
+                AssistantExplicitContext(
+                    AssistantContextKind.FACT,
+                    _ADVISOR_WORST_CASE_TEXT * MAX_CONTEXT_TEXT_BYTES,
+                )
+                for _ in range(MAX_CONTEXT_ENTRIES)
+            ),
+        )
+
+    lower = 0
+    upper = MAX_TASK_BYTES
+    while lower < upper:
+        candidate = (lower + upper + 1) // 2
+        if len(serialize_assistant_reasoning_envelope(make(candidate))) <= MAX_CONTEXT_BYTES:
+            lower = candidate
+        else:
+            upper = candidate - 1
+    return make(lower)
 
 
 def _maximum_result_envelope() -> AssistantResultEnvelopeV1:
@@ -314,12 +332,14 @@ def _maximum_result_envelope() -> AssistantResultEnvelopeV1:
     return AssistantResultEnvelopeV1(
         output_label=ASSISTANT_OUTPUT_LABEL,
         kind=AssistantResultKind.RECOMMENDATION,
-        recommendation="я" * (MAX_RECOMMENDATION_BYTES // 2),
+        recommendation=_ADVISOR_WORST_CASE_TEXT * MAX_RECOMMENDATION_BYTES,
         selected_option=AssistantOption(
             "a" * MAX_OPTION_ID_BYTES,
-            "я" * (MAX_OPTION_LABEL_BYTES // 2),
+            _ADVISOR_WORST_CASE_TEXT * MAX_OPTION_LABEL_BYTES,
         ),
-        rationale=tuple("я" * (MAX_RATIONALE_ITEM_BYTES // 2) for _ in range(MAX_RATIONALE)),
+        rationale=tuple(
+            _ADVISOR_WORST_CASE_TEXT * MAX_RATIONALE_ITEM_BYTES for _ in range(MAX_RATIONALE)
+        ),
         evidence_refs=tuple(
             AssistantEvidenceRef(
                 AssistantEvidenceSource.EXPLICIT_CONTEXT,
@@ -336,49 +356,41 @@ def _maximum_result_envelope() -> AssistantResultEnvelopeV1:
             AssistantInputRef(AssistantInputSource.EXPLICIT_GOAL, ordinal)
             for ordinal in range(1, MAX_OBJECTIVE_REFS + 1)
         ),
-        uncertainty=tuple("я" * (MAX_UNCERTAINTY_ITEM_BYTES // 2) for _ in range(MAX_UNCERTAINTY)),
+        uncertainty=tuple(
+            _ADVISOR_WORST_CASE_TEXT * MAX_UNCERTAINTY_ITEM_BYTES for _ in range(MAX_UNCERTAINTY)
+        ),
         abstention_code=None,
         contract_version=ASSISTANT_CONTRACT_VERSION,
     )
 
 
-_MAX_REASONING_ENVELOPE_BYTES = len(
-    serialize_assistant_reasoning_envelope(_maximum_reasoning_envelope())
-)
 _MAX_RESULT_ENVELOPE_BYTES = len(serialize_assistant_result_envelope(_maximum_result_envelope()))
-_ADVISOR_MARKER_EXPANSION_BYTES = 5 * (
-    _MAX_REASONING_ENVELOPE_BYTES // min(len(_ADVISOR_BEGIN_MARKER), len(_ADVISOR_END_MARKER))
+_ADVISOR_MAX_MARKER_COUNT = MAX_CONTEXT_BYTES // min(
+    len(_ADVISOR_BEGIN_MARKER), len(_ADVISOR_END_MARKER)
 )
+_ADVISOR_REQUEST_FIXED_BYTES = len(_compact_json_bytes(_advisor_request_payload(b"")))
 ADVISOR_REQUEST_BODY_CAP = (
-    len(
-        _compact_json_bytes(
-            _advisor_request_payload(
-                serialize_assistant_reasoning_envelope(_maximum_reasoning_envelope())
-            )
-        )
-    )
-    + _ADVISOR_MARKER_EXPANSION_BYTES
+    _ADVISOR_REQUEST_FIXED_BYTES
+    + _ADVISOR_ASCII_JSON_EXPANSION_FACTOR * MAX_CONTEXT_BYTES
+    + _ADVISOR_ESCAPED_MARKER_EXTRA_BYTES * _ADVISOR_MAX_MARKER_COUNT
 )
 ADVISOR_RESULT_ENVELOPE_BYTES = _MAX_RESULT_ENVELOPE_BYTES
-ADVISOR_RESPONSE_BODY_CAP = (
-    len(
-        _compact_json_bytes(
-            {
-                "choices": [
-                    {
-                        "index": 0,
-                        "message": {
-                            "role": "assistant",
-                            "content": serialize_assistant_result_envelope(
-                                _maximum_result_envelope()
-                            ).decode("utf-8"),
-                        },
-                        "finish_reason": "stop",
-                    }
-                ]
-            }
-        )
+_ADVISOR_RESPONSE_FIXED_BYTES = len(
+    _compact_json_bytes(
+        {
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": ""},
+                    "finish_reason": "stop",
+                }
+            ]
+        }
     )
+)
+ADVISOR_RESPONSE_BODY_CAP = (
+    _ADVISOR_RESPONSE_FIXED_BYTES
+    + _ADVISOR_ASCII_JSON_EXPANSION_FACTOR * MAX_RESULT_BYTES
     + ENVELOPE_OVERHEAD_BYTES
 )
 

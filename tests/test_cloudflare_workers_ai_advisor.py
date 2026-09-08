@@ -15,6 +15,7 @@ import second_brain.adapters.llm.cloudflare_workers_ai as transport
 from second_brain.application.assistant import (
     ASSISTANT_CONTRACT_VERSION,
     ASSISTANT_OUTPUT_LABEL,
+    MAX_CONTEXT_BYTES,
     AssistantAbstentionCode,
     AssistantCancelledError,
     AssistantContextKind,
@@ -33,6 +34,7 @@ from second_brain.application.assistant import (
     BuildAssistant,
     build_assistant_reasoning_envelope,
     serialize_assistant_reasoning_envelope,
+    serialize_assistant_result_envelope,
 )
 from second_brain.application.ports import CancellationToken, CancellationTokenSource
 
@@ -262,6 +264,23 @@ def test_advisor_response_cap_round_trips_through_shared_private_worker_ipc() ->
     assert decoded is not None
     assert decoded.response_cap == cloudflare.ADVISOR_RESPONSE_BODY_CAP
     assert decoded.max_output_bytes == 1
+
+
+def test_wire_caps_cover_worst_case_nested_json_escaping() -> None:
+    envelope = cloudflare._maximum_reasoning_envelope()
+    canonical_request = serialize_assistant_reasoning_envelope(envelope)
+    request_body = cloudflare.build_advisor_request_body(envelope)
+
+    assert len(canonical_request) == MAX_CONTEXT_BYTES
+    assert len(request_body) <= cloudflare.ADVISOR_REQUEST_BODY_CAP
+
+    result = cloudflare._maximum_result_envelope()
+    inner = json.loads(serialize_assistant_result_envelope(result))
+    response_body = make_outer(inner)
+
+    assert len(response_body) <= cloudflare.ADVISOR_RESPONSE_BODY_CAP
+    decoded = cloudflare._decode_assistant_result(worker_result(response_body))
+    assert decoded.kind is AssistantResultKind.RECOMMENDATION
 
 
 def test_valid_recommendation_and_analysis_results_are_typed() -> None:
