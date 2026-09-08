@@ -797,6 +797,45 @@ projection (не historical snapshot) из:
 - canonical evidence с known exact `evidence_at`, не позже decision; unknown,
   later и post-cutoff-edited evidence исключаются с caveat.
 
+Eligibility case закрыт следующими predicates: note имеет exact marker
+`second_brain_personal_memory: 1`, supported metadata pair
+`evidence_kind=observed_decision` + `self_kind=decision`, valid current Journal
+body и unique current identity; decision `evidence_at` — aware RFC3339 с
+`exact` precision; `Available options` содержит 2–8 items в исходном порядке;
+`Chosen option` exact whitespace matching соответствует ровно одному option; в
+body нет malformed/duplicate sections или hidden extra content. Stage 2 может
+хранить до 20 options, но 9–20 не replayable для Stage 6 и не усекаются.
+
+Case, не прошедший любой predicate, не вызывает Simulate Me, не становится
+mismatch и учитывается в `decision_notes_seen` ровно с одним кодом
+`excluded_decisions`:
+
+```text
+decision_time_unknown
+decision_time_not_exact_or_invalid
+decision_body_invalid
+decision_option_count_unsupported
+decision_option_identity_invalid
+decision_identity_invalid_or_duplicate
+```
+
+Для каждого aware evidence time сначала выполняется UTC conversion; включается
+только `evidence_at <= D` (inclusive). `unknown`, `created` и `updated` не
+заменяют `evidence_at`; известное `updated > D` исключает evidence. Отсутствие
+`updated` или `updated <= D` не доказывает, что текущие bytes исторически
+неизменны: current-vault projection не обещает исключить незафиксированную
+post-cutoff edit и не называется historical snapshot. При невозможности
+проверить current identity или filtered-context boundary case получает
+`unavailable`, а не unfiltered fallback. Temporal caveats имеют только эти
+коды:
+
+```text
+unknown_evidence_excluded
+later_evidence_excluded
+edited_after_cutoff_excluded
+historical_snapshot_unavailable
+```
+
 В Simulate Me input **не входят** `Chosen option`, `Reasons`, `Expected result`,
 `Actual result`, `Reassessment`, поздние notes или сам expected answer. Это
 explicit anti-leakage boundary. После replay predicted choice сравнивается с
@@ -817,6 +856,13 @@ Actual choice берётся только после replay из reviewed `obser
 не получает неправильный prediction. Valid no-match/multiple-support остаются
 bounded Simulate Me abstention; unavailable и invalid replay не маскируются под
 mismatch.
+
+Остальные per-case outcomes закрыты: `replay_unavailable` —
+`prechoice_context_unavailable`, `historical_context_unreconstructable`,
+`simulate_me_unavailable`; `replay_invalid` — `prechoice_request_invalid`,
+`simulate_me_result_invalid`, `simulate_me_policy_mismatch`,
+`calibration_composition_invalid`. Ни один excluded case не становится
+abstention, и ни один unavailable/invalid case не становится mismatch.
 
 Calibration v1 показывает только bounded counts, exact option match/mismatch,
 predicted/abstained/unavailable/invalid, coverage и exact non-abstained
