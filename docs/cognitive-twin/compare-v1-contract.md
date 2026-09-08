@@ -374,8 +374,14 @@ assistant_state и simulate_me_state являются typed projection wrappers,
 - Simulate Me: supporting_only, contextual_only или
   supporting_and_contextual по двум отдельным lists, либо empty;
 - unavailable используется только для error wrapper;
-- simulate_me_temporal_caveat равен true, если в Simulate Me wrapper
-  присутствует хотя бы один approved evidence_at_unknown caveat.
+- перед projection Compare повторно проверяет temporal correspondence:
+  `unknown_claim_ids` — claim IDs из `evidence_refs` и
+  `contextual_evidence_refs` с `evidence_at="unknown"`, а
+  `caveat_claim_ids` — claim IDs из `temporal_caveats` с code
+  `evidence_at_unknown`; множества обязаны совпадать. При несовпадении branch
+  классифицируется как `COMPARE_BRANCH_RESULT_INVALID`, без Delta;
+  `simulate_me_temporal_caveat` вычисляется как
+  `bool(unknown_claim_ids)`, а не принимается из unverified boolean.
 
 Эти shapes не сравнивают тексты, UUID, rationale, evidence strength или
 количество refs между ветками. Branch refs остаются только в своём wrapper.
