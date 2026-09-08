@@ -327,6 +327,21 @@ def test_policy_identity_and_canonical_result_shape_are_fixed() -> None:
     assert not encoded.endswith(b"\n")
 
 
+def test_temporal_caveat_counts_cannot_exceed_eligible_cases() -> None:
+    service, _scanner, _context, _replay = _service(_snapshot())
+    result = service.execute(RetrospectiveCalibrationRequestV1())
+    invalid = replace(
+        result,
+        temporal_caveats=(
+            RetrospectiveCalibrationCountV1("unknown_evidence_excluded", 1),
+            *result.temporal_caveats[1:],
+        ),
+    )
+
+    with pytest.raises(ValueError):
+        serialize_retrospective_calibration_result(invalid)
+
+
 def test_bounded_scanner_enforces_entry_limit_before_materialization(tmp_path: Path) -> None:
     vault = create_vault(tmp_path / "vault")
     write_note(vault, "10 Projects/one.md", "---\nid: x\n---\nbody")
@@ -694,6 +709,26 @@ def test_wrong_policy_and_malformed_stage6_results_are_fixed_replay_invalid_code
     )
     malformed_result = malformed_service.execute(RetrospectiveCalibrationRequestV1())
     assert _counts(malformed_result, "replay_invalid")["simulate_me_result_invalid"] == 1
+
+    class _CompositionMismatch:
+        def execute(
+            self,
+            request: SimulateMeRequest,
+            *,
+            context: SelfModelResult,
+        ) -> SimulateMeResult:
+            valid = BuildRetrospectiveCalibrationReplay().execute(request, context=context)
+            assert valid.evidence_refs
+            return replace(
+                valid,
+                evidence_refs=(replace(valid.evidence_refs[0], evidence_at=DECISION_AT),),
+            )
+
+    composition_service, _scanner, _context, _replay = _service(
+        snapshot, context=_ContextFromReal(), replay=_CompositionMismatch()
+    )
+    composition_result = composition_service.execute(RetrospectiveCalibrationRequestV1())
+    assert _counts(composition_result, "replay_invalid")["calibration_composition_invalid"] == 1
 
 
 def test_valid_abstention_is_counted_without_materializing_target() -> None:

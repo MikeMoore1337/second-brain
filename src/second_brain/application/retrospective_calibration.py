@@ -46,6 +46,7 @@ from second_brain.application.self_model import (
     DEFAULT_SELF_MODEL_POLICY,
     BuildSelfModel,
     SelfModelClaim,
+    SelfModelDimension,
     SelfModelEvidenceRef,
     SelfModelRequest,
     SelfModelResult,
@@ -65,7 +66,10 @@ from second_brain.application.simulate_me import (
 from second_brain.application.simulate_me import (
     BuildSimulateMe,
     SimulateMeAbstentionCode,
+    SimulateMeContextualEvidenceRef,
+    SimulateMeDimension,
     SimulateMeError,
+    SimulateMeEvidenceRef,
     SimulateMeOption,
     SimulateMeRequest,
     SimulateMeResult,
@@ -925,6 +929,8 @@ def validate_retrospective_calibration_result(
     _validate_count_array(result.replay_unavailable, _REPLAY_UNAVAILABLE_CODES)
     _validate_count_array(result.replay_invalid, _REPLAY_INVALID_CODES)
     _validate_count_array(result.temporal_caveats, _TEMPORAL_CAVEAT_CODES)
+    if any(item.count > metrics.eligible_decisions for item in result.temporal_caveats):
+        raise ValueError("temporal caveat count exceeds eligible decisions")
     excluded_total = sum(item.count for item in result.excluded_decisions)
     unavailable_total = sum(item.count for item in result.replay_unavailable)
     invalid_total = sum(item.count for item in result.replay_invalid)
@@ -1563,18 +1569,39 @@ def _stage6_composition_is_safe(
 ) -> bool:
     if result.temporal_caveats:
         return False
-    context_ids = {
-        ref.note_id
-        for claim in context.claims
-        for role in (
-            claim.supporting_evidence,
-            claim.contradicting_evidence,
-            claim.contextual_evidence,
-        )
-        for ref in role
-    }
-    return all(ref.claim_id in context_ids for ref in result.evidence_refs) and all(
-        ref.claim_id in context_ids for ref in result.contextual_evidence_refs
+    expected_evidence: dict[UUID, SimulateMeEvidenceRef] = {}
+    expected_contextual: dict[UUID, SimulateMeContextualEvidenceRef] = {}
+    for claim in context.claims:
+        if len(claim.supporting_evidence) != 1:
+            return False
+        source = claim.supporting_evidence[0]
+        note_ids = tuple(sorted({source.note_id, *source.related_note_ids}, key=str))
+        if claim.dimension is SelfModelDimension.BELIEF:
+            expected_contextual_ref = SimulateMeContextualEvidenceRef(
+                claim_id=source.note_id,
+                dimension=SimulateMeDimension.BELIEF,
+                note_ids=note_ids,
+                evidence_at=source.evidence_at,
+            )
+            previous_contextual = expected_contextual.setdefault(
+                source.note_id, expected_contextual_ref
+            )
+            if previous_contextual != expected_contextual_ref:
+                return False
+        elif claim.dimension in {SelfModelDimension.PREFERENCE, SelfModelDimension.GOAL}:
+            expected_evidence_ref = SimulateMeEvidenceRef(
+                claim_id=source.note_id,
+                dimension=SimulateMeDimension(claim.dimension.value),
+                note_ids=note_ids,
+                evidence_at=source.evidence_at,
+            )
+            previous_evidence = expected_evidence.setdefault(source.note_id, expected_evidence_ref)
+            if previous_evidence != expected_evidence_ref:
+                return False
+        else:
+            return False
+    return all(expected_evidence.get(ref.claim_id) == ref for ref in result.evidence_refs) and all(
+        expected_contextual.get(ref.claim_id) == ref for ref in result.contextual_evidence_refs
     )
 
 
