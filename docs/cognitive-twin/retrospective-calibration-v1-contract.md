@@ -350,6 +350,10 @@ Implementation валидирует эту пару существующим Sel
 validator до context projection. Missing, malformed или mismatched identity
 делает context boundary недоверенной и даёт `prechoice_context_unavailable`;
 fallback к другой Self Model policy запрещён.
+Replay обязан вызывать эту boundary с exact Self Model request limits
+`max_claims=200` и `max_evidence_refs_per_claim=200`; caller или implementation
+не может молча поднять эти caps. Превышение любого cap делает current context
+недоверенным и даёт `prechoice_context_unavailable`, а не partial context.
 
 Разрешены только существующие Stage 6 semantics:
 
@@ -439,13 +443,17 @@ current context передаётся только через approved applicatio
    успешного bounded scan построить typed `ScanReport`, затем до любой
    классификации Journal cases применить scan-completeness gate существующей
    report boundary: manifest должен быть валиден, а
-   `report.content_scan_complete` должен быть true. Gate fail-closed
+   `report.content_scan_complete` должен быть true и отдельный calibration
+   supplemental check не должен находить content-scoped `VAULT_LINKED_ENTRY`.
+   Последний check обязателен даже если текущая implementation
+   `ScanReport.content_scan_complete` ещё не включает этот code. Gate fail-closed
    срабатывает при любом content-affecting completeness diagnostic, включая
    `NOTE_READ_ERROR`, `VAULT_DIRECTORY_READ_ERROR`,
    `VAULT_ENTRY_RESOLVE_ERROR`, `VAULT_LINKED_DIRECTORY`,
-   `VAULT_OVERLAPPING_ROOTS`, `VAULT_PATH_ESCAPE`, `VAULT_ROOT_MISSING`,
-   `VAULT_ROOT_NOT_DIRECTORY` или `NOTE_FRONT_MATTER_ERROR`, когда diagnostic
-   относится к content root. При false gate вернуть
+   `VAULT_LINKED_ENTRY`, `VAULT_OVERLAPPING_ROOTS`, `VAULT_PATH_ESCAPE`,
+   `VAULT_ROOT_MISSING`, `VAULT_ROOT_NOT_DIRECTORY` или
+   `NOTE_FRONT_MATTER_ERROR`, когда diagnostic относится к content root. При
+   false gate вернуть
    `RETROSPECTIVE_CALIBRATION_SOURCE_UNAVAILABLE` без `decision_notes_seen`,
    partial aggregate или silent omission unreadable/malformed documents.
    Classified Journal cases ограничить `MAX_DECISION_CASES_V1` без sampling.
@@ -712,13 +720,13 @@ Fingerprint input is exactly this one-line ASCII JSON, encoded as UTF-8 with
 `sort_keys=true`, separators `,` and `:`, no BOM and no trailing newline:
 
 ```json
-{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","decision_note_metadata":"all-canonical-note-and-plausible-journal-errors-excluded-v5","diagnostics":"exclusive-phase-mapped-code-sums-v2","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","journal_body_cutoff":"updated-after-decision-excluded-v1","journal_creation_cutoff":"journal-and-context-created-after-decision-excluded-v2","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","max_decision_cases":"512","max_result_bytes":"65536","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_failure_mapping":"available-options-before-generic-body-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","result_size_guard":"internal-canonical-utf8-byte-length-v1","scan_completeness":"content-affecting-diagnostics-abort-before-classification-v2","scan_limits":"entries-16384;documents-4096;bytes-16777216-v1","self_model_derivation_version":"self-model-derivation-v1","self_model_policy_fingerprint":"d7969ba732665c0406736b0e669a9123ccd0ee7b12de36f57899f59f94282cd3","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","simulate_me_request_limits":"min-text-bytes-1;query-bytes-4096;label-bytes-256;options-1..8-v1","simulate_me_result_limits":"max-result-refs-20;max-note-ids-per-ref-20-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-required-updated-optional-never-evidence-time-v2","target_extraction":"post-validated-terminal-result-isolated-v1","temporal_caveat_counting":"per-eligible-case-independent-codes-v2","temporal_caveat_scope":"after-request-validation-context-source-inspection-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
+{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","decision_note_metadata":"all-canonical-note-and-plausible-journal-errors-excluded-v5","diagnostics":"exclusive-phase-mapped-code-sums-v2","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","journal_body_cutoff":"updated-after-decision-excluded-v1","journal_creation_cutoff":"journal-and-context-created-after-decision-excluded-v2","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","max_decision_cases":"512","max_result_bytes":"65536","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_failure_mapping":"available-options-before-generic-body-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","result_size_guard":"internal-canonical-utf8-byte-length-v1","scan_completeness":"content-affecting-diagnostics-abort-before-classification-v3","scan_limits":"entries-16384;documents-4096;bytes-16777216-v1","self_model_derivation_version":"self-model-derivation-v1","self_model_policy_fingerprint":"d7969ba732665c0406736b0e669a9123ccd0ee7b12de36f57899f59f94282cd3","self_model_request_limits":"max-claims-200;max-evidence-refs-per-claim-200-v1","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","simulate_me_request_limits":"min-text-bytes-1;query-bytes-4096;label-bytes-256;options-1..8-v1","simulate_me_result_limits":"max-result-refs-20;max-note-ids-per-ref-20-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-required-updated-optional-never-evidence-time-v2","target_extraction":"post-validated-terminal-result-isolated-v1","temporal_caveat_counting":"per-eligible-case-independent-codes-v2","temporal_caveat_scope":"after-request-validation-context-source-inspection-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
 ```
 
 Expected fingerprint:
 
 ```text
-sha256:554ca12d4bc17c4541a640bc88be692599934c8aeb820018e6edeef01269c0d5
+sha256:6218f228dfcf70c2bf410f5fd39323145681d5683275265ee6be7dd821a55f7f
 ```
 
 Fingerprint changes when any eligibility, masking, cutoff, execution, scan
@@ -794,6 +802,8 @@ database or write path.
 | Создание/изменение Journal после cutoff | `created > decision_at` даёт `decision_body_created_after_cutoff`, `updated > decision_at` даёт `decision_body_edited_after_cutoff`; target/query/context не строятся, это никогда не mismatch или temporal caveat. |
 | Отсутствует optional `updated` | `created <= decision_at` и отсутствующий `updated` принимаются; отсутствие `updated` означает только отсутствие известной later mutation и не исключает case. |
 | Создание context source после cutoff | Для non-Journal source `created > decision_at` исключает текущий source и даёт `created_after_cutoff_excluded`; `created` не используется как evidence time и не получает historical fallback. |
+| Linked entry в content root | `VAULT_LINKED_ENTRY` при content-scoped diagnostic fail-closes всю run с `RETROSPECTIVE_CALIBRATION_SOURCE_UNAVAILABLE`; `decision_notes_seen` и partial aggregate не публикуются. |
+| Drift Self Model request caps | Replay использует ровно `max_claims=200` и `max_evidence_refs_per_claim=200`; mismatch или overflow делает context unavailable и меняет policy fingerprint. |
 | Диагностика canonical metadata note | Exact marker плюс raw canonical metadata validation result и Journal-plausible kind shape — exact Journal pair или перечисленный `PERSONAL_MEMORY_*` diagnostic — делает note candidate до typed projection; valid non-Journal pair исключается даже при malformed других полях. Qualifying `NOTE_*` storage/provenance и `PERSONAL_MEMORY_*` diagnostics, включая `NOTE_INVALID_TYPE`, `PERSONAL_MEMORY_INVALID_DOMAIN`, `NOTE_MISSING_TIMESTAMP` и `NOTE_INVALID_TIMESTAMP`, дают fixed exclusion mapping, если более ранняя specific exclusion не победила; note не становится eligible. |
 | Linked Outcome present | `actual_result`, `reassessment`, `notes` never enter query/context/metrics. |
 | Later evidence | `evidence_at > decision_at` is excluded; `later_evidence_excluded` is counted once per eligible case if any such source exists, and it cannot make a prediction. |
