@@ -334,8 +334,9 @@ current context передаётся только через approved applicatio
    diagnostic, включая `NOTE_READ_ERROR`,
    `VAULT_DIRECTORY_READ_ERROR`, `VAULT_ENTRY_RESOLVE_ERROR`,
    `VAULT_LINKED_DIRECTORY`, `VAULT_OVERLAPPING_ROOTS`, `VAULT_PATH_ESCAPE`,
-   `VAULT_ROOT_MISSING` или `VAULT_ROOT_NOT_DIRECTORY`, когда diagnostic
-   относится к content root. При false gate вернуть
+   `VAULT_ROOT_MISSING`, `VAULT_ROOT_NOT_DIRECTORY` или
+   `NOTE_FRONT_MATTER_ERROR`, когда diagnostic относится к content root. При
+   false gate вернуть
    `RETROSPECTIVE_CALIBRATION_SOURCE_UNAVAILABLE` без `decision_notes_seen`,
    частичного aggregate или silent omission unreadable documents.
    Classified Journal cases ограничить `MAX_DECISION_CASES_V1` без sampling.
@@ -583,13 +584,13 @@ Fingerprint input is exactly this one-line ASCII JSON, encoded as UTF-8 with
 `sort_keys=true`, separators `,` and `:`, no BOM and no trailing newline:
 
 ```json
-{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","decision_note_metadata":"created-updated-invalid-diagnostic-excluded-v1","diagnostics":"exclusive-phase-mapped-code-sums-v2","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","journal_body_cutoff":"updated-after-decision-excluded-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","result_size_guard":"internal-canonical-utf8-byte-length-v1","scan_completeness":"content-affecting-diagnostics-abort-before-classification-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","temporal_caveat_counting":"per-eligible-case-independent-codes-v1","temporal_caveat_scope":"after-request-validation-context-source-inspection-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
+{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","decision_note_metadata":"created-updated-invalid-diagnostic-excluded-v1","diagnostics":"exclusive-phase-mapped-code-sums-v2","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","journal_body_cutoff":"updated-after-decision-excluded-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","result_size_guard":"internal-canonical-utf8-byte-length-v1","scan_completeness":"content-affecting-diagnostics-abort-before-classification-v2","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","temporal_caveat_counting":"per-eligible-case-independent-codes-v1","temporal_caveat_scope":"after-request-validation-context-source-inspection-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
 ```
 
 Expected fingerprint:
 
 ```text
-sha256:0836d20bed2e49ac028cfeb72a90c80147a4632720aa0c0f3de6b7ae34f01ece
+sha256:a3eb9b82629a4223d57ef822f4793b3e58fbaed116ab63ffc2bf7f5bf98efcee
 ```
 
 Fingerprint changes when any eligibility, masking, cutoff, execution, option
@@ -671,7 +672,7 @@ database or write path.
 | Deleted/missing evidence | UUID miss is excluded/unavailable; Search/path/created does not recover it. |
 | Journal with 9–20 options | excluded as unsupported Stage 6 option count; no truncation or option selection. |
 | Invalid choice, body, duplicate identity or time | excluded with fixed code; never scored as mismatch. |
-| Неполный content scan, включая `NOTE_READ_ERROR` | top-level `RETROSPECTIVE_CALIBRATION_SOURCE_UNAVAILABLE`; aggregate и partial counters не выдаются, unreadable document нельзя молча пропустить. |
+| Неполный content scan, включая `NOTE_READ_ERROR` или `NOTE_FRONT_MATTER_ERROR` | top-level `RETROSPECTIVE_CALIBRATION_SOURCE_UNAVAILABLE`; aggregate и partial counters не выдаются, unreadable/malformed document нельзя молча пропустить. |
 | Invalid/too-large request до context inspection | `prechoice_request_invalid`; context и branch не вызываются, temporal caveats для case остаются нулевыми. |
 | Exact cutoff boundary | evidence at exactly `decision_at` is included; later instant is excluded after UTC conversion. |
 | Malformed filtered context | unavailable/invalid safe category; never unfiltered current prediction. |
