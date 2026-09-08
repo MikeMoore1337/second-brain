@@ -361,12 +361,12 @@ def _scan_content_tree(
                     )
                     continue
             else:
+                available_before_reservation = budget.remaining_raw_bytes()
                 if not budget.reserve_document(file_size):
                     return
-                remaining = budget.remaining_raw_bytes()
                 try:
                     with resolved.open("rb") as stream:
-                        raw = stream.read(remaining + 1)
+                        raw = stream.read(available_before_reservation + 1)
                 except OSError:
                     diagnostics.append(
                         Diagnostic(
@@ -379,7 +379,7 @@ def _scan_content_tree(
                     )
                     continue
                 budget.reconcile_document_size(file_size, len(raw))
-                if len(raw) > remaining:
+                if len(raw) > available_before_reservation:
                     budget.exceeded = True
                     return
                 try:

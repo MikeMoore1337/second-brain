@@ -378,7 +378,7 @@ def test_bounded_scanner_caps_a_file_that_grows_after_stat(
     )
 
     assert result.limit_exceeded is True
-    assert read_sizes == [3]
+    assert read_sizes == [len(actual_bytes) + 3]
 
 
 def test_exact_prediction_uses_only_prechoice_fields_and_request_local_target() -> None:
