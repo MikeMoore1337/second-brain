@@ -129,13 +129,21 @@ Calibration сканирует current canonical report и рассматрив�
    partial-field и body heuristic запрещены. Поэтому missing/invalid
    `evidence_kind` или `self_kind` всё равно делает plausible note candidate
    через собственный validation diagnostic.
-   `PERSONAL_MEMORY_MISSING_EVIDENCE_AT`,
-   `PERSONAL_MEMORY_INVALID_EVIDENCE_AT`,
-   `PERSONAL_MEMORY_MISSING_EVIDENCE_AT_PRECISION`,
-   `PERSONAL_MEMORY_INVALID_EVIDENCE_AT_PRECISION` и
-   `PERSONAL_MEMORY_INVALID_EVIDENCE_AT_PAIR` дают соответствующий
-   `decision_time_unknown` или `decision_time_not_exact_or_invalid`; остальные
-   текущие canonical scan `PERSONAL_MEMORY_*` diagnostics —
+   Time diagnostics имеют exact mapping: `PERSONAL_MEMORY_MISSING_EVIDENCE_AT`
+   всегда даёт `decision_time_unknown`; `PERSONAL_MEMORY_INVALID_EVIDENCE_AT`
+   всегда даёт `decision_time_not_exact_or_invalid`;
+   `PERSONAL_MEMORY_MISSING_EVIDENCE_AT_PRECISION` и
+   `PERSONAL_MEMORY_INVALID_EVIDENCE_AT_PRECISION` дают
+   `decision_time_unknown` только если raw `evidence_at` — exact scalar
+   `unknown`, иначе `decision_time_not_exact_or_invalid`;
+   `PERSONAL_MEMORY_INVALID_EVIDENCE_AT_PAIR` даёт
+   `decision_time_unknown` только для raw `evidence_at=unknown`, а для
+   parseable aware timestamp с `unknown` precision и для любого другого
+   invalid pair — `decision_time_not_exact_or_invalid`. Если diagnostics
+   co-occur, применяется эта mapping по raw values и одна resulting category;
+   `PERSONAL_MEMORY_MISSING_EVIDENCE_AT`/explicit raw `unknown` имеют priority
+   над precision-only metadata. Остальные текущие canonical scan
+   `PERSONAL_MEMORY_*` diagnostics —
    `PERSONAL_MEMORY_INVALID_RECORD`, `PERSONAL_MEMORY_MISSING_EVIDENCE_KIND`,
    `PERSONAL_MEMORY_INVALID_EVIDENCE_KIND`,
    `PERSONAL_MEMORY_MISSING_SELF_KIND`, `PERSONAL_MEMORY_INVALID_SELF_KIND`,
@@ -395,11 +403,14 @@ Situation={E(Situation)}|InformationKnownAtDecisionTime={E(Information known at 
 `Situation` может быть empty только если existing Journal parser это допустил;
 information и criteria должны оставаться valid по Stage 2. Values берутся как
 точный current body text без смысловой переработки, затем кодируются только
-через `E`; criteria сохраняют Journal order. Итоговый query проходит existing
-Simulate Me strict UTF-8/NFC/edge-strip/control validation и `1..4096` UTF-8 byte
-bound. Если percent-encoded query слишком велик, он получает
-`query_too_large_or_invalid` → `prechoice_request_invalid` и не запускает
-branch. Truncation запрещена, а внутренняя validation не переписывает query.
+через `E`; criteria сохраняют Journal order. Итоговый request обязан пройти
+existing Simulate Me strict UTF-8/NFC/edge-strip/control validation с exact
+Stage 6 limits `MIN_TEXT_BYTES=1`, `MAX_QUERY_BYTES=4096`,
+`MAX_LABEL_BYTES=256`, `MIN_OPTIONS=1` и `MAX_OPTIONS=8`; calibration eligibility
+при этом требует `available_options` `2..8`. Если query/label/options не
+проходят эти request bounds, case получает `prechoice_request_invalid` и не
+запускает branch. Truncation запрещена, а внутренняя validation не переписывает
+query или labels.
 
 Итоговый request имеет ровно этот shape:
 
@@ -695,13 +706,13 @@ Fingerprint input is exactly this one-line ASCII JSON, encoded as UTF-8 with
 `sort_keys=true`, separators `,` and `:`, no BOM and no trailing newline:
 
 ```json
-{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","decision_note_metadata":"all-canonical-note-and-plausible-journal-errors-excluded-v5","diagnostics":"exclusive-phase-mapped-code-sums-v2","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","journal_body_cutoff":"updated-after-decision-excluded-v1","journal_creation_cutoff":"journal-and-context-created-after-decision-excluded-v2","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","max_decision_cases":"512","max_result_bytes":"65536","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_failure_mapping":"available-options-before-generic-body-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","result_size_guard":"internal-canonical-utf8-byte-length-v1","scan_completeness":"content-affecting-diagnostics-abort-before-classification-v2","scan_limits":"entries-16384;documents-4096;bytes-16777216-v1","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","self_model_derivation_version":"self-model-derivation-v1","self_model_policy_fingerprint":"d7969ba732665c0406736b0e669a9123ccd0ee7b12de36f57899f59f94282cd3","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-required-updated-optional-never-evidence-time-v2","temporal_caveat_counting":"per-eligible-case-independent-codes-v2","temporal_caveat_scope":"after-request-validation-context-source-inspection-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
+{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","decision_note_metadata":"all-canonical-note-and-plausible-journal-errors-excluded-v5","diagnostics":"exclusive-phase-mapped-code-sums-v2","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","journal_body_cutoff":"updated-after-decision-excluded-v1","journal_creation_cutoff":"journal-and-context-created-after-decision-excluded-v2","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","max_decision_cases":"512","max_result_bytes":"65536","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_failure_mapping":"available-options-before-generic-body-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","result_size_guard":"internal-canonical-utf8-byte-length-v1","scan_completeness":"content-affecting-diagnostics-abort-before-classification-v2","scan_limits":"entries-16384;documents-4096;bytes-16777216-v1","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","simulate_me_request_limits":"min-text-bytes-1;query-bytes-4096;label-bytes-256;options-1..8-v1","self_model_derivation_version":"self-model-derivation-v1","self_model_policy_fingerprint":"d7969ba732665c0406736b0e669a9123ccd0ee7b12de36f57899f59f94282cd3","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-required-updated-optional-never-evidence-time-v2","temporal_caveat_counting":"per-eligible-case-independent-codes-v2","temporal_caveat_scope":"after-request-validation-context-source-inspection-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
 ```
 
 Expected fingerprint:
 
 ```text
-sha256:06cbd08221708563045f2f24d706ca0a9bda87ad6be24440006fe4b10f9767f4
+sha256:fc8b08b5211a198a722ea8330050a9214d12aa1357a3569f79541e28cd9c35d6
 ```
 
 Fingerprint changes when any eligibility, masking, cutoff, execution, scan
@@ -777,7 +788,7 @@ database or write path.
 | Создание/изменение Journal после cutoff | `created > decision_at` даёт `decision_body_created_after_cutoff`, `updated > decision_at` даёт `decision_body_edited_after_cutoff`; target/query/context не строятся, это никогда не mismatch или temporal caveat. |
 | Отсутствует optional `updated` | `created <= decision_at` и отсутствующий `updated` принимаются; отсутствие `updated` означает только отсутствие известной later mutation и не исключает case. |
 | Создание context source после cutoff | Для non-Journal source `created > decision_at` исключает текущий source и даёт `created_after_cutoff_excluded`; `created` не используется как evidence time и не получает historical fallback. |
-| Диагностика canonical metadata note | Exact marker плюс raw canonical metadata validation result — exact Journal pair или любой перечисленный `PERSONAL_MEMORY_*` diagnostic — делает note candidate до typed projection; qualifying `NOTE_*` storage/provenance и `PERSONAL_MEMORY_*` diagnostics, включая `NOTE_INVALID_TYPE`, `PERSONAL_MEMORY_INVALID_DOMAIN`, `NOTE_MISSING_TIMESTAMP` и `NOTE_INVALID_TIMESTAMP`, дают fixed exclusion mapping, если более ранняя specific exclusion не победила; note не становится eligible. |
+| Диагностика canonical metadata note | Exact marker плюс raw canonical metadata validation result и Journal-plausible kind shape — exact Journal pair или перечисленный `PERSONAL_MEMORY_*` diagnostic — делает note candidate до typed projection; valid non-Journal pair исключается даже при malformed других полях. Qualifying `NOTE_*` storage/provenance и `PERSONAL_MEMORY_*` diagnostics, включая `NOTE_INVALID_TYPE`, `PERSONAL_MEMORY_INVALID_DOMAIN`, `NOTE_MISSING_TIMESTAMP` и `NOTE_INVALID_TIMESTAMP`, дают fixed exclusion mapping, если более ранняя specific exclusion не победила; note не становится eligible. |
 | Linked Outcome present | `actual_result`, `reassessment`, `notes` never enter query/context/metrics. |
 | Later evidence | `evidence_at > decision_at` is excluded; `later_evidence_excluded` is counted once per eligible case if any such source exists, and it cannot make a prediction. |
 | Unknown-time evidence | `unknown` is excluded; `unknown_evidence_excluded` is counted once per eligible case if any such source exists, with no assumption that it pre-existed choice. |
