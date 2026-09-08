@@ -904,10 +904,15 @@ Situation: {json_string(Situation)} | Information known at decision time: {json_
 
 `{criterion 1}; {criterion 2}; ...` означает упорядоченное соединение всех
 criteria через literal `; `; literal `...` не эмитируется. `json_string(value)`
-— exact JSON string scalar с `ensure_ascii=true`, separators `,` и `:`, без
-surrounding field name, BOM или trailing newline. Он обратимо кодирует quotes,
-backslash, line breaks, controls и non-ASCII в ASCII escape sequences. Значения
-берутся из allowed sections без semantic rewriting до этого reversible encoding;
+— ровно результат Python 3.14 stdlib `json.dumps(value,
+ensure_ascii=True, separators=(",", ":"), allow_nan=False)` для `str` value,
+включая обязательные outer double quotes, без surrounding field name, BOM или
+trailing newline. Named encoder использует стандартные short escapes для quote,
+reverse solidus, backspace, form feed, line feed, carriage return и tab; slash
+не экранируется, остальные C0/non-ASCII кодируются lowercase `\uXXXX` escapes.
+Этот exact encoder является частью policy, а не только описанием эквивалентного
+результата. Значения берутся из allowed sections без semantic rewriting до этого
+reversible encoding;
 `Chosen option`, `Reasons`, `Confidence`, `Expected result`, `Actual result`,
 `Reassessment`, outcome и evidence refs в query не входят. Sanitization, замена
 line break, truncation и alternate normalized query запрещены; ошибка scalar
@@ -989,7 +994,7 @@ derivation_version = "retrospective-calibration-v1"
 policy_id = "retrospective-simulate-me-exact-cutoff-v1"
 reconstruction_mode = "current-vault-temporal-projection-v1"
 context_projection = "per-case-filtered-current-self-model-builder-v1"
-query_projection = "retrospective-one-line-json-string-situation-information-criteria-semicolon-v2"
+query_projection = "retrospective-one-line-json-string-situation-information-criteria-semicolon-v3"
 self_model_derivation_version = "self-model-derivation-v1"
 self_model_policy_fingerprint = "d7969ba732665c0406736b0e669a9123ccd0ee7b12de36f57899f59f94282cd3"
 simulate_me_derivation_version = "simulate-me-v1"
@@ -1006,13 +1011,13 @@ Replay обязан использовать ровно этот `self_model_der
 `sort_keys=true`, separators `,` и `:`, без BOM и trailing newline:
 
 ```json
-{"context_projection":"per-case-filtered-current-self-model-builder-v1","decision_eligibility":"current-valid-stage2-journal-exact-utc-time-max-6-fraction-v2","evidence_cutoff":"exact-aware-inclusive-utc-max-6-fraction;updated-validated-before-cutoff;unknown-excluded-v3","execution":"one-provider-free-simulate-me-replay-at-most-once-after-preflight-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-v1","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_projection":"retrospective-one-line-json-string-situation-information-criteria-semicolon-v2","self_model_derivation_version":"self-model-derivation-v1","self_model_policy_fingerprint":"d7969ba732665c0406736b0e669a9123ccd0ee7b12de36f57899f59f94282cd3","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
+{"context_projection":"per-case-filtered-current-self-model-builder-v1","decision_eligibility":"current-valid-stage2-journal-exact-utc-time-max-6-fraction-v2","evidence_cutoff":"exact-aware-inclusive-utc-max-6-fraction;updated-validated-before-cutoff;unknown-excluded-v3","execution":"one-provider-free-simulate-me-replay-at-most-once-after-preflight-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-v1","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_projection":"retrospective-one-line-json-string-situation-information-criteria-semicolon-v3","self_model_derivation_version":"self-model-derivation-v1","self_model_policy_fingerprint":"d7969ba732665c0406736b0e669a9123ccd0ee7b12de36f57899f59f94282cd3","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
 ```
 
 Ожидаемый fingerprint:
 
 ```text
-sha256:28fb92f0fae4ae395ae520f1855fe05cb38b6a86755d17c55f893ebe1b5ffa74
+sha256:54c447cf3b25dc4661c1e0ada0773436a372c285566dda5d953946a41146a7a7
 ```
 
 Изменение любого правила eligibility, masking, cutoff, execution, option
