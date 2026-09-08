@@ -805,8 +805,9 @@ metadata pair `evidence_kind=observed_decision` + `self_kind=decision` счит�
 
 Для классифицированного case eligibility задаётся следующими predicates: note
 имеет valid current Journal body и unique current identity; decision
-`evidence_at` — aware RFC3339 с
-`exact` precision; `Available options` содержит 2–8 items в исходном порядке;
+`evidence_at` — aware RFC3339 с `exact` precision и успешным преобразованием в
+UTC для построения cutoff `D`; `Available options` содержит 2–8 items в
+исходном порядке;
 `Chosen option` exact whitespace matching соответствует ровно одному option; в
 body нет malformed/duplicate sections или hidden extra content. Stage 2 может
 хранить до 20 options, но 9–20 не replayable для Stage 6 и не усекаются.
@@ -824,9 +825,17 @@ missing/duplicate chosen mapping    -> decision_option_identity_invalid
 duplicate/invalid UUID или path     -> decision_identity_invalid_or_duplicate
 ```
 
+Exact precision сама по себе не делает decision time пригодным для cutoff:
+aware `evidence_at` должен успешно преобразоваться в UTC до формирования `D`.
+Значение вне допустимого диапазона или ошибка этого преобразования (включая
+`OverflowError`) классифицируется как `invalid/non-exact decision time`, получает
+`decision_time_not_exact_or_invalid`, исключается до evidence projection и не
+вызывает Simulate Me; остальные cases сохраняются.
+
 Порядок оценки нормативен, действует первое совпадение: (0) marker/metadata
 classification gate; (1) current identity; (2) Journal body/section validation;
-(3) decision time с различением unknown и invalid/non-exact; (4) option count;
+(3) decision time с различением unknown и invalid/non-exact, включая failed UTC
+conversion; (4) option count;
 (5) option identity и chosen mapping. Поэтому malformed body имеет приоритет
 над возможным следствием в виде неподдерживаемого числа options или ошибки
 chosen mapping, а unknown decision time — над последующими predicates.
@@ -902,6 +911,12 @@ text/label case получает
 `prechoice_request_invalid` с подкодом `query_too_large_or_invalid`, и branch не
 вызывается.
 
+Replay execution имеет условие at-most-once: для eligible case Simulate Me
+вызывается не более одного раза и только после успешного preflight filtered
+context и retrospective request/options. Если context seam или request
+preflight завершается `unavailable` либо `invalid`, branch не вызывается и
+повтор с другим context/request запрещён; такой outcome остаётся в aggregate.
+
 В Simulate Me input **не входят** `Chosen option`, `Reasons`, `Expected result`,
 `Actual result`, `Reassessment`, поздние notes или сам expected answer. Это
 explicit anti-leakage boundary. После replay predicted choice сравнивается с
@@ -973,13 +988,13 @@ simulate_me_policy_fingerprint = "sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da7
 `sort_keys=true`, separators `,` и `:`, без BOM и trailing newline:
 
 ```json
-{"context_projection":"per-case-filtered-current-self-model-builder-v1","decision_eligibility":"current-valid-stage2-journal-exact-time-v1","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-v1","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_projection":"retrospective-one-line-json-string-situation-information-criteria-semicolon-v2","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
+{"context_projection":"per-case-filtered-current-self-model-builder-v1","decision_eligibility":"current-valid-stage2-journal-exact-time-v1","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-at-most-once-after-preflight-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-v1","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_projection":"retrospective-one-line-json-string-situation-information-criteria-semicolon-v2","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
 ```
 
 Ожидаемый fingerprint:
 
 ```text
-sha256:8ae33703c8bdaffd96850ff60db658923b205560fdc62bea606372097fc572e1
+sha256:80ef0a0467259e07884ffc9627e723732c4340f24b68bfd0cc09c01cae52f335
 ```
 
 Изменение любого правила eligibility, masking, cutoff, execution, option
