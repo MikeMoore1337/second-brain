@@ -97,12 +97,22 @@ Calibration сканирует current canonical report и рассматрив�
    сортируются или усекaются для fit;
 8. `chosen_option` после exact Stage 2 whitespace comparison соответствует
    ровно одному item `available_options`;
-9. нет malformed/duplicate section, hidden extra body или qualifying storage
-   metadata diagnostic. В v1 к qualifying diagnostics относятся
-   `NOTE_MISSING_TIMESTAMP` и `NOTE_INVALID_TIMESTAMP` для storage fields
-   `created`/`updated`; они не трактуются как отсутствие timestamp и дают
-   fixed exclusion code `decision_note_metadata_invalid`, если более ранняя
-   specific check не сработала.
+9. нет malformed/duplicate section, hidden extra body или qualifying canonical
+   note diagnostic. В v1 exact qualifying diagnostic set для candidate Journal
+   note — `NOTE_MISSING_TYPE`, `NOTE_INVALID_TYPE`,
+   `NOTE_MISSING_TIMESTAMP`, `NOTE_INVALID_TIMESTAMP`, `NOTE_INVALID_TAGS`,
+   `NOTE_INVALID_SOURCES`, `NOTE_INVALID_SOURCE_COUNT`,
+   `NOTE_INVALID_SOURCE_RECORD`, `NOTE_SOURCE_MISSING_URI`,
+   `NOTE_SOURCE_MISSING_KIND`, `NOTE_SOURCE_MISSING_RETRIEVED_AT`,
+   `NOTE_SOURCE_INVALID_KIND`, `NOTE_SOURCE_INVALID_RETRIEVED_AT`,
+   `NOTE_SOURCE_INVALID_PUBLISHED_AT`, `NOTE_SOURCE_INVALID_URI`,
+   `NOTE_SOURCE_INVALID_METADATA` и `NOTE_INVALID_SOURCE`. Любой такой
+   diagnostic даёт fixed exclusion code `decision_note_metadata_invalid`, если
+   более ранняя specific check не сработала; invalid `created`/`updated` не
+   трактируется как отсутствие timestamp. `NOTE_MISSING_ID`/`NOTE_INVALID_ID`
+   относятся к `decision_identity_invalid_or_duplicate`, а
+   content-root `NOTE_FRONT_MATTER_ERROR` и `NOTE_READ_ERROR` останавливают
+   всю run на scan-completeness gate §7.
 
 Case с unknown decision time, invalid body, invalid choice mapping, duplicate
 identity или 9–20 options не запускает Simulate Me. Он учитывается в
@@ -134,9 +144,9 @@ note увеличивает не более одного counter в `excluded_de
 проверки выполняются в таком first-match order:
 `decision_identity_invalid_or_duplicate`, `decision_time_unknown`,
 `decision_time_not_exact_or_invalid`, `decision_body_created_after_cutoff`,
-`decision_body_edited_after_cutoff`, `decision_option_count_unsupported`,
-`decision_option_identity_invalid`, `decision_body_invalid`, затем
-`decision_note_metadata_invalid`.
+`decision_body_edited_after_cutoff`, `decision_note_metadata_invalid`,
+`decision_option_count_unsupported`, `decision_option_identity_invalid`, затем
+`decision_body_invalid`.
 Побеждает первая failing check; последующие applicable failures не считаются.
 Note, прошедшая все девять checks, становится eligible, а eligible case никогда
 не получает code из `excluded_decisions`.
@@ -526,10 +536,10 @@ decision_time_unknown
 decision_time_not_exact_or_invalid
 decision_body_created_after_cutoff
 decision_body_edited_after_cutoff
+decision_note_metadata_invalid
 decision_option_count_unsupported
 decision_option_identity_invalid
 decision_body_invalid
-decision_note_metadata_invalid
 ```
 
 `replay_unavailable`:
@@ -646,13 +656,13 @@ Fingerprint input is exactly this one-line ASCII JSON, encoded as UTF-8 with
 `sort_keys=true`, separators `,` and `:`, no BOM and no trailing newline:
 
 ```json
-{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","decision_note_metadata":"created-updated-invalid-diagnostic-excluded-v1","diagnostics":"exclusive-phase-mapped-code-sums-v2","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","journal_body_cutoff":"updated-after-decision-excluded-v1","journal_creation_cutoff":"created-after-decision-excluded-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_failure_mapping":"available-options-before-generic-body-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","result_size_guard":"internal-canonical-utf8-byte-length-v1","scan_completeness":"content-affecting-diagnostics-abort-before-classification-v2","scan_limits":"entries-16384;documents-4096;bytes-16777216-v1","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","self_model_derivation_version":"self-model-derivation-v1","self_model_policy_fingerprint":"d7969ba732665c0406736b0e669a9123ccd0ee7b12de36f57899f59f94282cd3","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","temporal_caveat_counting":"per-eligible-case-independent-codes-v1","temporal_caveat_scope":"after-request-validation-context-source-inspection-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
+{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","decision_note_metadata":"all-canonical-note-error-diagnostics-excluded-v2","diagnostics":"exclusive-phase-mapped-code-sums-v2","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","journal_body_cutoff":"updated-after-decision-excluded-v1","journal_creation_cutoff":"created-after-decision-excluded-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_failure_mapping":"available-options-before-generic-body-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","result_size_guard":"internal-canonical-utf8-byte-length-v1","scan_completeness":"content-affecting-diagnostics-abort-before-classification-v2","scan_limits":"entries-16384;documents-4096;bytes-16777216-v1","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","self_model_derivation_version":"self-model-derivation-v1","self_model_policy_fingerprint":"d7969ba732665c0406736b0e669a9123ccd0ee7b12de36f57899f59f94282cd3","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","temporal_caveat_counting":"per-eligible-case-independent-codes-v1","temporal_caveat_scope":"after-request-validation-context-source-inspection-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
 ```
 
 Expected fingerprint:
 
 ```text
-sha256:60acc3e647b916d7cb093d75fe9bd5393d9fc068cc9672f89f5b79f856c43aa6
+sha256:21347bca00ebd0f8d78fd0741e372f989e5cdcc8338a8a709f65774ba9042b3f
 ```
 
 Fingerprint changes when any eligibility, masking, cutoff, execution, scan
@@ -726,7 +736,7 @@ database or write path.
 | Valid multiple-support ambiguity | `multiple_options_supported` is abstention; no count/recency tie-break. |
 | Mismatch | Valid prediction with different request-local ID increments mismatch only. |
 | Создание/изменение Journal после cutoff | `created > decision_at` даёт `decision_body_created_after_cutoff`, `updated > decision_at` даёт `decision_body_edited_after_cutoff`; target/query/context не строятся, это никогда не mismatch или temporal caveat. |
-| Invalid `created`/`updated` storage timestamp | `NOTE_MISSING_TIMESTAMP` или `NOTE_INVALID_TIMESTAMP` даёт `decision_note_metadata_invalid`, если более ранняя specific exclusion не победила; malformed `updated` не считается отсутствующим. |
+| Диагностика canonical metadata note | Любая exact qualifying `NOTE_*` storage/provenance diagnostic, включая `NOTE_INVALID_TYPE`, `NOTE_MISSING_TIMESTAMP` и `NOTE_INVALID_TIMESTAMP`, даёт `decision_note_metadata_invalid`, если более ранняя specific exclusion не победила; note не становится eligible. |
 | Linked Outcome present | `actual_result`, `reassessment`, `notes` never enter query/context/metrics. |
 | Later evidence | `evidence_at > decision_at` is excluded; `later_evidence_excluded` is counted once per eligible case if any such source exists, and it cannot make a prediction. |
 | Unknown-time evidence | `unknown` is excluded; `unknown_evidence_excluded` is counted once per eligible case if any such source exists, with no assumption that it pre-existed choice. |
