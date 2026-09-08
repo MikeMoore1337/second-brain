@@ -947,6 +947,18 @@ context и retrospective request/options. Если context seam или request
 preflight завершается `unavailable` либо `invalid`, branch не вызывается и
 повтор с другим context/request запрещён; такой outcome остаётся в aggregate.
 
+Replay work дополнительно ограничен фиксированным logical preflight budget:
+`MAX_ELIGIBLE_DECISIONS = 256`, `MAX_SIMULATE_ME_CALLS = 256` и
+`MAX_PROJECTED_REQUEST_BYTES_TOTAL = 1_048_576`. Cases перечисляются в
+deterministic canonical UUID/path order; до первой Simulate Me invocation
+preflight считает eligible cases и точную сумму UTF-8 bytes каждого projected
+query и option labels, включая requests, которые затем будут отклонены strict
+per-case validation. Если любой limit был бы превышен, весь run получает
+`unavailable` с code `calibration_work_limit_exceeded`, partial aggregate и
+partial derived state не публикуются, Simulate Me в этом run не вызывается.
+Truncation, sampling и alternate query запрещены. Эти logical limits заменяют
+wall-clock deadline, чтобы overflow outcome оставался deterministic.
+
 В Simulate Me input **не входят** `Chosen option`, `Reasons`, `Expected result`,
 `Actual result`, `Reassessment`, поздние notes или сам expected answer. Это
 explicit anti-leakage boundary. После replay predicted choice сравнивается с
@@ -1014,6 +1026,7 @@ self_model_policy_fingerprint = "d7969ba732665c0406736b0e669a9123ccd0ee7b12de36f
 simulate_me_derivation_version = "simulate-me-v1"
 simulate_me_policy_id = "simulate-me-direct-exact-v1"
 simulate_me_policy_fingerprint = "sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a"
+work_budget = "max-256-eligible-decisions-256-provider-free-calls-1048576-request-bytes-no-truncation-v1"
 ```
 
 Replay обязан использовать ровно этот `self_model_derivation_version` и
@@ -1025,13 +1038,13 @@ Replay обязан использовать ровно этот `self_model_der
 `sort_keys=true`, separators `,` и `:`, без BOM и trailing newline:
 
 ```json
-{"context_projection":"per-case-filtered-current-self-model-builder-v1","decision_eligibility":"current-valid-stage2-journal-exact-utc-time-max-6-fraction-full-canonical-metadata-time-issue-routing-v4","evidence_cutoff":"exact-aware-inclusive-utc-max-6-fraction;updated-validated-before-cutoff;unknown-excluded-v3","execution":"one-provider-free-simulate-me-replay-at-most-once-after-preflight-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-v1","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_projection":"retrospective-one-line-json-string-situation-information-criteria-semicolon-v3","self_model_derivation_version":"self-model-derivation-v1","self_model_policy_fingerprint":"d7969ba732665c0406736b0e669a9123ccd0ee7b12de36f57899f59f94282cd3","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
+{"context_projection":"per-case-filtered-current-self-model-builder-v1","decision_eligibility":"current-valid-stage2-journal-exact-utc-time-max-6-fraction-full-canonical-metadata-time-issue-routing-v4","evidence_cutoff":"exact-aware-inclusive-utc-max-6-fraction;updated-validated-before-cutoff;unknown-excluded-v3","execution":"one-provider-free-simulate-me-replay-at-most-once-after-preflight-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-v1","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_projection":"retrospective-one-line-json-string-situation-information-criteria-semicolon-v3","self_model_derivation_version":"self-model-derivation-v1","self_model_policy_fingerprint":"d7969ba732665c0406736b0e669a9123ccd0ee7b12de36f57899f59f94282cd3","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","unknown_time":"exclude-and-report-caveat-v1","work_budget":"max-256-eligible-decisions-256-provider-free-calls-1048576-request-bytes-no-truncation-v1","version":"1"}
 ```
 
 Ожидаемый fingerprint:
 
 ```text
-sha256:692282ed5deb353a415531772612db6e977295ce76bb111a97e15d324d91f61d
+sha256:d42e19c89e7bebeba38ee01e4973d547d0aa26724882fa03c2276f8eaa8cfac2
 ```
 
 Изменение любого правила eligibility, masking, cutoff, execution, option
