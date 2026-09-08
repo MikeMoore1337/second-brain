@@ -1388,11 +1388,7 @@ def _target_option_id(request: SimulateMeRequest, chosen_option: str) -> str | N
 def _context_input(report: ScanReport) -> RetrospectiveCalibrationContextInputV1:
     if type(report.manifest) is not VaultManifest:
         raise RetrospectiveCalibrationSourceUnavailableError()
-    notes = tuple(
-        note
-        for note in report.notes
-        if _is_direct_context_note(note)
-    )
+    notes = tuple(note for note in report.notes if _is_direct_context_note(note))
     return RetrospectiveCalibrationContextInputV1(report.manifest, notes)
 
 

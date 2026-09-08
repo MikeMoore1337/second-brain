@@ -556,9 +556,7 @@ def test_invalid_direct_context_metadata_reaches_self_model_boundary() -> None:
         body="A direct assertion.",
         in_inbox=False,
     )
-    service, _scanner, _context, replay = _service(
-        _snapshot(_journal_document(1), invalid_context)
-    )
+    service, _scanner, _context, replay = _service(_snapshot(_journal_document(1), invalid_context))
 
     result = service.execute(RetrospectiveCalibrationRequestV1())
 
