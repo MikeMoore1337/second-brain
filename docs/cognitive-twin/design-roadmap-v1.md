@@ -774,24 +774,29 @@ mechanical Delta и остаются deferred.
 ## 15. Prediction & Calibration v1
 
 В v1 calibration — **только retrospective/rebuildable**. ML training pipeline
-не нужен. Нужен lifecycle:
+не нужен. Нормативные masking, cutoff, current-vault limitation и aggregate
+metrics зафиксированы в
+[retrospective-calibration-v1-contract.md](retrospective-calibration-v1-contract.md).
+Нужен lifecycle:
 
 ```text
-canonical historical Decision Journal
-  -> pre-choice snapshot
+current canonical Decision Journal
+  -> current-vault temporal projection (not a historical snapshot)
   -> current Simulate Me derivation without chosen option/outcome
-  -> predicted choice + confidence
+  -> predicted choice or bounded abstention
   -> compare with canonical observed decision
   -> rebuildable calibration aggregate
 ```
 
-Для каждого historical Journal строится pre-choice snapshot из:
+Для каждого eligible Journal строится bounded current-vault pre-choice
+projection (не historical snapshot) из:
 
 - `Situation`;
 - `Available options`;
 - `Information known at decision time`;
 - `Criteria`;
-- canonical evidence, доступного не позже `evidence_at` decision.
+- canonical evidence с known exact `evidence_at`, не позже decision; unknown,
+  later и post-cutoff-edited evidence исключаются с caveat.
 
 В Simulate Me input **не входят** `Chosen option`, `Reasons`, `Expected result`,
 `Actual result`, `Reassessment`, поздние notes или сам expected answer. Это
@@ -801,30 +806,29 @@ canonical `observed_decision` choice из Journal. Поэтому calibration о
 решения пользователя?», а не «насколько система когда-то предсказала их в
 production».
 
-Derived historical prediction существует только во время rebuild и содержит:
+Derived replay state существует только во время rebuild и содержит:
 
-- predicted choice и bounded confidence;
-- historical context fingerprint и decision cutoff;
-- supporting и contradicting canonical UUIDs;
-- `generated_at` и `derivation_version`.
+- validated predicted choice или abstention;
+- current-vault reconstruction mode и decision cutoff;
+- bounded internal refs только до завершения case, без публикации UUID/body;
+- exact `derivation_version` и policy fingerprint.
 
 Actual choice берётся только после replay из reviewed `observed_decision`.
-Если в Journal нет canonical chosen option или pre-choice information, sample
-получает `unobserved/insufficient_input`, а не неправильный prediction.
-Comparison различает как минимум `match`, `mismatch`, `partial/ambiguous` и
-`unobserved`.
+Если Journal не проходит exact eligibility, sample исключается с fixed code, а
+не получает неправильный prediction. Valid no-match/multiple-support остаются
+bounded Simulate Me abstention; unavailable и invalid replay не маскируются под
+mismatch.
 
-Calibration v1 показывает количество replayable samples, confidence bins,
-empirical hit rate и calibration gap. Brier score или другая proper scoring
-metric может быть добавлена только если choice space достаточно определён;
-отсутствие достаточного sample должно показываться явно. Нельзя выдавать
-маленькую выборку за validated personal trait.
+Calibration v1 показывает только bounded counts, exact option match/mismatch,
+predicted/abstained/unavailable/invalid, coverage и exact non-abstained
+accuracy numerator/denominator. Confidence, probability, Brier/ECE, bins,
+calibration gap, tuning и small-sample personal trait claims не входят.
 
-Retrospective prediction и calibration полностью derived: удаление derived
-state не теряет никаких данных и не сбрасывает historical calibration — она
-снова вычисляется из vault той же или новой derivation policy. При смене
-`derivation_version` результат честно является метрикой новой версии, а не
-притворяется историческим production prediction.
+Retrospective replay и calibration полностью derived: удаление derived state не
+теряет никаких данных, а aggregate снова вычисляется из current vault той же
+или новой derivation policy. При смене `derivation_version` результат честно
+является метрикой новой версии; current-vault projection не притворяется
+historical snapshot или production prediction.
 
 Prospective extension (`prediction now -> actual choice later`) в v1 не входит.
 Чтобы такой режим когда-либо имел rebuildable historical calibration, сначала
