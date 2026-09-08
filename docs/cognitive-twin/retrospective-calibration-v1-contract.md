@@ -109,7 +109,24 @@ Calibration сканирует current canonical report и рассматрив�
    `NOTE_SOURCE_INVALID_METADATA` и `NOTE_INVALID_SOURCE`. Любой такой
    diagnostic даёт fixed exclusion code `decision_note_metadata_invalid`, если
    более ранняя specific check не сработала; invalid `created`/`updated` не
-   трактируется как отсутствие timestamp. `NOTE_MISSING_ID`/`NOTE_INVALID_ID`
+   трактируется как отсутствие timestamp. Для note с exact enrollment marker и
+   raw metadata pair `evidence_kind=observed_decision` + `self_kind=decision`
+   typed projection не является обязательным условием preclassification:
+   текущие `PERSONAL_MEMORY_*` diagnostics также проверяются до projection.
+   `PERSONAL_MEMORY_MISSING_EVIDENCE_AT`,
+   `PERSONAL_MEMORY_INVALID_EVIDENCE_AT`,
+   `PERSONAL_MEMORY_MISSING_EVIDENCE_AT_PRECISION`,
+   `PERSONAL_MEMORY_INVALID_EVIDENCE_AT_PRECISION` и
+   `PERSONAL_MEMORY_INVALID_EVIDENCE_AT_PAIR` дают соответствующий
+   `decision_time_unknown` или `decision_time_not_exact_or_invalid`; остальные
+   текущие `PERSONAL_MEMORY_*` diagnostics —
+   `PERSONAL_MEMORY_INVALID_RECORD`, `PERSONAL_MEMORY_MISSING_EVIDENCE_KIND`,
+   `PERSONAL_MEMORY_INVALID_EVIDENCE_KIND`,
+   `PERSONAL_MEMORY_MISSING_SELF_KIND`, `PERSONAL_MEMORY_INVALID_SELF_KIND`,
+   `PERSONAL_MEMORY_INVALID_KIND_PAIR` и `PERSONAL_MEMORY_INVALID_DOMAIN` —
+   дают `decision_note_metadata_invalid`. Такой candidate увеличивает
+   `decision_notes_seen` и ровно один excluded counter; invalid domain не может
+   silently исчезнуть из denominator accounting. `NOTE_MISSING_ID`/`NOTE_INVALID_ID`
    относятся к `decision_identity_invalid_or_duplicate`, а
    content-root `NOTE_FRONT_MATTER_ERROR` и `NOTE_READ_ERROR` останавливают
    всю run на scan-completeness gate §7.
@@ -656,13 +673,13 @@ Fingerprint input is exactly this one-line ASCII JSON, encoded as UTF-8 with
 `sort_keys=true`, separators `,` and `:`, no BOM and no trailing newline:
 
 ```json
-{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","decision_note_metadata":"all-canonical-note-error-diagnostics-excluded-v2","diagnostics":"exclusive-phase-mapped-code-sums-v2","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","journal_body_cutoff":"updated-after-decision-excluded-v1","journal_creation_cutoff":"created-after-decision-excluded-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_failure_mapping":"available-options-before-generic-body-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","result_size_guard":"internal-canonical-utf8-byte-length-v1","scan_completeness":"content-affecting-diagnostics-abort-before-classification-v2","scan_limits":"entries-16384;documents-4096;bytes-16777216-v1","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","self_model_derivation_version":"self-model-derivation-v1","self_model_policy_fingerprint":"d7969ba732665c0406736b0e669a9123ccd0ee7b12de36f57899f59f94282cd3","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","temporal_caveat_counting":"per-eligible-case-independent-codes-v1","temporal_caveat_scope":"after-request-validation-context-source-inspection-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
+{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","decision_note_metadata":"all-canonical-note-and-personal-memory-errors-excluded-v3","diagnostics":"exclusive-phase-mapped-code-sums-v2","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","journal_body_cutoff":"updated-after-decision-excluded-v1","journal_creation_cutoff":"created-after-decision-excluded-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_failure_mapping":"available-options-before-generic-body-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","result_size_guard":"internal-canonical-utf8-byte-length-v1","scan_completeness":"content-affecting-diagnostics-abort-before-classification-v2","scan_limits":"entries-16384;documents-4096;bytes-16777216-v1","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","self_model_derivation_version":"self-model-derivation-v1","self_model_policy_fingerprint":"d7969ba732665c0406736b0e669a9123ccd0ee7b12de36f57899f59f94282cd3","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","temporal_caveat_counting":"per-eligible-case-independent-codes-v1","temporal_caveat_scope":"after-request-validation-context-source-inspection-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
 ```
 
 Expected fingerprint:
 
 ```text
-sha256:21347bca00ebd0f8d78fd0741e372f989e5cdcc8338a8a709f65774ba9042b3f
+sha256:4daf20f43e211e12af3587eb88ea2cef363ef3abbe385c414cf0d6f9f9684446
 ```
 
 Fingerprint changes when any eligibility, masking, cutoff, execution, scan
@@ -736,7 +753,7 @@ database or write path.
 | Valid multiple-support ambiguity | `multiple_options_supported` is abstention; no count/recency tie-break. |
 | Mismatch | Valid prediction with different request-local ID increments mismatch only. |
 | Создание/изменение Journal после cutoff | `created > decision_at` даёт `decision_body_created_after_cutoff`, `updated > decision_at` даёт `decision_body_edited_after_cutoff`; target/query/context не строятся, это никогда не mismatch или temporal caveat. |
-| Диагностика canonical metadata note | Любая exact qualifying `NOTE_*` storage/provenance diagnostic, включая `NOTE_INVALID_TYPE`, `NOTE_MISSING_TIMESTAMP` и `NOTE_INVALID_TIMESTAMP`, даёт `decision_note_metadata_invalid`, если более ранняя specific exclusion не победила; note не становится eligible. |
+| Диагностика canonical metadata note | Любая exact qualifying `NOTE_*` storage/provenance или `PERSONAL_MEMORY_*` diagnostic, включая `NOTE_INVALID_TYPE`, `PERSONAL_MEMORY_INVALID_DOMAIN`, `NOTE_MISSING_TIMESTAMP` и `NOTE_INVALID_TIMESTAMP`, даёт fixed exclusion mapping, если более ранняя specific exclusion не победила; note не становится eligible. |
 | Linked Outcome present | `actual_result`, `reassessment`, `notes` never enter query/context/metrics. |
 | Later evidence | `evidence_at > decision_at` is excluded; `later_evidence_excluded` is counted once per eligible case if any such source exists, and it cannot make a prediction. |
 | Unknown-time evidence | `unknown` is excluded; `unknown_evidence_excluded` is counted once per eligible case if any such source exists, with no assumption that it pre-existed choice. |
