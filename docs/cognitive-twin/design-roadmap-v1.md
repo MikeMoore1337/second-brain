@@ -849,8 +849,10 @@ Marker/metadata gate не является exclusion outcome, потому чт�
 Для каждого aware evidence time сначала по исходному сериализованному значению
 проверяется RFC3339 exact precision: дробная часть отсутствует либо содержит 1–6
 ASCII digits; затем выполняется UTC conversion, и включается только
-`evidence_at <= D` (inclusive). `unknown`, `created` и `updated` не
-заменяют `evidence_at`; известное `updated > D` исключает evidence. Отсутствие
+`evidence_at <= D` (inclusive). `unknown` и `created` не заменяют
+`evidence_at`. Если `updated` присутствует, его исходное сериализованное
+значение проходит ту же raw-lexeme проверку precision и UTC conversion до
+сравнения с `D`; известное `updated > D` исключает evidence. Отсутствие
 `updated` или `updated <= D` не доказывает, что текущие bytes исторически
 неизменны: current-vault projection не обещает исключить незафиксированную
 post-cutoff edit и не называется historical snapshot. При невозможности
@@ -867,10 +869,11 @@ edited_after_cutoff_excluded
 historical_snapshot_unavailable
 ```
 
-Если aware `evidence_at` содержит более 6 fractional digits или не удаётся
-преобразовать его в UTC из-за значения вне допустимого диапазона либо ошибки
-преобразования (включая `OverflowError`), это не приводит к исключению наружу и
-не классифицируется как `invalid`: case получает `unavailable` с
+Если aware `evidence_at` или присутствующий `updated` содержит более 6
+fractional digits либо не удаётся преобразовать его в UTC из-за значения вне
+допустимого диапазона или ошибки преобразования (включая `OverflowError`), это
+не приводит к исключению наружу и не классифицируется как `invalid`: case
+получает `unavailable` с
 `historical_context_unreconstructable`, Simulate Me не вызывается, а остальные
 cases сохраняются. Сравнение не округляет и не обрезает fractional precision.
 Это отдельная детерминированная ошибка source, а не temporal caveat и не
@@ -996,13 +999,13 @@ simulate_me_policy_fingerprint = "sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da7
 `sort_keys=true`, separators `,` и `:`, без BOM и trailing newline:
 
 ```json
-{"context_projection":"per-case-filtered-current-self-model-builder-v1","decision_eligibility":"current-valid-stage2-journal-exact-utc-time-max-6-fraction-v2","evidence_cutoff":"exact-aware-inclusive-utc-max-6-fraction;unknown-excluded-v2","execution":"one-provider-free-simulate-me-replay-at-most-once-after-preflight-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-v1","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_projection":"retrospective-one-line-json-string-situation-information-criteria-semicolon-v2","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
+{"context_projection":"per-case-filtered-current-self-model-builder-v1","decision_eligibility":"current-valid-stage2-journal-exact-utc-time-max-6-fraction-v2","evidence_cutoff":"exact-aware-inclusive-utc-max-6-fraction;updated-validated-before-cutoff;unknown-excluded-v3","execution":"one-provider-free-simulate-me-replay-at-most-once-after-preflight-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-v1","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_projection":"retrospective-one-line-json-string-situation-information-criteria-semicolon-v2","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
 ```
 
 Ожидаемый fingerprint:
 
 ```text
-sha256:9f2e09d4280b63355c2e39d31015d0d59a790275aa346beb168554a4a0a8ba68
+sha256:19a3bb4c6c98160f768fd2d6da734fbae44a7f381d260026615a0cbe296cf17c
 ```
 
 Изменение любого правила eligibility, masking, cutoff, execution, option
