@@ -232,7 +232,7 @@ summary.
 | `Available options` | **ALLOW** | Строит общий request-local options tuple; labels сохраняют Journal order и exact text. |
 | `Information known at decision time` | **ALLOW** | Входит в deterministic query; не расширяется current knowledge после cutoff. |
 | `Criteria` | **ALLOW** | Входит в deterministic query как явные pre-choice criteria. |
-| `Chosen option` | **MASK** | Сохраняется отдельно как observed target только после replay; в query/options authority кроме derived option list не передаётся и в current context не читается. |
+| `Chosen option` | **MASK** | Exact Stage 2 identity check is an eligibility gate only; observed target/request-local target ID сохраняется отдельно только после validated terminal Stage 6 result. В query/options authority кроме derived option list, Self Model, current context или branch metadata chosen option не передаётся. |
 | `Reasons` | **MASK** | Даже если часть reasons могла быть записана до выбора, v1 не классифицирует её и исключает как possible post-choice explanation. |
 | `Confidence` | **MASK** | Это субъективная choice-time field, не Stage 6 confidence; она не нужна для exact prediction и может раскрывать target. |
 | `Expected result` | **MASK** | Всегда исключается: section может отражать выбранный option и future expectation. Нет conditional inspection. |
@@ -374,12 +374,14 @@ o1, o2, ... oN
 `SimulateMeOption` равен exact current Journal `available_options[i]` text.
 Не создаются aliases, synonyms, translations, fuzzy matches или LLM mapping.
 
-Observed target mapping выполняется отдельно тем же exact Stage 2 comparison,
-который разрешил Journal body: after Stage 2 whitespace normalization,
-`chosen_option` должен correspond to one and only one available option. The
-target ID is retained in ephemeral case state only after request options are
-constructed; it is never sent as query content, Self Model input, option
-authority or branch metadata.
+Eligibility выполняет тот же exact Stage 2 comparison, чтобы проверить, что
+`chosen_option` после whitespace normalization correspond to one and only one
+available option, но до branch target ID не materializes и не сохраняется.
+Только после validated terminal Stage 6 `prediction` implementation повторяет
+этот exact comparison и сохраняет observed target как ephemeral request-local
+ID для post-result match. Target не является query content, Self Model input,
+option authority или branch metadata; для validated abstention target ID не
+materializes вообще.
 
 If Simulate Me returns a prediction, score сравнивает только predicted
 request-local ID и target request-local ID byte-for-byte. Labels, case, inner
@@ -451,9 +453,10 @@ current context передаётся только через approved applicatio
    safe relative path)`; unknown-time и ineligible cases не входят в replay
    order, но остаются в exclusion counts.
 3. Для каждого eligible case проверить §4 mask, построить options и query,
-   определить target отдельно и проверить exact request bounds. Если request
-   validation завершается до context-source boundary, case получает mapping из
-   §8.3 и temporal caveats для него не считаются.
+   подтвердить уже выполненную §3 exact target-identity gate без materializing
+   target ID и проверить exact request bounds. Если request validation
+   завершается до context-source boundary, case получает mapping из §8.3 и
+   temporal caveats для него не считаются.
 4. Построить filtered current-vault context по §5; каждый current UUID и
    metadata проверить заново. С началом проверки context sources достигается
    temporal-caveat boundary §5.2.1. Unknown/later/edited source claims
@@ -471,8 +474,11 @@ current context передаётся только через approved applicatio
    `prechoice_context_unavailable`, потому что pre-choice context не был
    получен; malformed/wrong-policy result → exact `replay_invalid` code по
    §8.3.
-8. Сравнить predicted request-local ID с retained target ID, обновить bounded
-   in-memory counters и temporal caveat counters.
+8. Только для validated `prediction` после terminal result повторить exact
+   Journal target comparison, materialize target request-local ID и сравнить его
+   с predicted ID; затем обновить bounded in-memory counters и temporal caveat
+   counters. Для validated abstention target не materializes и mismatch не
+   считается.
 9. Собрать один canonical aggregate. Если canonical bytes превышают
    `MAX_RESULT_BYTES_V1`, вернуть top-level result-too-large без truncation.
 
@@ -706,13 +712,13 @@ Fingerprint input is exactly this one-line ASCII JSON, encoded as UTF-8 with
 `sort_keys=true`, separators `,` and `:`, no BOM and no trailing newline:
 
 ```json
-{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","decision_note_metadata":"all-canonical-note-and-plausible-journal-errors-excluded-v5","diagnostics":"exclusive-phase-mapped-code-sums-v2","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","journal_body_cutoff":"updated-after-decision-excluded-v1","journal_creation_cutoff":"journal-and-context-created-after-decision-excluded-v2","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","max_decision_cases":"512","max_result_bytes":"65536","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_failure_mapping":"available-options-before-generic-body-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","result_size_guard":"internal-canonical-utf8-byte-length-v1","scan_completeness":"content-affecting-diagnostics-abort-before-classification-v2","scan_limits":"entries-16384;documents-4096;bytes-16777216-v1","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","simulate_me_request_limits":"min-text-bytes-1;query-bytes-4096;label-bytes-256;options-1..8-v1","self_model_derivation_version":"self-model-derivation-v1","self_model_policy_fingerprint":"d7969ba732665c0406736b0e669a9123ccd0ee7b12de36f57899f59f94282cd3","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-required-updated-optional-never-evidence-time-v2","temporal_caveat_counting":"per-eligible-case-independent-codes-v2","temporal_caveat_scope":"after-request-validation-context-source-inspection-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
+{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","decision_note_metadata":"all-canonical-note-and-plausible-journal-errors-excluded-v5","diagnostics":"exclusive-phase-mapped-code-sums-v2","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","journal_body_cutoff":"updated-after-decision-excluded-v1","journal_creation_cutoff":"journal-and-context-created-after-decision-excluded-v2","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","max_decision_cases":"512","max_result_bytes":"65536","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_failure_mapping":"available-options-before-generic-body-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","result_size_guard":"internal-canonical-utf8-byte-length-v1","scan_completeness":"content-affecting-diagnostics-abort-before-classification-v2","scan_limits":"entries-16384;documents-4096;bytes-16777216-v1","self_model_derivation_version":"self-model-derivation-v1","self_model_policy_fingerprint":"d7969ba732665c0406736b0e669a9123ccd0ee7b12de36f57899f59f94282cd3","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","simulate_me_request_limits":"min-text-bytes-1;query-bytes-4096;label-bytes-256;options-1..8-v1","simulate_me_result_limits":"max-result-refs-20;max-note-ids-per-ref-20-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-required-updated-optional-never-evidence-time-v2","target_extraction":"post-validated-terminal-result-isolated-v1","temporal_caveat_counting":"per-eligible-case-independent-codes-v2","temporal_caveat_scope":"after-request-validation-context-source-inspection-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
 ```
 
 Expected fingerprint:
 
 ```text
-sha256:fc8b08b5211a198a722ea8330050a9214d12aa1357a3569f79541e28cd9c35d6
+sha256:554ca12d4bc17c4541a640bc88be692599934c8aeb820018e6edeef01269c0d5
 ```
 
 Fingerprint changes when any eligibility, masking, cutoff, execution, scan
@@ -780,7 +786,7 @@ database or write path.
 
 | Case | Required assertion |
 | --- | --- |
-| Correct prediction from pre-choice evidence | exact request-local target/prediction IDs match; `predicted=1`, `match=1`. |
+| Correct prediction from pre-choice evidence | target ID is materialized only after validated terminal `prediction`; exact request-local target/prediction IDs match; `predicted=1`, `match=1`. |
 | Multiline Journal fields | Обратимое `E` encoding сохраняет exact UTF-8 field bytes, не удаляет supported Stage 2 content и даёт strict-valid single-line query, если не превышен bounded query byte cap. |
 | Valid no-match | Stage 6 `no_matching_evidence` is `abstentions=1`, not unavailable or mismatch. |
 | Valid multiple-support ambiguity | `multiple_options_supported` is abstention; no count/recency tie-break. |
@@ -793,6 +799,7 @@ database or write path.
 | Later evidence | `evidence_at > decision_at` is excluded; `later_evidence_excluded` is counted once per eligible case if any such source exists, and it cannot make a prediction. |
 | Unknown-time evidence | `unknown` is excluded; `unknown_evidence_excluded` is counted once per eligible case if any such source exists, with no assumption that it pre-existed choice. |
 | Chosen/reasons/expected-result leakage | For a case already accepted by §3, changing masked sections cannot change request options/query/context, branch availability or selection; a change that breaks §3 is an eligibility exclusion, not a mismatch. |
+| Target extraction order | Before branch only the eligibility identity gate runs; validated abstention never materializes target ID, and validated prediction materializes it only after the terminal result for post-result comparison. |
 | Current edited evidence | `updated > decision_at` source is excluded; `edited_after_cutoff_excluded` is counted once per eligible case if any such source exists, with no historical body reconstruction or fallback. |
 | Deleted/missing evidence | UUID miss is excluded/unavailable; Search/path/created does not recover it. |
 | Journal with 9–20 options | excluded as unsupported Stage 6 option count; no truncation or option selection. |
