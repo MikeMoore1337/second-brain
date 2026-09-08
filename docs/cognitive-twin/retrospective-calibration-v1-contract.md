@@ -112,8 +112,9 @@ truncation запрещена.
 
 ## 4. Mandatory pre-choice masking matrix
 
-Masking выполняется до построения `SimulateMeRequest` и до любого current
-context read, зависящего от case. Содержимое masked section не может попасть
+Для case, уже прошедшего всю §3 eligibility, masking выполняется до построения
+`SimulateMeRequest` и до любого current context read, зависящего от case.
+Содержимое masked section не может попасть
 через alternate field, linked note, Search hit, UUID relation или derived
 summary.
 
@@ -134,10 +135,13 @@ summary.
 | Any evidence with `evidence_at = unknown` | **EXCLUDE + CAVEAT** | Не предполагается, что evidence существовало до выбора; default safe policy — exclude. |
 | Any derived context whose source time/identity is not proven | **EXCLUDE / UNAVAILABLE** | Не заменяется `created`, `updated`, Search result или current unfiltered context. |
 
-`chosen_option`, `reasons`, `confidence`, `expected_result`, outcome и
-post-choice evidence не могут влиять ни на selection, ни на branch availability,
-ни на metrics category. Их наличие в current storage не является разрешением
-на retrospective leakage.
+Для case, уже прошедшего §3 eligibility, `chosen_option`, `reasons`,
+`confidence`, `expected_result`, outcome и post-choice evidence не могут влиять
+ни на selection, ни на branch availability, ни на metrics category. Изменение
+masked section, которое до этой границы делает Journal body невалидным,
+меняет eligibility и переводит case в fixed excluded category; это не является
+leakage и не может считаться mismatch. Наличие masked data в current storage
+не является разрешением на retrospective leakage.
 
 ## 5. Temporal cutoff и current-vault limitation
 
@@ -554,7 +558,7 @@ database or write path.
 | Linked Outcome present | `actual_result`, `reassessment`, `notes` never enter query/context/metrics. |
 | Later evidence | `evidence_at > decision_at` is excluded and caveat-counted; it cannot make a prediction. |
 | Unknown-time evidence | `unknown` is excluded and caveat-counted; no assumption that it pre-existed choice. |
-| Chosen/reasons/expected-result leakage | changing masked sections cannot change request options/query/context or selection. |
+| Chosen/reasons/expected-result leakage | For a case already accepted by §3, changing masked sections cannot change request options/query/context, branch availability or selection; a change that breaks §3 is an eligibility exclusion, not a mismatch. |
 | Current edited evidence | `updated > decision_at` source is excluded; no historical body reconstruction or fallback. |
 | Deleted/missing evidence | UUID miss is excluded/unavailable; Search/path/created does not recover it. |
 | Journal with 9–20 options | excluded as unsupported Stage 6 option count; no truncation or option selection. |
