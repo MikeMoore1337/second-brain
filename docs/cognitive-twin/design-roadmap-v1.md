@@ -802,8 +802,13 @@ projection (не historical snapshot) из:
 metadata pair `evidence_kind=observed_decision` + `self_kind=decision` считается
 классифицированным Stage 2 Journal case. Для такого кандидата обязательно
 выполняется полный canonical metadata predicate, эквивалентный
-`validate_canonical_personal_memory_fields(front_matter)`: результатом должен
-быть normalized metadata без issues до проверки decision-specific predicates.
+`validate_canonical_personal_memory_fields(front_matter)`, до любого replay или
+eligible outcome. Time-related issues этого validator проецируются в decision
+time codes: отсутствующий/literal `unknown` time получает
+`decision_time_unknown`, а invalid `evidence_at`, precision или incompatible
+time/precision pair получает `decision_time_not_exact_or_invalid`. Остальные
+canonical metadata issues (например invalid `domain`) получают normalized
+`decision_metadata_invalid`.
 Остальные notes не входят в `decision_notes_seen` и не получают calibration
 exclusion code.
 
@@ -841,16 +846,19 @@ Exact precision сама по себе не делает decision time приг�
 `decision_time_not_exact_or_invalid`, исключается до evidence projection и не
 вызывает Simulate Me; остальные cases сохраняются.
 
-Порядок оценки нормативен, действует первое совпадение: (0) marker/pair
-classification gate; (1) current identity; (2) full canonical metadata validation;
-(3) Journal body/section validation; (4) decision time с различением unknown и
-invalid/non-exact, включая failed UTC conversion; (5) option count;
+Порядок outcome classification нормативен, действует первое совпадение: (0)
+marker/pair classification gate; (1) current identity; (2) Journal body/section
+validation; (3) decision time с различением unknown и invalid/non-exact, включая
+failed UTC conversion и time-related validator issues; (4) remaining full canonical
+metadata issues; (5) option count;
 (6) option identity и chosen mapping. Поэтому malformed body имеет приоритет
 над возможным следствием в виде неподдерживаемого числа options или ошибки
 chosen mapping, а unknown decision time — над последующими predicates.
-Marker/pair classification gate не является exclusion outcome, потому что находится
-вне `decision_notes_seen`; failure full canonical metadata predicate, напротив,
-получает `decision_metadata_invalid` и учитывается в `decision_notes_seen`.
+Полная canonical metadata validation при этом обязательна для каждого classified
+case: её time-related issues получают decision-time codes, а остальные issues —
+`decision_metadata_invalid`; marker/pair classification gate не является exclusion
+outcome, потому что находится вне `decision_notes_seen`. Любой получившийся code
+учитывается в `decision_notes_seen` ровно один раз.
 
 Для каждого aware evidence time сначала по исходному сериализованному значению
 проверяется RFC3339 exact precision: дробная часть отсутствует либо содержит 1–6
@@ -1017,13 +1025,13 @@ Replay обязан использовать ровно этот `self_model_der
 `sort_keys=true`, separators `,` и `:`, без BOM и trailing newline:
 
 ```json
-{"context_projection":"per-case-filtered-current-self-model-builder-v1","decision_eligibility":"current-valid-stage2-journal-exact-utc-time-max-6-fraction-full-canonical-metadata-v3","evidence_cutoff":"exact-aware-inclusive-utc-max-6-fraction;updated-validated-before-cutoff;unknown-excluded-v3","execution":"one-provider-free-simulate-me-replay-at-most-once-after-preflight-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-v1","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_projection":"retrospective-one-line-json-string-situation-information-criteria-semicolon-v3","self_model_derivation_version":"self-model-derivation-v1","self_model_policy_fingerprint":"d7969ba732665c0406736b0e669a9123ccd0ee7b12de36f57899f59f94282cd3","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
+{"context_projection":"per-case-filtered-current-self-model-builder-v1","decision_eligibility":"current-valid-stage2-journal-exact-utc-time-max-6-fraction-full-canonical-metadata-time-issue-routing-v4","evidence_cutoff":"exact-aware-inclusive-utc-max-6-fraction;updated-validated-before-cutoff;unknown-excluded-v3","execution":"one-provider-free-simulate-me-replay-at-most-once-after-preflight-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-v1","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_projection":"retrospective-one-line-json-string-situation-information-criteria-semicolon-v3","self_model_derivation_version":"self-model-derivation-v1","self_model_policy_fingerprint":"d7969ba732665c0406736b0e669a9123ccd0ee7b12de36f57899f59f94282cd3","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
 ```
 
 Ожидаемый fingerprint:
 
 ```text
-sha256:9397c0c56ad40a40752b3d6ca517c8e78e6806651f5df3ccde4b9d7e3e27c07b
+sha256:692282ed5deb353a415531772612db6e977295ce76bb111a97e15d324d91f61d
 ```
 
 Изменение любого правила eligibility, masking, cutoff, execution, option
