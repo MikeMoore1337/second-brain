@@ -1093,7 +1093,10 @@ context и derived explanation divergence.
   wrappers и structural Delta по exact request-local option IDs. Owner decision A
   принят; `HUMAN_REQUIRED: none` для capability-boundary, а automatic Personal
   Memory, provider/network/privacy integration и runtime остаются отдельными
-  future gates. Assistant и Compare runtime не начаты.
+  future gates. В #171 реализуется provider-free Assistant application core:
+  typed explicit-only DTO/validation и отдельная `AdvisorPort` boundary без
+  provider call, private context или persistence. Compare runtime и
+  retrospective calibration runtime не начаты.
 - **Цель:** сначала определить независимый bounded advice contract, затем в
   будущем сопоставить его с likely user choice и измерить, насколько текущая
   derivation policy воспроизводит исторические decisions.
@@ -1345,8 +1348,8 @@ prediction, inference write-back, canonical fields или изменения
 
 Stage 6 contract approved, а provider-free application/Web runtime и core
 находятся в current `main`; confidence, provider runtime и persistence
-отсутствуют. Assistant v1, Compare v1 и retrospective calibration остаются
-design-only contracts:
+отсутствуют. Assistant v1 explicit-context-only application core реализуется в
+#171; Compare v1 и retrospective calibration остаются design-only contracts:
 `HUMAN_REQUIRED: none` относится только к capability-boundary, а provider/
 network/privacy integration и runtime остаются отдельными future gates. Этот
 status sync не объявляет Stage 8 runtime scope, не создаёт Stage 8 item и не
