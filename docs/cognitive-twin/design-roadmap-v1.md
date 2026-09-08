@@ -19,11 +19,12 @@ context, provider/network/privacy integration и real Advisor runtime пока �
 [Compare v1 contract](compare-v1-contract.md): три зоны остаются раздельными,
 а Delta сравнивает только typed terminal states и exact request-local option
 IDs.
-Retrospective Calibration v1 остаётся отдельным design-only, current-vault и
-pre-choice-only contract, tracked by issue #164.
+Retrospective Calibration v1 остаётся отдельным current-vault и
+pre-choice-only contract; provider-free bounded core реализован в issue #175,
+а user-facing Web/API/CLI и persistence остаются future gates.
 
-Точный status snapshot перед этой docs reconciliation — current `main`:
-`8e8a6d8a92d4933404195fcd84cadad8642f61bc`.
+Точный status snapshot перед #175 implementation — canonical `main`:
+`a461b0b08d4e396561a869d7348700d5d86934bc`.
 
 Issue #66 задаёт исходную архитектурную границу roadmap. Для текущего Stage 4
 Self Model scope и contract source of truth — issue #81 и
@@ -1098,7 +1099,10 @@ context и derived explanation divergence.
   provider call, private context или persistence. В #173 реализуется
   provider-free Compare application core: typed branch wrappers, shared
   execution controls и structural Delta без provider call, private context или
-  persistence. Retrospective calibration runtime не начат.
+  persistence. В #175 реализован provider-free Retrospective Calibration
+  application core: bounded pre-choice replay, filtered current context и
+  deterministic aggregate; user-facing Web/API/CLI, provider runtime и
+  persistence не входят в этот slice.
 - **Цель:** сначала определить независимый bounded advice contract, затем в
   будущем сопоставить его с likely user choice и измерить, насколько текущая
   derivation policy воспроизводит исторические decisions.
@@ -1350,9 +1354,11 @@ prediction, inference write-back, canonical fields или изменения
 
 Stage 6 contract approved, а provider-free application/Web runtime и core
 находятся в current `main`; confidence, provider runtime и persistence
-отсутствуют. Assistant v1 explicit-context-only application core реализуется в
-#171; Compare v1 и retrospective calibration остаются design-only contracts:
-`HUMAN_REQUIRED: none` относится только к capability-boundary, а provider/
-network/privacy integration и runtime остаются отдельными future gates. Этот
-status sync не объявляет Stage 8 runtime scope, не создаёт Stage 8 item и не
-меняет product semantics.
+отсутствуют. Assistant v1 explicit-context-only application core (#171),
+Compare v1 core (#173) и provider-free Retrospective Calibration core (#175)
+реализованы в current `main`. Calibration остаётся bounded current-vault
+temporal projection: user-facing Web/API/CLI, provider runtime, persistence и
+prospective calibration не входят в этот slice. `HUMAN_REQUIRED: none`
+относится только к capability-boundary; новые provider/privacy/schema решения
+отложены на отдельные future gates. Этот status sync не объявляет Stage 8
+runtime scope, не создаёт Stage 8 item и не меняет product semantics.
