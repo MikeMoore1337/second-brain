@@ -549,13 +549,13 @@ Fingerprint input is exactly this one-line ASCII JSON, encoded as UTF-8 with
 `sort_keys=true`, separators `,` and `:`, no BOM and no trailing newline:
 
 ```json
-{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","diagnostics":"exclusive-phase-mapped-code-sums-v2","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","journal_body_cutoff":"updated-after-decision-excluded-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","temporal_caveat_counting":"per-eligible-case-independent-codes-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
+{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","diagnostics":"exclusive-phase-mapped-code-sums-v2","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","journal_body_cutoff":"updated-after-decision-excluded-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","result_size_guard":"internal-canonical-utf8-byte-length-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","temporal_caveat_counting":"per-eligible-case-independent-codes-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
 ```
 
 Expected fingerprint:
 
 ```text
-sha256:174e43853583a3c56e478d80844399afbcbfc3bfcc56cd7dbec7d3a0c35c2c6b
+sha256:4899d302ac32ab6a999daae29481fb3f07964c5951807c1ba6c4685ba1413043
 ```
 
 Fingerprint changes when any eligibility, masking, cutoff, execution, option
@@ -583,8 +583,9 @@ When a result is produced, serialization is deterministic:
 6. count object key order exactly `code`, `count`; arrays preserve the fixed
    code order from §8.3;
 7. all integers are JSON integers and bool is not accepted as an integer;
-8. `result_bytes` is the exact length of canonical UTF-8 bytes and must be
-   `<= MAX_RESULT_BYTES_V1`.
+8. После serialization проверяется exact length canonical UTF-8 bytes; она должна
+   быть `<= MAX_RESULT_BYTES_V1`. Это internal measurement для size guard, а не
+   поле DTO и не ключ опубликованного JSON.
 
 The aggregate contains no per-case array, so note order cannot leak through
 result rows. Processing order remains normative for deterministic diagnostics
