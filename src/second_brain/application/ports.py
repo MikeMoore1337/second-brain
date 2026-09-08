@@ -19,6 +19,10 @@ from second_brain.application.writes import (
 from second_brain.domain.models import NoteType, VaultManifest
 
 if TYPE_CHECKING:
+    from second_brain.application.assistant import (
+        AssistantReasoningEnvelopeV1,
+        AssistantResultEnvelopeV1,
+    )
     from second_brain.application.decision_journal import (
         DecisionJournalDraft,
         OutcomeObservationDraft,
@@ -177,6 +181,18 @@ class CancellationToken(Protocol):
 
     def is_cancelled(self) -> bool:
         """Вернуть, была ли операция отменена владельцем запроса."""
+
+
+class AdvisorPort(Protocol):
+    """Provider-neutral boundary для explicit-context-only Assistant v1."""
+
+    def advise(
+        self,
+        request: AssistantReasoningEnvelopeV1,
+        *,
+        cancellation: CancellationToken,
+    ) -> AssistantResultEnvelopeV1:
+        """Вернуть один typed Assistant result без private-context authority."""
 
 
 class TranscriptionPort(Protocol):
