@@ -824,6 +824,14 @@ missing/duplicate chosen mapping    -> decision_option_identity_invalid
 duplicate/invalid UUID or path      -> decision_identity_invalid_or_duplicate
 ```
 
+Evaluation order is normative and first-match wins: (0) marker/metadata
+classification gate; (1) current identity; (2) Journal body/section
+validation; (3) decision time, distinguishing unknown from invalid/non-exact;
+(4) option count; (5) option identity and chosen mapping. Thus malformed body
+wins over its possible option-count or chosen-mapping consequence, while
+unknown decision time wins over later predicates. The marker/metadata gate is
+not an exclusion outcome because it is outside `decision_notes_seen`.
+
 Для каждого aware evidence time сначала выполняется UTC conversion; включается
 только `evidence_at <= D` (inclusive). `unknown`, `created` и `updated` не
 заменяют `evidence_at`; известное `updated > D` исключает evidence. Отсутствие
@@ -843,35 +851,43 @@ edited_after_cutoff_excluded
 historical_snapshot_unavailable
 ```
 
+Replay must use a per-case injected provider-free
+`CurrentSelfModelBuilder` (or an explicitly equivalent typed context seam),
+constructed from the filtered current Stage 4/5 claims above. The seam may pass
+only claims whose complete supporting/contextual refs satisfy the cutoff and
+current identity checks; unsafe claims are omitted as a whole. Empty safe
+context is valid and lets Simulate Me return its ordinary no-support abstention.
+If the seam cannot construct or validate the filtered boundary, the case is
+`unavailable` with `prechoice_context_unavailable` or
+`historical_context_unreconstructable`. The replay must not instantiate the
+default unfiltered `SelfModelRequest()` path, read full current Self Model, or
+silently retry with unfiltered context; the one provider-free attempt is made
+only after this injection succeeds.
+
 Request projection также фиксирован. В Journal options в исходном order `1..N`
 создаются только ephemeral ASCII IDs `o1, o2, ... oN`; они не являются UUID,
 hash или persistence key, а option labels передаются exact current text. Query
-имеет exact UTF-8 template без trailing newline:
+имеет exact one-line UTF-8 template без LF, CR или trailing newline:
 
 ```text
-Situation:
-{Situation}
-
-Information known at decision time:
-{Information known at decision time}
-
-Criteria:
-- {criterion 1}
-- {criterion 2}
-...
+Situation: {Situation} | Information known at decision time: {Information known at decision time} | Criteria: {criterion 1}; {criterion 2}; ...
 ```
 
-Values вставляются из allowed sections в current body order без semantic
-rewriting; `Chosen option`, `Reasons`, `Confidence`, `Expected result`,
-`Actual result`, `Reassessment`, outcome и evidence refs в query не входят.
+`{criterion 1}; {criterion 2}; ...` означает ordered join всех criteria через
+literal `; `; literal `...` не эмитируется. Values вставляются из allowed
+sections в current body order без semantic rewriting; `Chosen option`,
+`Reasons`, `Confidence`, `Expected result`, `Actual result`, `Reassessment`,
+outcome и evidence refs в query не входят. Any inserted forbidden control or
+format character is a request failure; sanitization, line-break replacement,
+truncation and an alternate normalized query are forbidden.
 Итоговый request имеет ровно shape
 `SimulateMeRequest(query=retrospective_query, options=(SimulateMeOption(...), ...))`;
 отдельных target/evidence/history fields нет.
 Перед branch call exact existing Simulate Me validation применяет UTF-8/NFC,
-edge-strip и forbidden-code-point rules и bounds query в `1..4096` bytes. При
-overflow или invalid code point case получает `prechoice_request_invalid` с
-подкодом `query_too_large_or_invalid` и branch не вызывается; truncation,
-internal normalization и alternate request запрещены.
+edge-strip и forbidden-code-point rules, bounds query в `1..4096` bytes и each
+option label в `1..256` bytes. При overflow или invalid text/label case получает
+`prechoice_request_invalid` с подкодом `query_too_large_or_invalid` и branch не
+вызывается.
 
 В Simulate Me input **не входят** `Chosen option`, `Reasons`, `Expected result`,
 `Actual result`, `Reassessment`, поздние notes или сам expected answer. Это
