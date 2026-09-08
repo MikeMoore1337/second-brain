@@ -342,6 +342,22 @@ def test_temporal_caveat_counts_cannot_exceed_eligible_cases() -> None:
         serialize_retrospective_calibration_result(invalid)
 
 
+def test_result_validator_rejects_decision_case_count_above_bound() -> None:
+    service, _scanner, _context, _replay = _service(_snapshot())
+    result = service.execute(RetrospectiveCalibrationRequestV1())
+    case_count = MAX_DECISION_CASES_V1 + 1
+    invalid_metrics = replace(
+        result.metrics,
+        decision_notes_seen=case_count,
+        eligible_decisions=case_count,
+        abstentions=case_count,
+        coverage=RetrospectiveCalibrationRatioV1(0, case_count),
+    )
+
+    with pytest.raises(ValueError):
+        serialize_retrospective_calibration_result(replace(result, metrics=invalid_metrics))
+
+
 def test_bounded_scanner_enforces_entry_limit_before_materialization(tmp_path: Path) -> None:
     vault = create_vault(tmp_path / "vault")
     write_note(vault, "10 Projects/one.md", "---\nid: x\n---\nbody")
@@ -729,6 +745,22 @@ def test_wrong_policy_and_malformed_stage6_results_are_fixed_replay_invalid_code
     )
     composition_result = composition_service.execute(RetrospectiveCalibrationRequestV1())
     assert _counts(composition_result, "replay_invalid")["calibration_composition_invalid"] == 1
+
+    class _PredictionWithoutEvidence:
+        def execute(
+            self,
+            request: SimulateMeRequest,
+            *,
+            context: SelfModelResult,
+        ) -> SimulateMeResult:
+            valid = BuildRetrospectiveCalibrationReplay().execute(request, context=context)
+            return replace(valid, evidence_refs=())
+
+    no_evidence_service, _scanner, _context, _replay = _service(
+        snapshot, context=_ContextFromReal(), replay=_PredictionWithoutEvidence()
+    )
+    no_evidence_result = no_evidence_service.execute(RetrospectiveCalibrationRequestV1())
+    assert _counts(no_evidence_result, "replay_invalid")["calibration_composition_invalid"] == 1
 
 
 def test_valid_abstention_is_counted_without_materializing_target() -> None:

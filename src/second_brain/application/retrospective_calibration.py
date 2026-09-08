@@ -58,12 +58,7 @@ from second_brain.application.simulate_me import (
     DERIVATION_VERSION as SIMULATE_ME_DERIVATION_VERSION,
 )
 from second_brain.application.simulate_me import (
-    POLICY_FINGERPRINT as SIMULATE_ME_POLICY_FINGERPRINT,
-)
-from second_brain.application.simulate_me import (
-    POLICY_ID as SIMULATE_ME_POLICY_ID,
-)
-from second_brain.application.simulate_me import (
+    MAX_LABEL_BYTES,
     BuildSimulateMe,
     SimulateMeAbstentionCode,
     SimulateMeContextualEvidenceRef,
@@ -74,9 +69,16 @@ from second_brain.application.simulate_me import (
     SimulateMeRequest,
     SimulateMeResult,
     SimulateMeResultKind,
+    normalize_simulate_me_text,
     validate_simulate_me_policy,
     validate_simulate_me_request,
     validate_simulate_me_result,
+)
+from second_brain.application.simulate_me import (
+    POLICY_FINGERPRINT as SIMULATE_ME_POLICY_FINGERPRINT,
+)
+from second_brain.application.simulate_me import (
+    POLICY_ID as SIMULATE_ME_POLICY_ID,
 )
 from second_brain.application.validation import build_report
 from second_brain.domain.models import (
@@ -822,7 +824,16 @@ class BuildRetrospectiveCalibration:
         except Exception:
             invalid[RetrospectiveCalibrationReplayInvalidCodeV1.RESULT_INVALID.value] += 1
             return
-        if not _stage6_composition_is_safe(validated, filtered_context):
+        context_abstention = (
+            validated.kind is SimulateMeResultKind.ABSTENTION
+            and validated.abstention_code
+            is SimulateMeAbstentionCode.INSUFFICIENT_OR_INVALID_CURRENT_CONTEXT
+        )
+        if not context_abstention and not _stage6_composition_is_safe(
+            validated,
+            filtered_context,
+            request=request,
+        ):
             invalid[RetrospectiveCalibrationReplayInvalidCodeV1.COMPOSITION_INVALID.value] += 1
             return
 
@@ -925,6 +936,8 @@ def validate_retrospective_calibration_result(
     )
     if any(not _valid_non_negative_int(value) for value in metric_values):
         raise ValueError("metric count is invalid")
+    if metrics.decision_notes_seen > MAX_DECISION_CASES_V1:
+        raise ValueError("decision case count exceeds bounded limit")
     _validate_count_array(result.excluded_decisions, _EXCLUDED_CODES)
     _validate_count_array(result.replay_unavailable, _REPLAY_UNAVAILABLE_CODES)
     _validate_count_array(result.replay_invalid, _REPLAY_INVALID_CODES)
@@ -1566,16 +1579,31 @@ def _stage6_policy_mismatch(result: object) -> bool:
 def _stage6_composition_is_safe(
     result: SimulateMeResult,
     context: SelfModelResult,
+    *,
+    request: SimulateMeRequest,
 ) -> bool:
     if result.temporal_caveats:
         return False
-    expected_evidence: dict[UUID, SimulateMeEvidenceRef] = {}
+    try:
+        normalized_options = tuple(
+            (option, normalize_simulate_me_text(option.label, MAX_LABEL_BYTES))
+            for option in request.options
+        )
+    except SimulateMeError, UnicodeError, ValueError:
+        return False
+    expected_evidence_by_option: dict[str, dict[UUID, SimulateMeEvidenceRef]] = {
+        option.id: {} for option in request.options
+    }
     expected_contextual: dict[UUID, SimulateMeContextualEvidenceRef] = {}
     for claim in context.claims:
         if len(claim.supporting_evidence) != 1:
             return False
         source = claim.supporting_evidence[0]
         note_ids = tuple(sorted({source.note_id, *source.related_note_ids}, key=str))
+        try:
+            normalized_claim = normalize_simulate_me_text(claim.claim, MAX_LABEL_BYTES)
+        except SimulateMeError, UnicodeError, ValueError:
+            continue
         if claim.dimension is SelfModelDimension.BELIEF:
             expected_contextual_ref = SimulateMeContextualEvidenceRef(
                 claim_id=source.note_id,
@@ -1595,14 +1623,50 @@ def _stage6_composition_is_safe(
                 note_ids=note_ids,
                 evidence_at=source.evidence_at,
             )
-            previous_evidence = expected_evidence.setdefault(source.note_id, expected_evidence_ref)
-            if previous_evidence != expected_evidence_ref:
-                return False
+            for option, normalized_option in normalized_options:
+                if normalized_claim != normalized_option:
+                    continue
+                option_evidence = expected_evidence_by_option[option.id]
+                previous_evidence = option_evidence.setdefault(
+                    source.note_id, expected_evidence_ref
+                )
+                if previous_evidence != expected_evidence_ref:
+                    return False
         else:
             return False
-    return all(expected_evidence.get(ref.claim_id) == ref for ref in result.evidence_refs) and all(
-        expected_contextual.get(ref.claim_id) == ref for ref in result.contextual_evidence_refs
+    expected_contextual_refs = tuple(
+        sorted(expected_contextual.values(), key=lambda ref: str(ref.claim_id))
     )
+    if result.contextual_evidence_refs != expected_contextual_refs:
+        return False
+    supported_option_ids = tuple(
+        option.id for option in request.options if expected_evidence_by_option[option.id]
+    )
+    if result.kind is SimulateMeResultKind.PREDICTION:
+        if (
+            result.selected_option is None
+            or len(supported_option_ids) != 1
+            or result.selected_option.id != supported_option_ids[0]
+        ):
+            return False
+        expected_prediction_refs = tuple(
+            sorted(
+                expected_evidence_by_option[supported_option_ids[0]].values(),
+                key=lambda ref: str(ref.claim_id),
+            )
+        )
+        return bool(expected_prediction_refs) and result.evidence_refs == expected_prediction_refs
+    expected_abstention_refs = tuple(
+        sorted(
+            {
+                ref
+                for option_id in supported_option_ids
+                for ref in expected_evidence_by_option[option_id].values()
+            },
+            key=lambda ref: str(ref.claim_id),
+        )
+    )
+    return result.evidence_refs == expected_abstention_refs
 
 
 def _eligible_sort_key(case: _EligibleCase) -> tuple[datetime, str, str]:
