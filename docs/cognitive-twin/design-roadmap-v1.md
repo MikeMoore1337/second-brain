@@ -798,39 +798,40 @@ projection (не historical snapshot) из:
   later evidence исключаются с caveat, а known `updated > D` исключается по
   temporal policy ниже.
 
-Только note с exact marker `second_brain_personal_memory: 1` и supported
+Только note с exact marker `second_brain_personal_memory: 1` и поддерживаемой
 metadata pair `evidence_kind=observed_decision` + `self_kind=decision` считается
-classified Stage 2 Journal case. Остальные notes не входят в
+классифицированным Stage 2 Journal case. Остальные notes не входят в
 `decision_notes_seen` и не получают calibration exclusion code.
 
-Для classified case eligibility закрыта следующими predicates: note имеет valid
-current Journal body и unique current identity; decision `evidence_at` — aware
-RFC3339 с
+Для классифицированного case eligibility задаётся следующими predicates: note
+имеет valid current Journal body и unique current identity; decision
+`evidence_at` — aware RFC3339 с
 `exact` precision; `Available options` содержит 2–8 items в исходном порядке;
 `Chosen option` exact whitespace matching соответствует ровно одному option; в
 body нет malformed/duplicate sections или hidden extra content. Stage 2 может
 хранить до 20 options, но 9–20 не replayable для Stage 6 и не усекаются.
 
-Classified case, не прошедший любой predicate, не вызывает Simulate Me, не
+Классифицированный case, не прошедший любой predicate, не вызывает Simulate Me, не
 становится mismatch и учитывается в `decision_notes_seen` ровно с одним кодом
-`excluded_decisions`. Mapping predicate -> code фиксирован:
+`excluded_decisions`. Соответствие predicate -> code фиксировано:
 
 ```text
-missing/unknown decision time       -> decision_time_unknown
+отсутствует/unknown decision time   -> decision_time_unknown
 invalid/non-exact decision time     -> decision_time_not_exact_or_invalid
 invalid Journal body                -> decision_body_invalid
-options outside 2..8                -> decision_option_count_unsupported
+options вне 2..8                    -> decision_option_count_unsupported
 missing/duplicate chosen mapping    -> decision_option_identity_invalid
-duplicate/invalid UUID or path      -> decision_identity_invalid_or_duplicate
+duplicate/invalid UUID или path     -> decision_identity_invalid_or_duplicate
 ```
 
-Evaluation order is normative and first-match wins: (0) marker/metadata
-classification gate; (1) current identity; (2) Journal body/section
-validation; (3) decision time, distinguishing unknown from invalid/non-exact;
-(4) option count; (5) option identity and chosen mapping. Thus malformed body
-wins over its possible option-count or chosen-mapping consequence, while
-unknown decision time wins over later predicates. The marker/metadata gate is
-not an exclusion outcome because it is outside `decision_notes_seen`.
+Порядок оценки нормативен, действует первое совпадение: (0) marker/metadata
+classification gate; (1) current identity; (2) Journal body/section validation;
+(3) decision time с различением unknown и invalid/non-exact; (4) option count;
+(5) option identity и chosen mapping. Поэтому malformed body имеет приоритет
+над возможным следствием в виде неподдерживаемого числа options или ошибки
+chosen mapping, а unknown decision time — над последующими predicates.
+Marker/metadata gate не является exclusion outcome, потому что находится вне
+`decision_notes_seen`.
 
 Для каждого aware evidence time сначала выполняется UTC conversion; включается
 только `evidence_at <= D` (inclusive). `unknown`, `created` и `updated` не
@@ -840,9 +841,9 @@ not an exclusion outcome because it is outside `decision_notes_seen`.
 post-cutoff edit и не называется historical snapshot. При невозможности
 проверить current identity или filtered-context boundary case получает
 `unavailable`, а не unfiltered fallback. Current-valid source при отсутствии
-known later mutation может войти в projection только с этой explicit limitation;
-implementation не утверждает, что untracked post-cutoff edits исключены.
-Temporal caveats имеют только эти коды:
+известной later mutation может войти в projection только с этой explicit
+limitation; implementation не утверждает, что untracked post-cutoff edits
+исключены. Temporal caveats имеют только эти коды:
 
 ```text
 unknown_evidence_excluded
@@ -851,20 +852,21 @@ edited_after_cutoff_excluded
 historical_snapshot_unavailable
 ```
 
-Replay must use a per-case injected provider-free
-`CurrentSelfModelBuilder` (or an explicitly equivalent typed context seam),
-constructed from the filtered current Stage 4/5 claims above. The seam may pass
-only claims whose complete supporting/contextual refs satisfy the cutoff and
-current identity checks; unsafe claims are omitted as a whole. Empty safe
-context is valid and lets Simulate Me return its ordinary no-support abstention.
-If the seam cannot construct or validate the filtered boundary, the case is
-`unavailable` with `prechoice_context_unavailable` or
-`historical_context_unreconstructable`. The replay must not instantiate the
-default unfiltered `SelfModelRequest()` path, read full current Self Model, or
-silently retry with unfiltered context; the one provider-free attempt is made
-only after this injection succeeds.
+Для каждого case replay выполняется через обязательное provider-free внедрение
+`CurrentSelfModelBuilder` (или явно эквивалентную typed context seam), которое
+строится из отфильтрованных current Stage 4/5 claims выше. Builder передаётся
+в composition boundary Simulate Me как явная зависимость; реализация не может
+внутри создать default unfiltered `SelfModelRequest()` или прочитать полный
+current Self Model. Эта seam передаёт только claims, у которых все
+supporting/contextual refs проходят cutoff и current identity checks; unsafe
+claim исключается целиком. Пустой безопасный context допустим и позволяет
+Simulate Me вернуть обычный no-support abstention. Если seam не может построить
+или проверить filtered boundary, case получает `unavailable` с
+`prechoice_context_unavailable` или `historical_context_unreconstructable`.
+Тихий retry с unfiltered context запрещён; одна provider-free попытка
+начинается только после успешного внедрения.
 
-Request projection также фиксирован. В Journal options в исходном order `1..N`
+Проекция request также фиксирована. Для Journal options в исходном order `1..N`
 создаются только ephemeral ASCII IDs `o1, o2, ... oN`; они не являются UUID,
 hash или persistence key, а option labels передаются exact current text. Query
 имеет exact one-line UTF-8 template без LF, CR или trailing newline:
@@ -873,20 +875,21 @@ hash или persistence key, а option labels передаются exact current
 Situation: {Situation} | Information known at decision time: {Information known at decision time} | Criteria: {criterion 1}; {criterion 2}; ...
 ```
 
-`{criterion 1}; {criterion 2}; ...` означает ordered join всех criteria через
-literal `; `; literal `...` не эмитируется. Values вставляются из allowed
+`{criterion 1}; {criterion 2}; ...` означает упорядоченное соединение всех
+criteria через literal `; `; literal `...` не эмитируется. Значения подставляются из allowed
 sections в current body order без semantic rewriting; `Chosen option`,
 `Reasons`, `Confidence`, `Expected result`, `Actual result`, `Reassessment`,
-outcome и evidence refs в query не входят. Any inserted forbidden control or
-format character is a request failure; sanitization, line-break replacement,
-truncation and an alternate normalized query are forbidden.
-Итоговый request имеет ровно shape
+outcome и evidence refs в query не входят. Любой forbidden control или format
+character в подставленном значении является request failure; sanitization,
+замена line break, truncation и alternate normalized query запрещены.
+Итоговый request имеет ровно форму
 `SimulateMeRequest(query=retrospective_query, options=(SimulateMeOption(...), ...))`;
 отдельных target/evidence/history fields нет.
-Перед branch call exact existing Simulate Me validation применяет UTF-8/NFC,
-edge-strip и forbidden-code-point rules, bounds query в `1..4096` bytes и each
-option label в `1..256` bytes. При overflow или invalid text/label case получает
-`prechoice_request_invalid` с подкодом `query_too_large_or_invalid` и branch не
+Перед вызовом branch существующая строгая валидация Simulate Me применяет
+UTF-8/NFC, edge-strip и forbidden-code-point rules, bounds query в `1..4096`
+bytes и каждую option label в `1..256` bytes. При overflow или invalid
+text/label case получает
+`prechoice_request_invalid` с подкодом `query_too_large_or_invalid`, и branch не
 вызывается.
 
 В Simulate Me input **не входят** `Chosen option`, `Reasons`, `Expected result`,
@@ -910,9 +913,9 @@ Actual choice берётся только после replay из reviewed `obser
 bounded Simulate Me abstention; unavailable и invalid replay не маскируются под
 mismatch.
 
-Остальные per-case outcomes закрыты: `replay_unavailable` —
+Остальные per-case outcomes закрыты: `replay_unavailable` содержит
 `prechoice_context_unavailable`, `historical_context_unreconstructable`,
-`simulate_me_unavailable`; `replay_invalid` — `prechoice_request_invalid`,
+`simulate_me_unavailable`; `replay_invalid` содержит `prechoice_request_invalid`,
 `simulate_me_result_invalid`, `simulate_me_policy_mismatch`,
 `calibration_composition_invalid`. Ни один excluded case не становится
 abstention, и ни один unavailable/invalid case не становится mismatch.
@@ -922,16 +925,42 @@ predicted/abstained/unavailable/invalid, coverage и exact non-abstained
 accuracy numerator/denominator. Confidence, probability, Brier/ECE, bins,
 calibration gap, tuning и small-sample personal trait claims не входят.
 
-Metric formulas exact; `excluded_decisions_total` — сумма всех fixed-code
-counts в `excluded_decisions`: `decision_notes_seen =
+Формулы метрик фиксированы; `excluded_decisions_total` — сумма всех counts с
+fixed code в `excluded_decisions`: `decision_notes_seen =
 excluded_decisions_total + eligible_decisions`; `eligible_decisions =
 predicted_decisions + abstentions + unavailable_count + invalid_count`;
 `predicted_decisions =
 exact_option_match_count + mismatch_count`; `coverage = predicted_decisions /
 eligible_decisions`; `accuracy_non_abstained = exact_option_match_count /
-predicted_decisions`. Both ratios use exact numerator/denominator objects and
-are `null` when their denominator is zero. Unavailable/invalid cases are never
-predictions or abstentions, and excluded cases are never mismatches.
+predicted_decisions`. Обе ratios используют exact numerator/denominator objects
+и равны `null`, если denominator равен нулю. Unavailable/invalid cases никогда
+не становятся predictions или abstentions, а excluded cases никогда не
+становятся mismatches.
+
+Идентичность retrospective policy фиксирована:
+
+```text
+derivation_version = "retrospective-calibration-v1"
+policy_id = "retrospective-simulate-me-exact-cutoff-v1"
+reconstruction_mode = "current-vault-temporal-projection-v1"
+```
+
+Вход fingerprint — ровно эта однострочная ASCII JSON строка в UTF-8, с
+`sort_keys=true`, separators `,` и `:`, без BOM и trailing newline:
+
+```json
+{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-v1","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
+```
+
+Ожидаемый fingerprint:
+
+```text
+sha256:6917d22275b15c86507354e5cec72b58f3cad9674abe333c4f1f30791b42c605
+```
+
+Изменение любого правила eligibility, masking, cutoff, execution, option
+identity, metrics или source authority обязано менять fingerprint. Fingerprint
+не является model score и не разрешает policy optimization.
 
 Retrospective replay и calibration полностью derived: удаление derived state не
 теряет никаких данных, а aggregate снова вычисляется из current vault той же

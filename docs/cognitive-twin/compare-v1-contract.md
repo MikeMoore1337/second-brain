@@ -381,7 +381,7 @@ assistant_state и simulate_me_state являются typed projection wrappers,
   `evidence_at_unknown`; множества обязаны совпадать. При несовпадении branch
   классифицируется как `COMPARE_BRANCH_RESULT_INVALID`, без Delta;
   `simulate_me_temporal_caveat` вычисляется как
-  `bool(unknown_claim_ids)`, а не принимается из unverified boolean.
+  `bool(unknown_claim_ids)`, а не принимается из непроверенного boolean.
 
 Эти shapes не сравнивают тексты, UUID, rationale, evidence strength или
 количество refs между ветками. Branch refs остаются только в своём wrapper.
