@@ -852,6 +852,13 @@ edited_after_cutoff_excluded
 historical_snapshot_unavailable
 ```
 
+Если aware `evidence_at` не удаётся преобразовать в UTC из-за значения вне
+допустимого диапазона или ошибки преобразования (включая `OverflowError`), это
+не приводит к исключению наружу и не классифицируется как `invalid`: case
+получает `unavailable` с `historical_context_unreconstructable`, Simulate Me не
+вызывается, а остальные cases сохраняются. Это отдельная детерминированная
+ошибка source, а не temporal caveat и не mismatch.
+
 Для каждого case replay выполняется через обязательное provider-free внедрение
 `CurrentSelfModelBuilder` (или явно эквивалентную typed context seam), которое
 строится из отфильтрованных current Stage 4/5 claims выше. Builder передаётся
@@ -872,16 +879,19 @@ hash или persistence key, а option labels передаются exact current
 имеет exact one-line UTF-8 template без LF, CR или trailing newline:
 
 ```text
-Situation: {Situation} | Information known at decision time: {Information known at decision time} | Criteria: {criterion 1}; {criterion 2}; ...
+Situation: {json_string(Situation)} | Information known at decision time: {json_string(Information known at decision time)} | Criteria: {json_string(criterion 1)}; {json_string(criterion 2)}; ...
 ```
 
 `{criterion 1}; {criterion 2}; ...` означает упорядоченное соединение всех
-criteria через literal `; `; literal `...` не эмитируется. Значения подставляются из allowed
-sections в current body order без semantic rewriting; `Chosen option`,
-`Reasons`, `Confidence`, `Expected result`, `Actual result`, `Reassessment`,
-outcome и evidence refs в query не входят. Любой запрещённый управляющий или
-форматный символ в подставленном значении считается request failure; очистка,
-замена line break, truncation и alternate normalized query запрещены.
+criteria через literal `; `; literal `...` не эмитируется. `json_string(value)`
+— exact JSON string scalar с `ensure_ascii=true`, separators `,` и `:`, без
+surrounding field name, BOM или trailing newline. Он обратимо кодирует quotes,
+backslash, line breaks, controls и non-ASCII в ASCII escape sequences. Значения
+берутся из allowed sections без semantic rewriting до этого reversible encoding;
+`Chosen option`, `Reasons`, `Confidence`, `Expected result`, `Actual result`,
+`Reassessment`, outcome и evidence refs в query не входят. Sanitization, замена
+line break, truncation и alternate normalized query запрещены; ошибка scalar
+encoding делает case `prechoice_request_invalid`.
 Итоговый request имеет ровно форму
 `SimulateMeRequest(query=retrospective_query, options=(SimulateMeOption(...), ...))`;
 отдельных target/evidence/history fields нет.
@@ -926,16 +936,25 @@ accuracy numerator/denominator. Confidence, probability, Brier/ECE, bins,
 calibration gap, tuning и small-sample personal trait claims не входят.
 
 Формулы метрик фиксированы; `excluded_decisions_total` — сумма всех counts с
-фиксированным code в `excluded_decisions`: `decision_notes_seen =
-excluded_decisions_total + eligible_decisions`; `eligible_decisions =
-predicted_decisions + abstentions + unavailable_count + invalid_count`;
-`predicted_decisions =
-exact_option_match_count + mismatch_count`; `coverage = predicted_decisions /
-eligible_decisions`; `accuracy_non_abstained = exact_option_match_count /
-predicted_decisions`. Обе ratios используют exact numerator/denominator objects
-и равны `null`, если denominator равен нулю. Unavailable/invalid cases никогда
-не становятся predictions или abstentions, а excluded cases никогда не
-становятся mismatches.
+фиксированным code в `excluded_decisions`:
+
+```text
+excluded_decisions_total = sum(count in excluded_decisions)
+decision_notes_seen = excluded_decisions_total + eligible_decisions
+eligible_decisions = predicted_decisions + abstentions
+                     + unavailable_count + invalid_count
+predicted_decisions = exact_option_match_count + mismatch_count
+coverage = null, when eligible_decisions = 0
+         = {numerator: predicted_decisions,
+            denominator: eligible_decisions}, otherwise
+accuracy_non_abstained = null, when predicted_decisions = 0
+                       = {numerator: exact_option_match_count,
+                          denominator: predicted_decisions}, otherwise
+```
+
+Обе ratios используют exact numerator/denominator objects. Unavailable/invalid
+cases никогда не становятся predictions или abstentions, а excluded cases
+никогда не становятся mismatches.
 
 Идентичность retrospective policy фиксирована:
 
@@ -944,7 +963,7 @@ derivation_version = "retrospective-calibration-v1"
 policy_id = "retrospective-simulate-me-exact-cutoff-v1"
 reconstruction_mode = "current-vault-temporal-projection-v1"
 context_projection = "per-case-filtered-current-self-model-builder-v1"
-query_projection = "retrospective-one-line-situation-information-criteria-semicolon-v1"
+query_projection = "retrospective-one-line-json-string-situation-information-criteria-semicolon-v2"
 simulate_me_derivation_version = "simulate-me-v1"
 simulate_me_policy_id = "simulate-me-direct-exact-v1"
 simulate_me_policy_fingerprint = "sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a"
@@ -954,13 +973,13 @@ simulate_me_policy_fingerprint = "sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da7
 `sort_keys=true`, separators `,` и `:`, без BOM и trailing newline:
 
 ```json
-{"context_projection":"per-case-filtered-current-self-model-builder-v1","decision_eligibility":"current-valid-stage2-journal-exact-time-v1","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-v1","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_projection":"retrospective-one-line-situation-information-criteria-semicolon-v1","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
+{"context_projection":"per-case-filtered-current-self-model-builder-v1","decision_eligibility":"current-valid-stage2-journal-exact-time-v1","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-v1","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_projection":"retrospective-one-line-json-string-situation-information-criteria-semicolon-v2","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
 ```
 
 Ожидаемый fingerprint:
 
 ```text
-sha256:f863ae0b2d12196aab6edc8ea48717e68e3669e7bda31a7bd45e767731aeb55c
+sha256:8ae33703c8bdaffd96850ff60db658923b205560fdc62bea606372097fc572e1
 ```
 
 Изменение любого правила eligibility, masking, cutoff, execution, option
