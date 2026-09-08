@@ -113,11 +113,17 @@ Calibration сканирует current canonical report и рассматрив�
    preclassification — managed note с exact enrollment marker и raw canonical
    metadata validation result, который либо содержит exact pair
    `evidence_kind=observed_decision` + `self_kind=decision`, либо содержит хотя
-   бы один diagnostic из закрытого `PERSONAL_MEMORY_*` set ниже. Predicate
-   вычисляется до typed projection из raw front matter; partial-field и body
-   heuristic запрещены. Поэтому missing/invalid `evidence_kind` или `self_kind`
-   всё равно делает note candidate через собственный validation diagnostic, а
-   valid non-Journal pair без diagnostic candidate не создаёт.
+   бы один diagnostic из закрытого `PERSONAL_MEMORY_*` set ниже, и raw kind
+   shape остаётся Journal-plausible. Journal-plausible shape — exact Journal
+   pair либо missing/invalid/unsupported kind field или pair, не являющийся
+   valid non-Journal pair. Valid non-Journal pairs в v1 —
+   `explicit_user_fact`/`user_statement` с `memory`/`preference`/`belief`/
+   `goal`, а также `outcome_later_observation` с `outcome`; такие notes никогда
+   не candidate для calibration, даже если другие Personal Memory fields
+   malformed. Predicate вычисляется до typed projection из raw front matter;
+   partial-field и body heuristic запрещены. Поэтому missing/invalid
+   `evidence_kind` или `self_kind` всё равно делает plausible note candidate
+   через собственный validation diagnostic.
    `PERSONAL_MEMORY_MISSING_EVIDENCE_AT`,
    `PERSONAL_MEMORY_INVALID_EVIDENCE_AT`,
    `PERSONAL_MEMORY_MISSING_EVIDENCE_AT_PRECISION`,
@@ -268,12 +274,13 @@ Simulate Me может честно вернуть `abstention/no_matching_evide
 | Current canonical note valid; `evidence_at` exact and `<= D`; no known later mutation | Может войти в current-vault temporal projection; result всё равно помечен mode `current-vault-temporal-projection-v1`. |
 | `evidence_at` unknown | Note не входит; increment `unknown_evidence_excluded` caveat. |
 | `evidence_at > D` | Note не входит; increment `later_evidence_excluded` caveat. |
+| Non-Journal context source `created > D` | Note не входит: текущее содержимое впервые stored после выбора и не может быть доказано pre-choice; increment `created_after_cutoff_excluded` caveat. `created` остаётся storage lifecycle time, а не evidence time. |
 | Decision Journal note `created > D` | Journal считается созданным после выбора и исключается с `decision_body_created_after_cutoff`; target/query/context не строятся, temporal caveats не увеличиваются. `created` по-прежнему не является evidence time. |
 | Decision Journal note `updated > D` | Journal считается изменённым после выбора и исключается с `decision_body_edited_after_cutoff`; target/query/context не строятся, temporal caveats не увеличиваются. `updated` не используется как evidence time. |
 | `updated > D` | Note считается известным post-choice edit и не входит; increment `edited_after_cutoff_excluded` caveat. `updated` не используется как evidence time. |
 | Note deleted or UUID no longer resolves uniquely | Missing source не восстанавливается Search/path/created; affected claim исключается. Если resulting filtered context boundary нельзя построить или revalidate, используется `prechoice_context_unavailable` по §8.3. |
 | Current note body/metadata changed and scanner no longer validates it | Current invalid source не используется и не чинится эвристикой; affected claim исключается. Если сама context boundary из-за этого невалидна, используется `prechoice_context_unavailable` по §8.3. |
-| `updated` отсутствует или не позже `D` | Это только отсутствие известного later mutation; не доказательство historical bytes. `created` по-прежнему не является eligibility timestamp. |
+| `updated` отсутствует или не позже `D` | Это только отсутствие известного later mutation; не доказательство historical bytes. `created <= D` — необходимый storage cutoff для context source, но `created` по-прежнему не является evidence time. |
 
 ### 5.2.1 Детерминированный подсчёт temporal caveats
 
@@ -290,12 +297,14 @@ case operation не читает current context только ради подс�
 Для eligible case, достигшего context-source boundary, каждый applicable code
 увеличивается не более одного раза: наличие одного или нескольких
 соответствующих sources даёт один increment. Conditions считаются независимо и
-могут co-occur: например, один source с `evidence_at > D` и `updated > D`
-увеличивает и `later_evidence_excluded`, и `edited_after_cutoff_excluded`, по
-одному разу. `unknown_evidence_excluded` увеличивается, если хотя бы один
-candidate source имеет `evidence_at=unknown`; аналогично
-`later_evidence_excluded` — если есть source с `evidence_at > D`, а
-`edited_after_cutoff_excluded` — если есть source с `updated > D`.
+могут co-occur: например, один source с `evidence_at > D`, `created > D` и
+`updated > D` увеличивает `later_evidence_excluded`,
+`created_after_cutoff_excluded` и `edited_after_cutoff_excluded`, по одному
+разу. `unknown_evidence_excluded` увеличивается, если хотя бы один candidate
+source имеет `evidence_at=unknown`; аналогично `later_evidence_excluded` —
+если есть source с `evidence_at > D`, `created_after_cutoff_excluded` — если
+есть source с `created > D`, а `edited_after_cutoff_excluded` — если есть source
+с `updated > D`.
 `historical_snapshot_unavailable` также увеличивается не более одного раза за
 такой case, когда context-source boundary достигнута. У excluded до §3 cases
 temporal caveats не считаются: их состояние представляется через
@@ -588,6 +597,7 @@ calibration_composition_invalid
 ```text
 unknown_evidence_excluded
 later_evidence_excluded
+created_after_cutoff_excluded
 edited_after_cutoff_excluded
 historical_snapshot_unavailable
 ```
@@ -680,13 +690,13 @@ Fingerprint input is exactly this one-line ASCII JSON, encoded as UTF-8 with
 `sort_keys=true`, separators `,` and `:`, no BOM and no trailing newline:
 
 ```json
-{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","decision_note_metadata":"all-canonical-note-and-personal-memory-errors-excluded-v4","diagnostics":"exclusive-phase-mapped-code-sums-v2","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","journal_body_cutoff":"updated-after-decision-excluded-v1","journal_creation_cutoff":"created-after-decision-excluded-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_failure_mapping":"available-options-before-generic-body-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","result_size_guard":"internal-canonical-utf8-byte-length-v1","scan_completeness":"content-affecting-diagnostics-abort-before-classification-v2","scan_limits":"entries-16384;documents-4096;bytes-16777216-v1","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","self_model_derivation_version":"self-model-derivation-v1","self_model_policy_fingerprint":"d7969ba732665c0406736b0e669a9123ccd0ee7b12de36f57899f59f94282cd3","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","temporal_caveat_counting":"per-eligible-case-independent-codes-v1","temporal_caveat_scope":"after-request-validation-context-source-inspection-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
+{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","decision_note_metadata":"all-canonical-note-and-plausible-journal-errors-excluded-v5","diagnostics":"exclusive-phase-mapped-code-sums-v2","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","journal_body_cutoff":"updated-after-decision-excluded-v1","journal_creation_cutoff":"journal-and-context-created-after-decision-excluded-v2","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_failure_mapping":"available-options-before-generic-body-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","result_size_guard":"internal-canonical-utf8-byte-length-v1","scan_completeness":"content-affecting-diagnostics-abort-before-classification-v2","scan_limits":"entries-16384;documents-4096;bytes-16777216-v1","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","self_model_derivation_version":"self-model-derivation-v1","self_model_policy_fingerprint":"d7969ba732665c0406736b0e669a9123ccd0ee7b12de36f57899f59f94282cd3","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","temporal_caveat_counting":"per-eligible-case-independent-codes-v2","temporal_caveat_scope":"after-request-validation-context-source-inspection-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
 ```
 
 Expected fingerprint:
 
 ```text
-sha256:08b49f95a529106dd2222e52e2fd6a7680ce761b93ec7bbecc7f149645011cca
+sha256:ab083da4ef88e1bacef118f02ba710b26aa993f9be031b57b1295a1d5485e0d6
 ```
 
 Fingerprint changes when any eligibility, masking, cutoff, execution, scan
@@ -760,6 +770,7 @@ database or write path.
 | Valid multiple-support ambiguity | `multiple_options_supported` is abstention; no count/recency tie-break. |
 | Mismatch | Valid prediction with different request-local ID increments mismatch only. |
 | Создание/изменение Journal после cutoff | `created > decision_at` даёт `decision_body_created_after_cutoff`, `updated > decision_at` даёт `decision_body_edited_after_cutoff`; target/query/context не строятся, это никогда не mismatch или temporal caveat. |
+| Создание context source после cutoff | Для non-Journal source `created > decision_at` исключает текущий source и даёт `created_after_cutoff_excluded`; `created` не используется как evidence time и не получает historical fallback. |
 | Диагностика canonical metadata note | Exact marker плюс raw canonical metadata validation result — exact Journal pair или любой перечисленный `PERSONAL_MEMORY_*` diagnostic — делает note candidate до typed projection; qualifying `NOTE_*` storage/provenance и `PERSONAL_MEMORY_*` diagnostics, включая `NOTE_INVALID_TYPE`, `PERSONAL_MEMORY_INVALID_DOMAIN`, `NOTE_MISSING_TIMESTAMP` и `NOTE_INVALID_TIMESTAMP`, дают fixed exclusion mapping, если более ранняя specific exclusion не победила; note не становится eligible. |
 | Linked Outcome present | `actual_result`, `reassessment`, `notes` never enter query/context/metrics. |
 | Later evidence | `evidence_at > decision_at` is excluded; `later_evidence_excluded` is counted once per eligible case if any such source exists, and it cannot make a prediction. |
