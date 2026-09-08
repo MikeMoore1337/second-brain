@@ -805,9 +805,10 @@ metadata pair `evidence_kind=observed_decision` + `self_kind=decision` счит�
 
 Для классифицированного case eligibility задаётся следующими predicates: note
 имеет valid current Journal body и unique current identity; decision
-`evidence_at` — aware RFC3339 с `exact` precision и успешным преобразованием в
-UTC для построения cutoff `D`; `Available options` содержит 2–8 items в
-исходном порядке;
+`evidence_at` — aware RFC3339 с `exact` precision, без дробной части или с
+1–6 ASCII digits после decimal point, и успешным преобразованием в UTC для
+построения cutoff `D`; `Available options` содержит 2–8 items в исходном
+порядке;
 `Chosen option` exact whitespace matching соответствует ровно одному option; в
 body нет malformed/duplicate sections или hidden extra content. Stage 2 может
 хранить до 20 options, но 9–20 не replayable для Stage 6 и не усекаются.
@@ -826,9 +827,12 @@ duplicate/invalid UUID или path     -> decision_identity_invalid_or_duplicate
 ```
 
 Exact precision сама по себе не делает decision time пригодным для cutoff:
-aware `evidence_at` должен успешно преобразоваться в UTC до формирования `D`.
-Значение вне допустимого диапазона или ошибка этого преобразования (включая
-`OverflowError`) классифицируется как `invalid/non-exact decision time`, получает
+число fractional digits проверяется по исходной serialized RFC3339 value до
+любого datetime parsing, чтобы parser не мог молча обрезать precision. Aware
+`evidence_at` должен успешно преобразоваться в UTC до формирования `D`.
+Значение с более чем 6 fractional digits, значение вне допустимого диапазона
+или ошибка этого преобразования (включая `OverflowError`) классифицируется как
+`invalid/non-exact decision time`, получает
 `decision_time_not_exact_or_invalid`, исключается до evidence projection и не
 вызывает Simulate Me; остальные cases сохраняются.
 
@@ -842,8 +846,10 @@ chosen mapping, а unknown decision time — над последующими pre
 Marker/metadata gate не является exclusion outcome, потому что находится вне
 `decision_notes_seen`.
 
-Для каждого aware evidence time сначала выполняется UTC conversion; включается
-только `evidence_at <= D` (inclusive). `unknown`, `created` и `updated` не
+Для каждого aware evidence time сначала по исходному сериализованному значению
+проверяется RFC3339 exact precision: дробная часть отсутствует либо содержит 1–6
+ASCII digits; затем выполняется UTC conversion, и включается только
+`evidence_at <= D` (inclusive). `unknown`, `created` и `updated` не
 заменяют `evidence_at`; известное `updated > D` исключает evidence. Отсутствие
 `updated` или `updated <= D` не доказывает, что текущие bytes исторически
 неизменны: current-vault projection не обещает исключить незафиксированную
@@ -861,12 +867,14 @@ edited_after_cutoff_excluded
 historical_snapshot_unavailable
 ```
 
-Если aware `evidence_at` не удаётся преобразовать в UTC из-за значения вне
-допустимого диапазона или ошибки преобразования (включая `OverflowError`), это
-не приводит к исключению наружу и не классифицируется как `invalid`: case
-получает `unavailable` с `historical_context_unreconstructable`, Simulate Me не
-вызывается, а остальные cases сохраняются. Это отдельная детерминированная
-ошибка source, а не temporal caveat и не mismatch.
+Если aware `evidence_at` содержит более 6 fractional digits или не удаётся
+преобразовать его в UTC из-за значения вне допустимого диапазона либо ошибки
+преобразования (включая `OverflowError`), это не приводит к исключению наружу и
+не классифицируется как `invalid`: case получает `unavailable` с
+`historical_context_unreconstructable`, Simulate Me не вызывается, а остальные
+cases сохраняются. Сравнение не округляет и не обрезает fractional precision.
+Это отдельная детерминированная ошибка source, а не temporal caveat и не
+mismatch.
 
 Для каждого case replay выполняется через обязательное provider-free внедрение
 `CurrentSelfModelBuilder` (или явно эквивалентную typed context seam), которое
@@ -988,13 +996,13 @@ simulate_me_policy_fingerprint = "sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da7
 `sort_keys=true`, separators `,` и `:`, без BOM и trailing newline:
 
 ```json
-{"context_projection":"per-case-filtered-current-self-model-builder-v1","decision_eligibility":"current-valid-stage2-journal-exact-time-v1","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-at-most-once-after-preflight-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-v1","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_projection":"retrospective-one-line-json-string-situation-information-criteria-semicolon-v2","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
+{"context_projection":"per-case-filtered-current-self-model-builder-v1","decision_eligibility":"current-valid-stage2-journal-exact-utc-time-max-6-fraction-v2","evidence_cutoff":"exact-aware-inclusive-utc-max-6-fraction;unknown-excluded-v2","execution":"one-provider-free-simulate-me-replay-at-most-once-after-preflight-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-v1","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_projection":"retrospective-one-line-json-string-situation-information-criteria-semicolon-v2","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
 ```
 
 Ожидаемый fingerprint:
 
 ```text
-sha256:80ef0a0467259e07884ffc9627e723732c4340f24b68bfd0cc09c01cae52f335
+sha256:9f2e09d4280b63355c2e39d31015d0d59a790275aa346beb168554a4a0a8ba68
 ```
 
 Изменение любого правила eligibility, masking, cutoff, execution, option
