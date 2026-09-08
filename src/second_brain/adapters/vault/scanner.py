@@ -15,6 +15,10 @@ from second_brain.application.reports import (
     VaultRootRole,
     VaultSnapshot,
 )
+from second_brain.application.retrospective_calibration_scan import (
+    RetrospectiveCalibrationScanLimitsV1,
+    RetrospectiveCalibrationScanV1,
+)
 from second_brain.domain.models import AttachmentRecord, LinkReference, MarkdownDocument
 
 _CONTENT_ROOT_ROLES: tuple[VaultRootRole, ...] = (
@@ -41,6 +45,49 @@ class _DeclaredRoot:
     resolved: Path | None
 
 
+@dataclass(slots=True)
+class _ScanBudget:
+    """Mutable counters kept inside one bounded scanner invocation."""
+
+    limits: RetrospectiveCalibrationScanLimitsV1
+    entries_inspected: int = 0
+    documents_materialized: int = 0
+    raw_utf8_bytes: int = 0
+    exceeded: bool = False
+
+    def inspect_entry(self) -> bool:
+        """Count an entry before any materialization or recursive descent."""
+
+        self.entries_inspected += 1
+        if self.entries_inspected > self.limits.max_scan_entries:
+            self.exceeded = True
+            return False
+        return True
+
+    def reserve_document(self, raw_bytes: int) -> bool:
+        """Reserve one Markdown document before reading its body."""
+
+        self.documents_materialized += 1
+        self.raw_utf8_bytes += raw_bytes
+        if (
+            self.documents_materialized > self.limits.max_scan_documents
+            or self.raw_utf8_bytes > self.limits.max_scan_bytes
+        ):
+            self.exceeded = True
+            return False
+        return True
+
+    def remaining_raw_bytes(self) -> int:
+        """Return the bytes available after the conservative stat reservation."""
+
+        return self.limits.max_scan_bytes - self.raw_utf8_bytes
+
+    def reconcile_document_size(self, reserved_bytes: int, actual_bytes: int) -> None:
+        """Correct a stat reservation when a file shrinks before it is read."""
+
+        self.raw_utf8_bytes += actual_bytes - reserved_bytes
+
+
 class FileSystemVaultReader:
     """Прочитать настроенный vault без перехода по links и записи файлов."""
 
@@ -49,6 +96,27 @@ class FileSystemVaultReader:
 
     def scan(self) -> VaultSnapshot:
         """Прочитать manifest, Markdown-документы, links и attachments."""
+
+        return self._scan_snapshot()
+
+    def scan_bounded(
+        self,
+        limits: RetrospectiveCalibrationScanLimitsV1,
+    ) -> RetrospectiveCalibrationScanV1:
+        """Read through a pre-materialization budget for Calibration v1 only."""
+
+        budget = _ScanBudget(limits)
+        snapshot = self._scan_snapshot(budget)
+        return RetrospectiveCalibrationScanV1(
+            snapshot=snapshot,
+            entries_inspected=budget.entries_inspected,
+            documents_materialized=budget.documents_materialized,
+            raw_utf8_bytes=budget.raw_utf8_bytes,
+            limit_exceeded=budget.exceeded,
+        )
+
+    def _scan_snapshot(self, budget: _ScanBudget | None = None) -> VaultSnapshot:
+        """Run the shared scanner, optionally carrying a bounded budget."""
 
         diagnostics: list[Diagnostic] = []
         try:
@@ -128,7 +196,10 @@ class FileSystemVaultReader:
                 documents,
                 links,
                 diagnostics,
+                budget,
             )
+            if budget is not None and budget.exceeded:
+                break
 
         attachment_root = resolved_roots.get(VaultRootRole.ATTACHMENTS)
         if attachment_root is not None:
@@ -138,6 +209,7 @@ class FileSystemVaultReader:
                 tuple(declared_roots),
                 attachments,
                 diagnostics,
+                budget,
             )
 
         return VaultSnapshot(
@@ -150,6 +222,21 @@ class FileSystemVaultReader:
         )
 
 
+class FileSystemRetrospectiveCalibrationScanner:
+    """Expose only the bounded scanner seam required by Calibration v1."""
+
+    def __init__(self, root: Path) -> None:
+        self._reader = FileSystemVaultReader(root)
+
+    def scan(
+        self,
+        limits: RetrospectiveCalibrationScanLimitsV1,
+    ) -> RetrospectiveCalibrationScanV1:
+        """Return one bounded scan without calling the ordinary scan path."""
+
+        return self._reader.scan_bounded(limits)
+
+
 def _scan_content_tree(
     root: Path,
     vault_root: Path,
@@ -159,6 +246,7 @@ def _scan_content_tree(
     documents: list[MarkdownDocument],
     links: list[LinkReference],
     diagnostics: list[Diagnostic],
+    budget: _ScanBudget | None = None,
 ) -> None:
     stack = [root]
     visited: set[tuple[int, int]] = set()
@@ -169,9 +257,17 @@ def _scan_content_tree(
             continue
         visited.add(identity)
         try:
-            children = sorted(
-                directory.iterdir(), key=lambda item: item.name.casefold(), reverse=True
-            )
+            if budget is None:
+                children = sorted(
+                    directory.iterdir(), key=lambda item: item.name.casefold(), reverse=True
+                )
+            else:
+                children = []
+                for child in directory.iterdir():
+                    if not budget.inspect_entry():
+                        return
+                    children.append(child)
+                children.sort(key=lambda item: item.name.casefold(), reverse=True)
         except OSError:
             diagnostics.append(
                 Diagnostic(
@@ -238,8 +334,8 @@ def _scan_content_tree(
             if resolved is None or child.suffix.casefold() != ".md":
                 continue
             try:
-                text = resolved.read_text(encoding="utf-8")
-            except OSError, UnicodeError:
+                file_size = resolved.stat().st_size
+            except OSError:
                 diagnostics.append(
                     Diagnostic(
                         "NOTE_READ_ERROR",
@@ -250,6 +346,56 @@ def _scan_content_tree(
                     )
                 )
                 continue
+            if budget is None:
+                try:
+                    text = resolved.read_text(encoding="utf-8")
+                except OSError, UnicodeError:
+                    diagnostics.append(
+                        Diagnostic(
+                            "NOTE_READ_ERROR",
+                            "cannot read Markdown as UTF-8",
+                            DiagnosticSeverity.ERROR,
+                            relative_path,
+                            root_role=root_role,
+                        )
+                    )
+                    continue
+            else:
+                available_before_reservation = budget.remaining_raw_bytes()
+                if not budget.reserve_document(file_size):
+                    return
+                try:
+                    with resolved.open("rb") as stream:
+                        raw = stream.read(available_before_reservation + 1)
+                except OSError:
+                    diagnostics.append(
+                        Diagnostic(
+                            "NOTE_READ_ERROR",
+                            "cannot read Markdown as UTF-8",
+                            DiagnosticSeverity.ERROR,
+                            relative_path,
+                            root_role=root_role,
+                        )
+                    )
+                    continue
+                budget.reconcile_document_size(file_size, len(raw))
+                if len(raw) > available_before_reservation:
+                    budget.exceeded = True
+                    return
+                try:
+                    text = raw.decode("utf-8")
+                except UnicodeError:
+                    diagnostics.append(
+                        Diagnostic(
+                            "NOTE_READ_ERROR",
+                            "cannot read Markdown as UTF-8",
+                            DiagnosticSeverity.ERROR,
+                            relative_path,
+                            root_role=root_role,
+                        )
+                    )
+                    continue
+            text = text.replace("\r\n", "\n").replace("\r", "\n")
             in_inbox = inbox_root is not None and _path_is_within(resolved, inbox_root)
             document = _read_document(relative_path, text, in_inbox, root_role, diagnostics)
             documents.append(document)
@@ -291,6 +437,7 @@ def _scan_attachment_tree(
     declared_roots: tuple[_DeclaredRoot, ...],
     attachments: list[AttachmentRecord],
     diagnostics: list[Diagnostic],
+    budget: _ScanBudget | None = None,
 ) -> None:
     stack = [root]
     visited: set[tuple[int, int]] = set()
@@ -301,9 +448,17 @@ def _scan_attachment_tree(
             continue
         visited.add(identity)
         try:
-            children = sorted(
-                directory.iterdir(), key=lambda item: item.name.casefold(), reverse=True
-            )
+            if budget is None:
+                children = sorted(
+                    directory.iterdir(), key=lambda item: item.name.casefold(), reverse=True
+                )
+            else:
+                children = []
+                for child in directory.iterdir():
+                    if not budget.inspect_entry():
+                        return
+                    children.append(child)
+                children.sort(key=lambda item: item.name.casefold(), reverse=True)
         except OSError:
             diagnostics.append(
                 Diagnostic(
