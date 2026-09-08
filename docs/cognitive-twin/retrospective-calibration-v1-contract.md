@@ -95,8 +95,12 @@ Calibration сканирует current canonical report и рассматрив�
    сортируются или усекaются для fit;
 8. `chosen_option` после exact Stage 2 whitespace comparison соответствует
    ровно одному item `available_options`;
-9. нет malformed/duplicate section, hidden extra body или current diagnostic,
-   делающего эту Journal note недостоверной.
+9. нет malformed/duplicate section, hidden extra body или qualifying storage
+   metadata diagnostic. В v1 к qualifying diagnostics относятся
+   `NOTE_MISSING_TIMESTAMP` и `NOTE_INVALID_TIMESTAMP` для storage fields
+   `created`/`updated`; они не трактуются как отсутствие timestamp и дают
+   fixed exclusion code `decision_note_metadata_invalid`, если более ранняя
+   specific check не сработала.
 
 Case с unknown decision time, invalid body, invalid choice mapping, duplicate
 identity или 9–20 options не запускает Simulate Me. Он учитывается в
@@ -120,9 +124,10 @@ note увеличивает не более одного counter в `excluded_de
 `decision_identity_invalid_or_duplicate`, `decision_time_unknown`,
 `decision_time_not_exact_or_invalid`, `decision_body_edited_after_cutoff`,
 `decision_body_invalid`,
-`decision_option_count_unsupported`, затем `decision_option_identity_invalid`.
+`decision_note_metadata_invalid`, `decision_option_count_unsupported`, затем
+`decision_option_identity_invalid`.
 Побеждает первая failing check; последующие applicable failures не считаются.
-Note, прошедшая все семь checks, становится eligible, а eligible case никогда
+Note, прошедшая все восемь checks, становится eligible, а eligible case никогда
 не получает code из `excluded_decisions`.
 
 Чтобы operation оставалась bounded, одна run обрабатывает не более
@@ -472,6 +477,7 @@ decision_time_unknown
 decision_time_not_exact_or_invalid
 decision_body_edited_after_cutoff
 decision_body_invalid
+decision_note_metadata_invalid
 decision_option_count_unsupported
 decision_option_identity_invalid
 ```
@@ -577,13 +583,13 @@ Fingerprint input is exactly this one-line ASCII JSON, encoded as UTF-8 with
 `sort_keys=true`, separators `,` and `:`, no BOM and no trailing newline:
 
 ```json
-{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","diagnostics":"exclusive-phase-mapped-code-sums-v2","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","journal_body_cutoff":"updated-after-decision-excluded-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","result_size_guard":"internal-canonical-utf8-byte-length-v1","scan_completeness":"content-affecting-diagnostics-abort-before-classification-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","temporal_caveat_counting":"per-eligible-case-independent-codes-v1","temporal_caveat_scope":"after-request-validation-context-source-inspection-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
+{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","decision_note_metadata":"created-updated-invalid-diagnostic-excluded-v1","diagnostics":"exclusive-phase-mapped-code-sums-v2","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","journal_body_cutoff":"updated-after-decision-excluded-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","result_size_guard":"internal-canonical-utf8-byte-length-v1","scan_completeness":"content-affecting-diagnostics-abort-before-classification-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","temporal_caveat_counting":"per-eligible-case-independent-codes-v1","temporal_caveat_scope":"after-request-validation-context-source-inspection-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
 ```
 
 Expected fingerprint:
 
 ```text
-sha256:68aea1ac41e3acba50526905b07554d27c46096e4d64993cca14f1ebe0cebc4f
+sha256:0836d20bed2e49ac028cfeb72a90c80147a4632720aa0c0f3de6b7ae34f01ece
 ```
 
 Fingerprint changes when any eligibility, masking, cutoff, execution, option
@@ -656,6 +662,7 @@ database or write path.
 | Valid multiple-support ambiguity | `multiple_options_supported` is abstention; no count/recency tie-break. |
 | Mismatch | Valid prediction with different request-local ID increments mismatch only. |
 | Изменение Journal body после cutoff | `updated > decision_at` исключает case до target/query/context construction с `decision_body_edited_after_cutoff`; это никогда не mismatch и не temporal caveat. |
+| Invalid `created`/`updated` storage timestamp | `NOTE_MISSING_TIMESTAMP` или `NOTE_INVALID_TIMESTAMP` даёт `decision_note_metadata_invalid`, если более ранняя specific exclusion не победила; malformed `updated` не считается отсутствующим. |
 | Linked Outcome present | `actual_result`, `reassessment`, `notes` never enter query/context/metrics. |
 | Later evidence | `evidence_at > decision_at` is excluded; `later_evidence_excluded` is counted once per eligible case if any such source exists, and it cannot make a prediction. |
 | Unknown-time evidence | `unknown` is excluded; `unknown_evidence_excluded` is counted once per eligible case if any such source exists, with no assumption that it pre-existed choice. |
