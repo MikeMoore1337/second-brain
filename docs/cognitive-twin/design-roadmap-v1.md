@@ -990,22 +990,29 @@ policy_id = "retrospective-simulate-me-exact-cutoff-v1"
 reconstruction_mode = "current-vault-temporal-projection-v1"
 context_projection = "per-case-filtered-current-self-model-builder-v1"
 query_projection = "retrospective-one-line-json-string-situation-information-criteria-semicolon-v2"
+self_model_derivation_version = "self-model-derivation-v1"
+self_model_policy_fingerprint = "d7969ba732665c0406736b0e669a9123ccd0ee7b12de36f57899f59f94282cd3"
 simulate_me_derivation_version = "simulate-me-v1"
 simulate_me_policy_id = "simulate-me-direct-exact-v1"
 simulate_me_policy_fingerprint = "sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a"
 ```
 
+Replay обязан использовать ровно этот `self_model_derivation_version` и
+`self_model_policy_fingerprint`, возвращённые validated current Self Model.
+Изменение derivation или любого входящего Self Model policy identifier требует
+новой retrospective policy identity и нового calibration fingerprint.
+
 Вход fingerprint — ровно эта однострочная ASCII JSON строка в UTF-8, с
 `sort_keys=true`, separators `,` и `:`, без BOM и trailing newline:
 
 ```json
-{"context_projection":"per-case-filtered-current-self-model-builder-v1","decision_eligibility":"current-valid-stage2-journal-exact-utc-time-max-6-fraction-v2","evidence_cutoff":"exact-aware-inclusive-utc-max-6-fraction;updated-validated-before-cutoff;unknown-excluded-v3","execution":"one-provider-free-simulate-me-replay-at-most-once-after-preflight-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-v1","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_projection":"retrospective-one-line-json-string-situation-information-criteria-semicolon-v2","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
+{"context_projection":"per-case-filtered-current-self-model-builder-v1","decision_eligibility":"current-valid-stage2-journal-exact-utc-time-max-6-fraction-v2","evidence_cutoff":"exact-aware-inclusive-utc-max-6-fraction;updated-validated-before-cutoff;unknown-excluded-v3","execution":"one-provider-free-simulate-me-replay-at-most-once-after-preflight-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-v1","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_projection":"retrospective-one-line-json-string-situation-information-criteria-semicolon-v2","self_model_derivation_version":"self-model-derivation-v1","self_model_policy_fingerprint":"d7969ba732665c0406736b0e669a9123ccd0ee7b12de36f57899f59f94282cd3","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
 ```
 
 Ожидаемый fingerprint:
 
 ```text
-sha256:19a3bb4c6c98160f768fd2d6da734fbae44a7f381d260026615a0cbe296cf17c
+sha256:28fb92f0fae4ae395ae520f1855fe05cb38b6a86755d17c55f893ebe1b5ffa74
 ```
 
 Изменение любого правила eligibility, masking, cutoff, execution, option
