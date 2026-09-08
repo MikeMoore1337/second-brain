@@ -775,8 +775,7 @@ mechanical Delta и остаются deferred.
 
 В v1 calibration — **только retrospective/rebuildable**. ML training pipeline
 не нужен. Нормативные masking, cutoff, current-vault limitation и aggregate
-metrics зафиксированы в
-[retrospective-calibration-v1-contract.md](retrospective-calibration-v1-contract.md).
+metrics зафиксированы в этом разделе.
 Нужен lifecycle:
 
 ```text
