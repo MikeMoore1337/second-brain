@@ -379,7 +379,10 @@ assistant_state и simulate_me_state являются typed projection wrappers,
   `contextual_evidence_refs` с `evidence_at="unknown"`, а
   `caveat_claim_ids` — claim IDs из `temporal_caveats` с code
   `evidence_at_unknown`; множества обязаны совпадать. При несовпадении branch
-  классифицируется как `COMPARE_BRANCH_RESULT_INVALID`, без Delta;
+  получает safe `COMPARE_BRANCH_RESULT_INVALID` error wrapper до построения
+  Delta. Затем применяется §8: valid sibling branch сохраняется в partial
+  result, а Delta строится из error wrapper (`simulate_me_error` или
+  `assistant_error`); при двух error wrappers используется `both_error`.
   `simulate_me_temporal_caveat` вычисляется как
   `bool(unknown_claim_ids)`, а не принимается из непроверенного boolean.
 

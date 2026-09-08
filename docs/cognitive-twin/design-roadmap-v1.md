@@ -787,7 +787,7 @@ current canonical Decision Journal
   -> rebuildable calibration aggregate
 ```
 
-Для каждого eligible Journal строится bounded current-vault pre-choice
+Для каждого eligible Journal строится ограниченная current-vault pre-choice
 projection (не historical snapshot) из:
 
 - `Situation`;
@@ -879,15 +879,15 @@ Situation: {Situation} | Information known at decision time: {Information known 
 criteria через literal `; `; literal `...` не эмитируется. Значения подставляются из allowed
 sections в current body order без semantic rewriting; `Chosen option`,
 `Reasons`, `Confidence`, `Expected result`, `Actual result`, `Reassessment`,
-outcome и evidence refs в query не входят. Любой forbidden control или format
-character в подставленном значении является request failure; sanitization,
+outcome и evidence refs в query не входят. Любой запрещённый управляющий или
+форматный символ в подставленном значении считается request failure; очистка,
 замена line break, truncation и alternate normalized query запрещены.
 Итоговый request имеет ровно форму
 `SimulateMeRequest(query=retrospective_query, options=(SimulateMeOption(...), ...))`;
 отдельных target/evidence/history fields нет.
-Перед вызовом branch существующая строгая валидация Simulate Me применяет
+Перед вызовом branch применяется существующая строгая валидация Simulate Me:
 UTF-8/NFC, edge-strip и forbidden-code-point rules, bounds query в `1..4096`
-bytes и каждую option label в `1..256` bytes. При overflow или invalid
+bytes и каждой option label в `1..256` bytes. При overflow или invalid
 text/label case получает
 `prechoice_request_invalid` с подкодом `query_too_large_or_invalid`, и branch не
 вызывается.
@@ -913,7 +913,7 @@ Actual choice берётся только после replay из reviewed `obser
 bounded Simulate Me abstention; unavailable и invalid replay не маскируются под
 mismatch.
 
-Остальные per-case outcomes закрыты: `replay_unavailable` содержит
+Остальные outcomes отдельных cases закрыты: `replay_unavailable` содержит
 `prechoice_context_unavailable`, `historical_context_unreconstructable`,
 `simulate_me_unavailable`; `replay_invalid` содержит `prechoice_request_invalid`,
 `simulate_me_result_invalid`, `simulate_me_policy_mismatch`,
@@ -926,7 +926,7 @@ accuracy numerator/denominator. Confidence, probability, Brier/ECE, bins,
 calibration gap, tuning и small-sample personal trait claims не входят.
 
 Формулы метрик фиксированы; `excluded_decisions_total` — сумма всех counts с
-fixed code в `excluded_decisions`: `decision_notes_seen =
+фиксированным code в `excluded_decisions`: `decision_notes_seen =
 excluded_decisions_total + eligible_decisions`; `eligible_decisions =
 predicted_decisions + abstentions + unavailable_count + invalid_count`;
 `predicted_decisions =
@@ -943,19 +943,24 @@ predicted_decisions`. Обе ratios используют exact numerator/denomin
 derivation_version = "retrospective-calibration-v1"
 policy_id = "retrospective-simulate-me-exact-cutoff-v1"
 reconstruction_mode = "current-vault-temporal-projection-v1"
+context_projection = "per-case-filtered-current-self-model-builder-v1"
+query_projection = "retrospective-one-line-situation-information-criteria-semicolon-v1"
+simulate_me_derivation_version = "simulate-me-v1"
+simulate_me_policy_id = "simulate-me-direct-exact-v1"
+simulate_me_policy_fingerprint = "sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a"
 ```
 
 Вход fingerprint — ровно эта однострочная ASCII JSON строка в UTF-8, с
 `sort_keys=true`, separators `,` и `:`, без BOM и trailing newline:
 
 ```json
-{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-v1","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
+{"context_projection":"per-case-filtered-current-self-model-builder-v1","decision_eligibility":"current-valid-stage2-journal-exact-time-v1","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-v1","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_projection":"retrospective-one-line-situation-information-criteria-semicolon-v1","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
 ```
 
 Ожидаемый fingerprint:
 
 ```text
-sha256:6917d22275b15c86507354e5cec72b58f3cad9674abe333c4f1f30791b42c605
+sha256:f863ae0b2d12196aab6edc8ea48717e68e3669e7bda31a7bd45e767731aeb55c
 ```
 
 Изменение любого правила eligibility, masking, cutoff, execution, option
