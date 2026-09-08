@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
+from io import BytesIO
 from pathlib import Path, PurePosixPath
 from typing import Any, cast
 from uuid import UUID
@@ -343,6 +344,43 @@ def test_bounded_scanner_enforces_entry_limit_before_materialization(tmp_path: P
     assert result.documents_materialized == 0
 
 
+def test_bounded_scanner_caps_a_file_that_grows_after_stat(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = create_vault(tmp_path / "vault")
+    note = write_note(vault, "10 Projects/growing.md", "small file")
+    actual_bytes = note.read_bytes()
+    target = note.resolve()
+    read_sizes: list[int] = []
+
+    class _GrowingStream(BytesIO):
+        def __init__(self) -> None:
+            super().__init__(actual_bytes + b"x" * 1024)
+
+        def read(self, size: int | None = -1) -> bytes:
+            read_sizes.append(-1 if size is None else size)
+            return super().read(-1 if size is None else size)
+
+    original_open = Path.open
+
+    def growing_open(path: Path, *args: Any, **kwargs: Any) -> Any:
+        if path.resolve(strict=False) == target:
+            return _GrowingStream()
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", growing_open)
+    result = FileSystemRetrospectiveCalibrationScanner(vault).scan(
+        RetrospectiveCalibrationScanLimitsV1(
+            max_scan_entries=16_384,
+            max_scan_documents=4_096,
+            max_scan_bytes=len(actual_bytes) + 2,
+        )
+    )
+
+    assert result.limit_exceeded is True
+    assert read_sizes == [3]
+
+
 def test_exact_prediction_uses_only_prechoice_fields_and_request_local_target() -> None:
     snapshot = _snapshot(
         _journal_document(1),
@@ -506,6 +544,25 @@ def test_non_journal_pair_with_malformed_personal_memory_is_not_a_candidate() ->
 
     assert result.metrics.decision_notes_seen == 0
     assert getattr(context, "calls", 0) == 0
+    assert getattr(replay, "calls", 0) == 0
+
+
+def test_invalid_direct_context_metadata_reaches_self_model_boundary() -> None:
+    invalid_direct = _direct_front_matter(_uuid(2))
+    invalid_direct["domain"] = "INVALID DOMAIN"
+    invalid_context = MarkdownDocument(
+        relative_path="10 Projects/invalid-direct.md",
+        front_matter=invalid_direct,
+        body="A direct assertion.",
+        in_inbox=False,
+    )
+    service, _scanner, _context, replay = _service(
+        _snapshot(_journal_document(1), invalid_context)
+    )
+
+    result = service.execute(RetrospectiveCalibrationRequestV1())
+
+    assert _counts(result, "replay_unavailable")["prechoice_context_unavailable"] == 1
     assert getattr(replay, "calls", 0) == 0
 
 

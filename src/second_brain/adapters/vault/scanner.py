@@ -77,6 +77,16 @@ class _ScanBudget:
             return False
         return True
 
+    def remaining_raw_bytes(self) -> int:
+        """Return the bytes available after the conservative stat reservation."""
+
+        return self.limits.max_scan_bytes - self.raw_utf8_bytes
+
+    def reconcile_document_size(self, reserved_bytes: int, actual_bytes: int) -> None:
+        """Correct a stat reservation when a file shrinks before it is read."""
+
+        self.raw_utf8_bytes += actual_bytes - reserved_bytes
+
 
 class FileSystemVaultReader:
     """Прочитать настроенный vault без перехода по links и записи файлов."""
@@ -336,39 +346,55 @@ def _scan_content_tree(
                     )
                 )
                 continue
-            if budget is not None and not budget.reserve_document(file_size):
-                return
-            try:
-                raw = resolved.read_bytes()
-            except OSError, UnicodeError:
-                diagnostics.append(
-                    Diagnostic(
-                        "NOTE_READ_ERROR",
-                        "cannot read Markdown as UTF-8",
-                        DiagnosticSeverity.ERROR,
-                        relative_path,
-                        root_role=root_role,
+            if budget is None:
+                try:
+                    text = resolved.read_text(encoding="utf-8")
+                except OSError, UnicodeError:
+                    diagnostics.append(
+                        Diagnostic(
+                            "NOTE_READ_ERROR",
+                            "cannot read Markdown as UTF-8",
+                            DiagnosticSeverity.ERROR,
+                            relative_path,
+                            root_role=root_role,
+                        )
                     )
-                )
-                continue
-            if budget is not None and len(raw) > file_size:
-                budget.raw_utf8_bytes += len(raw) - file_size
-                if budget.raw_utf8_bytes > budget.limits.max_scan_bytes:
+                    continue
+            else:
+                if not budget.reserve_document(file_size):
+                    return
+                remaining = budget.remaining_raw_bytes()
+                try:
+                    with resolved.open("rb") as stream:
+                        raw = stream.read(remaining + 1)
+                except OSError:
+                    diagnostics.append(
+                        Diagnostic(
+                            "NOTE_READ_ERROR",
+                            "cannot read Markdown as UTF-8",
+                            DiagnosticSeverity.ERROR,
+                            relative_path,
+                            root_role=root_role,
+                        )
+                    )
+                    continue
+                budget.reconcile_document_size(file_size, len(raw))
+                if len(raw) > remaining:
                     budget.exceeded = True
                     return
-            try:
-                text = raw.decode("utf-8")
-            except UnicodeError:
-                diagnostics.append(
-                    Diagnostic(
-                        "NOTE_READ_ERROR",
-                        "cannot read Markdown as UTF-8",
-                        DiagnosticSeverity.ERROR,
-                        relative_path,
-                        root_role=root_role,
+                try:
+                    text = raw.decode("utf-8")
+                except UnicodeError:
+                    diagnostics.append(
+                        Diagnostic(
+                            "NOTE_READ_ERROR",
+                            "cannot read Markdown as UTF-8",
+                            DiagnosticSeverity.ERROR,
+                            relative_path,
+                            root_role=root_role,
+                        )
                     )
-                )
-                continue
+                    continue
             text = text.replace("\r\n", "\n").replace("\r", "\n")
             in_inbox = inbox_root is not None and _path_is_within(resolved, inbox_root)
             document = _read_document(relative_path, text, in_inbox, root_role, diagnostics)

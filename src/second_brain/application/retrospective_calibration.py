@@ -323,6 +323,13 @@ _VALID_NON_JOURNAL_PAIRS: Final[frozenset[tuple[str, str]]] = frozenset(
     }
     | {("outcome_later_observation", "outcome")}
 )
+_DIRECT_CONTEXT_PAIRS: Final[frozenset[tuple[str, str]]] = frozenset(
+    {
+        (evidence_kind, self_kind)
+        for evidence_kind in ("explicit_user_fact", "user_statement")
+        for self_kind in ("preference", "belief", "goal")
+    }
+)
 _UNRESERVED = frozenset(b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
 
 
@@ -1384,9 +1391,7 @@ def _context_input(report: ScanReport) -> RetrospectiveCalibrationContextInputV1
     notes = tuple(
         note
         for note in report.notes
-        if note.managed is True
-        and is_personal_memory_enrolled(note.front_matter)
-        and _is_direct_metadata(note.personal_memory)
+        if _is_direct_context_note(note)
     )
     return RetrospectiveCalibrationContextInputV1(report.manifest, notes)
 
@@ -1396,6 +1401,22 @@ def _is_direct_metadata(metadata: PersonalMemoryMetadata | None) -> bool:
         type(metadata) is PersonalMemoryMetadata
         and metadata.evidence_kind in {EvidenceKind.EXPLICIT_USER_FACT, EvidenceKind.USER_STATEMENT}
         and metadata.self_kind in {SelfKind.PREFERENCE, SelfKind.BELIEF, SelfKind.GOAL}
+    )
+
+
+def _is_direct_context_note(note: NoteRecord) -> bool:
+    """Keep invalid direct notes so Self Model can fail closed at its boundary."""
+
+    if note.managed is not True or not is_personal_memory_enrolled(note.front_matter):
+        return False
+    if _is_direct_metadata(note.personal_memory):
+        return True
+    raw_evidence_kind = note.front_matter.get("evidence_kind")
+    raw_self_kind = note.front_matter.get("self_kind")
+    return (
+        type(raw_evidence_kind) is str
+        and type(raw_self_kind) is str
+        and (raw_evidence_kind, raw_self_kind) in _DIRECT_CONTEXT_PAIRS
     )
 
 
