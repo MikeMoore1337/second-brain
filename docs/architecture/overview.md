@@ -421,6 +421,18 @@ production deployment workflow. Обычные vault/research read commands не
 orchestration передаёт source content в `LlmRequest.context`, а framing
 остаётся внутри Cloudflare adapter.
 
+Отдельный `CloudflareWorkersAiAdvisorPort` реализует provider-neutral
+`AdvisorPort` для explicit-context-only Assistant v1. Он остаётся отдельным
+high-level adapter: `LlmPort.draft_note` и `NoteDraft` не расширяются и не
+используются как reasoning API. Advisor строит собственный exact request/result
+contract, но переиспользует те же Cloudflare settings, fixed worker, private
+framed IPC, sanitized child environment, TLS/HTTPS, bounded response и
+terminate/kill cleanup. Через этот boundary проходит только canonical
+`AssistantReasoningEnvelopeV1`; automatic Stage 5/Search/Self Model/Personal
+Memory/vault reads и Simulate Me/Compare result отсутствуют. Result остаётся
+ephemeral и после strict structural decoding проходит final semantic validation
+существующего Assistant core.
+
 ## Search / Retrieval v1
 
 Search является отдельным read-only слоем над уже существующей границей vault:

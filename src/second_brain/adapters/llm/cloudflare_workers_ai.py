@@ -108,6 +108,7 @@ _RESULT_KIND_TO_CODE = {
     "worker_error": _RESULT_WORKER_ERROR,
 }
 _RESULT_CODE_TO_KIND = {value: key for key, value in _RESULT_KIND_TO_CODE.items()}
+MAX_WORKER_RESPONSE_BYTES = 16 * 1024 * 1024 - _RESULT_HEADER.size
 _WORKER_MODULE = "second_brain.adapters.llm.cloudflare_workers_ai_worker"
 _SAFE_WORKER_ENVIRONMENT_NAMES = frozenset(
     {"PATH", "Path", "SystemRoot", "WINDIR", "TEMP", "TMP", "TMPDIR"}
@@ -355,6 +356,17 @@ def response_body_cap(max_output_bytes: int) -> int:
     )
 
 
+def _worker_response_cap(request: _WorkerRequest) -> int:
+    """Return the bounded response cap carried through the private worker IPC."""
+
+    response_cap = request.response_cap
+    if response_cap is None:
+        return response_body_cap(request.max_output_bytes)
+    if type(response_cap) is not int or not 1 <= response_cap <= MAX_WORKER_RESPONSE_BYTES:
+        raise _WorkerContentTooLarge()
+    return response_cap
+
+
 REQUEST_BODY_CAP = request_body_cap()
 
 
@@ -367,6 +379,7 @@ class _WorkerRequest:
     body: bytes = field(repr=False, compare=False)
     max_output_bytes: int
     timeout_seconds: float = field(default=TOTAL_DEADLINE_SECONDS, repr=False, compare=False)
+    response_cap: int | None = field(default=None, repr=False, compare=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -479,6 +492,7 @@ def _encode_worker_request(request: _WorkerRequest, *, timeout_micros: int) -> b
         raise _WorkerUnavailable()
     if type(request.body) is not bytes or len(request.body) > REQUEST_BODY_CAP:
         raise _WorkerContentTooLarge()
+    response_cap = _worker_response_cap(request)
     if not 1 <= timeout_micros <= int(TOTAL_DEADLINE_SECONDS * 1_000_000):
         raise _WorkerTimedOut()
     header = _REQUEST_HEADER.pack(
@@ -486,7 +500,7 @@ def _encode_worker_request(request: _WorkerRequest, *, timeout_micros: int) -> b
         len(account),
         len(token),
         len(request.body),
-        request.max_output_bytes,
+        response_cap,
         timeout_micros,
     )
     payload = header + account + token + request.body
@@ -501,7 +515,7 @@ def _decode_worker_request(payload: bytes) -> _WorkerRequest | None:
     if len(payload) < _REQUEST_HEADER.size:
         return None
     try:
-        magic, account_size, token_size, body_size, max_output_bytes, timeout_micros = (
+        magic, account_size, token_size, body_size, response_cap, timeout_micros = (
             _REQUEST_HEADER.unpack(payload[: _REQUEST_HEADER.size])
         )
     except struct.error:
@@ -513,7 +527,7 @@ def _decode_worker_request(payload: bytes) -> _WorkerRequest | None:
         return None
     if account_size > MAX_ACCOUNT_ID_BYTES or token_size > MAX_API_TOKEN_BYTES:
         return None
-    if body_size > REQUEST_BODY_CAP or not 1 <= max_output_bytes <= MAX_MAX_OUTPUT_BYTES:
+    if body_size > REQUEST_BODY_CAP or not 1 <= response_cap <= MAX_WORKER_RESPONSE_BYTES:
         return None
     if not 1 <= timeout_micros <= int(TOTAL_DEADLINE_SECONDS * 1_000_000):
         return None
@@ -534,8 +548,9 @@ def _decode_worker_request(payload: bytes) -> _WorkerRequest | None:
         account_id=account_id,
         api_token=api_token,
         body=body,
-        max_output_bytes=max_output_bytes,
+        max_output_bytes=1,
         timeout_seconds=timeout_micros / 1_000_000,
+        response_cap=response_cap,
     )
 
 
@@ -776,6 +791,7 @@ class SubprocessWorkerRunner:
         )
         if timeout_micros < 1:
             raise _WorkerTimedOut()
+        response_cap = _worker_response_cap(request)
         frame = _encode_worker_request(request, timeout_micros=timeout_micros)
         try:
             process = self.popen_factory(
@@ -798,9 +814,7 @@ class SubprocessWorkerRunner:
             _close_pipe(process.stderr)
             raise _WorkerUnavailable()
 
-        stdout_capture = _BoundedCapture(
-            _FRAME_LENGTH.size + _RESULT_HEADER.size + response_body_cap(request.max_output_bytes)
-        )
+        stdout_capture = _BoundedCapture(_FRAME_LENGTH.size + _RESULT_HEADER.size + response_cap)
         stderr_capture = _BoundedCapture(MAX_WORKER_STDERR_BYTES)
         stdout_done = threading.Event()
         stderr_done = threading.Event()
@@ -886,11 +900,11 @@ class SubprocessWorkerRunner:
         try:
             payload = _decode_frame(
                 bytes(stdout_capture.data),
-                max_payload_bytes=_RESULT_HEADER.size + response_body_cap(request.max_output_bytes),
+                max_payload_bytes=_RESULT_HEADER.size + response_cap,
             )
             return _decode_worker_result(
                 payload,
-                response_cap=response_body_cap(request.max_output_bytes),
+                response_cap=response_cap,
             )
         except _WorkerExecutionError:
             raise
@@ -983,6 +997,7 @@ def _perform_https_request(
     connection: _HttpsConnection | None = None
     response: _HttpResponse | None = None
     try:
+        response_cap = _worker_response_cap(request)
         context = make_context()
         connection = make_connection(
             CLOUDFLARE_API_HOST,
@@ -1002,10 +1017,10 @@ def _perform_https_request(
         status = response.status
         if type(status) is not int or not 100 <= status <= 599:
             return _WorkerResult(kind="malformed")
-        body = response.read(response_body_cap(request.max_output_bytes) + 1)
+        body = response.read(response_cap + 1)
         if type(body) is not bytes:
             return _WorkerResult(kind="malformed")
-        if len(body) > response_body_cap(request.max_output_bytes):
+        if len(body) > response_cap:
             return _WorkerResult(kind="too_large")
         if status == 200:
             return _WorkerResult(kind="http", http_status=status, body=body)
@@ -1090,30 +1105,56 @@ _MANAGED_NOTE_TYPES = frozenset(
 def _raise_http_mapping(result: _WorkerResult) -> None:
     """Свести status/provider code к существующей LLM taxonomy."""
 
+    category = _cloudflare_result_category(result)
+    if category == "too_large":
+        raise LlmContentTooLargeError()
+    if category == "timeout":
+        raise LlmTimeoutError()
+    if category == "unavailable":
+        raise LlmBackendUnavailableError()
+    if category == "malformed":
+        raise LlmMalformedResultError()
+    raise LlmUpstreamError()
+
+
+def _cloudflare_result_category(result: _WorkerResult) -> str:
+    """Return a fixed failure category reusable by separate Cloudflare adapters."""
+
+    if result.kind == "too_large":
+        return "too_large"
+    if result.kind == "timeout":
+        return "timeout"
+    if result.kind in {"transport", "worker_error"}:
+        return "unavailable"
+    if result.kind == "malformed":
+        return "malformed"
+    if result.kind != "http":
+        return "unavailable"
+    if result.http_status == 200:
+        return "ok"
+
     code = result.provider_code
     if type(code) is int and not isinstance(code, bool):
         if code == 3006:
-            raise LlmContentTooLargeError()
+            return "too_large"
         if code in _TIMEOUT_PROVIDER_CODES:
-            raise LlmTimeoutError()
+            return "timeout"
         if code in _BACKEND_PROVIDER_CODES:
-            raise LlmBackendUnavailableError()
+            return "unavailable"
         if code in _UPSTREAM_PROVIDER_CODES:
-            raise LlmUpstreamError()
+            return "upstream"
     status = result.http_status
     if status == 408:
-        raise LlmTimeoutError()
+        return "timeout"
     if status == 413:
-        raise LlmContentTooLargeError()
+        return "too_large"
     if status in {401, 403, 404}:
-        raise LlmBackendUnavailableError()
-    if status == 429:
-        raise LlmUpstreamError()
+        return "unavailable"
     if 200 <= status < 300:
-        raise LlmMalformedResultError()
+        return "malformed"
     if 300 <= status < 400:
-        raise LlmBackendUnavailableError()
-    raise LlmUpstreamError()
+        return "unavailable"
+    return "upstream"
 
 
 class _DuplicateJsonKey(ValueError):

@@ -3,8 +3,16 @@
 Статус: **DESIGN / OWNER DECISION A APPROVED / EXPLICIT-CONTEXT-ONLY**. Для
 capability-boundary решения `HUMAN_REQUIRED: none`; owner выбрал отдельный
 provider-neutral `AdvisorPort`. Этот документ закрывает design-only часть
-issue [#162](https://github.com/MikeMoore1337/second-brain/issues/162) и не
-создаёт production runtime, provider integration, LLM operation, API или Web.
+issue [#162](https://github.com/MikeMoore1337/second-brain/issues/162). Отдельная
+реализация [#179](https://github.com/MikeMoore1337/second-brain/issues/179)
+добавляет production `CloudflareWorkersAiAdvisorPort` без изменения этого
+Assistant core contract, `LlmPort` или explicit-only privacy boundary.
+
+Реализация #179 использует только уже одобренные Cloudflare Workers AI
+settings и private worker/transport boundary. Через provider проходит только
+canonical `AssistantReasoningEnvelopeV1`; automatic Stage 5/Search/Self Model/
+Personal Memory/vault context, Simulate Me/Compare result, persistence и
+write-back не добавляются.
 
 Контрольная база для этой редакции: `main`, commit
 `30249d56d366c0688c451a45a7e0214114c7c197`.
