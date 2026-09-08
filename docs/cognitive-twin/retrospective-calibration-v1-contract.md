@@ -282,6 +282,19 @@ historical replay. Если текущий Stage 6 implementation не имее�
 `prechoice_context_unavailable` по §8.3; hidden fallback к full current context
 запрещён.
 
+Filtered-context boundary обязана принять только результат существующей Self
+Model policy с exact identity:
+
+```text
+self_model_derivation_version = "self-model-derivation-v1"
+self_model_policy_fingerprint = "d7969ba732665c0406736b0e669a9123ccd0ee7b12de36f57899f59f94282cd3"
+```
+
+Implementation валидирует эту пару существующим Self Model result/policy
+validator до context projection. Missing, malformed или mismatched identity
+делает context boundary недоверенной и даёт `prechoice_context_unavailable`;
+fallback к другой Self Model policy запрещён.
+
 Разрешены только существующие Stage 6 semantics:
 
 - direct `preference` и `goal` могут поддержать option;
@@ -633,19 +646,19 @@ Fingerprint input is exactly this one-line ASCII JSON, encoded as UTF-8 with
 `sort_keys=true`, separators `,` and `:`, no BOM and no trailing newline:
 
 ```json
-{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","decision_note_metadata":"created-updated-invalid-diagnostic-excluded-v1","diagnostics":"exclusive-phase-mapped-code-sums-v2","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","journal_body_cutoff":"updated-after-decision-excluded-v1","journal_creation_cutoff":"created-after-decision-excluded-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_failure_mapping":"available-options-before-generic-body-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","result_size_guard":"internal-canonical-utf8-byte-length-v1","scan_completeness":"content-affecting-diagnostics-abort-before-classification-v2","scan_limits":"entries-16384;documents-4096;bytes-16777216-v1","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","temporal_caveat_counting":"per-eligible-case-independent-codes-v1","temporal_caveat_scope":"after-request-validation-context-source-inspection-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
+{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","decision_note_metadata":"created-updated-invalid-diagnostic-excluded-v1","diagnostics":"exclusive-phase-mapped-code-sums-v2","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","journal_body_cutoff":"updated-after-decision-excluded-v1","journal_creation_cutoff":"created-after-decision-excluded-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_failure_mapping":"available-options-before-generic-body-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","result_size_guard":"internal-canonical-utf8-byte-length-v1","scan_completeness":"content-affecting-diagnostics-abort-before-classification-v2","scan_limits":"entries-16384;documents-4096;bytes-16777216-v1","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","self_model_derivation_version":"self-model-derivation-v1","self_model_policy_fingerprint":"d7969ba732665c0406736b0e669a9123ccd0ee7b12de36f57899f59f94282cd3","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","temporal_caveat_counting":"per-eligible-case-independent-codes-v1","temporal_caveat_scope":"after-request-validation-context-source-inspection-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
 ```
 
 Expected fingerprint:
 
 ```text
-sha256:26376bae0e232acb2d992717c3939bd87d3c88bc06448e276b9674259206851b
+sha256:60acc3e647b916d7cb093d75fe9bd5393d9fc068cc9672f89f5b79f856c43aa6
 ```
 
 Fingerprint changes when any eligibility, masking, cutoff, execution, scan
-limit, option identity, metrics, source-authority or bound Stage 6 identity
-rule changes. It is not a model score and does not authorize policy
-optimization.
+limit, option identity, metrics, source-authority, bound Self Model identity or
+bound Stage 6 identity rule changes. It is not a model score and does not
+authorize policy optimization.
 
 ## 11. Canonical serialization
 
@@ -728,6 +741,7 @@ database or write path.
 | Invalid/too-large request до context inspection | `prechoice_request_invalid`; context и branch не вызываются, temporal caveats для case остаются нулевыми. |
 | Exact cutoff boundary | evidence at exactly `decision_at` is included; later instant is excluded after UTC conversion. |
 | Malformed filtered context | unavailable/invalid safe category; never unfiltered current prediction. |
+| Self Model derivation/fingerprint mismatch at context boundary | `prechoice_context_unavailable`; no alternate Self Model policy or unfiltered context fallback. |
 | Stage 6 wrong policy or malformed result | invalid; sibling cases remain in aggregate. |
 | Aggregate arithmetic | all §8.2 invariants, null ratio rules and fixed count arrays hold. |
 | Deterministic rebuild | same synthetic vault and policy produce byte-identical canonical result. |
@@ -750,6 +764,7 @@ not made to pass through heuristic metadata.
 | Journal-order `o1..oN` request-local IDs and exact target comparison | **ACCEPT** |
 | Existing provider-free Stage 6 exact prediction/abstention semantics | **ACCEPT** |
 | Exact Stage 6 identity in calibration request boundary and fingerprint | **ACCEPT** |
+| Exact Self Model identity at filtered-context boundary and in fingerprint | **ACCEPT** |
 | Bounded counts, exact numerator/denominator ratios and coverage | **ACCEPT** |
 | Pre-materialization scan limits with fail-closed overrun | **ACCEPT** |
 | Domain breakdown, per-user rows or small-sample trait interpretation | **DEFER** |
