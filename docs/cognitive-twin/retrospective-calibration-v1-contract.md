@@ -134,8 +134,25 @@ Note, прошедшая все восемь checks, становится eligib
 `MAX_DECISION_CASES_V1 = 512` classified Journal cases. Если current scan
 содержит больше, чем этот cap, run возвращает top-level
 `RETROSPECTIVE_CALIBRATION_TOO_LARGE` без частичного aggregate и без silent
-sampling. Result budget — `MAX_RESULT_BYTES_V1 = 65536` canonical UTF-8 bytes;
-truncation запрещена.
+sampling. Этот cap не заменяет resource budget самого scan. До materialization
+полного `ScanReport` canonical scan обязан соблюдать все три fixed limits:
+
+- `MAX_SCAN_ENTRIES_V1 = 16384` filesystem entries, inspected across declared
+  roots;
+- `MAX_SCAN_DOCUMENTS_V1 = 4096` content-root Markdown documents, whose
+  front matter/body may be materialized;
+- `MAX_SCAN_BYTES_V1 = 16777216` cumulative raw UTF-8 bytes of those
+  content-root Markdown documents.
+
+Entry/document counters и raw byte size проверяются на scan boundary до
+добавления entry/document в materialized snapshot; file size должен быть
+проверен до чтения body и не может обходить оставшийся byte budget. Если любой
+limit превышен, bounded scanner останавливается и возвращает только
+`RETROSPECTIVE_CALIBRATION_TOO_LARGE`; partial snapshot не передаётся в
+`build_report`, partial aggregate не выдаётся. Streaming implementation,
+которая не materializes полный snapshot, может использовать ту же boundary и
+те же limits. Result budget — `MAX_RESULT_BYTES_V1 = 65536` canonical UTF-8
+bytes; truncation запрещена.
 
 ## 4. Mandatory pre-choice masking matrix
 
@@ -326,19 +343,23 @@ current context передаётся только через approved applicatio
 
 Для одной run порядок следующий:
 
-1. Выполнить один current canonical scan и построить typed `ScanReport`; не
-   читать Search index и не писать vault. До любой классификации Journal cases
-   применить scan-completeness gate существующей report boundary: manifest
-   должен быть валиден, а `report.content_scan_complete` должен быть true.
-   Gate fail-closed срабатывает при любом content-affecting completeness
-   diagnostic, включая `NOTE_READ_ERROR`,
-   `VAULT_DIRECTORY_READ_ERROR`, `VAULT_ENTRY_RESOLVE_ERROR`,
-   `VAULT_LINKED_DIRECTORY`, `VAULT_OVERLAPPING_ROOTS`, `VAULT_PATH_ESCAPE`,
-   `VAULT_ROOT_MISSING`, `VAULT_ROOT_NOT_DIRECTORY` или
-   `NOTE_FRONT_MATTER_ERROR`, когда diagnostic относится к content root. При
-   false gate вернуть
+1. Выполнить один bounded current canonical scan через pre-materialization
+   boundary §3; не читать Search index и не писать vault. Если scan превышает
+   `MAX_SCAN_ENTRIES_V1`, `MAX_SCAN_DOCUMENTS_V1` или `MAX_SCAN_BYTES_V1`,
+   немедленно вернуть `RETROSPECTIVE_CALIBRATION_TOO_LARGE` без
+   `build_report`, `decision_notes_seen` или partial aggregate. Только после
+   успешного bounded scan построить typed `ScanReport`, затем до любой
+   классификации Journal cases применить scan-completeness gate существующей
+   report boundary: manifest должен быть валиден, а
+   `report.content_scan_complete` должен быть true. Gate fail-closed
+   срабатывает при любом content-affecting completeness diagnostic, включая
+   `NOTE_READ_ERROR`, `VAULT_DIRECTORY_READ_ERROR`,
+   `VAULT_ENTRY_RESOLVE_ERROR`, `VAULT_LINKED_DIRECTORY`,
+   `VAULT_OVERLAPPING_ROOTS`, `VAULT_PATH_ESCAPE`, `VAULT_ROOT_MISSING`,
+   `VAULT_ROOT_NOT_DIRECTORY` или `NOTE_FRONT_MATTER_ERROR`, когда diagnostic
+   относится к content root. При false gate вернуть
    `RETROSPECTIVE_CALIBRATION_SOURCE_UNAVAILABLE` без `decision_notes_seen`,
-   частичного aggregate или silent omission unreadable documents.
+   partial aggregate или silent omission unreadable/malformed documents.
    Classified Journal cases ограничить `MAX_DECISION_CASES_V1` без sampling.
 2. Отсортировать cases по `(decision_at UTC, lowercase canonical note UUID,
    safe relative path)`; unknown-time и ineligible cases не входят в replay
@@ -551,7 +572,7 @@ Top-level errors return only fixed `{code, message}` and no aggregate:
 | `RETROSPECTIVE_CALIBRATION_INVALID_REQUEST` | `retrospective calibration request failed validation` | Invalid bounded operation input or unsupported configuration before scan. |
 | `RETROSPECTIVE_CALIBRATION_CANCELLED` | `retrospective calibration operation cancelled` | Global cancellation before aggregate completion. |
 | `RETROSPECTIVE_CALIBRATION_SOURCE_UNAVAILABLE` | `retrospective calibration source unavailable` | Scan/build_report не создал валидный manifest/report или content-completeness gate обнаружил content-affecting diagnostic (например, `NOTE_READ_ERROR`); aggregate не строится, unreadable document нельзя молча пропустить. |
-| `RETROSPECTIVE_CALIBRATION_TOO_LARGE` | `retrospective calibration input exceeds its case limit` | More than 512 classified cases; no sampling or partial result. |
+| `RETROSPECTIVE_CALIBRATION_TOO_LARGE` | `retrospective calibration input exceeds its bounded limit` | More than 512 classified cases или превышен любой pre-materialization scan limit; no sampling, `build_report` of partial input or partial result. |
 | `RETROSPECTIVE_CALIBRATION_RESULT_TOO_LARGE` | `retrospective calibration result exceeds its byte limit` | Full canonical aggregate exceeds 65536 bytes; no truncation. |
 
 Per-case semantics preserve progress of other cases inside the final aggregate:
@@ -580,22 +601,36 @@ policy_id = "retrospective-simulate-me-exact-cutoff-v1"
 reconstruction_mode = "current-vault-temporal-projection-v1"
 ```
 
+Calibration обязана принимать только exact approved Stage 6 identity из
+существующего Simulate Me contract:
+
+```text
+simulate_me_derivation_version = "simulate-me-v1"
+simulate_me_policy_id = "simulate-me-direct-exact-v1"
+simulate_me_policy_fingerprint = "sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a"
+```
+
+Эти три значения проверяются на request/branch boundary и входят в
+calibration fingerprint; отсутствие или mismatch любого значения даёт
+`simulate_me_policy_mismatch`, а не silent fallback к другой Stage 6 policy.
+
 Fingerprint input is exactly this one-line ASCII JSON, encoded as UTF-8 with
 `sort_keys=true`, separators `,` and `:`, no BOM and no trailing newline:
 
 ```json
-{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","decision_note_metadata":"created-updated-invalid-diagnostic-excluded-v1","diagnostics":"exclusive-phase-mapped-code-sums-v2","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","journal_body_cutoff":"updated-after-decision-excluded-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","result_size_guard":"internal-canonical-utf8-byte-length-v1","scan_completeness":"content-affecting-diagnostics-abort-before-classification-v2","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","temporal_caveat_counting":"per-eligible-case-independent-codes-v1","temporal_caveat_scope":"after-request-validation-context-source-inspection-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
+{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","decision_note_metadata":"created-updated-invalid-diagnostic-excluded-v1","diagnostics":"exclusive-phase-mapped-code-sums-v2","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","journal_body_cutoff":"updated-after-decision-excluded-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","result_size_guard":"internal-canonical-utf8-byte-length-v1","scan_completeness":"content-affecting-diagnostics-abort-before-classification-v2","scan_limits":"entries-16384;documents-4096;bytes-16777216-v1","simulate_me_derivation_version":"simulate-me-v1","simulate_me_policy_fingerprint":"sha256:07aa1d0d57fdd2d009087c05423fc4eb9304da70e87f32b1790fbd4753f21c3a","simulate_me_policy_id":"simulate-me-direct-exact-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","temporal_caveat_counting":"per-eligible-case-independent-codes-v1","temporal_caveat_scope":"after-request-validation-context-source-inspection-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
 ```
 
 Expected fingerprint:
 
 ```text
-sha256:a3eb9b82629a4223d57ef822f4793b3e58fbaed116ab63ffc2bf7f5bf98efcee
+sha256:64ccdb2cc1245e7caba6dd9fb9281afa2db1a9b55ca89decb512a98cd2b49548
 ```
 
-Fingerprint changes when any eligibility, masking, cutoff, execution, option
-identity, metrics or source-authority rule changes. It is not a model score and
-does not authorize policy optimization.
+Fingerprint changes when any eligibility, masking, cutoff, execution, scan
+limit, option identity, metrics, source-authority or bound Stage 6 identity
+rule changes. It is not a model score and does not authorize policy
+optimization.
 
 ## 11. Canonical serialization
 
@@ -673,6 +708,7 @@ database or write path.
 | Journal with 9–20 options | excluded as unsupported Stage 6 option count; no truncation or option selection. |
 | Invalid choice, body, duplicate identity or time | excluded with fixed code; never scored as mismatch. |
 | Неполный content scan, включая `NOTE_READ_ERROR` или `NOTE_FRONT_MATTER_ERROR` | top-level `RETROSPECTIVE_CALIBRATION_SOURCE_UNAVAILABLE`; aggregate и partial counters не выдаются, unreadable/malformed document нельзя молча пропустить. |
+| Scan превышает `MAX_SCAN_ENTRIES_V1`, `MAX_SCAN_DOCUMENTS_V1` или `MAX_SCAN_BYTES_V1` | top-level `RETROSPECTIVE_CALIBRATION_TOO_LARGE` до `build_report`; partial snapshot и aggregate не выдаются. |
 | Invalid/too-large request до context inspection | `prechoice_request_invalid`; context и branch не вызываются, temporal caveats для case остаются нулевыми. |
 | Exact cutoff boundary | evidence at exactly `decision_at` is included; later instant is excluded after UTC conversion. |
 | Malformed filtered context | unavailable/invalid safe category; never unfiltered current prediction. |
@@ -697,7 +733,9 @@ not made to pass through heuristic metadata.
 | Current edit/deletion safe exclusion and no `created`/`updated` fallback | **ACCEPT** |
 | Journal-order `o1..oN` request-local IDs and exact target comparison | **ACCEPT** |
 | Existing provider-free Stage 6 exact prediction/abstention semantics | **ACCEPT** |
+| Exact Stage 6 identity in calibration request boundary and fingerprint | **ACCEPT** |
 | Bounded counts, exact numerator/denominator ratios and coverage | **ACCEPT** |
+| Pre-materialization scan limits with fail-closed overrun | **ACCEPT** |
 | Domain breakdown, per-user rows or small-sample trait interpretation | **DEFER** |
 | Confidence, Brier/ECE, probabilistic calibration, bins or tuning | **DEFER** |
 | Recency/frequency/weighting, behavioral learning or policy optimization | **DEFER** |
@@ -718,6 +756,8 @@ contract merged, должен оставаться provider-free и исполь
 application contracts:
 
 - current scanner/report и typed Decision Journal projections;
+- bounded current scan с pre-materialization limits §3; unbounded
+  `VaultReader.scan()` нельзя использовать как calibration boundary;
 - existing Stage 4/5 current context validation;
 - existing Stage 6 `SimulateMeRequest`, `BuildSimulateMe` seam and result
   validator;
