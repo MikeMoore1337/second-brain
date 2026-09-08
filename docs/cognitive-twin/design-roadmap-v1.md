@@ -1095,8 +1095,10 @@ context и derived explanation divergence.
   Memory, provider/network/privacy integration и runtime остаются отдельными
   future gates. В #171 реализуется provider-free Assistant application core:
   typed explicit-only DTO/validation и отдельная `AdvisorPort` boundary без
-  provider call, private context или persistence. Compare runtime и
-  retrospective calibration runtime не начаты.
+  provider call, private context или persistence. В #173 реализуется
+  provider-free Compare application core: typed branch wrappers, shared
+  execution controls и structural Delta без provider call, private context или
+  persistence. Retrospective calibration runtime не начат.
 - **Цель:** сначала определить независимый bounded advice contract, затем в
   будущем сопоставить его с likely user choice и измерить, насколько текущая
   derivation policy воспроизводит исторические decisions.
