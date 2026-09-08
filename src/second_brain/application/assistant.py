@@ -636,6 +636,12 @@ def _normalize_result_structure(result: object) -> AssistantResultEnvelopeV1:
     )
 
 
+def normalize_assistant_result_structure(result: object) -> AssistantResultEnvelopeV1:
+    """Validate and return the normalized structural result before semantic binding."""
+
+    return _normalize_result_structure(result)
+
+
 def _validate_result_semantics(
     result: AssistantResultEnvelopeV1,
     request: AssistantRequest,
@@ -792,7 +798,7 @@ def _result_payload(result: AssistantResultEnvelopeV1) -> dict[str, object]:
 def serialize_assistant_result_envelope(result: object) -> bytes:
     """Serialize a structurally valid result using exact canonical UTF-8 bytes."""
 
-    normalized = _normalize_result_structure(result)
+    normalized = normalize_assistant_result_structure(result)
     return AssistantCanonicalJsonEncoderV1.encode(_result_payload(normalized))
 
 

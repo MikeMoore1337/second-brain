@@ -86,10 +86,10 @@ vault smoke не требуют `curl` или `yt-dlp`, если research adapte
 
 ## Cloudflare Workers AI runtime settings
 
-`CloudflareWorkersAiLlmPort` — отдельный production adapter, не включённый в
-обычные `doctor`, `vault validate` и `research read`. Поэтому эти команды
-работают без Cloudflare settings. При явном вызове adapter process environment
-должен предоставить только:
+`CloudflareWorkersAiLlmPort` и `CloudflareWorkersAiAdvisorPort` — отдельные
+production adapters, не включённые в обычные `doctor`, `vault validate` и
+`research read`. Поэтому эти команды работают без Cloudflare settings. При
+явном вызове любого adapter process environment должен предоставить только:
 
 ```text
 CLOUDFLARE_ACCOUNT_ID=<account id>
@@ -100,9 +100,13 @@ CLOUDFLARE_API_TOKEN=<runtime secret>
 `CLOUDFLARE_API_TOKEN` является secret: не помещайте его в repository, argv,
 URL/query, временные файлы, логи или public diagnostics. Передача в worker
 выполняется через private anonymous pipe; child получает explicit sanitized
-allowlisted environment без Cloudflare variables. Не добавляйте model/provider/
-base URL overrides, proxy settings, retry или fallback. Authenticated smoke не
-выполняется bootstrap-ом и остаётся отдельным операторским gate.
+allowlisted environment без Cloudflare variables. Оба adapter используют fixed
+Cloudflare provider/model и этот же worker/transport; новых credential names,
+model/provider/base URL overrides, proxy settings, retry или fallback нет.
+Advisor передаёт только caller-explicit `AssistantReasoningEnvelopeV1` и не
+читает автоматически vault, Search, Self Model, Personal Memory или Simulate Me.
+Authenticated smoke не выполняется bootstrap-ом и остаётся отдельным
+операторским gate.
 
 Для proposal workflow дополнительно требуется `gh` и уже настроенная auth
 сессия. Проверка включается отдельной опцией `--check-gh` и использует только
