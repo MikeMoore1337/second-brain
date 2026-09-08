@@ -103,14 +103,15 @@ Outcome всегда обрабатывается как post-choice data и п�
 для replay. Malformed Journal body или malformed Journal identity, наоборот,
 делают сам case ineligible.
 
-Exclusion classification is exclusive: one classified Journal note increments
-at most one `excluded_decisions` counter. Before replay, apply this first-match
-order: `decision_identity_invalid_or_duplicate`, `decision_body_invalid`,
+Классификация исключений является взаимоисключающей: одна classified Journal
+note увеличивает не более одного counter в `excluded_decisions`. До replay
+проверки выполняются в таком first-match order:
+`decision_identity_invalid_or_duplicate`, `decision_body_invalid`,
 `decision_time_unknown`, `decision_time_not_exact_or_invalid`,
-`decision_option_count_unsupported`, then `decision_option_identity_invalid`.
-The first failing check wins; later applicable failures are not counted. A note
-that passes all six checks is eligible, and an eligible case never receives an
-`excluded_decisions` code.
+`decision_option_count_unsupported`, затем `decision_option_identity_invalid`.
+Побеждает первая failing check; последующие applicable failures не считаются.
+Note, прошедшая все шесть checks, становится eligible, а eligible case никогда
+не получает code из `excluded_decisions`.
 
 Чтобы operation оставалась bounded, одна run обрабатывает не более
 `MAX_DECISION_CASES_V1 = 512` classified Journal cases. Если current scan
@@ -191,6 +192,21 @@ Simulate Me может честно вернуть `abstention/no_matching_evide
 | Current note body/metadata changed and scanner no longer validates it | Current invalid source не используется и не чинится эвристикой; affected claim исключается. Если сама context boundary из-за этого невалидна, используется `prechoice_context_unavailable` по §8.3. |
 | `updated` отсутствует или не позже `D` | Это только отсутствие известного later mutation; не доказательство historical bytes. `created` по-прежнему не является eligibility timestamp. |
 
+### 5.2.1 Детерминированный подсчёт temporal caveats
+
+Единица подсчёта для всех `temporal_caveats` — один eligible Decision Journal
+case, а не source note, claim или отдельный reference. Для каждого eligible
+case каждый applicable code увеличивается не более одного раза: наличие одного
+или нескольких соответствующих sources даёт один increment. Conditions
+считаются независимо и могут co-occur: например, один source с
+`evidence_at > D` и `updated > D` увеличивает и
+`later_evidence_excluded`, и `edited_after_cutoff_excluded`, по одному разу.
+`unknown_evidence_excluded` увеличивается, если хотя бы один candidate source
+имеет `evidence_at=unknown`; аналогично `later_evidence_excluded` — если есть
+source с `evidence_at > D`, а `edited_after_cutoff_excluded` — если есть
+source с `updated > D`. У excluded до §3 cases temporal caveats не считаются:
+их состояние представляется через `excluded_decisions`.
+
 Если текущий vault не позволяет доказать нужную source identity, contract не
 делает вид, что восстановил прошлое. В v1 допускается только current valid
 projection с этой explicit limitation; requirement на точные historical bytes
@@ -244,12 +260,12 @@ whitespace, reasons, evidence, UUIDs и outcome не участвуют в match
 
 Query строится только из allowed Journal fields и не содержит chosen/reasons/
 confidence/expected/actual/reassessment/outcome. Сначала для каждого field
-применяется reversible `E(value)` encoding: exact UTF-8 bytes value идут
-последовательно; bytes из `[A-Za-z0-9._~-]` остаются как ASCII, каждый другой
-byte заменяется на `%` и две uppercase hex digits. Это не semantic rewriting,
-а injective serialization, поэтому multiline text, Unicode и delimiters
+применяется обратимое кодирование `E(value)`: исходные UTF-8 байты value идут
+последовательно; байты из `[A-Za-z0-9._~-]` остаются как ASCII, каждый другой
+байт заменяется на `%` и две uppercase hex digits. Это не смысловая переработка,
+а инъективная сериализация, поэтому многострочный текст, Unicode и разделители
 восстанавливаются однозначно и не становятся control code points. Канонический
-template без trailing newline и с одной physical line:
+шаблон не содержит trailing newline и занимает одну физическую строку:
 
 ```text
 Situation={E(Situation)}|InformationKnownAtDecisionTime={E(Information known at decision time)}|Criteria={E(criterion 1)};{E(criterion 2)};...
@@ -257,10 +273,10 @@ Situation={E(Situation)}|InformationKnownAtDecisionTime={E(Information known at 
 
 `Situation` может быть empty только если existing Journal parser это допустил;
 information и criteria должны оставаться valid по Stage 2. Values берутся как
-current body text без semantic rewriting, затем кодируются только через `E`;
-criteria сохраняют Journal order. Итоговый query проходит existing Simulate
-Me strict UTF-8/NFC/edge-strip/control validation и `1..4096` UTF-8 byte bound.
-Если percent-encoded query слишком велик, он получает
+точный current body text без смысловой переработки, затем кодируются только
+через `E`; criteria сохраняют Journal order. Итоговый query проходит existing
+Simulate Me strict UTF-8/NFC/edge-strip/control validation и `1..4096` UTF-8 byte
+bound. Если percent-encoded query слишком велик, он получает
 `query_too_large_or_invalid` → `prechoice_request_invalid` и не запускает
 branch. Truncation запрещена, а внутренняя validation не переписывает query.
 
@@ -395,11 +411,11 @@ accuracy_non_abstained.numerator = exact_option_match_count
 accuracy_non_abstained.denominator = predicted_decisions
 ```
 
-The `coverage` equations apply only when `coverage` is non-null; it is null
-exactly when `eligible_decisions == 0`. The `accuracy_non_abstained` equations
-apply only when that ratio is non-null; it is null exactly when
-`predicted_decisions == 0`. Null ratios are not dereferenced and do not weaken
-the count equalities above.
+Уравнения для `coverage` применяются только когда `coverage` не равен `null`;
+`coverage` равен `null` ровно при `eligible_decisions == 0`. Уравнения для
+`accuracy_non_abstained` применяются только когда этот ratio не равен `null`;
+он равен `null` ровно при `predicted_decisions == 0`. У `null` ratios нет полей
+для dereference, и это не ослабляет count equalities выше.
 
 `coverage` и `accuracy_non_abstained` не являются confidence, probability,
 quality guarantee или validated personal trait. No minimum sample claim is
@@ -450,19 +466,20 @@ historical_snapshot_unavailable
 Для eligible case после §3 применяется ровно одна first-match mapping из
 следующей таблицы; вторичные причины не создают второй code:
 
-| First-match condition | Exact code | Counter and branch effect |
+| Условие first-match | Exact code | Counter и effect на branch |
 | --- | --- | --- |
-| `SimulateMeRequest` cannot be constructed or fails existing strict request validation, including the percent-encoded query byte bound | `prechoice_request_invalid` | `invalid_count += 1`; no context read and no branch invocation. |
-| Approved Stage 6 policy ID or fingerprint is not the exact v1 identity at the request/branch boundary, or returned policy identity differs | `simulate_me_policy_mismatch` | `invalid_count += 1`; no scoring and no fallback. |
-| The approved context seam reports that historical bytes or edit history are required to decide a source's pre-choice eligibility, but v1 has no historical snapshot input | `historical_context_unreconstructable` | `unavailable_count += 1`; no historical fallback and no branch invocation. Merely excluding later/unknown evidence under §5 is not this code. |
-| Approved filtered current context cannot be built or revalidated because the current report, projection, type, metadata or trust boundary fails; or the validated branch result is `insufficient_or_invalid_current_context` | `prechoice_context_unavailable` | `unavailable_count += 1`; no prediction and no artificial abstention. |
-| The one approved Simulate Me attempt does not reach a terminal result because the operation is unavailable, times out, or is cancelled at the case boundary | `simulate_me_unavailable` | `unavailable_count += 1`; sibling cases continue. Global cancellation uses the top-level code in §7. |
-| A result object is returned but fails `validate_simulate_me_result`, including an impossible selected option or result invariant | `simulate_me_result_invalid` | `invalid_count += 1`; never score as mismatch. |
-| A validated branch result cannot be reconciled with retained target/options or the aggregate's exact composition invariants | `calibration_composition_invalid` | `invalid_count += 1`; no alternate composition or retry. |
+| `SimulateMeRequest` нельзя построить или он не проходит existing strict request validation, включая byte bound percent-encoded query | `prechoice_request_invalid` | `invalid_count += 1`; context не читается, branch не вызывается. |
+| Approved Stage 6 policy ID или fingerprint не совпадает с exact v1 identity на request/branch boundary, либо returned policy identity отличается | `simulate_me_policy_mismatch` | `invalid_count += 1`; scoring и fallback запрещены. |
+| Approved context seam сообщает, что для решения pre-choice eligibility нужны historical bytes или edit history, но v1 не имеет historical snapshot input | `historical_context_unreconstructable` | `unavailable_count += 1`; historical fallback и branch invocation запрещены. Простое исключение later/unknown evidence по §5 не является этим code. |
+| Approved filtered current context нельзя построить или revalidate из-за сбоя current report, projection, type, metadata или trust boundary; либо validated branch result равен `insufficient_or_invalid_current_context` | `prechoice_context_unavailable` | `unavailable_count += 1`; prediction и artificial abstention запрещены. |
+| Единственная approved Simulate Me attempt не достигает terminal result из-за unavailable operation, timeout или cancellation на case boundary | `simulate_me_unavailable` | `unavailable_count += 1`; sibling cases продолжают. Global cancellation использует top-level code из §7. |
+| Returned result object не проходит `validate_simulate_me_result`, включая impossible selected option или result invariant | `simulate_me_result_invalid` | `invalid_count += 1`; mismatch не выставляется. |
+| Validated branch result нельзя согласовать с retained target/options или exact composition invariants aggregate | `calibration_composition_invalid` | `invalid_count += 1`; alternate composition и retry запрещены. |
 
-The mapping is phase-ordered and exclusive: evaluate the rows top to bottom and
-stop at the first applicable row. The fixed arrays still contain every code
-once, including zero counts, and their sums are normative:
+Mapping упорядочена по фазам и является exclusive: rows проверяются сверху
+вниз, и при первом applicable row обработка останавливается. Fixed arrays всё
+равно содержат каждый code ровно один раз, включая zero counts; их суммы
+являются нормативными:
 
 ```text
 excluded_decisions_total = sum(count(code) for code in excluded_decisions)
@@ -470,11 +487,11 @@ unavailable_count = sum(count(code) for code in replay_unavailable)
 invalid_count = sum(count(code) for code in replay_invalid)
 ```
 
-`query_too_large_or_invalid` is a deterministic pre-branch request failure and
-is therefore counted only as `prechoice_request_invalid`; it never invokes
-Simulate Me. `historical_snapshot_unavailable` is incremented once per eligible
-case to make the non-snapshot limitation visible; it is a temporal caveat and
-never changes selection or unavailable/invalid counts.
+`query_too_large_or_invalid` является deterministic pre-branch request failure и
+поэтому считается только как `prechoice_request_invalid`; Simulate Me не
+вызывается. `historical_snapshot_unavailable` увеличивается один раз на
+eligible case, чтобы показать limitation отсутствия snapshot; это temporal
+caveat, который не меняет selection или unavailable/invalid counts.
 
 ## 9. Error and partial-result taxonomy
 
@@ -517,13 +534,13 @@ Fingerprint input is exactly this one-line ASCII JSON, encoded as UTF-8 with
 `sort_keys=true`, separators `,` and `:`, no BOM and no trailing newline:
 
 ```json
-{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","diagnostics":"exclusive-phase-mapped-code-sums-v1","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
+{"decision_eligibility":"current-valid-stage2-journal-exact-time-v1","diagnostics":"exclusive-phase-mapped-code-sums-v1","evidence_cutoff":"exact-aware-inclusive-utc;unknown-excluded-v1","execution":"one-provider-free-simulate-me-replay-per-eligible-decision-v1","leakage":"mask-choice-reasons-confidence-expectation-outcome-later-context-eligible-only-v2","metrics":"bounded-counts-and-exact-ratios-no-confidence-v1","option_identity":"journal-order-exact-label-request-local-id-v1","query_serialization":"utf8-byte-percent-encode-unreserved-v1","source_authority":"current-vault-only-no-historical-snapshot-v1","storage_metadata":"created-updated-never-evidence-time-v1","temporal_caveat_counting":"per-eligible-case-independent-codes-v1","unknown_time":"exclude-and-report-caveat-v1","version":"1"}
 ```
 
 Expected fingerprint:
 
 ```text
-sha256:b6ba7ec3cf52373a8f021e309b6942d389604f8f032a2c51e532ba7b6bc9df2b
+sha256:4e353355521919b0d5253cb76dd6baec27d3f94467b940068c9be7603112439c
 ```
 
 Fingerprint changes when any eligibility, masking, cutoff, execution, option
@@ -590,15 +607,15 @@ database or write path.
 | Case | Required assertion |
 | --- | --- |
 | Correct prediction from pre-choice evidence | exact request-local target/prediction IDs match; `predicted=1`, `match=1`. |
-| Multiline Journal fields | reversible `E` encoding preserves exact UTF-8 field bytes, removes no supported Stage 2 content, and produces a strict-valid single-line query unless the bounded query byte cap is exceeded. |
+| Multiline Journal fields | Обратимое `E` encoding сохраняет exact UTF-8 field bytes, не удаляет supported Stage 2 content и даёт strict-valid single-line query, если не превышен bounded query byte cap. |
 | Valid no-match | Stage 6 `no_matching_evidence` is `abstentions=1`, not unavailable or mismatch. |
 | Valid multiple-support ambiguity | `multiple_options_supported` is abstention; no count/recency tie-break. |
 | Mismatch | Valid prediction with different request-local ID increments mismatch only. |
 | Linked Outcome present | `actual_result`, `reassessment`, `notes` never enter query/context/metrics. |
-| Later evidence | `evidence_at > decision_at` is excluded and caveat-counted; it cannot make a prediction. |
-| Unknown-time evidence | `unknown` is excluded and caveat-counted; no assumption that it pre-existed choice. |
+| Later evidence | `evidence_at > decision_at` is excluded; `later_evidence_excluded` is counted once per eligible case if any such source exists, and it cannot make a prediction. |
+| Unknown-time evidence | `unknown` is excluded; `unknown_evidence_excluded` is counted once per eligible case if any such source exists, with no assumption that it pre-existed choice. |
 | Chosen/reasons/expected-result leakage | For a case already accepted by §3, changing masked sections cannot change request options/query/context, branch availability or selection; a change that breaks §3 is an eligibility exclusion, not a mismatch. |
-| Current edited evidence | `updated > decision_at` source is excluded; no historical body reconstruction or fallback. |
+| Current edited evidence | `updated > decision_at` source is excluded; `edited_after_cutoff_excluded` is counted once per eligible case if any such source exists, with no historical body reconstruction or fallback. |
 | Deleted/missing evidence | UUID miss is excluded/unavailable; Search/path/created does not recover it. |
 | Journal with 9–20 options | excluded as unsupported Stage 6 option count; no truncation or option selection. |
 | Invalid choice, body, duplicate identity or time | excluded with fixed code; never scored as mismatch. |
