@@ -103,6 +103,15 @@ Outcome всегда обрабатывается как post-choice data и п�
 для replay. Malformed Journal body или malformed Journal identity, наоборот,
 делают сам case ineligible.
 
+Exclusion classification is exclusive: one classified Journal note increments
+at most one `excluded_decisions` counter. Before replay, apply this first-match
+order: `decision_identity_invalid_or_duplicate`, `decision_body_invalid`,
+`decision_time_unknown`, `decision_time_not_exact_or_invalid`,
+`decision_option_count_unsupported`, then `decision_option_identity_invalid`.
+The first failing check wins; later applicable failures are not counted. A note
+that passes all six checks is eligible, and an eligible case never receives an
+`excluded_decisions` code.
+
 Чтобы operation оставалась bounded, одна run обрабатывает не более
 `MAX_DECISION_CASES_V1 = 512` classified Journal cases. Если current scan
 содержит больше, чем этот cap, run возвращает top-level
@@ -234,28 +243,20 @@ whitespace, reasons, evidence, UUIDs и outcome не участвуют в match
 
 Query строится только из allowed Journal fields и не содержит chosen/reasons/
 confidence/expected/actual/reassessment/outcome. Канонический template без
-trailing newline:
+trailing newline и с одной physical line:
 
 ```text
-Situation:
-{Situation}
-
-Information known at decision time:
-{Information known at decision time}
-
-Criteria:
-- {criterion 1}
-- {criterion 2}
-...
+Situation: {Situation} · Information known at decision time: {Information known at decision time} · Criteria: {criterion 1}; {criterion 2}; ...
 ```
 
 `Situation` может быть empty только если existing Journal parser это допустил;
 information и criteria должны оставаться valid по Stage 2. Values вставляются
-как current body text без semantic rewriting. Перед branch invocation итоговый
-query проходит existing Simulate Me strict UTF-8/NFC/edge-strip/control
-validation и `1..4096` UTF-8 byte bound. Если query слишком велик или
-содержит запрещённый code point, он не truncates и не normalizes internally:
-case получает `query_too_large_or_invalid` и не запускает branch.
+как current body text без semantic rewriting; template itself не добавляет
+запрещённых control code points. Если вставленное value само содержит такой
+code point, итоговый query проходит existing Simulate Me strict
+UTF-8/NFC/edge-strip/control validation и `1..4096` UTF-8 byte bound, получает
+`query_too_large_or_invalid` → `prechoice_request_invalid` и не запускает
+branch. Truncation запрещена, а внутренняя validation не переписывает query.
 
 Итоговый request имеет ровно этот shape:
 
@@ -386,6 +387,12 @@ coverage.denominator = eligible_decisions
 accuracy_non_abstained.numerator = exact_option_match_count
 accuracy_non_abstained.denominator = predicted_decisions
 ```
+
+The `coverage` equations apply only when `coverage` is non-null; it is null
+exactly when `eligible_decisions == 0`. The `accuracy_non_abstained` equations
+apply only when that ratio is non-null; it is null exactly when
+`predicted_decisions == 0`. Null ratios are not dereferenced and do not weaken
+the count equalities above.
 
 `coverage` и `accuracy_non_abstained` не являются confidence, probability,
 quality guarantee или validated personal trait. No minimum sample claim is
