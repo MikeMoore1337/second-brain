@@ -52,9 +52,11 @@ from second_brain.application.self_model import (
     SelfModelResult,
 )
 from second_brain.application.simulate_me import (
+    SimulateMeAbstentionCode,
     SimulateMeOption,
     SimulateMeRequest,
     SimulateMeResult,
+    SimulateMeResultKind,
 )
 from second_brain.domain.models import (
     AttachmentPolicy,
@@ -510,6 +512,43 @@ def test_eligibility_first_match_maps_time_storage_and_note_metadata(
     assert getattr(replay, "calls", 0) == 0
 
 
+def test_storage_timestamp_failures_follow_first_match_order() -> None:
+    missing_created = _journal_front_matter(_uuid(1), updated="2026-09-05T13:00:01Z")
+    del missing_created["created"]
+    cases = (
+        (missing_created, "decision_body_edited_after_cutoff"),
+        (
+            _journal_front_matter(_uuid(2), created="not-a-time", updated="2026-09-05T13:00:01Z"),
+            "decision_body_edited_after_cutoff",
+        ),
+        (
+            _journal_front_matter(_uuid(3), created="2026-09-05T13:00:01Z", updated="not-a-time"),
+            "decision_body_created_after_cutoff",
+        ),
+        (
+            _journal_front_matter(_uuid(4), created="not-a-time", updated="2026-09-05T11:00:00Z"),
+            "decision_note_metadata_invalid",
+        ),
+        (
+            _journal_front_matter(_uuid(5), created="not-a-time"),
+            "decision_note_metadata_invalid",
+        ),
+    )
+
+    for index, (front_matter, expected) in enumerate(cases, start=1):
+        service, _scanner, context, replay = _service(
+            _snapshot(_journal_document(index, front_matter=front_matter))
+        )
+
+        result = service.execute(RetrospectiveCalibrationRequestV1())
+
+        assert result.metrics.decision_notes_seen == 1
+        assert _counts(result, "excluded_decisions")[expected] == 1
+        assert result.metrics.eligible_decisions == 0
+        assert getattr(context, "calls", 0) == 0
+        assert getattr(replay, "calls", 0) == 0
+
+
 def test_unknown_evidence_time_has_exact_per_case_caveat_only_after_context_boundary() -> None:
     # An unknown-time decision is excluded before context inspection and gets
     # no temporal caveat.  A valid decision with unknown direct evidence does.
@@ -774,6 +813,90 @@ def test_valid_abstention_is_counted_without_materializing_target() -> None:
     assert result.metrics.exact_option_match_count == 0
     assert result.metrics.mismatch_count == 0
     assert replay is not None
+
+
+def test_unrelated_belief_is_not_required_for_valid_prediction() -> None:
+    snapshot = _snapshot(
+        _journal_document(1),
+        _direct_document(2, "Второй вариант"),
+        _direct_document(3, "Несвязанное убеждение", self_kind="belief"),
+    )
+    service, _scanner, _context, _replay = _service(snapshot)
+
+    result = service.execute(RetrospectiveCalibrationRequestV1())
+
+    assert result.metrics.predicted_decisions == 1
+    assert result.metrics.exact_option_match_count == 1
+    assert result.metrics.mismatch_count == 0
+    assert _counts(result, "replay_invalid")["calibration_composition_invalid"] == 0
+
+
+@pytest.mark.parametrize(
+    ("context_notes", "returned_code", "expected_abstentions", "expected_invalid"),
+    (
+        ((), SimulateMeAbstentionCode.NO_MATCHING_EVIDENCE, 1, 0),
+        ((), SimulateMeAbstentionCode.MULTIPLE_OPTIONS_SUPPORTED, 0, 1),
+        (
+            (_direct_document(2, "Второй вариант"),),
+            SimulateMeAbstentionCode.NO_MATCHING_EVIDENCE,
+            0,
+            1,
+        ),
+        (
+            (_direct_document(2, "Второй вариант"),),
+            SimulateMeAbstentionCode.MULTIPLE_OPTIONS_SUPPORTED,
+            0,
+            1,
+        ),
+        (
+            (
+                _direct_document(2, "Первый вариант"),
+                _direct_document(3, "Второй вариант"),
+            ),
+            SimulateMeAbstentionCode.MULTIPLE_OPTIONS_SUPPORTED,
+            1,
+            0,
+        ),
+        (
+            (
+                _direct_document(2, "Первый вариант"),
+                _direct_document(3, "Второй вариант"),
+            ),
+            SimulateMeAbstentionCode.NO_MATCHING_EVIDENCE,
+            0,
+            1,
+        ),
+    ),
+)
+def test_abstention_code_matches_supported_option_cardinality(
+    context_notes: tuple[MarkdownDocument, ...],
+    returned_code: SimulateMeAbstentionCode,
+    expected_abstentions: int,
+    expected_invalid: int,
+) -> None:
+    class _AbstentionWithCode:
+        def execute(
+            self,
+            request: SimulateMeRequest,
+            *,
+            context: SelfModelResult,
+        ) -> SimulateMeResult:
+            valid = BuildRetrospectiveCalibrationReplay().execute(request, context=context)
+            return replace(
+                valid,
+                kind=SimulateMeResultKind.ABSTENTION,
+                selected_option=None,
+                abstention_code=returned_code,
+            )
+
+    service, _scanner, _context, _replay = _service(
+        _snapshot(_journal_document(1), *context_notes), replay=_AbstentionWithCode()
+    )
+
+    result = service.execute(RetrospectiveCalibrationRequestV1())
+
+    assert result.metrics.abstentions == expected_abstentions
+    assert _counts(result, "replay_invalid")["calibration_composition_invalid"] == expected_invalid
 
 
 def test_mismatch_compares_only_request_local_ids() -> None:
