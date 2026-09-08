@@ -1300,28 +1300,31 @@ def _has_non_time_personal_memory_diagnostic(codes: frozenset[str]) -> bool:
 
 def _storage_cutoff_code(note: NoteRecord, decision_at: datetime) -> str | None:
     raw = note.front_matter
-    if "created" not in raw:
+    created: datetime | None = None
+    if "created" in raw:
+        try:
+            parsed_created = parse_rfc3339(raw["created"])
+        except TypeError, ValueError, OverflowError:
+            pass
+        else:
+            if _same_instant(note.created, parsed_created):
+                created = parsed_created
+                if created.astimezone(UTC) > decision_at:
+                    return RetrospectiveCalibrationExcludedCodeV1.CREATED_AFTER_CUTOFF.value
+
+    updated_valid = "updated" not in raw and note.updated is None
+    if "updated" in raw:
+        try:
+            parsed_updated = parse_rfc3339(raw["updated"])
+        except TypeError, ValueError, OverflowError:
+            pass
+        else:
+            updated_valid = _same_instant(note.updated, parsed_updated)
+            if updated_valid and parsed_updated.astimezone(UTC) > decision_at:
+                return RetrospectiveCalibrationExcludedCodeV1.EDITED_AFTER_CUTOFF.value
+
+    if created is None or not updated_valid:
         return RetrospectiveCalibrationExcludedCodeV1.METADATA_INVALID.value
-    try:
-        created = parse_rfc3339(raw["created"])
-    except TypeError, ValueError, OverflowError:
-        return RetrospectiveCalibrationExcludedCodeV1.METADATA_INVALID.value
-    if not _same_instant(note.created, created):
-        return RetrospectiveCalibrationExcludedCodeV1.METADATA_INVALID.value
-    if created.astimezone(UTC) > decision_at:
-        return RetrospectiveCalibrationExcludedCodeV1.CREATED_AFTER_CUTOFF.value
-    if "updated" not in raw:
-        if note.updated is not None:
-            return RetrospectiveCalibrationExcludedCodeV1.METADATA_INVALID.value
-        return None
-    try:
-        updated = parse_rfc3339(raw["updated"])
-    except TypeError, ValueError, OverflowError:
-        return RetrospectiveCalibrationExcludedCodeV1.METADATA_INVALID.value
-    if not _same_instant(note.updated, updated):
-        return RetrospectiveCalibrationExcludedCodeV1.METADATA_INVALID.value
-    if updated.astimezone(UTC) > decision_at:
-        return RetrospectiveCalibrationExcludedCodeV1.EDITED_AFTER_CUTOFF.value
     return None
 
 
@@ -1604,7 +1607,14 @@ def _stage6_composition_is_safe(
             normalized_claim = normalize_simulate_me_text(claim.claim, MAX_LABEL_BYTES)
         except SimulateMeError, UnicodeError, ValueError:
             continue
+        matched_options = tuple(
+            option
+            for option, normalized_option in normalized_options
+            if normalized_claim == normalized_option
+        )
         if claim.dimension is SelfModelDimension.BELIEF:
+            if not matched_options:
+                continue
             expected_contextual_ref = SimulateMeContextualEvidenceRef(
                 claim_id=source.note_id,
                 dimension=SimulateMeDimension.BELIEF,
@@ -1666,7 +1676,16 @@ def _stage6_composition_is_safe(
             key=lambda ref: str(ref.claim_id),
         )
     )
-    return result.evidence_refs == expected_abstention_refs
+    if len(supported_option_ids) == 0:
+        expected_abstention_code = SimulateMeAbstentionCode.NO_MATCHING_EVIDENCE
+    elif len(supported_option_ids) >= 2:
+        expected_abstention_code = SimulateMeAbstentionCode.MULTIPLE_OPTIONS_SUPPORTED
+    else:
+        return False
+    return (
+        result.abstention_code is expected_abstention_code
+        and result.evidence_refs == expected_abstention_refs
+    )
 
 
 def _eligible_sort_key(case: _EligibleCase) -> tuple[datetime, str, str]:
