@@ -1,5 +1,5 @@
 policy_version: night-shift-v1
-schema_version: 1
+schema_version: 2
 enabled_by_default: false
 morning_cutoff_local: "08:00"
 timezone: Europe/Moscow
@@ -29,11 +29,6 @@ risk_lanes:
     human_merge_required: true
     start_allowed: false
 
-verdicts:
-  - "NIGHT_SHIFT: FIX_REQUIRED"
-  - "NIGHT_SHIFT: MERGE_READY"
-  - "NIGHT_SHIFT: HUMAN_REQUIRED"
-
 red_gates:
   - canonical_schema_or_version
   - evidence_kind
@@ -57,7 +52,6 @@ red_gates:
 
 failure_budget:
   max_tasks_per_night: 4
-  max_review_fix_cycles_per_task: 3
   max_ci_fix_cycles_per_task: 3
   max_scope_expansion: 0
   flaky_ci_retry_requires_no_code_change: true
@@ -80,6 +74,8 @@ merge_gate:
   required_checks:
     - quality
     - windows-ssl-regression
+  required_statuses:
+    - checks
   method: squash
 
 post_task_cleanup:

@@ -38,14 +38,6 @@ class TaskState(StrEnum):
     BLOCKED = "blocked"
 
 
-class NightShiftVerdict(StrEnum):
-    """Exact reviewer verdict vocabulary."""
-
-    FIX_REQUIRED = "NIGHT_SHIFT: FIX_REQUIRED"
-    MERGE_READY = "NIGHT_SHIFT: MERGE_READY"
-    HUMAN_REQUIRED = "NIGHT_SHIFT: HUMAN_REQUIRED"
-
-
 class TaskSelectionSource(StrEnum):
     """Allowed sources for selecting one next task."""
 
@@ -79,8 +71,9 @@ class CheckConclusion(StrEnum):
 
 
 SUPPORTED_POLICY_VERSION: Final[str] = "night-shift-v1"
-SUPPORTED_SCHEMA_VERSION: Final[int] = 1
+SUPPORTED_SCHEMA_VERSION: Final[int] = 2
 REQUIRED_MERGE_CHECKS: Final[frozenset[str]] = frozenset({"quality", "windows-ssl-regression"})
+REQUIRED_MERGE_STATUS_CONTEXTS: Final[frozenset[str]] = frozenset({"checks"})
 SUPPORTED_RED_GATES: Final[frozenset[str]] = frozenset(
     {
         "canonical_schema_or_version",
@@ -133,7 +126,6 @@ class FailureBudget:
     """Per-night and per-task limits; flaky reruns are evidence-bound."""
 
     max_tasks_per_night: int
-    max_review_fix_cycles_per_task: int
     max_ci_fix_cycles_per_task: int
     max_scope_expansion: int
     flaky_ci_retry_requires_no_code_change: bool
@@ -163,7 +155,6 @@ class NightShiftPolicy:
     timezone: str
     task_states: tuple[TaskState, ...]
     risk_lanes: tuple[RiskPolicy, ...]
-    verdicts: tuple[NightShiftVerdict, ...]
     red_gates: tuple[str, ...]
     failure_budget: FailureBudget
     dependency_satisfied_state: TaskState
@@ -172,6 +163,7 @@ class NightShiftPolicy:
     allow_roadmap_next_task: bool
     allow_create_next_issue: bool
     required_checks: tuple[str, ...]
+    required_statuses: tuple[str, ...]
     merge_method: str
     post_task_cleanup: PostTaskCleanupPolicy
 
@@ -235,7 +227,6 @@ class FailureBudgetUsage:
     """Counters reconstructed from GitHub history, never persisted here."""
 
     tasks_started: int = 0
-    review_fix_cycles: int = 0
     ci_fix_cycles: int = 0
     scope_expansions: int = 0
     flaky_ci_retries: int = 0
@@ -259,21 +250,16 @@ class MergeGateEvidence:
     """Evidence required before a GREEN squash merge can be considered."""
 
     risk_lane: RiskLane
-    review_verdict: NightShiftVerdict
     current_head_sha: str
-    reviewed_head_sha: str
     current_base_ref: str
-    reviewed_base_ref: str
     current_base_sha: str
-    reviewed_base_sha: str
     check_evidence: Mapping[str, CheckRunEvidence]
     unresolved_review_threads: int
-    accepted_blockers: int
+    unresolved_blockers: int
     mergeable_clean: bool
     dependency_satisfied: bool
     human_gate: bool
     scope_unchanged: bool
-    review_is_latest: bool | None = None
 
 
 def load_night_shift_policy(path: Path) -> NightShiftPolicy:
@@ -371,11 +357,6 @@ def evaluate_failure_budget(
     limits = policy.failure_budget
     operation_counters = (
         (usage.tasks_started, limits.max_tasks_per_night, "max_tasks_per_night"),
-        (
-            usage.review_fix_cycles,
-            limits.max_review_fix_cycles_per_task,
-            "max_review_fix_cycles_per_task",
-        ),
         (usage.ci_fix_cycles, limits.max_ci_fix_cycles_per_task, "max_ci_fix_cycles_per_task"),
     )
     for used, maximum, name in operation_counters:
@@ -407,29 +388,12 @@ def evaluate_merge_gate(policy: NightShiftPolicy, evidence: MergeGateEvidence) -
 
     if evidence.risk_lane is not RiskLane.GREEN:
         return _human(f"risk_lane_{evidence.risk_lane.value.lower()}_cannot_auto_merge")
-    if evidence.review_is_latest is not True:
-        return _blocked("review_verdict_not_latest")
-    if evidence.review_verdict is NightShiftVerdict.HUMAN_REQUIRED:
-        return _human("review_verdict_is_human_required")
-    if evidence.review_verdict is not NightShiftVerdict.MERGE_READY:
-        return _blocked("review_verdict_is_not_merge_ready")
-    if (
-        evidence.current_base_ref != _EXPECTED_BASE_REF
-        or evidence.reviewed_base_ref != _EXPECTED_BASE_REF
-    ):
+    if evidence.current_base_ref != _EXPECTED_BASE_REF:
         return _blocked("merge_target_ref_is_not_main")
-    if not _is_full_commit_sha(evidence.current_base_sha) or not _is_full_commit_sha(
-        evidence.reviewed_base_sha
-    ):
-        return _blocked("reviewed_base_sha_is_not_full_commit_sha")
-    if evidence.current_base_sha != evidence.reviewed_base_sha:
-        return _blocked("reviewed_base_sha_is_not_current_base")
-    if not _is_full_commit_sha(evidence.current_head_sha) or not _is_full_commit_sha(
-        evidence.reviewed_head_sha
-    ):
-        return _blocked("reviewed_head_sha_is_not_full_commit_sha")
-    if evidence.current_head_sha != evidence.reviewed_head_sha:
-        return _blocked("reviewed_head_sha_is_not_current_head")
+    if not _is_full_commit_sha(evidence.current_base_sha):
+        return _blocked("current_base_sha_is_not_full_commit_sha")
+    if not _is_full_commit_sha(evidence.current_head_sha):
+        return _blocked("current_head_sha_is_not_full_commit_sha")
     if evidence.human_gate:
         return _human("human_gate_present")
     if not evidence.dependency_satisfied:
@@ -440,26 +404,26 @@ def evaluate_merge_gate(policy: NightShiftPolicy, evidence: MergeGateEvidence) -
         return _blocked("pull_request_is_not_mergeable_clean")
     if evidence.unresolved_review_threads:
         return _blocked("unresolved_review_threads_present")
-    if evidence.accepted_blockers:
-        return _human("accepted_review_blocker_present")
-    for check in policy.required_checks:
-        check_evidence = evidence.check_evidence.get(check)
+    if evidence.unresolved_blockers:
+        return _human("unresolved_blockers_present")
+    for gate_name in (*policy.required_checks, *policy.required_statuses):
+        check_evidence = evidence.check_evidence.get(gate_name)
         if check_evidence is None or not _check_is_success(check_evidence.conclusion):
-            return _blocked(f"required_check_not_green:{check}")
+            return _blocked(f"required_check_not_green:{gate_name}")
         if (
             not _is_full_commit_sha(check_evidence.head_sha)
             or check_evidence.head_sha != evidence.current_head_sha
         ):
-            return _blocked(f"required_check_not_bound_to_current_head:{check}")
+            return _blocked(f"required_check_not_bound_to_current_head:{gate_name}")
         if (
             not _is_full_commit_sha(check_evidence.base_sha or "")
             or check_evidence.base_sha != evidence.current_base_sha
         ):
-            return _blocked(f"required_check_not_bound_to_current_base:{check}")
+            return _blocked(f"required_check_not_bound_to_current_base:{gate_name}")
         if check_evidence.run_id <= 0:
-            return _blocked(f"required_check_run_id_missing:{check}")
+            return _blocked(f"required_check_run_id_missing:{gate_name}")
         if check_evidence.run_is_latest is not True:
-            return _blocked(f"required_check_run_not_latest:{check}")
+            return _blocked(f"required_check_run_not_latest:{gate_name}")
     return GateResult(GateStatus.MERGE_READY, ("all_green_merge_gates_passed",))
 
 
@@ -475,7 +439,6 @@ def _parse_policy(raw: object) -> NightShiftPolicy:
             "timezone",
             "task_states",
             "risk_lanes",
-            "verdicts",
             "red_gates",
             "failure_budget",
             "dependency_policy",
@@ -505,9 +468,6 @@ def _parse_policy(raw: object) -> NightShiftPolicy:
             "task_states must contain every supported task state exactly once"
         )
     risk_lanes = _parse_risk_lanes(data["risk_lanes"])
-    verdicts = _enum_list(data["verdicts"], NightShiftVerdict, "verdicts")
-    if set(verdicts) != set(NightShiftVerdict):
-        raise NightShiftConfigError("verdicts must contain every supported verdict exactly once")
     red_gates = _unique_strings(data["red_gates"], "red_gates")
     if set(red_gates) != SUPPORTED_RED_GATES:
         raise NightShiftConfigError("red_gates must match the supported RED gate vocabulary")
@@ -517,7 +477,6 @@ def _parse_policy(raw: object) -> NightShiftPolicy:
         failure_data,
         {
             "max_tasks_per_night",
-            "max_review_fix_cycles_per_task",
             "max_ci_fix_cycles_per_task",
             "max_scope_expansion",
             "flaky_ci_retry_requires_no_code_change",
@@ -527,11 +486,6 @@ def _parse_policy(raw: object) -> NightShiftPolicy:
     failure_budget = FailureBudget(
         max_tasks_per_night=_integer(
             failure_data["max_tasks_per_night"], "failure_budget.max_tasks_per_night", minimum=1
-        ),
-        max_review_fix_cycles_per_task=_integer(
-            failure_data["max_review_fix_cycles_per_task"],
-            "failure_budget.max_review_fix_cycles_per_task",
-            minimum=0,
         ),
         max_ci_fix_cycles_per_task=_integer(
             failure_data["max_ci_fix_cycles_per_task"],
@@ -579,12 +533,19 @@ def _parse_policy(raw: object) -> NightShiftPolicy:
         )
 
     merge_data = _mapping(data["merge_gate"], "merge_gate")
-    _require_exact_keys(merge_data, {"required_checks", "method"}, "merge_gate")
+    _require_exact_keys(
+        merge_data, {"required_checks", "required_statuses", "method"}, "merge_gate"
+    )
     required_checks = _unique_strings(merge_data["required_checks"], "merge_gate.required_checks")
     if not REQUIRED_MERGE_CHECKS.issubset(required_checks):
         raise NightShiftConfigError(
             "merge_gate.required_checks must include quality and windows-ssl-regression"
         )
+    required_statuses = _unique_strings(
+        merge_data["required_statuses"], "merge_gate.required_statuses"
+    )
+    if not REQUIRED_MERGE_STATUS_CONTEXTS.issubset(required_statuses):
+        raise NightShiftConfigError("merge_gate.required_statuses must include checks")
     merge_method = _string(merge_data["method"], "merge_gate.method")
     if merge_method != "squash":
         raise NightShiftConfigError("merge_gate.method must be squash")
@@ -644,7 +605,6 @@ def _parse_policy(raw: object) -> NightShiftPolicy:
         timezone=timezone,
         task_states=task_states,
         risk_lanes=risk_lanes,
-        verdicts=verdicts,
         red_gates=red_gates,
         failure_budget=failure_budget,
         dependency_satisfied_state=satisfied_state,
@@ -657,6 +617,7 @@ def _parse_policy(raw: object) -> NightShiftPolicy:
             selection_data["allow_create_next_issue"], "task_selection.allow_create_next_issue"
         ),
         required_checks=required_checks,
+        required_statuses=required_statuses,
         merge_method=merge_method,
         post_task_cleanup=cleanup_policy,
     )
@@ -808,6 +769,7 @@ def _human(reason: str) -> GateResult:
 
 __all__ = [
     "REQUIRED_MERGE_CHECKS",
+    "REQUIRED_MERGE_STATUS_CONTEXTS",
     "SUPPORTED_POLICY_VERSION",
     "SUPPORTED_RED_GATES",
     "SUPPORTED_SCHEMA_VERSION",
@@ -821,7 +783,6 @@ __all__ = [
     "MergeGateEvidence",
     "NightShiftConfigError",
     "NightShiftPolicy",
-    "NightShiftVerdict",
     "PostTaskCleanupEvidence",
     "PostTaskCleanupPolicy",
     "RiskLane",

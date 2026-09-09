@@ -168,9 +168,17 @@ Bounded repository protocol для явно активированного overn
 [`docs/automation/night-shift-v1.md`](docs/automation/night-shift-v1.md), а его
 машиночитаемая policy находится в `config/night-shift-v1.yaml`.
 
+Постоянное owner-level решение: Codex Code Review отключён и не используется
+как release gate, поскольку расходует Codex usage. Готовность определяется
+детерминированными тестами, static analysis, exact-head CI, обязательным
+aggregate GitHub status `checks`, отсутствием известных unresolved BLOCKER/HIGH,
+mergeability PR и явно требуемыми human/external gates. Отдельный Codex
+reviewer или LLM verdict для merge не создаётся.
+
 - `enabled_by_default: false`: обычная задача не получает autonomous commit,
   push, PR или merge права из-за наличия policy;
-- GitHub issue/PR state, exact SHA, review threads и CI остаются source of truth;
+- GitHub issue/PR state, existing review threads, exact SHA и CI остаются source
+  of truth;
 - RED/YELLOW gates, failure budget и dependency blocking нельзя обходить;
 - Night Shift не ослабляет Safe Write, privacy, Python 3.14 и границу
   `second-brain-vault`;
