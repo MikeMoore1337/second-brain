@@ -5,7 +5,7 @@
   --sb-glass-shadow:inset 0 1px 0 #ffffff35,inset 0 -1px 0 #ffffff0a,0 12px 32px #0004;
   --sb-glass-blur:blur(20px) saturate(135%);
 }
-.topbar { background:#100c18d9; border-bottom:1px solid var(--sb-glass-edge); box-shadow:inset 0 1px #ffffff18; backdrop-filter:var(--sb-glass-blur); }
+.topbar { background:#100c18d9; border-bottom:0; box-shadow:none; backdrop-filter:var(--sb-glass-blur); }
 .section-dropdown { background:var(--sb-glass-fill),#110c1df7; backdrop-filter:var(--sb-glass-blur); border-color:var(--sb-glass-edge); box-shadow:var(--sb-glass-shadow); }
 .sections-trigger,.quick-nav > a { background:var(--sb-glass-fill); box-shadow:inset 0 1px #ffffff20; border-color:var(--sb-glass-edge); }
 .motion-setting { position:relative; justify-content:space-between; border:0; border-top:1px solid var(--sb-glass-edge); border-radius:0; background:transparent; margin:0; text-align:left; }
@@ -75,3 +75,20 @@ main .section-heading { display:block; margin-bottom:20px; }
 @media(prefers-reduced-transparency:reduce) { .topbar,.quick-nav,.section-dropdown { background:#100c18; backdrop-filter:none; } }
 
 .search-results:empty { display:none; }
+
+/* Open edges and a compact closing thought, with original thematic art. */
+.motion-world main > section.pillars { padding:12px 16px; margin-top:24px; }
+.motion-world .pillar-card { min-height:0; padding:16px; isolation:isolate; }
+.pillar-card::after { display:none; }
+.pillar-backdrop { position:absolute; z-index:-1; right:-16px; top:calc(50% - 80px); width:160px; height:160px; opacity:.16; pointer-events:none; mask-image:linear-gradient(90deg,transparent,#000 60%); animation:pillar-drift 14s cubic-bezier(.77,0,.175,1) infinite alternate; animation-play-state:paused; }
+.pillar-card-growth .pillar-backdrop { animation-delay:-7s; }
+[data-page-motion=true] .pillars[data-in-view=true] .pillar-backdrop { animation-play-state:running; }
+@keyframes pillar-drift { from { transform:translate3d(0,5px,0) rotate(-5deg); } to { transform:translate3d(-8px,-5px,0) rotate(4deg); } }
+@media(max-width:600px) {
+  .motion-world main > section.pillars { padding:8px 12px; }
+  .motion-world .pillar-grid { gap:4px; }
+  .motion-world .pillar-card { padding:12px 4px; }
+  .pillar-backdrop { width:128px; height:128px; top:calc(50% - 64px); opacity:.12; }
+  .pillar-card-growth .pillar-backdrop { animation:none; }
+}
+@media(prefers-reduced-motion:reduce) { .pillar-backdrop { animation:none; transform:none; } }

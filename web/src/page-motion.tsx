@@ -28,7 +28,7 @@ export function PageMotion({ children }: { children: ReactNode }) {
     return () => { observer?.disconnect(); media.removeEventListener("change", update); document.removeEventListener("visibilitychange", update); };
   }, []);
   return <PageMotionContext.Provider value={{ paused, setPaused }}><div className="motion-world" data-page-motion={available && !paused}>
-    <div className="page-atmosphere" aria-hidden="true"><i className="page-light page-light-left" /><i className="page-light page-light-right" /><div className="page-filament" /></div>
+    <div className="page-atmosphere" aria-hidden="true"><i className="page-light page-light-left" /><i className="page-light page-light-right" /></div>
     {children}
   </div></PageMotionContext.Provider>;
 }

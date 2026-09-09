@@ -4,6 +4,8 @@ import { CinematicHero } from "./cinematic-hero";
 import { PageMotion } from "./page-motion";
 import { FoldSection, revealDestination } from "./fold-section";
 import { SectionMenu } from "./section-menu";
+import memoryBackdrop from "./assets/icons/memory-detail-192.webp";
+import growthBackdrop from "./assets/icons/growth-detail-192.webp";
 import brainMark from "./assets/brain-mark-48.webp";
 import brainMark2x from "./assets/brain-mark-96.webp";
 
@@ -93,7 +95,7 @@ export function App(): ReactElement {
                 <FoldSection id="self-retrieval" title="Сбор контекста" icon="self-retrieval"><SelfRetrievalSurface /></FoldSection>
                 <FoldSection id="diagnostics" title="Диагностика" icon="diagnostics"><DiagnosticsSurface /></FoldSection>
               </div>
-              <section className="pillars" aria-labelledby="pillars-title"><div className="section-heading"><p className="eyebrow">Две центральные части</p><h2 id="pillars-title">Система, которая растёт вместе с тобой.</h2></div><div className="pillar-grid"><article className="pillar-card pillar-card-memory" id="memory"><div className="card-topline"><span className="card-index">01</span><span className="card-dot" aria-hidden="true" /></div><Icon name="memory" size={64} className="section-art" /><h3>Память</h3><p>Собирай идеи, источники и наблюдения в надёжную личную память.</p><div className="card-meta"><span>База знаний</span><Icon name="open" size={18} /></div></article><article className="pillar-card pillar-card-growth" id="growth"><div className="card-topline"><span className="card-index">02</span><span className="card-dot" aria-hidden="true" /></div><Icon name="growth" size={64} className="section-art" /><h3>Развитие</h3><p>Превращай накопленное знание в ясность, навыки и следующий шаг.</p><div className="card-meta"><span>Личное развитие</span><Icon name="open" size={18} /></div></article></div></section>
+              <section className="pillars" aria-labelledby="pillars-title"><div className="section-heading"><p className="eyebrow">Две центральные части</p><h2 id="pillars-title">Система, которая растёт вместе с тобой.</h2></div><div className="pillar-grid"><article className="pillar-card pillar-card-memory" id="memory"><img className="pillar-backdrop" src={memoryBackdrop} width={192} height={192} alt="" aria-hidden="true" loading="lazy" decoding="async" /><div className="card-topline"><span className="card-index">01</span><span className="card-dot" aria-hidden="true" /></div><Icon name="memory" size={64} className="section-art" /><h3>Память</h3><p>Собирай идеи, источники и наблюдения в надёжную личную память.</p><div className="card-meta"><span>База знаний</span><Icon name="open" size={18} /></div></article><article className="pillar-card pillar-card-growth" id="growth"><img className="pillar-backdrop" src={growthBackdrop} width={192} height={192} alt="" aria-hidden="true" loading="lazy" decoding="async" /><div className="card-topline"><span className="card-index">02</span><span className="card-dot" aria-hidden="true" /></div><Icon name="growth" size={64} className="section-art" /><h3>Развитие</h3><p>Превращай накопленное знание в ясность, навыки и следующий шаг.</p><div className="card-meta"><span>Личное развитие</span><Icon name="open" size={18} /></div></article></div></section>
             </main>
             <footer className="footer"><span>Локально по умолчанию</span><span className="footer-line" aria-hidden="true" /><span>Приватные знания, осознанное развитие</span></footer>
           </div>

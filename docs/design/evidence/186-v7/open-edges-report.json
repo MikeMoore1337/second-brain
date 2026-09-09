@@ -1,0 +1,52 @@
+[
+  {
+    "width": 320,
+    "height": 308.125
+  },
+  {
+    "width": 360,
+    "height": 308.125
+  },
+  {
+    "width": 390,
+    "height": 286.4375,
+    "frames": {
+      "median": 16.699999999999818,
+      "p95": 16.799999999999727,
+      "max": 16.800000000000182
+    },
+    "axe": [],
+    "pause": "stable",
+    "offscreen": "paused",
+    "reduced": "none"
+  },
+  {
+    "width": 430,
+    "height": 264.75
+  },
+  {
+    "width": 768,
+    "height": 177.0625
+  },
+  {
+    "width": 1024,
+    "height": 155.375
+  },
+  {
+    "width": 1440,
+    "height": 155.375,
+    "frames": {
+      "median": 16.699999999999818,
+      "p95": 16.799999999999272,
+      "max": 16.800000000000182
+    },
+    "axe": [],
+    "pause": "stable",
+    "offscreen": "paused",
+    "reduced": "none"
+  },
+  {
+    "width": 1920,
+    "height": 155.375
+  }
+]

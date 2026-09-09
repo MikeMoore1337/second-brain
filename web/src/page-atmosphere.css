@@ -4,7 +4,6 @@
 .page-light { position:absolute; width:48vw; height:90vh; border-radius:50%; opacity:.45; background:radial-gradient(ellipse,#6d28d93b,transparent 68%); animation:page-breathe 18s ease-in-out infinite alternate; }
 .page-light-left { left:-27vw; top:0; }
 .page-light-right { right:-27vw; bottom:0; animation-delay:-9s; }
-.page-filament { position:absolute; inset:0; background:linear-gradient(90deg,transparent 3%,#c49aff18 3.05%,transparent 3.15%,transparent 96.8%,#c49aff18 96.9%,transparent 97%); }
 .topbar { position:sticky; top:0; z-index:40; background:#050407f5; }
 .brand-brain { display:block; width:44px; height:44px; object-fit:contain; transition:filter 180ms; }
 .brand:hover .brand-brain { filter:drop-shadow(0 0 8px #8b5cf680); }
