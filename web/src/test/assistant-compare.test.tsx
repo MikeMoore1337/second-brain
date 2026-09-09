@@ -138,12 +138,16 @@ describe("Assistant + Compare Stage 7 surface", () => {
   it("ignores an older response and never steals focus when requests complete out of order", async () => {
     let resolveFirst: ((value: Response) => void) | undefined;
     const first = new Promise<Response>((resolve) => { resolveFirst = resolve; });
+    const currentCompare = {
+      ...compareResult,
+      delta: {
+        ...compareResult.delta,
+        explanation: "Актуальный результат сравнения",
+      },
+    };
     vi.spyOn(window, "fetch")
       .mockReturnValueOnce(first)
-      .mockResolvedValueOnce(jsonResponse({
-        ...assistantResult,
-        rationale: ["Новый результат"],
-      }));
+      .mockResolvedValueOnce(jsonResponse(currentCompare));
     const host = await renderSurface();
     await fillRequired(host);
     const task = host.querySelector<HTMLTextAreaElement>("textarea");
@@ -157,7 +161,7 @@ describe("Assistant + Compare Stage 7 surface", () => {
       form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
     expect(document.activeElement).toBe(task);
-    expect(host.textContent).not.toContain("Новый результат");
+    expect(host.textContent).toContain("Актуальный результат сравнения");
 
     await act(async () => {
       resolveFirst?.(jsonResponse({ ...assistantResult, rationale: ["Устаревший результат"] }));
@@ -165,6 +169,7 @@ describe("Assistant + Compare Stage 7 surface", () => {
     });
 
     expect(host.textContent).not.toContain("Устаревший результат");
+    expect(host.textContent).toContain("Актуальный результат сравнения");
     expect(document.activeElement).toBe(task);
   });
 
