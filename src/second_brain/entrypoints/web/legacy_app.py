@@ -11,7 +11,7 @@ from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr
 from starlette.concurrency import run_in_threadpool
@@ -77,7 +77,15 @@ from second_brain.application.writes import (
 from second_brain.config import ConfigurationError
 from second_brain.domain.models import NoteType, parse_uuid7
 
-from .auth import configured_authority_port, trusted_authorities_from_scope
+from .auth import (
+    AUTH_MODE_APP_STATE_KEY,
+    WEB_AUTH_DISABLED,
+    WEB_AUTH_GITHUB,
+    WebAuthMode,
+    configured_authority_port,
+    trusted_authorities_from_scope,
+    web_index_response,
+)
 from .diagnostics import (
     DiagnosticsRequestPayload,
     DiagnosticsService,
@@ -2115,21 +2123,21 @@ def create_app(
         )
 
     @app.get("/", include_in_schema=False)
-    def index() -> Response:
-        return react_index()
+    def index(request: Request) -> Response:
+        return react_index(request)
 
     @app.get("/react", include_in_schema=False)
     @app.get("/react/", include_in_schema=False)
-    def react_index() -> Response:
+    def react_index(request: Request) -> Response:
         """Serve the single production React GUI after the parity build."""
 
-        if not REACT_INDEX_FILE.is_file():
-            return Response(
-                content="Для запуска нужен собранный React-интерфейс.",
-                status_code=503,
-                media_type="text/plain",
-            )
-        return FileResponse(REACT_INDEX_FILE, media_type="text/html")
+        auth_mode = cast(
+            WebAuthMode,
+            getattr(request.app.state, AUTH_MODE_APP_STATE_KEY, WEB_AUTH_DISABLED),
+        )
+        if auth_mode not in {WEB_AUTH_DISABLED, WEB_AUTH_GITHUB}:
+            auth_mode = WEB_AUTH_DISABLED
+        return web_index_response(REACT_INDEX_FILE, auth_mode=auth_mode)
 
     @app.get("/healthz", include_in_schema=False)
     def healthz() -> JSONResponse:

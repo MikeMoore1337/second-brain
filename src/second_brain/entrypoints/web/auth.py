@@ -23,7 +23,6 @@ from fastapi import FastAPI, Request
 from pydantic import ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from starlette.responses import (
-    FileResponse,
     HTMLResponse,
     JSONResponse,
     PlainTextResponse,
@@ -45,6 +44,7 @@ SESSION_COOKIE_NAME: Final[str] = "second_brain_session"
 OAUTH_STATE_COOKIE_NAME: Final[str] = "second_brain_oauth_state"
 AUTH_TRUSTED_AUTHORITIES_SCOPE_KEY: Final[str] = "second_brain.auth.trusted_authorities"
 AUTH_USER_ID_SCOPE_KEY: Final[str] = "second_brain.auth.user_id"
+AUTH_MODE_APP_STATE_KEY: Final[str] = "second_brain.auth.mode"
 MAX_COOKIE_HEADER_BYTES: Final[int] = 8 * 1024
 MAX_SESSION_COOKIE_BYTES: Final[int] = 1024
 MAX_OAUTH_STATE_BYTES: Final[int] = 512
@@ -523,6 +523,10 @@ def _state_digest(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+class OAuthStateCapacityError(RuntimeError):
+    """Raised when issuing another OAuth state would evict a live state."""
+
+
 @dataclass(slots=True)
 class OAuthStateStore:
     """Bounded process-local one-time state store; only digests are retained."""
@@ -543,19 +547,17 @@ class OAuthStateStore:
         if type(self.max_entries) is not int or not 1 <= self.max_entries <= MAX_STATE_ENTRIES:
             raise ValueError("invalid OAuth state store bound")
 
-    def _prune(self, now: int, *, before_issue: bool = False) -> None:
+    def _prune(self, now: int) -> None:
         expired = [key for key, expires_at in self._entries.items() if expires_at <= now]
         for key in expired:
             self._entries.pop(key, None)
-        if before_issue:
-            while len(self._entries) >= self.max_entries:
-                oldest_key = min(self._entries, key=self._entries.__getitem__)
-                self._entries.pop(oldest_key, None)
 
     def issue(self) -> str:
         now = int(self.clock())
         with self._lock:
-            self._prune(now, before_issue=True)
+            self._prune(now)
+            if len(self._entries) >= self.max_entries:
+                raise OAuthStateCapacityError
             while True:
                 state = secrets.token_urlsafe(32)
                 digest = _state_digest(state)
@@ -799,23 +801,68 @@ def _with_deleted_cookie(response: Response, *, name: str, secure: bool, path: s
     return response
 
 
-def _public_index_response(index_file: Path, *, status_code: int = 200) -> Response:
+def _read_index_html(index_file: Path) -> str:
+    if not index_file.is_file():
+        raise OSError
+    with index_file.open("rb") as stream:
+        content = stream.read(MAX_INDEX_BYTES + 1)
+    if len(content) > MAX_INDEX_BYTES:
+        raise OSError
+    return content.decode("utf-8")
+
+
+def _index_html_with_markers(
+    html: str,
+    *,
+    auth_mode: WebAuthMode,
+    auth_error: Literal["oauth", "denied"] | None = None,
+) -> str:
+    body_start = html.casefold().find("<body")
+    body_end = html.find(">", body_start)
+    if body_start < 0 or body_end < 0:
+        raise OSError
+    markers = [f' data-second-brain-auth-mode="{auth_mode}"']
+    if auth_error is not None:
+        markers.append(f' data-second-brain-auth-error="{auth_error}"')
+    return html[:body_end] + "".join(markers) + html[body_end:]
+
+
+def web_index_response(
+    index_file: Path,
+    *,
+    auth_mode: WebAuthMode = WEB_AUTH_DISABLED,
+    status_code: int = 200,
+) -> Response:
     if not index_file.is_file():
         return PlainTextResponse(
             "Для запуска нужен собранный React-интерфейс.",
             status_code=503,
             headers=AUTH_SECURITY_HEADERS,
         )
-    return FileResponse(
-        path=index_file,
+    try:
+        html = _index_html_with_markers(
+            _read_index_html(index_file),
+            auth_mode=auth_mode,
+        )
+    except OSError, UnicodeError:
+        return PlainTextResponse(
+            "Для запуска нужен собранный React-интерфейс.",
+            status_code=503,
+            headers=AUTH_SECURITY_HEADERS,
+        )
+    return HTMLResponse(
+        content=html,
         status_code=status_code,
-        media_type="text/html",
         headers=AUTH_SECURITY_HEADERS,
     )
 
 
 def _auth_error_page(
-    index_file: Path, *, status_code: int, kind: Literal["oauth", "denied"]
+    index_file: Path,
+    *,
+    status_code: int,
+    kind: Literal["oauth", "denied"],
+    auth_mode: WebAuthMode,
 ) -> Response:
     title = "Доступ закрыт" if kind == "denied" else "Не удалось выполнить вход"
     message = (
@@ -824,16 +871,11 @@ def _auth_error_page(
         else "Попробуйте повторить вход через GitHub."
     )
     try:
-        content = index_file.read_bytes()
-        if len(content) > MAX_INDEX_BYTES:
-            raise OSError
-        html = content.decode("utf-8")
-        body_start = html.casefold().find("<body")
-        body_end = html.find(">", body_start)
-        if body_start < 0 or body_end < 0:
-            raise OSError
-        marker = f' data-second-brain-auth-error="{kind}"'
-        html = html[:body_end] + marker + html[body_end:]
+        html = _index_html_with_markers(
+            _read_index_html(index_file),
+            auth_mode=auth_mode,
+            auth_error=kind,
+        )
         return HTMLResponse(
             content=html,
             status_code=status_code,
@@ -862,10 +904,16 @@ def _error_with_state_clear(
     *,
     status_code: int,
     kind: Literal["oauth", "denied"],
+    auth_mode: WebAuthMode,
     secure: bool,
 ) -> Response:
     return _with_deleted_cookie(
-        _auth_error_page(index_file, status_code=status_code, kind=kind),
+        _auth_error_page(
+            index_file,
+            status_code=status_code,
+            kind=kind,
+            auth_mode=auth_mode,
+        ),
         name=OAUTH_STATE_COOKIE_NAME,
         secure=secure,
         path="/auth/github/callback",
@@ -944,6 +992,7 @@ def install_web_auth(
 ) -> None:
     """Install public auth routes and, in GitHub mode, the outer private boundary."""
 
+    setattr(app.state, AUTH_MODE_APP_STATE_KEY, config.mode)
     codec: SignedSessionCodec | None = None
     state_store: OAuthStateStore | None = None
     actual_gateway: GitHubOAuthGateway | None = None
@@ -972,17 +1021,35 @@ def install_web_auth(
     def login() -> Response:
         """Serve the public branded login surface."""
 
-        return _public_index_response(index_file)
+        return web_index_response(index_file, auth_mode=config.mode)
 
     @app.get("/auth/github/login", include_in_schema=False)
     def github_login() -> Response:
         """Start one state-bound GitHub OAuth authorization request."""
 
         if config.mode != WEB_AUTH_GITHUB or state_store is None:
-            return _auth_error_page(index_file, status_code=503, kind="oauth")
+            return _auth_error_page(
+                index_file,
+                status_code=503,
+                kind="oauth",
+                auth_mode=config.mode,
+            )
         if config.github_client_id is None:
-            return _auth_error_page(index_file, status_code=503, kind="oauth")
-        state = state_store.issue()
+            return _auth_error_page(
+                index_file,
+                status_code=503,
+                kind="oauth",
+                auth_mode=config.mode,
+            )
+        try:
+            state = state_store.issue()
+        except OAuthStateCapacityError:
+            return _auth_error_page(
+                index_file,
+                status_code=503,
+                kind="oauth",
+                auth_mode=config.mode,
+            )
         query = urllib.parse.urlencode(
             {
                 "client_id": config.github_client_id,
@@ -1013,7 +1080,12 @@ def install_web_auth(
             or codec is None
             or actual_gateway is None
         ):
-            return _auth_error_page(index_file, status_code=503, kind="oauth")
+            return _auth_error_page(
+                index_file,
+                status_code=503,
+                kind="oauth",
+                auth_mode=config.mode,
+            )
         state = _single_query_param(request, "state", max_bytes=MAX_OAUTH_STATE_BYTES)
         state_cookie = _single_cookie(
             request.scope,
@@ -1031,6 +1103,7 @@ def install_web_auth(
                 index_file,
                 status_code=400,
                 kind="oauth",
+                auth_mode=config.mode,
                 secure=config.secure_cookies,
             )
 
@@ -1040,6 +1113,7 @@ def install_web_auth(
                 index_file,
                 status_code=400,
                 kind="oauth",
+                auth_mode=config.mode,
                 secure=config.secure_cookies,
             )
         code = _single_query_param(request, "code", max_bytes=MAX_OAUTH_CODE_BYTES)
@@ -1048,6 +1122,7 @@ def install_web_auth(
                 index_file,
                 status_code=400,
                 kind="oauth",
+                auth_mode=config.mode,
                 secure=config.secure_cookies,
             )
 
@@ -1062,6 +1137,7 @@ def install_web_auth(
                 index_file,
                 status_code=502,
                 kind="oauth",
+                auth_mode=config.mode,
                 secure=config.secure_cookies,
             )
         finally:
@@ -1072,6 +1148,7 @@ def install_web_auth(
                 index_file,
                 status_code=502,
                 kind="oauth",
+                auth_mode=config.mode,
                 secure=config.secure_cookies,
             )
         if config.allowed_user_id is None or not hmac.compare_digest(
@@ -1081,6 +1158,7 @@ def install_web_auth(
                 index_file,
                 status_code=403,
                 kind="denied",
+                auth_mode=config.mode,
                 secure=config.secure_cookies,
             )
 
@@ -1116,6 +1194,7 @@ def install_web_auth(
 
 
 __all__ = [
+    "AUTH_MODE_APP_STATE_KEY",
     "AUTH_SECURITY_HEADERS",
     "AUTH_TRUSTED_AUTHORITIES_SCOPE_KEY",
     "AUTH_USER_ID_SCOPE_KEY",
@@ -1134,6 +1213,7 @@ __all__ = [
     "GitHubOAuthClient",
     "GitHubOAuthError",
     "GitHubOAuthGateway",
+    "OAuthStateCapacityError",
     "OAuthStateStore",
     "SignedSessionCodec",
     "WebAuthConfig",
@@ -1147,4 +1227,5 @@ __all__ = [
     "request_host_is_trusted",
     "same_origin_is_trusted",
     "trusted_authorities_from_scope",
+    "web_index_response",
 ]

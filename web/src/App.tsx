@@ -54,6 +54,8 @@ export function AccountControl(): ReactElement {
 export function App(): ReactElement {
   const pathname = window.location.pathname;
   const authError = document.body.dataset.secondBrainAuthError;
+  const authMode = document.body.dataset.secondBrainAuthMode;
+  const showAccountControl = authMode === "github";
   const isAuthSurface = pathname === "/login" || pathname === "/auth/github/callback";
   useEffect(() => {
     if (isAuthSurface) return;
@@ -101,7 +103,7 @@ export function App(): ReactElement {
           <a className="brand" href="#main-content" aria-label="Second Brain — начало">
             <img className="brand-brain" src={brainMark} srcSet={`${brainMark} 1x, ${brainMark2x} 2x`} width={44} height={44} alt="" />
             <span className="brand-copy"><span className="brand-eyebrow">Личная система знаний</span><span className="brand-name">Second Brain</span></span>
-          </a><div className="topbar-actions"><nav className="quick-nav" aria-label="Быстрые действия"><a href="#capture"><Icon name="add" size={18} />Добавить</a><a href="#search"><Icon name="search" size={18} />Поиск</a><SectionMenu navigation={[["#capture", "Добавить материал", "add"], ...navigation]} /></nav><AccountControl /></div>
+          </a><div className="topbar-actions"><nav className="quick-nav" aria-label="Быстрые действия"><a href="#capture"><Icon name="add" size={18} />Добавить</a><a href="#search"><Icon name="search" size={18} />Поиск</a><SectionMenu navigation={[["#capture", "Добавить материал", "add"], ...navigation]} /></nav>{showAccountControl && <AccountControl />}</div>
         </header>
         <div className="workspace-frame">
           <div className="workspace-content">

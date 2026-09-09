@@ -96,10 +96,8 @@ try {
   await guard(context);
   const page = await context.newPage();
   await page.goto(origin);
-  await page.locator(".account-menu").waitFor();
-  assert.equal(await page.getByText("MikeMoore1337", { exact: true }).count(), 1);
-  await page.locator(".account-menu summary").click();
-  assert.equal(await page.getByRole("link", { name: "Выйти" }).getAttribute("href"), "/auth/logout");
+  assert.equal(await page.locator("body").getAttribute("data-second-brain-auth-mode"), "disabled");
+  assert.equal(await page.locator(".account-menu").count(), 0);
   await context.close();
 } finally {
   await writeFile(`${out}/login-report.json`, JSON.stringify(report, null, 2));

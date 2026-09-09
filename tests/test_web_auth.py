@@ -27,6 +27,7 @@ from second_brain.entrypoints.web.auth import (
     GitHubIdentity,
     GitHubOAuthClient,
     GitHubOAuthError,
+    OAuthStateCapacityError,
     OAuthStateStore,
     SignedSessionCodec,
     WebAuthConfig,
@@ -283,6 +284,7 @@ def test_successful_callback_uses_numeric_owner_id_and_preserves_existing_api_gu
     ]
     assert gateway.user_calls == [gateway.token]
     assert private_ui.status_code == 200
+    assert 'data-second-brain-auth-mode="github"' in private_ui.text
     assert search.status_code == 200
     assert search.json() == {"hits": []}
     assert wrong_origin.status_code == 400
@@ -434,12 +436,14 @@ def test_state_store_is_one_time_bounded_and_expiring() -> None:
     store = OAuthStateStore(ttl_seconds=60, clock=clock, max_entries=2)
     first = store.issue()
     second = store.issue()
-    third = store.issue()
 
-    assert not store.consume(first)
+    with pytest.raises(OAuthStateCapacityError):
+        store.issue()
+    assert store.consume(first)
     assert store.consume(second)
     assert not store.consume(second)
-    assert store.consume(third)
+    fourth = store.issue()
+    assert store.consume(fourth)
     expired = store.issue()
     clock.value += 61
     assert not store.consume(expired)
@@ -505,9 +509,12 @@ def test_disabled_mode_is_the_safe_local_default_and_has_no_real_oauth(
     monkeypatch.setattr(web_app, "REACT_INDEX_FILE", dist / "index.html")
     with TestClient(create_app(web_auth_config=config), base_url="http://127.0.0.1:8123") as client:
         response = client.get("/auth/github/login")
+        root = client.get("/")
     assert response.status_code == 503
     assert "github.com" not in response.text
     assert "Не удалось выполнить вход" not in response.text
+    assert root.status_code == 200
+    assert 'data-second-brain-auth-mode="disabled"' in root.text
 
 
 def test_github_client_uses_fixed_https_endpoints_and_bounded_provider_bodies() -> None:
