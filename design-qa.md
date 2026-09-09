@@ -71,12 +71,14 @@ runner проверяет замену switch в disclosure-навигации �
 
 ## Повторный проход PR #190
 
-Исправления проверены на head `43698f29de5ab1de6361c128f94e234bdef10c0b`
-(коммит `43698f2`), база PR — `1814ce74bc9a02a81ccf42d1502945ef206124b9`.
-Обычный CI run `34400232997` на этом head завершился успешно для всех четырёх
-job: `quality`, `windows-ssl-regression`, `frontend (ubuntu-latest)` и
-`frontend (windows-latest)`. PR #190 остаётся открытым; merge и deploy не
-выполнялись.
+Кодовые исправления внесены в head `43698f29de5ab1de6361c128f94e234bdef10c0b`
+(коммит `43698f2`), а итоговый head PR после обновления отчёта —
+`6867c04c04f0d60da0daa0007b88afdc94c4cfa5`; база PR —
+`1814ce74bc9a02a81ccf42d1502945ef206124b9`. CI run `34400232997` на кодовом
+head и финальный run `34400528312` на итоговом head завершились успешно для
+всех четырёх job: `quality`, `windows-ssl-regression`, `frontend
+(ubuntu-latest)` и `frontend (windows-latest)`. PR #190 остаётся открытым;
+merge и deploy не выполнялись.
 
 - `iconography.mjs`: 126 проверок в обычном контексте и 126 при задержке WebP
   250 мс; отдельный изолированный сценарий с повреждённой `timeline` ожидаемо
