@@ -172,6 +172,15 @@
   font-weight: 650;
 }
 
+.stage7-quality-warning {
+  color: var(--warning, #f0c36a);
+  font-size: 0.86rem;
+}
+
+.stage7-branch-error {
+  color: var(--danger, #ff7d92);
+}
+
 .stage7-delta-panel {
   background: linear-gradient(150deg, rgb(155 123 255 / 10%), rgb(10 9 18 / 84%));
 }
@@ -189,6 +198,7 @@
 }
 
 .stage7-delta-list dt {
+  overflow-wrap: anywhere;
   color: var(--sb-color-text-secondary);
 }
 
