@@ -69,6 +69,28 @@ runner проверяет замену switch в disclosure-навигации �
 исходники/static fixture. Они защищают текстовый контракт и не должны
 выдаваться за проверку браузера, физического телефона или screen reader.
 
+## Повторный проход PR #190
+
+Исправления проверены на head `43698f29de5ab1de6361c128f94e234bdef10c0b`
+(коммит `43698f2`), база PR — `1814ce74bc9a02a81ccf42d1502945ef206124b9`.
+Обычный CI run `34400232997` на этом head завершился успешно для всех четырёх
+job: `quality`, `windows-ssl-regression`, `frontend (ubuntu-latest)` и
+`frontend (windows-latest)`. PR #190 остаётся открытым; merge и deploy не
+выполнялись.
+
+- `iconography.mjs`: 126 проверок в обычном контексте и 126 при задержке WebP
+  250 мс; отдельный изолированный сценарий с повреждённой `timeline` ожидаемо
+  завершился диагностикой `complete=true, naturalWidth=0` после 300 мс.
+- `page-motion.mjs`: 326 проверок на ширинах 320/360/390/430/768/1024/1440/1920;
+  одна и та же `brain-region-front:thought-awaken` подтверждена как running,
+  paused со стабильным `currentTime`, resumed с продвижением, остановленная
+  вне экрана и остановленная reduced-motion. `scene-recording.mjs` прошёл с
+  85 проверками и сохранил видео/скриншоты в `.local/design-v7`.
+- Локально прошли `npm run check`, `npm run build`, targeted Python-контракты
+  (13 passed), `ruff format --check`, `ruff check`, `mypy` и полный Python 3.14
+  suite (1867 passed, 10 skipped, 2 warnings). Физический телефон, реальная
+  вкладка hidden, screen reader и live/provider операции не проверялись.
+
 ## Исторический отчёт v5 / до v7
 
 Ниже сохранены результаты и ограничения прежнего прохода. Его числовые
