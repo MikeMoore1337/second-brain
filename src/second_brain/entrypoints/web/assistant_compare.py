@@ -56,6 +56,8 @@ COMPARE_REQUEST_HEADER_VALUE = "compare-v1"
 MAX_RAW_ASSISTANT_BODY_BYTES = 64 * 1024
 MAX_RAW_COMPARE_BODY_BYTES = 128 * 1024
 
+_STAGE7_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+
 _API_HEADERS = {
     "Cache-Control": "no-store",
     "Content-Security-Policy": (
@@ -325,29 +327,64 @@ def _decode_header(headers: Mapping[bytes, bytes], name: bytes) -> str | None:
     return value.decode("latin-1")
 
 
-def _loopback_host(host_header: str | None) -> bool:
-    if not host_header:
-        return False
-    candidate = host_header.strip().lower()
-    if candidate.startswith("["):
-        hostname = candidate[1:].split("]", 1)[0]
-    else:
-        hostname = candidate.split(":", 1)[0]
-    return hostname in {"127.0.0.1", "localhost", "::1"}
+def _loopback_host_port(host_header: str | None, scheme: str) -> tuple[str, int] | None:
+    if not host_header or any(character.isspace() for character in host_header):
+        return None
+    normalized_scheme = scheme.casefold()
+    if normalized_scheme not in {"http", "https"}:
+        return None
+    try:
+        parsed = urlsplit(f"//{host_header}")
+        hostname = parsed.hostname
+        port = parsed.port
+    except UnicodeError, ValueError:
+        return None
+    if (
+        hostname is None
+        or hostname.casefold() not in _STAGE7_LOOPBACK_HOSTS
+        or parsed.path
+        or parsed.query
+        or parsed.fragment
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.netloc.endswith(":")
+    ):
+        return None
+    if port is None:
+        port = 443 if normalized_scheme == "https" else 80
+    if not 1 <= port <= 65535:
+        return None
+    return hostname.casefold(), port
 
 
-def _same_origin(origin: str | None, host_header: str | None) -> bool:
+def _loopback_host(host_header: str | None, scheme: str) -> bool:
+    return _loopback_host_port(host_header, scheme) is not None
+
+
+def _same_origin(origin: str | None, host_header: str | None, scheme: str) -> bool:
     if origin is None:
         return True
-    if host_header is None:
+    if not origin or any(character.isspace() for character in origin):
         return False
     try:
         parsed = urlsplit(origin)
-    except ValueError:
+    except UnicodeError, ValueError:
         return False
-    if parsed.scheme not in {"http", "https"} or parsed.username or parsed.password:
+    normalized_scheme = scheme.casefold()
+    if (
+        normalized_scheme not in {"http", "https"}
+        or parsed.scheme.casefold() != normalized_scheme
+        or not parsed.netloc
+        or parsed.path
+        or parsed.query
+        or parsed.fragment
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
         return False
-    return bool(parsed.netloc) and parsed.netloc.lower() == host_header.strip().lower()
+    return _loopback_host_port(parsed.netloc, normalized_scheme) == _loopback_host_port(
+        host_header, normalized_scheme
+    )
 
 
 async def _send_json_response(
@@ -387,7 +424,8 @@ class AssistantCompareRequestBoundaryMiddleware:
         headers = _header_map(scope)
         host = _decode_header(headers, b"host")
         origin = _decode_header(headers, b"origin")
-        if not _loopback_host(host) or not _same_origin(origin, host):
+        scheme = str(scope.get("scheme", "")).casefold()
+        if not _loopback_host(host, scheme) or not _same_origin(origin, host, scheme):
             await _send_json_response(_invalid_request(path), scope, receive, send)
             return
         purpose = _decode_header(headers, b"x-second-brain-request")

@@ -32,6 +32,19 @@ function setText(element: HTMLInputElement | HTMLTextAreaElement, value: string)
   element.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
+const MOTION_FRAME_INTERVAL_MS = 1000 / 60;
+
+function isMotionSchedulerCall(call: readonly unknown[]): boolean {
+  const [handler, delay, ...args] = call;
+  return (
+    typeof handler === "function" &&
+    handler.length === 0 &&
+    typeof delay === "number" &&
+    Math.abs(delay - MOTION_FRAME_INTERVAL_MS) < 0.001 &&
+    args.length === 0
+  );
+}
+
 async function fillRequired(host: HTMLDivElement): Promise<void> {
   const textareas = host.querySelectorAll<HTMLTextAreaElement>("textarea");
   const inputs = host.querySelectorAll<HTMLInputElement>(".stage7-option-row input");
@@ -185,11 +198,10 @@ describe("Assistant + Compare Stage 7 surface", () => {
     await act(async () => button?.click());
 
     expect(storage).not.toHaveBeenCalled();
-    const applicationPolling = polling.mock.calls.filter(([, delay]) => {
-      // Motion uses setInterval as a ~60 fps animation scheduler. Product polling
-      // would use a materially longer interval and remains forbidden here.
-      return typeof delay !== "number" || delay >= 100;
-    });
-    expect(applicationPolling).toHaveLength(0);
+    expect(polling.mock.calls.every((call) => isMotionSchedulerCall(call))).toBe(true);
+  });
+
+  it("does not classify an application interval as Motion's frame scheduler", () => {
+    expect(isMotionSchedulerCall([() => undefined, 50])).toBe(false);
   });
 });

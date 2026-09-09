@@ -27,6 +27,7 @@ from second_brain.entrypoints.web.app import (
 from second_brain.entrypoints.web.assistant_compare import (
     ProductionAssistantWebService,
     Stage7RequestPayload,
+    _loopback_host_port,
 )
 
 BASE_URL = "http://127.0.0.1"
@@ -242,6 +243,102 @@ def test_stage7_boundary_rejects_missing_purpose_cross_origin_and_oversize() -> 
     assert cross_origin.status_code == 400
     assert too_large.status_code == 413
     assert assistant.calls == []
+
+
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "https://127.0.0.1",
+        "http://127.0.0.1/path",
+        "http://127.0.0.1?query=1",
+        "http://127.0.0.1#fragment",
+        "http://[::1",
+    ],
+    ids=["scheme-mismatch", "path", "query", "fragment", "malformed"],
+)
+def test_stage7_boundary_rejects_noncanonical_origin_without_service_call(origin: str) -> None:
+    assistant = RecordingAssistantWebService()
+    app = create_app(
+        assistant_web_service=assistant,
+        compare_web_service=RecordingCompareWebService(),
+    )
+
+    with TestClient(app, base_url=BASE_URL) as client:
+        response = client.post(
+            "/api/assistant",
+            json=_payload(),
+            headers={**_headers(ASSISTANT_REQUEST_HEADER_VALUE), "Origin": origin},
+        )
+
+    assert response.status_code == 400
+    assert assistant.calls == []
+
+
+def test_stage7_boundary_rejects_malformed_loopback_port_without_service_call() -> None:
+    assistant = RecordingAssistantWebService()
+    app = create_app(
+        assistant_web_service=assistant,
+        compare_web_service=RecordingCompareWebService(),
+    )
+
+    with TestClient(app, base_url=BASE_URL) as client:
+        response = client.post(
+            "/api/assistant",
+            json=_payload(),
+            headers={
+                **_headers(ASSISTANT_REQUEST_HEADER_VALUE),
+                "Host": "localhost:evil",
+                "Origin": "http://localhost:evil",
+            },
+        )
+
+    assert response.status_code == 400
+    assert assistant.calls == []
+
+
+@pytest.mark.parametrize(
+    ("authority", "scheme", "expected"),
+    [
+        ("127.0.0.1", "http", ("127.0.0.1", 80)),
+        ("localhost:8080", "http", ("localhost", 8080)),
+        ("[::1]", "http", ("::1", 80)),
+        ("[::1]:8443", "https", ("::1", 8443)),
+    ],
+    ids=["ipv4-default-port", "localhost-port", "ipv6-default-port", "ipv6-port"],
+)
+def test_stage7_loopback_parser_accepts_valid_loopback_authorities(
+    authority: str, scheme: str, expected: tuple[str, int]
+) -> None:
+    assert _loopback_host_port(authority, scheme) == expected
+
+
+@pytest.mark.parametrize(
+    "authority",
+    ["localhost:evil", "localhost:", "127.0.0.1:0", "[::1]:evil", "::1"],
+)
+def test_stage7_loopback_parser_rejects_malformed_authorities(authority: str) -> None:
+    assert _loopback_host_port(authority, "http") is None
+
+
+def test_stage7_boundary_accepts_valid_localhost_port() -> None:
+    assistant = RecordingAssistantWebService()
+    app = create_app(
+        assistant_web_service=assistant,
+        compare_web_service=RecordingCompareWebService(),
+    )
+
+    with TestClient(app, base_url="http://localhost:8080") as client:
+        response = client.post(
+            "/api/assistant",
+            json=_payload(),
+            headers={
+                "X-Second-Brain-Request": ASSISTANT_REQUEST_HEADER_VALUE,
+                "Origin": "http://localhost:8080",
+            },
+        )
+
+    assert response.status_code == 200
+    assert len(assistant.calls) == 1
 
 
 def test_compare_api_uses_separate_purpose_and_preserves_branch_separation() -> None:
