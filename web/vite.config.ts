@@ -17,6 +17,8 @@ export default defineConfig(() => ({
     },
   },
   build: {
+    // Keep lazy raster art out of the initial JavaScript payload.
+    assetsInlineLimit: 0,
     outDir: "dist",
     emptyOutDir: true,
     sourcemap: false,

@@ -1,7 +1,7 @@
 Lucide Icons
 https://lucide.dev/
 
-The local semantic SVG subset in web/src/icons.tsx is derived from Lucide's
+The former local semantic SVG subset in web/src/icons.tsx was derived from Lucide's
 open-source line icon geometry. Lucide is distributed under the ISC License.
 
 ISC License

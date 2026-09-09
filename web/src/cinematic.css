@@ -30,27 +30,26 @@ button,input,textarea,select { font-family:var(--sb-font-sans); }
 /* Scene layers are independent of working content, never a knowledge graph. */
 .cinematic-hero { position:relative; isolation:isolate; min-height:780px; overflow:clip; margin-bottom:48px; background:var(--sb-color-void); }
 .universe-parallax { position:absolute; inset:0; z-index:-1; pointer-events:none; }
-.memory-horizon { position:absolute; width:100%; height:100%; inset:0; object-fit:cover; object-position:center bottom; opacity:.8; }
+.memory-depth { position:absolute;inset:0;background:radial-gradient(ellipse at 76% 65%,#43226426,transparent 45%); }
 .universe-light { position:absolute; inset:0; background:linear-gradient(90deg,var(--sb-color-void) 0%,transparent 58%),linear-gradient(0deg,var(--sb-color-void),transparent 20%); }
 .memory-stage { position:absolute; width:700px; height:700px; right:1%; top:0; perspective:900px; }
 .memory-stage [data-depth] { position:absolute; inset:0; transition:transform 350ms var(--sb-ease-out); }
 .stage-haze { z-index:0; }
 .haze-breath { position:absolute; inset:4%; border-radius:50%; background:radial-gradient(ellipse,#6d28d93b,transparent 67%); animation:haze-breathe 13s ease-in-out infinite alternate; }
-.stage-core { z-index:2; mix-blend-mode:screen; }
-.core-assembly { position:absolute; width:65%; left:17.5%; top:17.5%; aspect-ratio:1; animation:core-assemble 800ms var(--sb-ease-out) both; }
-.core-depth { display:block; width:100%; height:100%; mask-image:radial-gradient(circle,#000 60%,transparent 72%); animation:core-breathe 11s ease-in-out infinite alternate; }
-.core-corona { position:absolute; inset:11%; border:1px solid #c49aff52; border-radius:50%; box-shadow:0 0 32px #8b5cf63b,inset 0 0 28px #8b5cf622; animation:corona-breathe 7s ease-in-out infinite alternate; }
-.stage-orbits { z-index:3; transform-style:preserve-3d; }
-.orbit-plane { position:absolute; width:90%; aspect-ratio:1; left:5%; top:5%; transform-style:preserve-3d; }
-.orbit-plane-far { transform:rotateZ(-28deg) rotateX(68deg); opacity:.7; }
-.orbit-plane-middle { transform:rotateZ(24deg) rotateX(65deg); }
-.orbit-plane-near { transform:rotateZ(82deg) rotateX(72deg); width:80%; left:10%; top:10%; opacity:.8; }
-.orbit-track { width:100%; height:100%; color:#c49affb3; }
-.orbit-traveller { position:absolute; inset:0; animation:orbit-revolve 19s linear infinite; }
-.orbit-plane-middle .orbit-traveller { animation-duration:27s; animation-direction:reverse; animation-delay:-9s; }
-.orbit-plane-near .orbit-traveller { animation-duration:33s; animation-delay:-18s; }
-.orbit-traveller > span { position:absolute; width:9px; height:9px; border-radius:50%; left:calc(50% - 4px); top:1.7%; background:var(--sb-color-violet-signal); box-shadow:0 0 12px #e9d5ff,0 0 30px #8b5cf6; }
-.orbit-traveller > span::after { content:""; position:absolute; width:70px; height:3px; right:0; top:3px; background:linear-gradient(90deg,transparent,#c49aff); border-radius:50%; transform:rotate(-7deg); transform-origin:right center; }
+.stage-brain { z-index:2; }
+.brain-assembly { position:absolute; width:76%; left:12%; top:13%; aspect-ratio:1; animation:brain-arrive 800ms var(--sb-ease-out) both; }
+.memory-brain { display:block; width:100%; height:100%; object-fit:contain; }
+.brain-region { position:absolute; border-radius:50%; pointer-events:none; mix-blend-mode:screen; background:radial-gradient(ellipse,#c49aff90,transparent 70%); animation:thought-awaken 9s ease-in-out infinite alternate; }
+.brain-region-front { width:38%;height:34%;left:4%;top:29%;animation-delay:-2s; }
+.brain-region-middle { width:40%;height:37%;left:31%;top:20%;animation-duration:11s;animation-delay:-7s; }
+.brain-region-back { width:27%;height:35%;left:65%;top:32%;animation-duration:13s;animation-delay:-4s; }
+.stage-connections { z-index:3; }
+.thought-connections { width:100%;height:100%;overflow:visible; }
+.connection-thread { stroke:#c49aff6b;stroke-width:1.2; }
+.connection-pulse { stroke:#e9d5ff;stroke-width:2.4;stroke-linecap:round;stroke-dasharray:7 110;animation:thought-travel 12s ease-in-out infinite; }
+.thought-link-1 .connection-pulse { animation-duration:15s;animation-delay:-6s; }
+.thought-link-2 .connection-pulse { animation-duration:17s;animation-delay:-11s; }
+.thought-link-3 .connection-pulse { animation-duration:19s;animation-delay:-3s; }
 .stage-fragments { z-index:4; }
 .thought-fragment { position:absolute; display:flex; flex-direction:column; gap:16px; padding:20px; width:144px; border:1px solid #c49aff50; border-radius:14px; background:linear-gradient(145deg,#352045eb,#100b18ed); box-shadow:0 16px 36px #0006,inset 0 1px #e9d5ff20; color:#e9d5ff; animation:thought-float 10s ease-in-out infinite alternate; }
 .fragment-one { left:7%; top:18%; transform:rotate(-12deg); animation-delay:-2s; }
@@ -86,11 +85,10 @@ button,input,textarea,select { font-family:var(--sb-font-sans); }
 :is(a,button,input,textarea,select,summary):focus-visible { outline:2px solid var(--sb-color-violet-signal); outline-offset:4px; }
 .universe-primary:active,.scene-toggle:active { transform:scale(.97); }
 @keyframes universe-enter { from { opacity:.85; transform:translateY(12px); } to { opacity:1; transform:none; } }
-@keyframes core-assemble { from { opacity:.4; transform:scale(.92) rotate(-6deg); } to { opacity:1; transform:none; } }
-@keyframes core-breathe { from { transform:rotate(-3deg) scale(.98); } to { transform:rotate(3deg) scale(1.03); } }
-@keyframes corona-breathe { from { opacity:.3; transform:scale(.97); } to { opacity:.75; transform:scale(1.04); } }
 @keyframes haze-breathe { from { opacity:.55; transform:scale(.9) rotate(-10deg); } to { opacity:.9; transform:scale(1.08) rotate(10deg); } }
-@keyframes orbit-revolve { to { transform:rotate(360deg); } }
+@keyframes brain-arrive { from { opacity:.5; transform:translateY(8px); } to { opacity:1; transform:none; } }
+@keyframes thought-awaken { from { opacity:.12; } to { opacity:.6; } }
+@keyframes thought-travel { 0% { stroke-dashoffset:110;opacity:0; } 15%,75% { opacity:.75; } 100% { stroke-dashoffset:-110;opacity:0; } }
 @keyframes thought-float { from { translate:0 -5px; } to { translate:0 8px; } }
 @keyframes particle-drift { from { opacity:.25; transform:translateY(0); } to { opacity:.8; transform:translateY(-20px); } }
 
@@ -99,7 +97,13 @@ main > section:not(.cinematic-hero) { position:relative; isolation:isolate; max-
 main > section:not(.cinematic-hero)::before,main > section:not(.cinematic-hero)::after { display:none; }
 main .section-heading h2,main .entry-point > .entry-copy > h2,main .stage7-heading h2 { font-family:var(--sb-font-sans); font-weight:550; font-size:clamp(28px,3vw,42px); line-height:1.16; letter-spacing:-.055em; max-width:26ch; }
 main .entry-point { display:block; }
-.entry-point .entry-icon { display:none; }
+.entry-point .entry-icon { display:block; width:64px; height:64px; padding:0; margin:0 0 16px; background:none; border:0; box-shadow:none; }
+.section-art { display:block; margin:0 0 16px; }
+.pillar-card .section-art { margin-top:20px; }
+.pillar-card h3 { margin-top:16px; }
+.pillar-card .card-meta { position:static; margin-top:24px; }
+.icon-reversed { rotate:180deg; }
+.scene-toggle { display:inline-flex; align-items:center; gap:8px; }
 .entry-point .entry-content { width:100%; max-width:none; }
 .capture-panel { margin-top:28px; }
 main :is(.capture-input,.review-input,.search-input,.self-retrieval-input) { border:1px solid #60476e; border-radius:12px; background:var(--sb-color-ink); color:var(--sb-color-text-primary); font-family:var(--sb-font-sans); font-size:16px; font-weight:400; line-height:1.6; transition:border-color 160ms,box-shadow 200ms; }
@@ -165,16 +169,15 @@ main > section.context-enter::after { display:block; content:""; position:absolu
   .universe-actions a { font-size:13px; min-height:48px; }
   .universe-primary { padding:12px 18px; }
   .universe-search { padding:10px 8px; }
-  .memory-stage { width:450px; height:450px; left:50%; margin-left:-225px; top:440px; }
-  .memory-horizon { object-fit:cover; object-position:62% bottom; }
-  .core-assembly { width:67%; left:16.5%; top:16.5%; }
+  .memory-stage { width:450px; height:450px; left:50%; margin-left:-225px; top:416px; }
+  .brain-assembly { width:76%; left:12%; top:16%; }
   .thought-fragment { width:105px; padding:13px; gap:10px; border-radius:10px; }
   .fragment-thought { font-size:14px; }
   .fragment-label { font-size:9px; }
   .fragment-one { left:18%;top:16%; }
   .fragment-two { right:15%;top:57%;width:96px; font-size:12px; }
-  .fragment-three,.fragment-four,.orbit-plane-near,.particle-6,.particle-7,.particle-8,.particle-9,.particle-10,.particle-11,.pointer-light { display:none; }
-  .haze-breath { animation:none; }
+  .fragment-three,.fragment-four,.thought-link-2,.thought-link-3,.particle-6,.particle-7,.particle-8,.particle-9,.particle-10,.particle-11,.pointer-light { display:none; }
+  .haze-breath,.brain-region-back { animation:none; }
   .universe-caption { left:24px; right:24px; bottom:12px; flex-wrap:wrap; gap:8px; }
   .universe-caption > span { font-size:12px; }
   .scene-toggle { font-size:11px; }

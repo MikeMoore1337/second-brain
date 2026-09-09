@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactElement, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactElement } from "react";
+import { SectionHeading } from "./parity-surfaces";
 
 import { retrieveNote, searchNotes } from "./api";
 import { presentValue } from "./presentation";
@@ -18,10 +19,6 @@ function Field({ label, value }: { label: string; value: unknown }): ReactElemen
       <dd className="draft-field-value">{displayValue(value)}</dd>
     </div>
   );
-}
-
-function SectionHeading({ eyebrow, title, children, id }: { eyebrow: string; title: string; children?: ReactNode; id: string }): ReactElement {
-  return <div className="section-heading"><div><p className="eyebrow">{eyebrow}</p><h2 id={id}>{title}</h2></div>{children ? <p className="timeline-lede">{children}</p> : null}</div>;
 }
 
 export function SearchSurface(): ReactElement {

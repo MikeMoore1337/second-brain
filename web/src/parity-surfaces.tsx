@@ -23,7 +23,7 @@ import {
   type SavePlanResponse,
   type SavedNoteResponse,
 } from "./api";
-import { Icon } from "./icons";
+import { Icon, type IconName } from "./icons";
 import { presentValue } from "./presentation";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactElement, type ReactNode } from "react";
 
@@ -445,7 +445,7 @@ export function CaptureSurface(): ReactElement {
 
   return (
     <section className="entry-point" id="capture" aria-labelledby="entry-title">
-      <div className="entry-icon" aria-hidden="true"><Icon name="add" size={24} /></div>
+      <div className="entry-icon" aria-hidden="true"><Icon name="add" size={64} /></div>
       <div className="entry-copy">
         <p className="entry-kicker">Новая заметка</p>
         <h2 id="entry-title">Добавить знание</h2>
@@ -474,7 +474,8 @@ export function CaptureSurface(): ReactElement {
 }
 
 export function SectionHeading({ eyebrow, title, children, id }: { eyebrow: string; title: string; children?: ReactNode; id: string }): ReactElement {
-  return <div className="section-heading"><div><p className="eyebrow">{eyebrow}</p><h2 id={id}>{title}</h2></div>{children ? <p className="timeline-lede">{children}</p> : null}</div>;
+  const symbols: Record<string, IconName> = { "timeline-title": "timeline", "self-model-title": "self-model", "self-retrieval-title": "self-retrieval", "simulate-me-title": "simulate", "search-title": "search", "decision-journal-title": "decision", "diagnostics-title": "diagnostics" };
+  return <div className="section-heading"><div>{symbols[id] ? <Icon name={symbols[id]} size={64} className="section-art" /> : null}<p className="eyebrow">{eyebrow}</p><h2 id={id}>{title}</h2></div>{children ? <p className="timeline-lede">{children}</p> : null}</div>;
 }
 
 export function TimelineSurface(): ReactElement {

@@ -1,0 +1,138 @@
+[
+  {
+    "width": 320,
+    "layout": [
+      {
+        "textBottom": 456.859375,
+        "metaTop": 480.859375,
+        "cardBottom": 521.859375,
+        "metaBottom": 498.859375
+      },
+      {
+        "textBottom": 815.421875,
+        "metaTop": 839.421875,
+        "cardBottom": 880.421875,
+        "metaBottom": 857.421875
+      }
+    ]
+  },
+  {
+    "width": 360,
+    "layout": [
+      {
+        "textBottom": 457,
+        "metaTop": 481,
+        "cardBottom": 522,
+        "metaBottom": 499
+      },
+      {
+        "textBottom": 815.5625,
+        "metaTop": 839.5625,
+        "cardBottom": 880.5625,
+        "metaBottom": 857.5625
+      }
+    ]
+  },
+  {
+    "width": 390,
+    "layout": [
+      {
+        "textBottom": 449.6875,
+        "metaTop": 473.6875,
+        "cardBottom": 514.6875,
+        "metaBottom": 491.6875
+      },
+      {
+        "textBottom": 786.5625,
+        "metaTop": 810.5625,
+        "cardBottom": 851.5625,
+        "metaBottom": 828.5625
+      }
+    ]
+  },
+  {
+    "width": 430,
+    "layout": [
+      {
+        "textBottom": 439.5625,
+        "metaTop": 463.5625,
+        "cardBottom": 504.5625,
+        "metaBottom": 481.5625
+      },
+      {
+        "textBottom": 776.4375,
+        "metaTop": 800.4375,
+        "cardBottom": 841.4375,
+        "metaBottom": 818.4375
+      }
+    ]
+  },
+  {
+    "width": 768,
+    "layout": [
+      {
+        "textBottom": 717.796875,
+        "metaTop": 741.796875,
+        "cardBottom": 782.796875,
+        "metaBottom": 759.796875
+      },
+      {
+        "textBottom": 696.109375,
+        "metaTop": 720.109375,
+        "cardBottom": 782.796875,
+        "metaBottom": 738.109375
+      }
+    ]
+  },
+  {
+    "width": 1024,
+    "layout": [
+      {
+        "textBottom": 710.9375,
+        "metaTop": 734.9375,
+        "cardBottom": 775.9375,
+        "metaBottom": 752.9375
+      },
+      {
+        "textBottom": 710.9375,
+        "metaTop": 734.9375,
+        "cardBottom": 775.9375,
+        "metaBottom": 752.9375
+      }
+    ]
+  },
+  {
+    "width": 1440,
+    "layout": [
+      {
+        "textBottom": 723.3125,
+        "metaTop": 747.3125,
+        "cardBottom": 788.3125,
+        "metaBottom": 765.3125
+      },
+      {
+        "textBottom": 723.3125,
+        "metaTop": 747.3125,
+        "cardBottom": 788.3125,
+        "metaBottom": 765.3125
+      }
+    ]
+  },
+  {
+    "width": 1920,
+    "layout": [
+      {
+        "textBottom": 723.953125,
+        "metaTop": 747.953125,
+        "cardBottom": 788.953125,
+        "metaBottom": 765.953125
+      },
+      {
+        "textBottom": 723.953125,
+        "metaTop": 747.953125,
+        "cardBottom": 788.953125,
+        "metaBottom": 765.953125
+      }
+    ]
+  }
+]

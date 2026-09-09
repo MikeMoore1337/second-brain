@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 
 const origin = process.env.SB_QA_URL ?? 'http://127.0.0.1:8137';
 assert.equal(new URL(origin).hostname, '127.0.0.1', 'Only a local synthetic server is permitted');
-const out = resolve('../.local/design-v3');
+const out = resolve('../.local/design-v4');
 await mkdir(out, { recursive: true });
 const browser = await chromium.launch({ headless: true, executablePath: process.env.SB_QA_CHROMIUM });
 const report = { widths: [], accessibility: [], surfaces: [], scenarios: [], motion: [], errors: [] };

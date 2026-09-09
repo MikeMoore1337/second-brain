@@ -1,0 +1,776 @@
+{
+  "generator": "OpenAI built-in image_gen",
+  "date": "2026-09-09",
+  "usage": "Original project artwork; Apache-2.0 repository license; no third-party icon pack",
+  "sources": [
+    {
+      "name": "memory",
+      "file": "exec-ee79594b-e723-431c-bdb4-831d0b3bd7d5.png",
+      "width": 1774,
+      "height": 887,
+      "alpha": true,
+      "bytes": 1008144,
+      "sha256": "46c2422ca4ff4ed07110d99b7d1a95d83aa11cb910275fe38d747cb7f09ad92c"
+    },
+    {
+      "name": "add",
+      "file": "exec-f8e0fe56-f93c-413b-a8c3-5539a083761d.png",
+      "width": 1774,
+      "height": 887,
+      "alpha": true,
+      "bytes": 717452,
+      "sha256": "769dbe3f6ebd3839e14da59b3ad1c3f10dffe5a4d46bf0466b2cf2b9cb2139f0"
+    },
+    {
+      "name": "search",
+      "file": "exec-bfe1869a-56d6-4b36-919f-d6f86ce7d89d.png",
+      "width": 1774,
+      "height": 887,
+      "alpha": true,
+      "bytes": 906326,
+      "sha256": "4b804002ae2eb443ff8cac2342d9fb13d572b302aa7ac32648b9d1ffa7c6137a"
+    },
+    {
+      "name": "decision",
+      "file": "exec-4b11ae99-5e67-4d08-b7a1-95873db7ad4a.png",
+      "width": 1774,
+      "height": 887,
+      "alpha": true,
+      "bytes": 844144,
+      "sha256": "647a7e7c12503a81ce0b61522434342436dd0b4a791cb84b4447301d71cec014"
+    },
+    {
+      "name": "timeline",
+      "file": "exec-47d9b9cf-79d7-4ae8-9bfa-5e2ee6f425a2.png",
+      "width": 1774,
+      "height": 887,
+      "alpha": true,
+      "bytes": 686875,
+      "sha256": "ac9537993eea48af939ced0eec80b69c7f6ec39b77114dd5f8b28fde0bfa1965"
+    },
+    {
+      "name": "self-model",
+      "file": "exec-05c76b33-5760-48a4-9619-5b5f53454e55.png",
+      "width": 1774,
+      "height": 887,
+      "alpha": true,
+      "bytes": 961292,
+      "sha256": "2edc8c8aef14306da24a3b0cb434660f563acacd06fea321b921caa9a913d4fd"
+    },
+    {
+      "name": "growth",
+      "file": "exec-bd603fce-7265-42d1-8d20-ec14595e72cb.png",
+      "width": 1774,
+      "height": 887,
+      "alpha": true,
+      "bytes": 733407,
+      "sha256": "313e7d414a12b9b2b0586a0b48676686e57088b5e8d6d15680f0fb984c19ce95"
+    },
+    {
+      "name": "simulate",
+      "file": "exec-71fd6652-3e7b-40d4-b52e-b0db21477039.png",
+      "width": 1774,
+      "height": 887,
+      "alpha": true,
+      "bytes": 785009,
+      "sha256": "9d8684f043887ba82f37ee0fad23d7aa8a6ddfc303c5ec3870d6288e3550775c"
+    },
+    {
+      "name": "relation",
+      "file": "exec-13ac80b9-7bbe-4a79-ae43-947f11c22190.png",
+      "width": 1774,
+      "height": 887,
+      "alpha": true,
+      "bytes": 809556,
+      "sha256": "9bf57ad02e065154221b623129bbb22cd11b8a38744141f5ef342196ee653092"
+    },
+    {
+      "name": "self-retrieval",
+      "file": "exec-f38e9446-3c57-4f25-9a04-cbd22cf58b79.png",
+      "width": 1774,
+      "height": 887,
+      "alpha": true,
+      "bytes": 862959,
+      "sha256": "2ff521e8209baf4aa5776c5f8502692d0ac57429c9d3f133bd6ca0d51fede85e"
+    },
+    {
+      "name": "diagnostics",
+      "file": "exec-1df03bf5-904a-46ba-876d-ccf4aad1ee76.png",
+      "width": 1774,
+      "height": 887,
+      "alpha": true,
+      "bytes": 934977,
+      "sha256": "73bac27dbd8cdca4d43ae2fe1ac410e57370fa73e8a35bf7cfa2db3beae36be5"
+    },
+    {
+      "name": "voice",
+      "file": "exec-189a844b-4cde-4920-9766-0cf027ba4741.png",
+      "width": 1774,
+      "height": 887,
+      "alpha": true,
+      "bytes": 902121,
+      "sha256": "b8cfd69275fa14d7c8b281a9a3ccc815da74179651b382b569cc6c84175abb47"
+    },
+    {
+      "name": "close",
+      "file": "exec-b00b5ac0-8914-4d7d-ac34-bf6d702d34b9.png",
+      "width": 1254,
+      "height": 1254,
+      "alpha": true,
+      "bytes": 570022,
+      "sha256": "2c4ea2dc01f900440025947120eefccaf376b163f6b8d72ebabfcafc8c43bf44"
+    },
+    {
+      "name": "expand",
+      "file": "exec-d4288505-9326-48d5-a313-c67a89c59bc7.png",
+      "width": 1254,
+      "height": 1254,
+      "alpha": true,
+      "bytes": 367535,
+      "sha256": "3fcbb88005469f5818ff0b626d68751f0d86f471ba4c5969966504c417961bcf"
+    },
+    {
+      "name": "open",
+      "file": "exec-2f603cf3-8343-489d-98f3-99ea2f5d2beb.png",
+      "width": 1254,
+      "height": 1254,
+      "alpha": true,
+      "bytes": 380947,
+      "sha256": "e4a59d4918a018318cf7cdd587ca7c780f1f7656664963dbce5d995e4a214302"
+    },
+    {
+      "name": "refresh",
+      "file": "exec-11accc7e-44b2-4dda-ad14-4856a0e86449.png",
+      "width": 1254,
+      "height": 1254,
+      "alpha": true,
+      "bytes": 567190,
+      "sha256": "85a70943974449095c53325b3bbb3178d5296d0f381bdb440cbed9762c6237ec"
+    },
+    {
+      "name": "info",
+      "file": "exec-14fd3e29-a394-4df3-a425-6a8a6b726f06.png",
+      "width": 1254,
+      "height": 1254,
+      "alpha": true,
+      "bytes": 600890,
+      "sha256": "eec379a1adfade78d8d9e1987e667134d48dde41063ee0ac665e77a29f99484a"
+    },
+    {
+      "name": "warning",
+      "file": "exec-7314e0ff-e29b-4452-bc71-f5bea5970643.png",
+      "width": 1254,
+      "height": 1254,
+      "alpha": true,
+      "bytes": 696807,
+      "sha256": "74546cf6bf2e252f764f693157c83994cfc8dcab33e0a807fb334d62e2a92716"
+    },
+    {
+      "name": "success",
+      "file": "exec-2beaaed3-89c0-46aa-b94b-0a5c72911838.png",
+      "width": 1254,
+      "height": 1254,
+      "alpha": true,
+      "bytes": 439675,
+      "sha256": "3e4c082302f49d92e7cc74c9f420e2228caf23e4f90716a6d846b1f424cc144f"
+    },
+    {
+      "name": "copy",
+      "file": "exec-85b3da6b-4e1a-47e0-b42c-e3324f96afed.png",
+      "width": 1254,
+      "height": 1254,
+      "alpha": true,
+      "bytes": 664589,
+      "sha256": "34ac6f0a30e43155828a6d911a08d5b18620b70e4f1abd87f675ca1f7039a27d"
+    },
+    {
+      "name": "pause",
+      "file": "exec-a43905dc-6622-4a55-99ce-7259e94b43e6.png",
+      "width": 1254,
+      "height": 1254,
+      "alpha": true,
+      "bytes": 422751,
+      "sha256": "f9d40e2185b500d342b0c4491d0e392b3a973045ed5cfce5c62d16cfe0b07fab"
+    },
+    {
+      "name": "play",
+      "file": "exec-987c72d5-4fd2-4388-9abc-2412551ea1e6.png",
+      "width": 1254,
+      "height": 1254,
+      "alpha": true,
+      "bytes": 400536,
+      "sha256": "aa5e1afe97d8c8518fa8d7b34513961e270539580c81617daf683d6ff53e4899"
+    },
+    {
+      "name": "brain",
+      "file": "exec-c22ad683-8690-4e36-8d57-af664f23315e.png",
+      "width": 1254,
+      "height": 1254,
+      "alpha": true,
+      "bytes": 1881744,
+      "sha256": "8faceda9be0b7aead7854182bb68f5a4b151cfc1f6a4433c20ee13d40de0adc8"
+    }
+  ],
+  "files": [
+    {
+      "file": "add-compact-48.webp",
+      "width": 48,
+      "height": 48,
+      "alpha": true,
+      "bytes": 1348,
+      "sha256": "f99a48cac4da0e3e8be17e640b81e56d7db40df591a9b2069337db6fdaf5848e"
+    },
+    {
+      "file": "add-compact-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 2978,
+      "sha256": "f58f2e1d5814d4ff41836e4cad9a1962eaa73e8035c72549bbdd3208e99b80c7"
+    },
+    {
+      "file": "add-detail-192.webp",
+      "width": 192,
+      "height": 192,
+      "alpha": true,
+      "bytes": 7106,
+      "sha256": "5ddcb4ae0d84299d4f7103934b20422b00817b824ad4a76f06105a97c6cc4762"
+    },
+    {
+      "file": "add-detail-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 3042,
+      "sha256": "9345ba1fb8039f714eebb6f5707edf00f0ad96aa69637a38fae2717d73eb26ff"
+    },
+    {
+      "file": "close-compact-48.webp",
+      "width": 48,
+      "height": 48,
+      "alpha": true,
+      "bytes": 1458,
+      "sha256": "651964e84783550fbb3d6da152678dac56e1bcce9144cb7a23657108cf7cef8f"
+    },
+    {
+      "file": "close-compact-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 3018,
+      "sha256": "faeaee18fef801209d389da67ae208335a49e91884ea3a39917b3268805f44e6"
+    },
+    {
+      "file": "copy-compact-48.webp",
+      "width": 48,
+      "height": 48,
+      "alpha": true,
+      "bytes": 1046,
+      "sha256": "caeb90ba35b905f7210d3571e33c1487d465eb599147409d6e07338b180df2be"
+    },
+    {
+      "file": "copy-compact-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 2078,
+      "sha256": "72ee8d48fc6c8f15db5d55a6852e7daeaeac457eeb3fae7754be81284e852a2c"
+    },
+    {
+      "file": "decision-compact-48.webp",
+      "width": 48,
+      "height": 48,
+      "alpha": true,
+      "bytes": 1462,
+      "sha256": "9be202d2221dbde4c52fc4c28e42a2369125e35a60389a74f2a20ca50d444032"
+    },
+    {
+      "file": "decision-compact-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 3232,
+      "sha256": "9f1de43d93fd31129b70253e8964eb7c3373016aeecb3fd8044db074bc800aae"
+    },
+    {
+      "file": "decision-detail-192.webp",
+      "width": 192,
+      "height": 192,
+      "alpha": true,
+      "bytes": 8390,
+      "sha256": "be6aa4528746b36a333f0ec9bea882aa2854eb8321ffdf23b4443ea3938c1dee"
+    },
+    {
+      "file": "decision-detail-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 3570,
+      "sha256": "7432ecdb18a7181068753e8bc9e96d03fafabb3fde590c9ee0b965c945c555c6"
+    },
+    {
+      "file": "diagnostics-compact-48.webp",
+      "width": 48,
+      "height": 48,
+      "alpha": true,
+      "bytes": 1560,
+      "sha256": "522d0448b6903d35e118dd990775f25a788d327b2c70be6179c76bd21a237262"
+    },
+    {
+      "file": "diagnostics-compact-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 3532,
+      "sha256": "4e47c90582289b80b1370b93e3cee9838e62116fe0eb04236ccd1c23c8bb95b8"
+    },
+    {
+      "file": "diagnostics-detail-192.webp",
+      "width": 192,
+      "height": 192,
+      "alpha": true,
+      "bytes": 9180,
+      "sha256": "8dd805df33c23494b4a4b7d6c9bb05f71b91867cb0adf423fc21de4153b430f0"
+    },
+    {
+      "file": "diagnostics-detail-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 4224,
+      "sha256": "c34c4a4d5a1066a9498ddad05a31d719f6cf68d102db7af72750c57990f9f9e3"
+    },
+    {
+      "file": "expand-compact-48.webp",
+      "width": 48,
+      "height": 48,
+      "alpha": true,
+      "bytes": 962,
+      "sha256": "3b54ae3cf07a48cad3258e8f02e8d70769333b818fa62ebe03a645107751a2b5"
+    },
+    {
+      "file": "expand-compact-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 1978,
+      "sha256": "2b954b9b29cffaa1d6ffc1d3955c1efafdf784127138c17b3643cbc94ca81a34"
+    },
+    {
+      "file": "growth-compact-48.webp",
+      "width": 48,
+      "height": 48,
+      "alpha": true,
+      "bytes": 1640,
+      "sha256": "d10ea52fe2de22678630e4a32b7523332f1f39a42e5edabb31234def1d85816a"
+    },
+    {
+      "file": "growth-compact-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 3540,
+      "sha256": "92d101c49deb5ff076e1698b8ea0fdaa415e4b7d5423d6f743c1749aec2b8fa0"
+    },
+    {
+      "file": "growth-detail-192.webp",
+      "width": 192,
+      "height": 192,
+      "alpha": true,
+      "bytes": 9340,
+      "sha256": "7871d283f4f512a456b93e996161c1267d6821e441f81b32a689b6ca73394022"
+    },
+    {
+      "file": "growth-detail-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 3900,
+      "sha256": "7c5f0b58c24a2276c97921333968442fc6b1d8f27baad8939e29c03f01c9b4a2"
+    },
+    {
+      "file": "info-compact-48.webp",
+      "width": 48,
+      "height": 48,
+      "alpha": true,
+      "bytes": 2000,
+      "sha256": "99012ce55c6fa70b0514e42ba782938d728a5d213fe0164674839101eef85e75"
+    },
+    {
+      "file": "info-compact-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 4358,
+      "sha256": "dc87c50d5aca642b9384f68de5af3879f3298be8d88666bd03e17a2332b6525f"
+    },
+    {
+      "file": "memory-compact-48.webp",
+      "width": 48,
+      "height": 48,
+      "alpha": true,
+      "bytes": 1300,
+      "sha256": "7099094ed80efa65b79b432a58d90bc82c2b8645f8dd6f9d9561a57a737d5a18"
+    },
+    {
+      "file": "memory-compact-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 2974,
+      "sha256": "971024bec9cd25d99bc83c4c12ecadac4451b7c8378ca947b3b2113b0e43ff6c"
+    },
+    {
+      "file": "memory-detail-192.webp",
+      "width": 192,
+      "height": 192,
+      "alpha": true,
+      "bytes": 7846,
+      "sha256": "2c94ff4942b2ab60a4f66f32271dcd7776380be5885703d33864253641264d21"
+    },
+    {
+      "file": "memory-detail-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 3618,
+      "sha256": "5405a08dd92bc948d6e210901cc69842a4a2ca1a0ec9edbfbe702ed164f5ac67"
+    },
+    {
+      "file": "open-compact-48.webp",
+      "width": 48,
+      "height": 48,
+      "alpha": true,
+      "bytes": 924,
+      "sha256": "ef099486ffbe1e7f286f0f469e99aabb4c979ae450b580b384f784613b9dd3b6"
+    },
+    {
+      "file": "open-compact-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 1818,
+      "sha256": "cae2984007e72b95e395f3d12d17a9073f7d7f8138816702eaae57a74ec27206"
+    },
+    {
+      "file": "pause-compact-48.webp",
+      "width": 48,
+      "height": 48,
+      "alpha": true,
+      "bytes": 810,
+      "sha256": "d17321f56b591d7115978300fd94513915eadf17564d4256b4a37a5a2bfc5cd6"
+    },
+    {
+      "file": "pause-compact-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 1688,
+      "sha256": "e224842586dfb3b29339fe209f1e3ceb4cbaef09c75204c75cf70b7d68cab768"
+    },
+    {
+      "file": "play-compact-48.webp",
+      "width": 48,
+      "height": 48,
+      "alpha": true,
+      "bytes": 1030,
+      "sha256": "6f34b9dbe78cf644152ada02a83434c16b229aedbb0db2f6dd06416a367b0a4a"
+    },
+    {
+      "file": "play-compact-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 1964,
+      "sha256": "dba506e38c06c3e7449b6338271b664ccbb4fe264dc7fc9d01f30478e1f7ff46"
+    },
+    {
+      "file": "refresh-compact-48.webp",
+      "width": 48,
+      "height": 48,
+      "alpha": true,
+      "bytes": 1836,
+      "sha256": "cd573b109436df709900bffbd1905c07f2aceeb4a196b49238f6b9838ec27b22"
+    },
+    {
+      "file": "refresh-compact-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 3864,
+      "sha256": "e9f0faf84de630d187025725deb3af04a50c0d3d5f9320fd11f94ba86d2a50f7"
+    },
+    {
+      "file": "relation-compact-48.webp",
+      "width": 48,
+      "height": 48,
+      "alpha": true,
+      "bytes": 1478,
+      "sha256": "6dfbc81d5fbfd2b65d04a7506719cb5143f23e44a5277dd0eb088b589bd6a602"
+    },
+    {
+      "file": "relation-compact-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 3322,
+      "sha256": "8aea792571bd4f1a5ab29b733a7cd9a1c4450e9e8481459b35fae27954c9f1a5"
+    },
+    {
+      "file": "relation-detail-192.webp",
+      "width": 192,
+      "height": 192,
+      "alpha": true,
+      "bytes": 8730,
+      "sha256": "ffb40ff566d7ec95565e8813a32fc437c28362a9e69071d908268ebf7dd4771e"
+    },
+    {
+      "file": "relation-detail-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 3714,
+      "sha256": "f4fa3c66ad4e578bca78ea33bfa748bd84d15f0f221ba1c6e7335668bf8efd80"
+    },
+    {
+      "file": "search-compact-48.webp",
+      "width": 48,
+      "height": 48,
+      "alpha": true,
+      "bytes": 1512,
+      "sha256": "d4b5ac5fb316c1dedf625e91ce9ef58e8c86b58ea8a8285cdbc31002b6e8ea08"
+    },
+    {
+      "file": "search-compact-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 3384,
+      "sha256": "9b0a079505b8a721dbc539c13ebd86f4c79d627853bad834927cee1ce5f80ee0"
+    },
+    {
+      "file": "search-detail-192.webp",
+      "width": 192,
+      "height": 192,
+      "alpha": true,
+      "bytes": 8470,
+      "sha256": "c006e35dd188ba98d3c1de0bc24be2a051c31b71a84a2af03f4bf8e18ffbe382"
+    },
+    {
+      "file": "search-detail-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 3726,
+      "sha256": "3638481044bfb8f952a7ea4ec9034cc1bda9a80e9a668875927f4b28038c1497"
+    },
+    {
+      "file": "self-model-compact-48.webp",
+      "width": 48,
+      "height": 48,
+      "alpha": true,
+      "bytes": 1532,
+      "sha256": "c4d48d1463a6b779551bb856b3672faf1bb8fc78143db1a45107629f223b0eae"
+    },
+    {
+      "file": "self-model-compact-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 3154,
+      "sha256": "214b04c5274e3babca5905b6f19cbaed841fc8df9a78e6ab5cccc3948adfefaf"
+    },
+    {
+      "file": "self-model-detail-192.webp",
+      "width": 192,
+      "height": 192,
+      "alpha": true,
+      "bytes": 8526,
+      "sha256": "c03761f86a7379497b63db689b3045cc9d07f1abbb7f8deae2f0e2db5cc119f9"
+    },
+    {
+      "file": "self-model-detail-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 3838,
+      "sha256": "8dbb5093de0c1b47eedd195863ab263a4be72f6f239cec505e03fe401475d3b7"
+    },
+    {
+      "file": "self-retrieval-compact-48.webp",
+      "width": 48,
+      "height": 48,
+      "alpha": true,
+      "bytes": 2056,
+      "sha256": "6fc845fdb143c4f32f9f15c11a66e3513bc2714f9f8c57378087048380fc8ede"
+    },
+    {
+      "file": "self-retrieval-compact-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 4576,
+      "sha256": "c40ba9aac617a18775302abfdbd8218890b11f154cf40294c2330f1dd4f5494d"
+    },
+    {
+      "file": "self-retrieval-detail-192.webp",
+      "width": 192,
+      "height": 192,
+      "alpha": true,
+      "bytes": 11282,
+      "sha256": "333f83cd587d7b9238402864d66940cc3897c041c15d64274a3e8f1c987a74bb"
+    },
+    {
+      "file": "self-retrieval-detail-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 4798,
+      "sha256": "2d1f9dafe9ce032ce9b8f8ea90f756930e91b748a19ce27586158ad8571cfa2e"
+    },
+    {
+      "file": "simulate-compact-48.webp",
+      "width": 48,
+      "height": 48,
+      "alpha": true,
+      "bytes": 1800,
+      "sha256": "8dc3b8f0acb99ab0a02373393ea42a536726b3b430e40e48c3e91b405ad0ae7a"
+    },
+    {
+      "file": "simulate-compact-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 4290,
+      "sha256": "2a274b20f73d7588b760a12c41a8d9c01f76767fdaffc39e04c24378e79826f5"
+    },
+    {
+      "file": "simulate-detail-192.webp",
+      "width": 192,
+      "height": 192,
+      "alpha": true,
+      "bytes": 11076,
+      "sha256": "cb35bb4490dddebc880bfc1de956ded60983ac63a2acd4415748997a9628de69"
+    },
+    {
+      "file": "simulate-detail-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 4754,
+      "sha256": "10ee235476c6d9f72b8b13fde4b40fecadff7fe6f533708818cbc51e3dc21204"
+    },
+    {
+      "file": "success-compact-48.webp",
+      "width": 48,
+      "height": 48,
+      "alpha": true,
+      "bytes": 1062,
+      "sha256": "29cc98e9749fcb820e842a6f84c60b170a4c088508aac1e8443e4b3c21fbab4e"
+    },
+    {
+      "file": "success-compact-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 2040,
+      "sha256": "9aacb6d8b8a808985a2efe66a5f7a8e4d01ff898903c77b35409c696be434efd"
+    },
+    {
+      "file": "timeline-compact-48.webp",
+      "width": 48,
+      "height": 48,
+      "alpha": true,
+      "bytes": 1328,
+      "sha256": "ec796cd4ffb5a07589a9267adf379c60fb102540eb3be05698734e97399eb406"
+    },
+    {
+      "file": "timeline-compact-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 3160,
+      "sha256": "b205e31016a8aa2545b2dbf335828b4c5cd5f8d54edbbf78327d224a5ae1c2ba"
+    },
+    {
+      "file": "timeline-detail-192.webp",
+      "width": 192,
+      "height": 192,
+      "alpha": true,
+      "bytes": 6748,
+      "sha256": "810b552737e5502ed4f9958b74d25a32a2b3d0c4184c1ba3e4c4f1592b9561dc"
+    },
+    {
+      "file": "timeline-detail-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 2986,
+      "sha256": "c4b6c4eaabc28fd766570bc688eaeba85de0b3a14ea2a2075dd51945334c1c5f"
+    },
+    {
+      "file": "voice-compact-48.webp",
+      "width": 48,
+      "height": 48,
+      "alpha": true,
+      "bytes": 1404,
+      "sha256": "23c997d9ba5197e57209a4c76e2bcd0c0ded0a7f6b84f0541196c7f4d3f72ae5"
+    },
+    {
+      "file": "voice-compact-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 3050,
+      "sha256": "e9ac5aed2f5ed35d3791ab1e0869a498bf433426e62159859a2a1121216d752f"
+    },
+    {
+      "file": "voice-detail-192.webp",
+      "width": 192,
+      "height": 192,
+      "alpha": true,
+      "bytes": 8130,
+      "sha256": "9a60bb1d168b86d97d7903a7f94a22228f5b9c4b1796e49f7603be53707782a7"
+    },
+    {
+      "file": "voice-detail-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 3140,
+      "sha256": "18ad5407ff5a529f10a65ce350bd00aa56f75fae4681bdc1d29bd4cad95655e4"
+    },
+    {
+      "file": "warning-compact-48.webp",
+      "width": 48,
+      "height": 48,
+      "alpha": true,
+      "bytes": 1228,
+      "sha256": "9c4b48b1ddb5289fd1cb512152de79feb4142a3397f81033d05fa706ce4c5aac"
+    },
+    {
+      "file": "warning-compact-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 2586,
+      "sha256": "a5910ba6943e5ffc75161b2d18d7f4bfbcd16da9bf22d57a6ebb1c9cf751b352"
+    },
+    {
+      "file": "memory-brain-480.webp",
+      "width": 480,
+      "height": 480,
+      "alpha": true,
+      "bytes": 42804,
+      "sha256": "a6c90e9511db7277b645daf3b165f9ec1e8100100d691017d9f4e54454a7473f"
+    },
+    {
+      "file": "memory-brain-800.webp",
+      "width": 800,
+      "height": 800,
+      "alpha": true,
+      "bytes": 56482,
+      "sha256": "f941f68c307d75190a849a15c9e2f2350604daf9694439880755aab67eb5c494"
+    }
+  ]
+}
