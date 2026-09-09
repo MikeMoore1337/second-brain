@@ -185,6 +185,11 @@ describe("Assistant + Compare Stage 7 surface", () => {
     await act(async () => button?.click());
 
     expect(storage).not.toHaveBeenCalled();
-    expect(polling).not.toHaveBeenCalled();
+    const applicationPolling = polling.mock.calls.filter(([, delay]) => {
+      // Motion uses setInterval as a ~60 fps animation scheduler. Product polling
+      // would use a materially longer interval and remains forbidden here.
+      return typeof delay !== "number" || delay >= 100;
+    });
+    expect(applicationPolling).toHaveLength(0);
   });
 });

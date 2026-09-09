@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
 from pydantic import BaseModel, ConfigDict, StrictStr, ValidationError
+from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -57,7 +58,14 @@ MAX_RAW_COMPARE_BODY_BYTES = 128 * 1024
 
 _API_HEADERS = {
     "Cache-Control": "no-store",
+    "Content-Security-Policy": (
+        "default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; "
+        "form-action 'none'; frame-ancestors 'none'; img-src 'self'; object-src 'none'; "
+        "script-src 'self'; style-src 'self'"
+    ),
+    "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
 }
 
 _ASSISTANT_MESSAGES: Mapping[str, tuple[int, str]] = {
@@ -126,7 +134,9 @@ class CompareWebService(Protocol):
 def _assistant_request(payload: Stage7RequestPayload) -> AssistantRequest:
     return AssistantRequest(
         task=payload.task,
-        options=tuple(AssistantOption(id=option.id, label=option.label) for option in payload.options),
+        options=tuple(
+            AssistantOption(id=option.id, label=option.label) for option in payload.options
+        ),
         explicit_constraints=tuple(payload.explicit_constraints),
         explicit_goals=tuple(payload.explicit_goals),
         explicit_context=tuple(
@@ -139,7 +149,9 @@ def _assistant_request(payload: Stage7RequestPayload) -> AssistantRequest:
 def _compare_request(payload: Stage7RequestPayload) -> CompareRequestV1:
     return CompareRequestV1(
         task=payload.task,
-        options=tuple(CompareOptionV1(id=option.id, label=option.label) for option in payload.options),
+        options=tuple(
+            CompareOptionV1(id=option.id, label=option.label) for option in payload.options
+        ),
         assistant=CompareAssistantInputsV1(
             explicit_constraints=tuple(payload.explicit_constraints),
             explicit_goals=tuple(payload.explicit_goals),
@@ -290,7 +302,16 @@ def _invalid_request(path: str) -> JSONResponse:
 def _too_large(path: str) -> JSONResponse:
     if path == "/api/compare":
         return _safe_error("COMPARE_INVALID_REQUEST", "Запрос сравнения слишком велик.", 413)
-    return _safe_error("ASSISTANT_INVALID_REQUEST", "Запрос независимого совета слишком велик.", 413)
+    return _safe_error(
+        "ASSISTANT_INVALID_REQUEST", "Запрос независимого совета слишком велик.", 413
+    )
+
+
+def _method_not_allowed(path: str) -> JSONResponse:
+    response = _invalid_request(path)
+    response.status_code = 405
+    response.headers["Allow"] = "POST"
+    return response
 
 
 def _header_map(scope: Scope) -> dict[bytes, bytes]:
@@ -329,7 +350,9 @@ def _same_origin(origin: str | None, host_header: str | None) -> bool:
     return bool(parsed.netloc) and parsed.netloc.lower() == host_header.strip().lower()
 
 
-async def _send_json_response(response: JSONResponse, scope: Scope, receive: Receive, send: Send) -> None:
+async def _send_json_response(
+    response: JSONResponse, scope: Scope, receive: Receive, send: Send
+) -> None:
     await response(scope, receive, send)
 
 
@@ -348,6 +371,17 @@ class AssistantCompareRequestBoundaryMiddleware:
             await self.app(scope, receive, send)
             return
         if scope.get("method") != "POST":
+            await _send_json_response(_method_not_allowed(path), scope, receive, send)
+            return
+        security_headers = {
+            b"host",
+            b"origin",
+            b"content-type",
+            b"content-length",
+            b"x-second-brain-request",
+        }
+        header_names = [name.lower() for name, _ in scope.get("headers", [])]
+        if any(header_names.count(name) > 1 for name in security_headers):
             await _send_json_response(_invalid_request(path), scope, receive, send)
             return
         headers = _header_map(scope)
@@ -372,7 +406,9 @@ class AssistantCompareRequestBoundaryMiddleware:
         ):
             await _send_json_response(_invalid_request(path), scope, receive, send)
             return
-        cap = MAX_RAW_ASSISTANT_BODY_BYTES if path == "/api/assistant" else MAX_RAW_COMPARE_BODY_BYTES
+        cap = (
+            MAX_RAW_ASSISTANT_BODY_BYTES if path == "/api/assistant" else MAX_RAW_COMPARE_BODY_BYTES
+        )
         content_length = _decode_header(headers, b"content-length")
         if content_length is not None:
             try:
@@ -435,8 +471,8 @@ def install_assistant_compare_routes(
         try:
             raw = await request.json()
             payload = Stage7RequestPayload.model_validate(raw, strict=True)
-            result = assistant.execute(payload)
-        except (ValidationError, json.JSONDecodeError, UnicodeError, ValueError, TypeError):
+            result = await run_in_threadpool(assistant.execute, payload)
+        except ValidationError, json.JSONDecodeError, UnicodeError, ValueError, TypeError:
             return _invalid_request("/api/assistant")
         except AssistantError as error:
             return _assistant_error(error)
@@ -453,8 +489,8 @@ def install_assistant_compare_routes(
         try:
             raw = await request.json()
             payload = Stage7RequestPayload.model_validate(raw, strict=True)
-            result = compare.execute(payload)
-        except (ValidationError, json.JSONDecodeError, UnicodeError, ValueError, TypeError):
+            result = await run_in_threadpool(compare.execute, payload)
+        except ValidationError, json.JSONDecodeError, UnicodeError, ValueError, TypeError:
             return _invalid_request("/api/compare")
         except Exception:
             return _safe_error(

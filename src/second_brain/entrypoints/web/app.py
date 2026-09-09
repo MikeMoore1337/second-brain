@@ -18,12 +18,15 @@ from second_brain.entrypoints.web.assistant_compare import (
     CompareWebService,
     install_assistant_compare_routes,
 )
-from second_brain.entrypoints.web.legacy_app import *  # noqa: F403
 from second_brain.entrypoints.web.legacy_app import (
     DIAGNOSTICS_REQUEST_HEADER_NAME,
     DIAGNOSTICS_REQUEST_HEADER_VALUE,
     MAX_RAW_DIAGNOSTICS_BODY_BYTES,
+)
+from second_brain.entrypoints.web.legacy_app import (
     __all__ as _legacy_all,
+)
+from second_brain.entrypoints.web.legacy_app import (
     create_app as _legacy_create_app,
 )
 
@@ -34,7 +37,11 @@ _ERRORS = _legacy_app._ERRORS
 _GENERIC_ERROR = _legacy_app._GENERIC_ERROR
 REACT_INDEX_FILE = _legacy_app.REACT_INDEX_FILE
 REACT_ASSETS_DIR = _legacy_app.REACT_ASSETS_DIR
-run_in_threadpool = _legacy_app.run_in_threadpool
+run_in_threadpool = _legacy_app.run_in_threadpool  # type: ignore[attr-defined]
+
+for _legacy_name in _legacy_all:
+    if _legacy_name != "create_app":
+        globals()[_legacy_name] = getattr(_legacy_app, _legacy_name)
 
 _LEGACY_PATCHABLE_NAMES = frozenset(
     {

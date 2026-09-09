@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+from threading import Event
 from typing import cast
 
+import pytest
 from fastapi.testclient import TestClient
 
 from second_brain.application.assistant import (
@@ -32,8 +35,13 @@ BASE_URL = "http://127.0.0.1"
 @dataclass(slots=True)
 class RecordingAssistantWebService:
     calls: list[Stage7RequestPayload] = field(default_factory=list)
+    entered: Event | None = None
+    release: Event | None = None
 
     def execute(self, payload: Stage7RequestPayload) -> dict[str, object]:
+        if self.entered is not None and self.release is not None:
+            self.entered.set()
+            assert self.release.wait(timeout=2)
         self.calls.append(payload)
         return {
             "output_label": ASSISTANT_OUTPUT_LABEL,
@@ -53,13 +61,26 @@ class RecordingAssistantWebService:
 @dataclass(slots=True)
 class RecordingCompareWebService:
     calls: list[Stage7RequestPayload] = field(default_factory=list)
+    entered: Event | None = None
+    release: Event | None = None
 
     def execute(self, payload: Stage7RequestPayload) -> dict[str, object]:
+        if self.entered is not None and self.release is not None:
+            self.entered.set()
+            assert self.release.wait(timeout=2)
         self.calls.append(payload)
         return {
             "option_ids": [option.id for option in payload.options],
-            "assistant": {"state": "error", "result": None, "error": {"code": "COMPARE_BRANCH_UNAVAILABLE", "message": "safe"}},
-            "simulate_me": {"state": "abstention", "result": {"kind": "abstention", "selected_option": None}, "error": None},
+            "assistant": {
+                "state": "error",
+                "result": None,
+                "error": {"code": "COMPARE_BRANCH_UNAVAILABLE", "message": "safe"},
+            },
+            "simulate_me": {
+                "state": "abstention",
+                "result": {"kind": "abstention", "selected_option": None},
+                "error": None,
+            },
             "delta": {
                 "relation": "assistant_error",
                 "assistant_state": "error",
@@ -246,3 +267,33 @@ def test_compare_api_uses_separate_purpose_and_preserves_branch_separation() -> 
     assert set(body) >= {"assistant", "simulate_me", "delta"}
     assert len(compare.calls) == 1
     assert assistant.calls == []
+
+
+@pytest.mark.parametrize(
+    ("path", "purpose"),
+    [
+        ("/api/assistant", ASSISTANT_REQUEST_HEADER_VALUE),
+        ("/api/compare", COMPARE_REQUEST_HEADER_VALUE),
+    ],
+)
+def test_blocking_stage7_service_does_not_block_healthz(path: str, purpose: str) -> None:
+    entered = Event()
+    release = Event()
+    assistant = RecordingAssistantWebService(entered=entered, release=release)
+    compare = RecordingCompareWebService(entered=entered, release=release)
+    app = create_app(assistant_web_service=assistant, compare_web_service=compare)
+
+    with TestClient(app, base_url=BASE_URL) as client, ThreadPoolExecutor() as pool:
+        stage7_response = pool.submit(
+            client.post,
+            path,
+            json=_payload(),
+            headers=_headers(purpose),
+        )
+        assert entered.wait(timeout=1)
+        health_response = pool.submit(client.get, "/healthz")
+        try:
+            assert health_response.result(timeout=0.5).status_code == 200
+        finally:
+            release.set()
+        assert stage7_response.result(timeout=2).status_code == 200

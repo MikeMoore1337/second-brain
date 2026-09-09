@@ -16,10 +16,16 @@ from fastapi.testclient import TestClient
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from second_brain.entrypoints.web.app import (
+    ASSISTANT_REQUEST_HEADER_NAME,
+    ASSISTANT_REQUEST_HEADER_VALUE,
+    COMPARE_REQUEST_HEADER_NAME,
+    COMPARE_REQUEST_HEADER_VALUE,
     DIAGNOSTICS_REQUEST_HEADER_NAME,
     DIAGNOSTICS_REQUEST_HEADER_VALUE,
     DRAFT_REQUEST_HEADER_NAME,
     DRAFT_REQUEST_HEADER_VALUE,
+    MAX_RAW_ASSISTANT_BODY_BYTES,
+    MAX_RAW_COMPARE_BODY_BYTES,
     MAX_RAW_DIAGNOSTICS_BODY_BYTES,
     MAX_RAW_DRAFT_BODY_BYTES,
     MAX_RAW_SEARCH_BODY_BYTES,
@@ -153,6 +159,26 @@ def _draft_route(
 
 
 PRIVATE_ROUTES: tuple[PrivateRoute, ...] = (
+    PrivateRoute(
+        path="/api/assistant",
+        request_header_name=ASSISTANT_REQUEST_HEADER_NAME,
+        request_header_value=ASSISTANT_REQUEST_HEADER_VALUE,
+        content_type="application/json",
+        body=_json_body({"task": "Boundary fixture", "options": []}),
+        invalid_code="ASSISTANT_INVALID_REQUEST",
+        content_too_large_code="ASSISTANT_INVALID_REQUEST",
+        max_body_bytes=MAX_RAW_ASSISTANT_BODY_BYTES,
+    ),
+    PrivateRoute(
+        path="/api/compare",
+        request_header_name=COMPARE_REQUEST_HEADER_NAME,
+        request_header_value=COMPARE_REQUEST_HEADER_VALUE,
+        content_type="application/json",
+        body=_json_body({"task": "Boundary fixture", "options": []}),
+        invalid_code="COMPARE_INVALID_REQUEST",
+        content_too_large_code="COMPARE_INVALID_REQUEST",
+        max_body_bytes=MAX_RAW_COMPARE_BODY_BYTES,
+    ),
     _draft_route(
         "/api/drafts/text",
         body=_json_body({"text": "Boundary fixture text."}),
