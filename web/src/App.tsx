@@ -1,6 +1,7 @@
 import { MotionConfig } from "motion/react";
 import { type ReactElement } from "react";
 
+import { AssistantCompareSurface } from "./assistant-compare-surface";
 import {
   CaptureSurface,
   DecisionJournalSurface,
@@ -18,6 +19,7 @@ const navigation = [
   ["#timeline", "Хронология", "timeline"],
   ["#self-model", "Модель себя", "self-model"],
   ["#simulate-me", "Прогноз", "simulate"],
+  ["#assistant-compare", "Совет и сравнение", "relation"],
   ["#self-retrieval", "Сбор контекста", "self-retrieval"],
   ["#search", "Поиск", "search"],
   ["#diagnostics", "Диагностика", "diagnostics"],
@@ -58,6 +60,7 @@ export function App(): ReactElement {
               <TimelineSurface />
               <SelfModelSurface />
               <SimulateMeSurface />
+              <AssistantCompareSurface />
               <SelfRetrievalSurface />
               <SearchSurface />
               <DiagnosticsSurface />
