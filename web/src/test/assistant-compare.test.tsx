@@ -258,7 +258,7 @@ describe("Assistant + Compare Stage 7 surface", () => {
       kind: "recommendation",
       recommendation: "option-1",
       selected_option: null,
-      rationale: ["Поскольку в explicit_constraints указано ограничение."],
+      rationale: ["Assistant использует Simulate Me.", "Поскольку в explicit_constraints указано ограничение."],
       uncertainty: ["evidence_refs не указаны"],
     };
     vi.spyOn(window, "fetch").mockResolvedValue(jsonResponse(technicalResult));
@@ -271,6 +271,8 @@ describe("Assistant + Compare Stage 7 surface", () => {
 
     expect(host.textContent).not.toContain("option-1");
     expect(host.textContent).not.toContain("explicit_constraints");
+    expect(host.textContent).not.toContain("Assistant");
+    expect(host.textContent).not.toContain("Simulate Me");
     expect(host.textContent).not.toContain("Выбранный вариант:");
     expect(host.textContent).toContain("технический текст скрыт");
   });

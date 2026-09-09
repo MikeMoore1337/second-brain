@@ -78,6 +78,7 @@ function hasTechnicalProviderText(value: string, options: readonly Stage7Option[
     options.some((option) => option.id === trimmed) ||
     /^option-\d+$/iu.test(trimmed) ||
     /(^|[^\p{L}\p{N}_])option-\d+(?=$|[^\p{L}\p{N}_])/iu.test(value) ||
+    /(^|[^\p{L}\p{N}_])(?:assistant|simulate(?:[ _]+me))(?=$|[^\p{L}\p{N}_])/iu.test(value) ||
     INTERNAL_PROVIDER_TOKENS.some((token) => value.includes(token))
   );
 }
