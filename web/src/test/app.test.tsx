@@ -166,8 +166,8 @@ describe("React Web parity shell", () => {
 
     try {
       const host = await renderApp();
-      expect(host.querySelector('[aria-label="Навигация рабочего пространства"]')).not.toBeNull();
-      expect(host.querySelector('[aria-label="Основные разделы"]')).not.toBeNull();
+      expect(host.querySelector('.sections-trigger')).not.toBeNull();
+      expect(host.querySelector('.fold-list')).not.toBeNull();
       expect(host.querySelector('[aria-label="Режим добавления"]')).not.toBeNull();
       expect(host.querySelector('[aria-label="Режим журнала решений"]')).not.toBeNull();
       expect(host.textContent).toContain("Сбор контекста");
@@ -188,15 +188,15 @@ describe("React Web parity shell", () => {
     const host = await renderApp();
 
     expect(host.querySelector("main#main-content")).not.toBeNull();
-    expect(host.querySelector('[aria-label="Основные разделы"]')).not.toBeNull();
-    expect(host.querySelector("#hero-title")?.textContent).toContain("Сохраняй идеи");
+    expect(host.querySelector('.fold-list')).not.toBeNull();
+    expect(host.querySelector("#hero-title")?.textContent).toContain("Second");
     for (const id of ["decision-journal", "timeline", "self-model", "simulate-me", "self-retrieval", "search", "memory", "growth"]) {
       expect(host.querySelector(`#${id}`), id).not.toBeNull();
     }
     expect(host.querySelector('[data-capture-panel]')).not.toBeNull();
     expect(host.querySelector('[data-self-retrieval-surface]')).not.toBeNull();
-    expect(host.querySelector('.entry-icon [data-icon="add"]')).not.toBeNull();
-    expect(host.querySelector('.topnav [data-icon="decision"]')).not.toBeNull();
+    expect(host.querySelector('#entry-title [data-icon="add"]')).not.toBeNull();
+    expect(host.querySelector('.fold-section summary [data-icon="decision"]')).not.toBeNull();
     expect(host.querySelector('.card-meta [data-icon="open"]')).not.toBeNull();
   });
 

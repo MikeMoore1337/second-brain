@@ -3,7 +3,7 @@
   margin: clamp(3rem, 8vw, 7rem) 0;
   padding: clamp(1rem, 3vw, 2rem);
   overflow: clip;
-  border: 1px solid color-mix(in srgb, var(--signal-violet, #9b7bff) 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sb-color-accent) 28%, transparent);
   border-radius: clamp(1.25rem, 3vw, 2rem);
   background:
     radial-gradient(circle at 92% 8%, rgb(155 123 255 / 14%), transparent 36%),
@@ -16,7 +16,7 @@
 
 .stage7-heading > p:last-child {
   max-width: 48rem;
-  color: var(--text-secondary, #b8b5c8);
+  color: var(--sb-color-text-secondary);
 }
 
 .stage7-form {
@@ -37,12 +37,12 @@
   font-size: 0.86rem;
   font-weight: 650;
   letter-spacing: 0.02em;
-  color: var(--text-primary, #f7f5ff);
+  color: var(--sb-color-text-primary);
 }
 
 .stage7-field small {
   font-weight: 450;
-  color: var(--text-secondary, #b8b5c8);
+  color: var(--sb-color-text-secondary);
 }
 
 .stage7-field textarea,
@@ -92,7 +92,7 @@
   border: 1px solid rgb(155 123 255 / 22%);
   border-radius: 1rem;
   background: rgb(155 123 255 / 7%);
-  color: var(--text-secondary, #b8b5c8);
+  color: var(--sb-color-text-secondary);
 }
 
 .stage7-disclosure p {
@@ -111,13 +111,13 @@
   gap: 0.5rem;
   align-items: center;
   justify-content: center;
-  min-height: 2.75rem;
+  min-height: 44px;
 }
 
 .stage7-live {
   min-height: 1.5rem;
   margin-top: 1rem;
-  color: var(--text-secondary, #b8b5c8);
+  color: var(--sb-color-text-secondary);
   font-size: 0.9rem;
 }
 
@@ -163,12 +163,12 @@
 
 .stage7-status,
 .stage7-muted {
-  color: var(--text-secondary, #b8b5c8);
+  color: var(--sb-color-text-secondary);
   font-size: 0.86rem;
 }
 
 .stage7-choice {
-  color: var(--text-primary, #f7f5ff);
+  color: var(--sb-color-text-primary);
   font-weight: 650;
 }
 
@@ -198,12 +198,14 @@
 }
 
 .stage7-delta-list dt {
-  color: var(--text-secondary, #b8b5c8);
+  color: var(--sb-color-text-secondary);
 }
 
 .stage7-delta-list dd {
   margin: 0;
   overflow-wrap: anywhere;
+  font-family: var(--sb-font-sans);
+  font-size: 0.82rem;
 }
 
 .stage7-error {

@@ -1,0 +1,54 @@
+{
+  "date": "2026-09-09",
+  "generator": "OpenAI built-in image_gen",
+  "brainMarkSource": {
+    "file": "exec-248e0671-1a79-4522-a323-fe33061c383d.png",
+    "sha256": "138df0e4401afce710a987c400fa776880e58d389a4b8b9d11ca4712c93fbe9c",
+    "reference": "memory-brain-800.webp",
+    "prompt": "Simplified recognizable 3/4 brain brand mark; 5-7 broad violet folds, lavender upper-left light, dark purple shadow; transparent alpha; readable at 40px; no text, sphere or tiny sparkling filaments."
+  },
+  "chapterSources": "Left detailed masters from assets-v4.json: decision, self-model, search; crop/resize only",
+  "license": "Apache-2.0 project artwork, no third-party icon pack",
+  "files": [
+    {
+      "file": "brain-mark-48.webp",
+      "width": 48,
+      "height": 48,
+      "alpha": true,
+      "bytes": 1990,
+      "sha256": "591fd699c403ddbce9c6a9c2533445083af0612663e7df7f3afdadfe62e34e22"
+    },
+    {
+      "file": "brain-mark-96.webp",
+      "width": 96,
+      "height": 96,
+      "alpha": true,
+      "bytes": 4376,
+      "sha256": "580d4d96c959a59259aeedbca2a739364969adee57024ce104659f9de61b4c7a"
+    },
+    {
+      "file": "decision-chapter.webp",
+      "width": 384,
+      "height": 384,
+      "alpha": true,
+      "bytes": 19346,
+      "sha256": "3e2200bb30fa2e8cccc88cc8b5bc0f96454d831055ad55313b58dc973bcd3c31"
+    },
+    {
+      "file": "self-model-chapter.webp",
+      "width": 384,
+      "height": 384,
+      "alpha": true,
+      "bytes": 17852,
+      "sha256": "120c070813f88e40c82449840fed4b9912fcef6ad643b7261dc0a111e863d6f4"
+    },
+    {
+      "file": "search-chapter.webp",
+      "width": 384,
+      "height": 384,
+      "alpha": true,
+      "bytes": 19450,
+      "sha256": "18fdc88061a31f5f0fca3a8259edf725d1f340f2edc2c4f9d567c57c97a95d50"
+    }
+  ]
+}

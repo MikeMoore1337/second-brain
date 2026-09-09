@@ -59,8 +59,8 @@ def test_capture_write_styles_make_the_safety_sequence_visually_distinct() -> No
     ):
         assert selector in css
 
-    assert 'content: "REVIEW";' in css
-    assert 'content: "SAFE WRITE";' in css
+    assert 'content: "ПРОВЕРКА";' in css
+    assert 'content: "БЕЗОПАСНОЕ СОХРАНЕНИЕ";' in css
     assert ".capture-form {" in css
     assert "border-left: 2px solid rgb(var(--sb-rgb-violet-signal) / 0.62);" in css
     assert "border-left: 3px solid var(--sb-color-success);" in css

@@ -23,7 +23,7 @@ import {
   type SavePlanResponse,
   type SavedNoteResponse,
 } from "./api";
-import { Icon } from "./icons";
+import { Icon, type IconName } from "./icons";
 import { presentValue } from "./presentation";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactElement, type ReactNode } from "react";
 
@@ -73,7 +73,7 @@ function SavePlan({ plan, title }: { plan: SavePlanResponse; title: string }): R
         <Field label="Путь" value={plan.note.relative_path} />
       </dl>
       <h5>Предлагаемый Markdown-файл</h5>
-      <pre className="save-diff">{plan.diff}</pre>
+      <pre className="save-diff" tabIndex={0} aria-label="Полный diff предлагаемого файла">{plan.diff}</pre>
     </section>
   );
 }
@@ -444,11 +444,10 @@ export function CaptureSurface(): ReactElement {
   }
 
   return (
-    <section className="entry-point" aria-labelledby="entry-title">
-      <div className="entry-icon" aria-hidden="true"><Icon name="add" size={24} /></div>
+    <section className="entry-point" id="capture" aria-labelledby="entry-title">
       <div className="entry-copy">
         <p className="entry-kicker">Новая заметка</p>
-        <h2 id="entry-title">Добавить знание</h2>
+        <h2 id="entry-title"><Icon name="add" size={56} className="section-art" />Добавить знание</h2>
         <p id="add-description">Получи структурированный черновик из текста, голоса или публичной страницы.</p>
         {!draftResponse ? <div className="capture-panel" id="capture-panel" data-capture-panel aria-busy={busy}>
           <div className="mode-switch" role="group" aria-label="Режим добавления">
@@ -474,7 +473,8 @@ export function CaptureSurface(): ReactElement {
 }
 
 export function SectionHeading({ eyebrow, title, children, id }: { eyebrow: string; title: string; children?: ReactNode; id: string }): ReactElement {
-  return <div className="section-heading"><div><p className="eyebrow">{eyebrow}</p><h2 id={id}>{title}</h2></div>{children ? <p className="timeline-lede">{children}</p> : null}</div>;
+  const symbols: Record<string, IconName> = { "timeline-title": "timeline", "self-model-title": "self-model", "self-retrieval-title": "self-retrieval", "simulate-me-title": "simulate", "search-title": "search", "decision-journal-title": "decision", "diagnostics-title": "diagnostics" };
+  return <div className="section-heading"><div><p className="eyebrow">{eyebrow}</p><h2 id={id}>{symbols[id] ? <Icon name={symbols[id]} size={56} className="section-art" /> : null}{title}</h2></div>{children ? <p className="timeline-lede">{children}</p> : null}</div>;
 }
 
 export function TimelineSurface(): ReactElement {
@@ -502,14 +502,14 @@ export function TimelineSurface(): ReactElement {
 
   useEffect(() => { void load(); }, []);
 
-  const renderItem = (item: import("./api").TimelineItem, known: boolean): ReactElement => <article className={known ? "timeline-item" : "timeline-item timeline-item-unknown"} key={item.id}><h4 className="timeline-item-title">{known ? "Событие" : "Время неизвестно"}</h4><dl className="timeline-fields">{known ? <Field label="Время события" value={item.event_at} /> : null}<Field label="Событие" value={item.event_kind} /><Field label="Свидетельство" value={item.evidence_kind} /><Field label="Краткое содержание" value={item.summary} /><Field label="Домен" value={item.domain} /><Field label="Путь" value={item.relative_path} /><Field label="UUID" value={item.id} /><Field label="Сохранено" value={item.storage_created_at} />{item.storage_updated_at ? <Field label="Обновлено в хранилище" value={item.storage_updated_at} /> : null}{item.related_note_ids?.length ? <Field label="Связанные решения" value={item.related_note_ids.join(", ")} /> : null}</dl></article>;
+  const renderItem = (item: import("./api").TimelineItem, known: boolean): ReactElement => <li className={known ? "timeline-item" : "timeline-item timeline-item-unknown"} key={item.id}><h4 className="timeline-item-title">{known ? "Событие" : "Время неизвестно"}</h4><dl className="timeline-fields">{known ? <Field label="Время события" value={item.event_at} /> : null}<Field label="Событие" value={item.event_kind} /><Field label="Свидетельство" value={item.evidence_kind} /><Field label="Краткое содержание" value={item.summary} /><Field label="Домен" value={item.domain} /><Field label="Путь" value={item.relative_path} /><Field label="UUID" value={item.id} /><Field label="Сохранено" value={item.storage_created_at} />{item.storage_updated_at ? <Field label="Обновлено в хранилище" value={item.storage_updated_at} /> : null}{item.related_note_ids?.length ? <Field label="Связанные решения" value={item.related_note_ids.join(", ")} /> : null}</dl></li>;
   const total = (shown: number, count: number): string => shown < count ? `Показано: ${shown} / ${count} — история ограничена лимитом` : `Показано: ${shown} / ${count}`;
 
   return <section className="timeline-surface" id="timeline" aria-labelledby="timeline-title" data-timeline-surface aria-busy={busy}>
     <SectionHeading eyebrow="Шаг 3 · актуальные свидетельства" title="Личная хронология." id="timeline-title">Текущая хронология по каноническим свидетельствам — с честным разделением события и времени хранения.</SectionHeading>
     <div className="timeline-panel"><div className="timeline-controls"><label className="timeline-order-control"><span className="draft-field-label">Порядок</span><select className="review-input" value={order} disabled={busy} onChange={(event) => { const next = event.target.value as "asc" | "desc"; setOrder(next); void load(next); }}><option value="desc">Сначала новые</option><option value="asc">Сначала старые</option></select></label><button className="review-button review-button-secondary" type="button" disabled={busy} aria-busy={busy} onClick={() => void load()}>Обновить</button><p className="timeline-status" role="status" aria-live="polite">{status}</p></div>{error ? <p className="capture-error timeline-error" role="alert" tabIndex={-1}>{error}</p> : null}
       <section className="timeline-group" aria-labelledby="timeline-known-title"><div className="timeline-group-heading"><div><p className="eyebrow">Время события известно</p><h3 id="timeline-known-title">События с известным временем</h3></div><p className="timeline-total">{data ? total(data.known_items.length, data.known_total) : ""}</p></div><ol className="timeline-list">{data?.known_items.map((item) => renderItem(item, true))}</ol>{data && data.known_items.length === 0 ? <p className="timeline-empty">Пока нет событий с известным временем.</p> : null}</section>
-      <section className="timeline-group timeline-group-unknown" aria-labelledby="timeline-unknown-title"><div className="timeline-group-heading"><div><p className="eyebrow">Время события неизвестно</p><h3 id="timeline-unknown-title">Время неизвестно</h3></div><p className="timeline-total">{data ? total(data.unknown_items.length, data.unknown_total) : ""}</p></div><div className="timeline-list">{data?.unknown_items.map((item) => renderItem(item, false))}</div>{data && data.unknown_items.length === 0 ? <p className="timeline-empty">Пока нет событий без известного времени.</p> : null}</section>
+      <section className="timeline-group timeline-group-unknown" aria-labelledby="timeline-unknown-title"><div className="timeline-group-heading"><div><p className="eyebrow">Время события неизвестно</p><h3 id="timeline-unknown-title">Время неизвестно</h3></div><p className="timeline-total">{data ? total(data.unknown_items.length, data.unknown_total) : ""}</p></div><ul className="timeline-list">{data?.unknown_items.map((item) => renderItem(item, false))}</ul>{data && data.unknown_items.length === 0 ? <p className="timeline-empty">Пока нет событий без известного времени.</p> : null}</section>
     </div>
   </section>;
 }
@@ -574,7 +574,7 @@ export function SelfRetrievalSurface(): ReactElement {
 
   const tags = (values: readonly string[] | undefined): ReactElement => <div className="search-tags">{values?.length ? values.map((tag) => <span className="search-tag" key={tag}>{tag}</span>) : <span className="search-tag search-tag-empty">без тегов</span>}</div>;
   const claim = (value: import("./api").SelfRetrievalClaim): ReactElement => <li className="self-retrieval-claim" key={`${value.dimension ?? "claim"}-${value.claim ?? "text"}`}><dl className="self-retrieval-fields"><Field label="Измерение" value={value.dimension} /><Field label="Утверждение (уже построено)" value={value.claim} /><Field label="Подтверждающие UUID" value={value.supporting_note_ids.join(", ")} /><Field label="Версия построения" value={value.derivation_version} /><Field label="Отпечаток политики" value={value.policy_fingerprint} /></dl></li>;
-  const item = (value: import("./api").SelfRetrievalItem): ReactElement => <article className="self-retrieval-item" key={value.note_id}><h3 className="self-retrieval-item-title">{displayValue(value.title, "Без названия")}</h3><dl className="self-retrieval-fields"><Field label="Канонический UUID" value={value.note_id} /><Field label="Тип заметки" value={value.note_type} /><Field label="Порядок поиска (только аудит)" value={value.search_rank} /><Field label="Создано" value={value.created} /><Field label="Обновлено" value={value.updated} /></dl>{tags(value.tags)}<h4>Текущее содержимое (только чтение)</h4><pre className="self-retrieval-body">{value.body}</pre><h4>Точные связи с утверждениями модели себя</h4><ul className="self-retrieval-claims">{value.self_model_claims.length ? value.self_model_claims.map(claim) : <li className="self-retrieval-no-claims">Для этой заметки нет подтверждающих UUID-связей.</li>}</ul></article>;
+  const item = (value: import("./api").SelfRetrievalItem): ReactElement => <article className="self-retrieval-item" key={value.note_id}><h3 className="self-retrieval-item-title">{displayValue(value.title, "Без названия")}</h3><dl className="self-retrieval-fields"><Field label="Канонический UUID" value={value.note_id} /><Field label="Тип заметки" value={value.note_type} /><Field label="Порядок поиска (только аудит)" value={value.search_rank} /><Field label="Создано" value={value.created} /><Field label="Обновлено" value={value.updated} /></dl>{tags(value.tags)}<h4>Текущее содержимое (только чтение)</h4><pre className="self-retrieval-body" tabIndex={0} aria-label="Содержание найденной заметки">{value.body}</pre><h4>Точные связи с утверждениями модели себя</h4><ul className="self-retrieval-claims">{value.self_model_claims.length ? value.self_model_claims.map(claim) : <li className="self-retrieval-no-claims">Для этой заметки нет подтверждающих UUID-связей.</li>}</ul></article>;
 
   return <section className="self-retrieval-surface" id="self-retrieval" aria-labelledby="self-retrieval-title" data-self-retrieval-surface aria-busy={busy}><SectionHeading eyebrow="Шаг 5 · актуальный контекст" title="Собрать контекст." id="self-retrieval-title">Лексический запрос, текущая перечитка заметок и только точные подтверждающие UUID-связи из модели себя.</SectionHeading><form className="self-retrieval-form" onSubmit={(event) => void handleSubmit(event)}><label className="capture-label" htmlFor="self-retrieval-input">Запрос для контекста</label><div className="self-retrieval-form-row"><input className="capture-input" id="self-retrieval-input" type="search" placeholder="Например, проверка FastAPI" autoComplete="off" required value={query} disabled={busy} onChange={(event) => setQuery(event.target.value)} /><button className="capture-submit" type="submit" data-self-retrieval-submit disabled={busy} aria-busy={busy}>Собрать</button></div><p className="self-retrieval-status" role="status" aria-live="polite">{status}</p></form>{error ? <p className="capture-error self-retrieval-error" role="alert" tabIndex={-1}>{error}</p> : null}<p className="self-retrieval-summary">{data ? `Кандидатов: ${displayValue(data.candidate_count)} · Текущих заметок: ${displayValue(data.included_count)} · Исключено: ${displayValue(data.excluded_count)} · Байт содержимого: ${displayValue(data.content_bytes)} · Обрезано: ${displayValue(data.truncated)} · Версия построения: ${displayValue(data.self_model_derivation_version)} · Отпечаток политики: ${displayValue(data.self_model_policy_fingerprint)}` : ""}</p>{data && data.items.length === 0 ? <p className="self-retrieval-empty">По этому запросу текущий контекст не найден.</p> : null}<div className="self-retrieval-results" aria-live="polite">{data?.items.map(item)}{data?.exclusions.length ? <section className="self-retrieval-exclusions"><h3>Исключения текущей сборки</h3><ul>{data.exclusions.map((exclusion, index) => <li key={`${exclusion.search_rank ?? index}-${exclusion.reason ?? "reason"}`}>Порядок поиска: {displayValue(exclusion.search_rank)} · {displayValue(exclusion.reason)}</li>)}</ul></section> : null}</div></section>;
 }

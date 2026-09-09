@@ -1,0 +1,1106 @@
+{
+  "motion": [
+    {
+      "width": 1440,
+      "phase": "active",
+      "moving": "true",
+      "animations": [
+        {
+          "name": "haze-breathe",
+          "state": "running",
+          "time": 1133.2510000512004
+        },
+        {
+          "name": "thought-travel",
+          "state": "running",
+          "time": 1133.2510000512004
+        },
+        {
+          "name": "thought-travel",
+          "state": "running",
+          "time": 1133.2510000512004
+        },
+        {
+          "name": "thought-travel",
+          "state": "running",
+          "time": 1133.2510000512004
+        },
+        {
+          "name": "thought-travel",
+          "state": "running",
+          "time": 1133.2510000512004
+        },
+        {
+          "name": "brain-arrive",
+          "state": "finished",
+          "time": 800
+        },
+        {
+          "name": "thought-awaken",
+          "state": "running",
+          "time": 1133.2510000512004
+        },
+        {
+          "name": "thought-awaken",
+          "state": "running",
+          "time": 1133.2510000512004
+        },
+        {
+          "name": "thought-awaken",
+          "state": "running",
+          "time": 1133.2510000512004
+        },
+        {
+          "name": "thought-float",
+          "state": "running",
+          "time": 1133.2510000512004
+        },
+        {
+          "name": "thought-float",
+          "state": "running",
+          "time": 1133.2510000512004
+        },
+        {
+          "name": "thought-float",
+          "state": "running",
+          "time": 1133.2510000512004
+        },
+        {
+          "name": "thought-float",
+          "state": "running",
+          "time": 1133.2510000512004
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1133.2510000512004
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1133.2510000512004
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1133.2510000512004
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1133.2510000512004
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1133.2510000512004
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1133.2510000512004
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1133.2510000512004
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1133.2510000512004
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1133.2510000512004
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1133.2510000512004
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1133.2510000512004
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1133.2510000512004
+        }
+      ],
+      "transforms": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "width": 1440,
+      "phase": "pointer",
+      "moving": "true",
+      "animations": [
+        {
+          "name": "haze-breathe",
+          "state": "running",
+          "time": 1549.9510000512005
+        },
+        {
+          "name": "thought-travel",
+          "state": "running",
+          "time": 1549.9510000512005
+        },
+        {
+          "name": "thought-travel",
+          "state": "running",
+          "time": 1549.9510000512005
+        },
+        {
+          "name": "thought-travel",
+          "state": "running",
+          "time": 1549.9510000512005
+        },
+        {
+          "name": "thought-travel",
+          "state": "running",
+          "time": 1549.9510000512005
+        },
+        {
+          "name": "brain-arrive",
+          "state": "finished",
+          "time": 800
+        },
+        {
+          "name": "thought-awaken",
+          "state": "running",
+          "time": 1549.9510000512005
+        },
+        {
+          "name": "thought-awaken",
+          "state": "running",
+          "time": 1549.9510000512005
+        },
+        {
+          "name": "thought-awaken",
+          "state": "running",
+          "time": 1549.9510000512005
+        },
+        {
+          "name": "thought-float",
+          "state": "running",
+          "time": 1549.9510000512005
+        },
+        {
+          "name": "thought-float",
+          "state": "running",
+          "time": 1549.9510000512005
+        },
+        {
+          "name": "thought-float",
+          "state": "running",
+          "time": 1549.9510000512005
+        },
+        {
+          "name": "thought-float",
+          "state": "running",
+          "time": 1549.9510000512005
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1549.9510000512005
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1549.9510000512005
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1549.9510000512005
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1549.9510000512005
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1549.9510000512005
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1549.9510000512005
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1549.9510000512005
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1549.9510000512005
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1549.9510000512005
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1549.9510000512005
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1549.9510000512005
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1549.9510000512005
+        }
+      ],
+      "transforms": [
+        "translate3d(4.18605px, -1.43741px, 0px)",
+        "translate3d(7.53488px, -2.58733px, 0px)",
+        "translate3d(5.02326px, -1.72489px, 0px)",
+        "translate3d(13.3953px, -4.5997px, 0px)",
+        "translate3d(16.7442px, -5.74963px, 0px)",
+        "translate3d(23.4419px, -8.04948px, 0px)"
+      ]
+    },
+    {
+      "width": 1440,
+      "phase": "paused-stable-650ms",
+      "moving": "false",
+      "animations": [
+        {
+          "name": "haze-breathe",
+          "state": "paused",
+          "time": 1633.2510000512004
+        },
+        {
+          "name": "thought-travel",
+          "state": "paused",
+          "time": 1633.2510000512004
+        },
+        {
+          "name": "thought-travel",
+          "state": "paused",
+          "time": 1633.2510000512004
+        },
+        {
+          "name": "thought-travel",
+          "state": "paused",
+          "time": 1633.2510000512004
+        },
+        {
+          "name": "thought-travel",
+          "state": "paused",
+          "time": 1633.2510000512004
+        },
+        {
+          "name": "brain-arrive",
+          "state": "paused",
+          "time": 800
+        },
+        {
+          "name": "thought-awaken",
+          "state": "paused",
+          "time": 1633.2510000512004
+        },
+        {
+          "name": "thought-awaken",
+          "state": "paused",
+          "time": 1633.2510000512004
+        },
+        {
+          "name": "thought-awaken",
+          "state": "paused",
+          "time": 1633.2510000512004
+        },
+        {
+          "name": "thought-float",
+          "state": "paused",
+          "time": 1633.2510000512004
+        },
+        {
+          "name": "thought-float",
+          "state": "paused",
+          "time": 1633.2510000512004
+        },
+        {
+          "name": "thought-float",
+          "state": "paused",
+          "time": 1633.2510000512004
+        },
+        {
+          "name": "thought-float",
+          "state": "paused",
+          "time": 1633.2510000512004
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1633.2510000512004
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1633.2510000512004
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1633.2510000512004
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1633.2510000512004
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1633.2510000512004
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1633.2510000512004
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1633.2510000512004
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1633.2510000512004
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1633.2510000512004
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1633.2510000512004
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1633.2510000512004
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1633.2510000512004
+        }
+      ],
+      "transforms": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "width": 1440,
+      "phase": "offscreen",
+      "moving": "false",
+      "animations": [
+        {
+          "name": "haze-breathe",
+          "state": "paused",
+          "time": 1666.5860000683924
+        },
+        {
+          "name": "thought-travel",
+          "state": "paused",
+          "time": 1666.5860000683924
+        },
+        {
+          "name": "thought-travel",
+          "state": "paused",
+          "time": 1666.5860000683924
+        },
+        {
+          "name": "thought-travel",
+          "state": "paused",
+          "time": 1666.5860000683924
+        },
+        {
+          "name": "thought-travel",
+          "state": "paused",
+          "time": 1666.5860000683924
+        },
+        {
+          "name": "brain-arrive",
+          "state": "paused",
+          "time": 800
+        },
+        {
+          "name": "thought-awaken",
+          "state": "paused",
+          "time": 1666.5860000683924
+        },
+        {
+          "name": "thought-awaken",
+          "state": "paused",
+          "time": 1666.5860000683924
+        },
+        {
+          "name": "thought-awaken",
+          "state": "paused",
+          "time": 1666.5860000683924
+        },
+        {
+          "name": "thought-float",
+          "state": "paused",
+          "time": 1666.5860000683924
+        },
+        {
+          "name": "thought-float",
+          "state": "paused",
+          "time": 1666.5860000683924
+        },
+        {
+          "name": "thought-float",
+          "state": "paused",
+          "time": 1666.5860000683924
+        },
+        {
+          "name": "thought-float",
+          "state": "paused",
+          "time": 1666.5860000683924
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1666.5860000683924
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1666.5860000683924
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1666.5860000683924
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1666.5860000683924
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1666.5860000683924
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1666.5860000683924
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1666.5860000683924
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1666.5860000683924
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1666.5860000683924
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1666.5860000683924
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1666.5860000683924
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1666.5860000683924
+        }
+      ],
+      "transforms": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "width": 1440,
+      "phase": "raf-4seconds",
+      "cpu": 1,
+      "frames": 241,
+      "median": 16.699999999999818,
+      "p95": 16.799999999999272,
+      "over33ms": 0,
+      "max": 16.800000000000182
+    },
+    {
+      "width": 1440,
+      "phase": "raf-4seconds",
+      "cpu": 4,
+      "frames": 241,
+      "median": 16.69999999999891,
+      "p95": 16.700000000000728,
+      "over33ms": 0,
+      "max": 16.80000000000109
+    },
+    {
+      "width": 1440,
+      "phase": "reduced",
+      "moving": "false",
+      "animations": [],
+      "transforms": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "width": 390,
+      "phase": "active",
+      "moving": "true",
+      "animations": [
+        {
+          "name": "thought-travel",
+          "state": "running",
+          "time": 1183.259999995198
+        },
+        {
+          "name": "thought-travel",
+          "state": "running",
+          "time": 1183.259999995198
+        },
+        {
+          "name": "thought-travel",
+          "state": "running",
+          "time": 1183.259999995198
+        },
+        {
+          "name": "thought-travel",
+          "state": "running",
+          "time": 1183.259999995198
+        },
+        {
+          "name": "brain-arrive",
+          "state": "finished",
+          "time": 800
+        },
+        {
+          "name": "thought-awaken",
+          "state": "running",
+          "time": 1183.259999995198
+        },
+        {
+          "name": "thought-awaken",
+          "state": "running",
+          "time": 1183.259999995198
+        },
+        {
+          "name": "thought-float",
+          "state": "running",
+          "time": 1183.259999995198
+        },
+        {
+          "name": "thought-float",
+          "state": "running",
+          "time": 1183.259999995198
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1183.259999995198
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1183.259999995198
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1183.259999995198
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1183.259999995198
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1183.259999995198
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1183.259999995198
+        }
+      ],
+      "transforms": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "width": 390,
+      "phase": "pointer",
+      "moving": "true",
+      "animations": [
+        {
+          "name": "thought-travel",
+          "state": "running",
+          "time": 1599.893999995198
+        },
+        {
+          "name": "thought-travel",
+          "state": "running",
+          "time": 1599.893999995198
+        },
+        {
+          "name": "thought-travel",
+          "state": "running",
+          "time": 1599.893999995198
+        },
+        {
+          "name": "thought-travel",
+          "state": "running",
+          "time": 1599.893999995198
+        },
+        {
+          "name": "brain-arrive",
+          "state": "finished",
+          "time": 800
+        },
+        {
+          "name": "thought-awaken",
+          "state": "running",
+          "time": 1599.893999995198
+        },
+        {
+          "name": "thought-awaken",
+          "state": "running",
+          "time": 1599.893999995198
+        },
+        {
+          "name": "thought-float",
+          "state": "running",
+          "time": 1599.893999995198
+        },
+        {
+          "name": "thought-float",
+          "state": "running",
+          "time": 1599.893999995198
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1599.893999995198
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1599.893999995198
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1599.893999995198
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1599.893999995198
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1599.893999995198
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1599.893999995198
+        }
+      ],
+      "transforms": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "width": 390,
+      "phase": "paused-stable-650ms",
+      "moving": "false",
+      "animations": [
+        {
+          "name": "thought-travel",
+          "state": "paused",
+          "time": 1683.2939999951982
+        },
+        {
+          "name": "thought-travel",
+          "state": "paused",
+          "time": 1683.2939999951982
+        },
+        {
+          "name": "thought-travel",
+          "state": "paused",
+          "time": 1683.2939999951982
+        },
+        {
+          "name": "thought-travel",
+          "state": "paused",
+          "time": 1683.2939999951982
+        },
+        {
+          "name": "brain-arrive",
+          "state": "paused",
+          "time": 800
+        },
+        {
+          "name": "thought-awaken",
+          "state": "paused",
+          "time": 1683.2939999951982
+        },
+        {
+          "name": "thought-awaken",
+          "state": "paused",
+          "time": 1683.2939999951982
+        },
+        {
+          "name": "thought-float",
+          "state": "paused",
+          "time": 1683.2939999951982
+        },
+        {
+          "name": "thought-float",
+          "state": "paused",
+          "time": 1683.2939999951982
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1683.2939999951982
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1683.2939999951982
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1683.2939999951982
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1683.2939999951982
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1683.2939999951982
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1683.2939999951982
+        }
+      ],
+      "transforms": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "width": 390,
+      "phase": "offscreen",
+      "moving": "false",
+      "animations": [
+        {
+          "name": "thought-travel",
+          "state": "paused",
+          "time": 1716.635999998171
+        },
+        {
+          "name": "thought-travel",
+          "state": "paused",
+          "time": 1716.635999998171
+        },
+        {
+          "name": "thought-travel",
+          "state": "paused",
+          "time": 1716.635999998171
+        },
+        {
+          "name": "thought-travel",
+          "state": "paused",
+          "time": 1716.635999998171
+        },
+        {
+          "name": "brain-arrive",
+          "state": "paused",
+          "time": 800
+        },
+        {
+          "name": "thought-awaken",
+          "state": "paused",
+          "time": 1716.635999998171
+        },
+        {
+          "name": "thought-awaken",
+          "state": "paused",
+          "time": 1716.635999998171
+        },
+        {
+          "name": "thought-float",
+          "state": "paused",
+          "time": 1716.635999998171
+        },
+        {
+          "name": "thought-float",
+          "state": "paused",
+          "time": 1716.635999998171
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1716.635999998171
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1716.635999998171
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1716.635999998171
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1716.635999998171
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1716.635999998171
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1716.635999998171
+        }
+      ],
+      "transforms": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "width": 390,
+      "phase": "raf-4seconds",
+      "cpu": 1,
+      "frames": 241,
+      "median": 16.699999999999818,
+      "p95": 16.700000000000728,
+      "over33ms": 0,
+      "max": 16.800000000000182
+    },
+    {
+      "width": 390,
+      "phase": "raf-4seconds",
+      "cpu": 4,
+      "frames": 241,
+      "median": 16.69999999999891,
+      "p95": 16.700000000000728,
+      "over33ms": 0,
+      "max": 16.80000000000109
+    },
+    {
+      "width": 390,
+      "phase": "reduced",
+      "moving": "false",
+      "animations": [],
+      "transforms": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    }
+  ],
+  "inputs": [
+    "URL → synthetic DI draft",
+    "Synthetic WAV → DI transcription → editable text → draft",
+    "Deferred HTTP → busy state → localized 503 error → editable recovery",
+    {
+      "emulatedKeyboardViewport": {
+        "height": 430,
+        "fieldBottom": 381.953125,
+        "navigationVisible": false,
+        "navigationTop": 0,
+        "overflow": false
+      }
+    }
+  ],
+  "fonts": [
+    {
+      "width": 1440,
+      "selector": "#hero-title",
+      "fonts": [
+        {
+          "familyName": "Onest",
+          "postScriptName": "Onest-SemiBold",
+          "isCustomFont": true,
+          "glyphCount": 11
+        }
+      ]
+    },
+    {
+      "width": 1440,
+      "selector": ".universe-thesis",
+      "fonts": [
+        {
+          "familyName": "Onest",
+          "postScriptName": "Onest-Medium",
+          "isCustomFont": true,
+          "glyphCount": 21
+        }
+      ]
+    },
+    {
+      "width": 1440,
+      "selector": "#entry-title",
+      "fonts": [
+        {
+          "familyName": "Onest",
+          "postScriptName": "Onest-SemiBold",
+          "isCustomFont": true,
+          "glyphCount": 15
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "selector": "#hero-title",
+      "fonts": [
+        {
+          "familyName": "Onest",
+          "postScriptName": "Onest-SemiBold",
+          "isCustomFont": true,
+          "glyphCount": 11
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "selector": ".universe-thesis",
+      "fonts": [
+        {
+          "familyName": "Onest",
+          "postScriptName": "Onest-Medium",
+          "isCustomFont": true,
+          "glyphCount": 21
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "selector": "#entry-title",
+      "fonts": [
+        {
+          "familyName": "Onest",
+          "postScriptName": "Onest-SemiBold",
+          "isCustomFont": true,
+          "glyphCount": 15
+        }
+      ]
+    }
+  ],
+  "colors": [
+    {
+      "name": "initial-1440",
+      "greens": [],
+      "unexpectedFonts": []
+    },
+    {
+      "name": "initial-390",
+      "greens": [],
+      "unexpectedFonts": []
+    },
+    {
+      "name": "error",
+      "greens": [],
+      "unexpectedFonts": []
+    }
+  ],
+  "keyboard": [
+    "Tab → skip → main → add → text → draft → preview → prepare → confirm → search → open → reading focus; keyboard only"
+  ],
+  "accessibility": [
+    {
+      "state": "error",
+      "violations": []
+    }
+  ]
+}

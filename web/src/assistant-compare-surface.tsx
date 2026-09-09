@@ -228,6 +228,7 @@ export function AssistantCompareSurface(): ReactElement {
       animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
     >
       <div className="section-heading stage7-heading">
+        <Icon name="relation" size={64} className="section-art" />
         <p className="eyebrow">Две независимые перспективы</p>
         <h2 id="assistant-compare-title">Совет и прогноз - рядом, но не смешиваются.</h2>
         <p>Независимый совет анализирует только то, что вы явно ввели. Прогноз моего выбора использует отдельную локальную модель текущего контекста. Структурное сравнение сопоставляет только состояние веток и точные идентификаторы вариантов.</p>

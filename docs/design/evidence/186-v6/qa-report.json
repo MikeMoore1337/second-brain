@@ -1,0 +1,304 @@
+{
+  "widths": [
+    {
+      "width": 320,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    },
+    {
+      "width": 360,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    },
+    {
+      "width": 390,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    },
+    {
+      "width": 430,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    },
+    {
+      "width": 768,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    },
+    {
+      "width": 1024,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    },
+    {
+      "width": 1440,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    },
+    {
+      "width": 1920,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    }
+  ],
+  "accessibility": [
+    {
+      "name": "initial-390",
+      "violations": []
+    },
+    {
+      "name": "initial-1440",
+      "violations": []
+    },
+    {
+      "name": "draft-1440",
+      "violations": []
+    },
+    {
+      "name": "diff-1440",
+      "violations": []
+    },
+    {
+      "name": "saved-1440",
+      "violations": []
+    },
+    {
+      "name": "note-1440",
+      "violations": []
+    },
+    {
+      "name": "draft-390",
+      "violations": []
+    },
+    {
+      "name": "diff-390",
+      "violations": []
+    },
+    {
+      "name": "saved-390",
+      "violations": []
+    },
+    {
+      "name": "note-390",
+      "violations": []
+    }
+  ],
+  "surfaces": [
+    {
+      "id": "capture",
+      "width": 390,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    },
+    {
+      "id": "decision-journal",
+      "width": 390,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    },
+    {
+      "id": "timeline",
+      "width": 390,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    },
+    {
+      "id": "self-model",
+      "width": 390,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    },
+    {
+      "id": "simulate-me",
+      "width": 390,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    },
+    {
+      "id": "assistant-compare",
+      "width": 390,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    },
+    {
+      "id": "self-retrieval",
+      "width": 390,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    },
+    {
+      "id": "search",
+      "width": 390,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    },
+    {
+      "id": "diagnostics",
+      "width": 390,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    },
+    {
+      "id": "capture",
+      "width": 1440,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    },
+    {
+      "id": "decision-journal",
+      "width": 1440,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    },
+    {
+      "id": "timeline",
+      "width": 1440,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    },
+    {
+      "id": "self-model",
+      "width": 1440,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    },
+    {
+      "id": "simulate-me",
+      "width": 1440,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    },
+    {
+      "id": "assistant-compare",
+      "width": 1440,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    },
+    {
+      "id": "self-retrieval",
+      "width": 1440,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    },
+    {
+      "id": "search",
+      "width": 1440,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    },
+    {
+      "id": "diagnostics",
+      "width": 1440,
+      "overflow": false,
+      "smallTargets": [],
+      "fonts": [
+        "Onest, ui-sans-serif, system-ui, sans-serif"
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "width": 1440,
+      "textDraftPreviewDiffInvalidationConfirmSearchReadEmpty": "passed",
+      "applyRequests": 1,
+      "layout": {
+        "width": 1440,
+        "overflow": false,
+        "smallTargets": [],
+        "fonts": [
+          "Onest, ui-sans-serif, system-ui, sans-serif"
+        ]
+      }
+    },
+    {
+      "width": 390,
+      "textDraftPreviewDiffInvalidationConfirmSearchReadEmpty": "passed",
+      "applyRequests": 1,
+      "layout": {
+        "width": 390,
+        "overflow": false,
+        "smallTargets": [],
+        "fonts": [
+          "Onest, ui-sans-serif, system-ui, sans-serif"
+        ]
+      }
+    }
+  ],
+  "motion": [],
+  "errors": []
+}

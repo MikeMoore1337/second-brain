@@ -1,0 +1,276 @@
+{
+  "initialRasterRequests": [
+    "/assets/memory-brain-800-BRbBS8ps.webp",
+    "/assets/memory-compact-48-D5jU0ZAr.webp",
+    "/assets/pause-compact-48-DJIfWE8Q.webp",
+    "/assets/expand-compact-48-DC1QY69q.webp",
+    "/assets/relation-compact-48-b4I9Hy0-.webp",
+    "/assets/add-compact-48-0_0iVdht.webp",
+    "/assets/search-compact-48-CMxvxU_H.webp",
+    "/assets/add-detail-96-DdCGZ-60.webp",
+    "/assets/decision-detail-96-D2cuZf4W.webp",
+    "/assets/timeline-detail-96-D2ORYPmS.webp"
+  ],
+  "icons": [
+    {
+      "name": "memory",
+      "alt": "",
+      "hidden": "true",
+      "width": 26,
+      "loaded": true
+    },
+    {
+      "name": "add",
+      "alt": "",
+      "hidden": "true",
+      "width": 18,
+      "loaded": true
+    },
+    {
+      "name": "search",
+      "alt": "",
+      "hidden": "true",
+      "width": 18,
+      "loaded": true
+    },
+    {
+      "name": "expand",
+      "alt": "",
+      "hidden": "true",
+      "width": 18,
+      "loaded": true
+    },
+    {
+      "name": "relation",
+      "alt": "",
+      "hidden": "true",
+      "width": 25.486083984375,
+      "loaded": true
+    },
+    {
+      "name": "memory",
+      "alt": "",
+      "hidden": "true",
+      "width": 24.244384765625,
+      "loaded": true
+    },
+    {
+      "name": "add",
+      "alt": "",
+      "hidden": "true",
+      "width": 19,
+      "loaded": true
+    },
+    {
+      "name": "search",
+      "alt": "",
+      "hidden": "true",
+      "width": 19,
+      "loaded": true
+    },
+    {
+      "name": "pause",
+      "alt": "",
+      "hidden": "true",
+      "width": 18,
+      "loaded": true
+    },
+    {
+      "name": "add",
+      "alt": "",
+      "hidden": "true",
+      "width": 64,
+      "loaded": true
+    },
+    {
+      "name": "decision",
+      "alt": "",
+      "hidden": "true",
+      "width": 64,
+      "loaded": true
+    },
+    {
+      "name": "timeline",
+      "alt": "",
+      "hidden": "true",
+      "width": 64,
+      "loaded": true
+    },
+    {
+      "name": "self-model",
+      "alt": "",
+      "hidden": "true",
+      "width": 64,
+      "loaded": false
+    },
+    {
+      "name": "simulate",
+      "alt": "",
+      "hidden": "true",
+      "width": 64,
+      "loaded": true
+    },
+    {
+      "name": "relation",
+      "alt": "",
+      "hidden": "true",
+      "width": 64,
+      "loaded": true
+    },
+    {
+      "name": "add",
+      "alt": "",
+      "hidden": "true",
+      "width": 18,
+      "loaded": true
+    },
+    {
+      "name": "info",
+      "alt": "",
+      "hidden": "true",
+      "width": 18,
+      "loaded": true
+    },
+    {
+      "name": "relation",
+      "alt": "",
+      "hidden": "true",
+      "width": 18,
+      "loaded": true
+    },
+    {
+      "name": "simulate",
+      "alt": "",
+      "hidden": "true",
+      "width": 18,
+      "loaded": true
+    },
+    {
+      "name": "self-retrieval",
+      "alt": "",
+      "hidden": "true",
+      "width": 64,
+      "loaded": true
+    },
+    {
+      "name": "search",
+      "alt": "",
+      "hidden": "true",
+      "width": 64,
+      "loaded": true
+    },
+    {
+      "name": "diagnostics",
+      "alt": "",
+      "hidden": "true",
+      "width": 64,
+      "loaded": true
+    },
+    {
+      "name": "refresh",
+      "alt": "",
+      "hidden": "true",
+      "width": 18,
+      "loaded": true
+    },
+    {
+      "name": "memory",
+      "alt": "",
+      "hidden": "true",
+      "width": 64,
+      "loaded": true
+    },
+    {
+      "name": "open",
+      "alt": "",
+      "hidden": "true",
+      "width": 18,
+      "loaded": true
+    },
+    {
+      "name": "growth",
+      "alt": "",
+      "hidden": "true",
+      "width": 64,
+      "loaded": true
+    },
+    {
+      "name": "open",
+      "alt": "",
+      "hidden": "true",
+      "width": 18,
+      "loaded": true
+    },
+    {
+      "name": "decision",
+      "alt": "",
+      "hidden": "true",
+      "width": 18,
+      "loaded": true
+    },
+    {
+      "name": "timeline",
+      "alt": "",
+      "hidden": "true",
+      "width": 18,
+      "loaded": true
+    },
+    {
+      "name": "self-model",
+      "alt": "",
+      "hidden": "true",
+      "width": 18,
+      "loaded": true
+    },
+    {
+      "name": "simulate",
+      "alt": "",
+      "hidden": "true",
+      "width": 18,
+      "loaded": true
+    },
+    {
+      "name": "relation",
+      "alt": "",
+      "hidden": "true",
+      "width": 18,
+      "loaded": true
+    },
+    {
+      "name": "self-retrieval",
+      "alt": "",
+      "hidden": "true",
+      "width": 18,
+      "loaded": true
+    },
+    {
+      "name": "search",
+      "alt": "",
+      "hidden": "true",
+      "width": 18,
+      "loaded": true
+    },
+    {
+      "name": "diagnostics",
+      "alt": "",
+      "hidden": "true",
+      "width": 18,
+      "loaded": true
+    },
+    {
+      "name": "memory",
+      "alt": "",
+      "hidden": "true",
+      "width": 18,
+      "loaded": true
+    },
+    {
+      "name": "growth",
+      "alt": "",
+      "hidden": "true",
+      "width": 18,
+      "loaded": true
+    }
+  ],
+  "navigationIcons": true
+}
