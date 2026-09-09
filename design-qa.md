@@ -1,12 +1,69 @@
-Текущий проход: [v7 — открытые края и компактный нижний блок](docs/design/evidence/186-v7/README.md).
+# QA-контракт v7
 
-Текущий проход: [v6 — компактность и стекло](docs/design/evidence/186-v6/README.md).
+Текущий проход: [v7 — открытые края и компактное завершение](docs/design/evidence/186-v7/README.md).
+Канонический визуальный контракт: [`DESIGN.md`](DESIGN.md). PR #187 уже слит
+в `main` merge-коммитом `9382cc25a87a29c07c5613b109845304958f665e`; это не
+разрешение на deploy. Deploy, VPS, DNS, production-конфигурация, секреты и
+`second-brain-vault` остаются вне этой проверки.
 
-# Актуальная доработка v5: логотип, меню и сквозное движение
+## Текущие команды и входы
 
-[Результаты нового прохода, скриншоты и запись страницы](docs/design/evidence/186-v5/README.md).
-Логотип-мозг, выпадающие «Разделы», три крупные композиции и общая пауза.
-Ниже сохранён отчёт предыдущего прохода v4; актуальные замеры и проверки — по ссылке выше.
+Команды ниже относятся к production React GUI v7 и запускаются только на
+синтетическом loopback-сервере:
+
+```text
+uv run python -m web.qa.serve
+cd web
+npm ci
+npm run check
+npm run build
+SB_QA_OUT=../.local/design-v7 node qa/page-motion.mjs
+SB_QA_OUT=../.local/design-v7 node qa/iconography.mjs
+SB_QA_OUT=../.local/design-v7 node qa/scene-recording.mjs
+```
+
+`SB_QA_CHROMIUM` задаёт путь к локальному Chromium, если Playwright не видит
+свою установку. Эти runner’ы проверяют настоящие `Разделы`/`section-dropdown`,
+switch `role="switch"` с именем «Анимация», текущие `details/summary`, разделы
+и `data-icon`; отсутствие целевого элемента или нулевое число проверок даёт
+ошибку. `npm run qa:design`, `node qa/compact-glass.mjs` и `node qa/open-edges.mjs`
+остаются отдельными текущими проверками своих контрактов.
+
+## Решения по трём runner’ам
+
+| Вход | Решение | Что проверяет сейчас |
+| --- | --- | --- |
+| `web/qa/page-motion.mjs` | обновлён для v7 | disclosure-навигацию, keyboard focus, switch «Анимация», остановку/возобновление PageMotion, offscreen и reduced-motion |
+| `web/qa/iconography.mjs` | обновлён для v7 | локальный статический atlas как provenance и реальные React `data-icon`, alt/aria-hidden, lazy-загрузку и иконки меню |
+| `web/qa/scene-recording.mjs` | обновлён для v7 | композицию hero, два блока «Память / Развитие», восемь ширин и запись переходов через текущее меню/switch |
+
+Статический atlas внутри `iconography.mjs` — проверка файлов и размеров,
+а не браузерное доказательство React-рендера. Исторические runner’ы и их
+артефакты v3–v6 сохранены по ссылкам ниже и не переписываются.
+
+## Матрица затрагиваемых контрактов
+
+| Документ / селектор | Реализация | Тест или runner |
+| --- | --- | --- |
+| `DESIGN.md` v7; `.sections-trigger`, `#section-dropdown`, `role="switch"` «Анимация» | `web/src/section-menu.tsx`, `web/src/page-motion.tsx` | `web/src/test/section-menu.test.tsx`, `web/qa/page-motion.mjs` |
+| `details/summary`, текущие `#decision-journal` … `#diagnostics` | `web/src/fold-section.tsx`, `web/src/App.tsx` | `web/src/test/fold-section.test.tsx`, `web/qa/page-motion.mjs` |
+| `data-icon`, локальные WebP и логотип | `web/src/icons.tsx`, `web/src/App.tsx` | `web/src/test/iconography.test.tsx`, `tests/test_web_iconography.py`, `web/qa/iconography.mjs` |
+| hero `data-moving`, `data-depth`, `#memory`/`#growth` | `web/src/cinematic-hero.tsx`, `web/src/App.tsx` | `web/src/test/cinematic-hero.test.tsx`, `web/qa/scene-recording.mjs` |
+| `--sb-*` palette/gradient/focus/motion tokens | `src/second_brain/entrypoints/web/static/app.css`, импорт через `web/src/styles.css` | `tests/test_design_tokens.py`, `tests/test_web_motion.py` (source-level, не browser) |
+| bounded atmosphere selectors в `web/src/styles.css` | React stylesheet source | `tests/test_web_atmosphere.py` (source-level, не browser) |
+
+`tests/test_web_atmosphere.py`, `tests/test_design_tokens.py`,
+`tests/test_web_motion.py` и `tests/test_web_iconography.py` намеренно читают
+исходники/static fixture. Они защищают текстовый контракт и не должны
+выдаваться за проверку браузера, физического телефона или screen reader.
+
+## Исторический отчёт v5 / до v7
+
+Ниже сохранены результаты и ограничения прежнего прохода. Его числовые
+замеры, старые head’ы и команды не являются текущим v7 evidence; актуальные
+команды находятся выше. Ссылки на v5 и v6 оставлены для сравнения.
+
+[Исторические материалы v5: логотип, меню и сквозное движение](docs/design/evidence/186-v5/README.md).
 
 # Проверка смыслового редизайна — Issue #186 / PR #187
 
@@ -131,9 +188,10 @@ Mobile — браузерная эмуляция. INP полевых польз�
 новая графика сохраняет тот же контроллер. Остановка именно при настоящем скрытии
 вкладки **не подтверждена** и не выдаётся за проверку физического устройства.
 
-## Воспроизведение и доставка
+## Историческое воспроизведение и доставка
 
-Из корня: `uv run python -m web.qa.serve`. Из `web/`:
+Следующие команды сохранены как воспроизводимость исторического отчёта, а не
+как единственный текущий v7 вход. Из корня: `uv run python -m web.qa.serve`. Из `web/`:
 `npm ci`, `npm run build`, `npx playwright install chromium`,
 `npm run qa:design`. Дополнительно: `node qa/iconography.mjs`,
 `node qa/scene-recording.mjs`. Для замеров отдельно:
@@ -145,7 +203,8 @@ Mobile — браузерная эмуляция. INP полевых польз�
 Расширенные локальные артефакты: `.local/design-v4/`.
 Предыдущие доказательства сохранены в `docs/design/evidence/186-v3/`.
 
-Один существующий PR #187. Независимое review окончательного head фиксируется
-отдельно в PR; старое review неприменимо к новым изменениям.
-Merge/deploy не выполняются по прямому указанию владельца.
+Исторический отчёт относится к PR #187; его старые review/evidence не являются
+проверкой этой задачи. GitHub Codex Code Review для этой задачи не запрашивался.
+Merge #187 уже состоялся (см. точный SHA в начале файла); deploy по-прежнему
+не выполняется.
 

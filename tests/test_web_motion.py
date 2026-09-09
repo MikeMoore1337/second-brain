@@ -1,4 +1,8 @@
-"""Static contracts for the bounded Web motion system."""
+"""Source-level contracts for static and React Web motion layers.
+
+Static fixture assertions and React stylesheet assertions are intentionally
+kept separate from browser QA; this module does not claim to render the GUI.
+"""
 
 from __future__ import annotations
 

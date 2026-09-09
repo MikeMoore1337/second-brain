@@ -1,11 +1,17 @@
-# Design tokens v1 — Cognitive Signal Lattice
+# Design tokens v1 — совместимая основа v7
 
-Статус: GREEN foundation для production design track #109.
+Статус: действующая token-спецификация для общей палитры и source-contract тестов;
+историческая часть Cognitive Signal Lattice ниже отмечена отдельно. Актуальная
+визуальная композиция и motion описаны в [`DESIGN.md`](../../DESIGN.md).
 
-Этот документ фиксирует token foundation, который следует из принятого в #108
-направления Cognitive Signal Lattice. Источник runtime-стилей — существующий
-`src/second_brain/entrypoints/web/static/app.css`. Изменения не добавляют новые
-маршруты, API, persistence, auth, vault side effects или frontend framework.
+Канонический слой `--sb-*` находится в
+`src/second_brain/entrypoints/web/static/app.css`; React импортирует его через
+`web/src/styles.css`, а production-композиция дополняется `web/src/cinematic.css`,
+`web/src/page-atmosphere.css` и `web/src/compact-glass.css`. Связь проверяют
+`tests/test_design_tokens.py` и static/source assertions в
+`tests/test_web_motion.py`; эти тесты читают файлы и не заменяют браузерную QA.
+Изменения не добавляют новые маршруты, API, persistence, auth, vault side effects
+или frontend framework.
 
 ## Слои токенов
 
@@ -81,7 +87,7 @@ mobile в #117.
 
 ## Typography и depth
 
-- `--sb-font-sans` — IBM Plex Sans с системным fallback для body и UI;
+- `--sb-font-sans` — локальный variable Onest с системным fallback для body и UI;
 - `--sb-font-mono` — metadata/code role, не основной текст;
 - `--sb-type-body`, `--sb-type-control`, `--sb-type-label`,
   `--sb-type-title` — базовые type roles;
@@ -99,9 +105,21 @@ Z-layer roles (`--sb-z-base`, `--sb-z-header`, `--sb-z-overlay`,
 `:focus-visible` использует `--sb-focus-width`, `--sb-focus-offset` и
 `--sb-color-accent`; input и custom controls не могут убирать этот indicator.
 Motion roles (`--sb-duration-press`, `--sb-duration-short`,
-`--sb-duration-panel`, `--sb-ease-*`) пока являются placeholders foundation.
-Они не добавляют новые transitions или product behavior: named motion primitives
-будут разрешены отдельно в #112 и должны иметь reduced-motion вариант.
+`--sb-duration-panel`, `--sb-duration-busy`, `--sb-duration-ambient`,
+`--sb-motion-distance`, `--sb-motion-entry-scale`, `--sb-ease-*`) используются
+текущими рабочими поверхностями и декоративным слоем v7. `PageMotion` и системный
+`prefers-reduced-motion` выключают непрерывный декор, сохраняя короткую обратную
+связь. Конкретные сценарии и интервалы являются частью действующего `DESIGN.md`;
+токены не разрешают добавлять бесконечное движение или задерживать действие.
+
+## Историческая часть
+
+Название Cognitive Signal Lattice, ранняя карта направлений и первоначальные
+ограничения #108/#109 — запись принятого тогда exploratory решения. Они объясняют
+происхождение namespace и некоторых gradient-ролей, но не ограничивают v7:
+текущий шрифт — Onest, а актуальные surface/motion правила находятся в
+`DESIGN.md`. Сам документ остаётся действующим там, где его таблица токенов и
+проверки описывают реально импортируемый `app.css`.
 
 ## Граница применения
 
