@@ -115,7 +115,21 @@ _ADVISOR_SYSTEM_MESSAGE = (
     "— один из разрешённых кодов, не null. Не повторяй ссылки внутри массивов. "
     "Ordinal начинается с 1 и относится только к соответствующему explicit массиву. "
     "Для context kind=fact роль reported_fact; для kind=background роль background. "
-    "Пустой входной массив означает пустой массив ссылок."
+    "Пустой входной массив означает пустой массив ссылок. "
+    "Пиши recommendation, rationale и uncertainty естественным русским языком "
+    "для пользователя. Не показывай в этом тексте имена полей, названия DTO или "
+    "schema, служебные source names, option IDs (например option-1) или другие "
+    "технические обозначения. recommendation не может быть точным ID варианта; "
+    "если выбор сделан, recommendation должен быть понятным человеческим "
+    "объяснением, а selected_option обязан содержать exact request-local пару id/label. "
+    "Если выбор не сделан, selected_option=null и текст не должен выдавать его за "
+    "выбор. Recommendation, rationale и selected_option должны быть согласованы: "
+    "не рекомендуй вариант, который rationale признаёт несовместимым с explicit "
+    "inputs; при невозможности обоснованного выбора верни typed abstention. "
+    "Если рассуждение опирается на explicit constraint, включи соответствующий "
+    "constraints_used; для explicit goal используй objectives_used; для explicit "
+    "context используй соответствующий evidence_refs. Не добавляй ссылки на "
+    "inputs, которые не использовал."
 )
 _ADVISOR_RESULT_FIELDS = frozenset(
     {

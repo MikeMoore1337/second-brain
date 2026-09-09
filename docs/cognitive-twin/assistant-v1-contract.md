@@ -937,5 +937,23 @@ system rules; application validation остаётся окончательной
 Сохранены 30-second deadline, один request, отсутствие retry/fallback/repair,
 application byte limits, explicit-input-only и shared NoteDraft GLM boundary.
 
+Provider-specific quality rules не расширяют application contract: Advisor пишет
+`recommendation`, `rationale` и `uncertainty` естественным русским языком и не
+вставляет туда имена полей, DTO/schema, source names или request-local option ID.
+Если сделан выбор из options, `selected_option` содержит exact пару `id`/`label`,
+а `recommendation` остаётся human-readable объяснением. При отсутствии выбора
+Advisor не имитирует selection через текст. Recommendation, rationale и
+selected_option должны быть взаимно согласованы; несовместимый с explicit inputs
+вариант не рекомендуется, а при отсутствии обоснованного выбора допустим typed
+abstention. Использованные explicit constraints, goals и context должны иметь
+соответствующие `constraints_used`, `objectives_used` и `evidence_refs`; ссылки
+на неиспользованные inputs запрещены. Application validation остаётся
+окончательной и fail-closed.
+
+Web presentation сохраняет structured IDs для Compare, но показывает пользователю
+caller-owned labels. Техническая provider prose и неизвестные IDs не заменяются
+другим результатом: они скрываются с явным пояснением, а настоящая branch error
+остаётся видимой.
+
 `env change required: no`: код не меняет env keys, credentials loading или
 deployment contract. Authenticated smoke для нового head — PENDING.

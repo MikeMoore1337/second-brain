@@ -6,6 +6,7 @@ import {
   type AssistantResult,
   type CompareResult,
   type Stage7Request,
+  type Stage7Option,
   requestAssistant,
   requestCompare,
 } from "./stage7-api";
@@ -13,23 +14,93 @@ import "./assistant-compare-surface.css";
 
 type RequestKind = "assistant" | "compare";
 type UiResult =
-  | { kind: "assistant"; data: AssistantResult }
-  | { kind: "compare"; data: CompareResult };
+  | { kind: "assistant"; data: AssistantResult; options: Stage7Option[] }
+  | { kind: "compare"; data: CompareResult; options: Stage7Option[] };
+
+const INTERNAL_PROVIDER_TOKENS = [
+  "explicit_constraints",
+  "explicit_context",
+  "objectives_used",
+  "constraints_used",
+  "evidence_refs",
+] as const;
+
+function hasTechnicalProviderText(value: string, options: readonly Stage7Option[]): boolean {
+  const trimmed = value.trim();
+  return (
+    options.some((option) => option.id === trimmed) ||
+    /^option-\d+$/iu.test(trimmed) ||
+    /(^|[^\p{L}\p{N}_])option-\d+(?=$|[^\p{L}\p{N}_])/iu.test(value) ||
+    INTERNAL_PROVIDER_TOKENS.some((token) => value.includes(token))
+  );
+}
+
+function humanProviderText(value: string, options: readonly Stage7Option[]): string | null {
+  return value.trim() && !hasTechnicalProviderText(value, options) ? value : null;
+}
+
+function visibleProviderText(
+  values: readonly string[],
+  options: readonly Stage7Option[],
+): { visible: string[]; hiddenCount: number } {
+  const visible: string[] = [];
+  let hiddenCount = 0;
+  for (const value of values) {
+    const text = humanProviderText(value, options);
+    if (text) visible.push(text);
+    else hiddenCount += 1;
+  }
+  return { visible, hiddenCount };
+}
+
+function optionLabel(
+  selected: Stage7Option,
+  options: readonly Stage7Option[],
+): string | null {
+  const requestOption = options.find((option) => option.id === selected.id);
+  return requestOption ? humanProviderText(requestOption.label, []) : null;
+}
+
+function displaySelection(
+  selectedId: string | null,
+  options: readonly Stage7Option[],
+): { text: string; hidden: boolean } {
+  if (selectedId === null) return { text: "нет выбора", hidden: false };
+  const selected = options.find((option) => option.id === selectedId);
+  if (!selected) return { text: "неизвестный вариант", hidden: true };
+  const label = humanProviderText(selected.label, []);
+  return label ? { text: label, hidden: false } : { text: "вариант скрыт", hidden: true };
+}
+
+function qualityWarning(hiddenCount: number, subject: string): ReactElement | null {
+  return hiddenCount > 0
+    ? <p className="stage7-quality-warning">{subject}: технический текст скрыт, чтобы не показывать внутренние обозначения.</p>
+    : null;
+}
 
 function lines(value: string): string[] {
   return value.split("\n").map((item) => item.trim()).filter(Boolean);
 }
 
-function assistantSummary(result: AssistantResult): ReactElement {
+function assistantSummary(result: AssistantResult, options: readonly Stage7Option[]): ReactElement {
   if (result.kind === "abstention") {
     return <p>Недостаточно оснований для независимого совета.</p>;
   }
+  const recommendation = result.recommendation
+    ? humanProviderText(result.recommendation, options)
+    : null;
+  const rationale = visibleProviderText(result.rationale, options);
+  const uncertainty = visibleProviderText(result.uncertainty, options);
+  const selectedLabel = result.selected_option ? optionLabel(result.selected_option, options) : null;
+  const hiddenCount = (result.recommendation && !recommendation ? 1 : 0) + rationale.hiddenCount + uncertainty.hiddenCount;
   return (
     <>
-      {result.selected_option ? <p className="stage7-choice">Выбранный вариант: {result.selected_option.label}</p> : null}
-      {result.recommendation ? <p>{result.recommendation}</p> : null}
-      {result.rationale.length > 0 ? <ul>{result.rationale.map((item) => <li key={item}>{item}</li>)}</ul> : null}
-      {result.uncertainty.length > 0 ? <p className="stage7-muted">Неопределённость: {result.uncertainty.join("; ")}</p> : null}
+      {result.selected_option && selectedLabel ? <p className="stage7-choice">Выбранный вариант: {selectedLabel}</p> : null}
+      {recommendation ? <p>{recommendation}</p> : null}
+      {rationale.visible.length > 0 ? <ul>{rationale.visible.map((item) => <li key={item}>{item}</li>)}</ul> : null}
+      {uncertainty.visible.length > 0 ? <p className="stage7-muted">Неопределённость: {uncertainty.visible.join("; ")}</p> : null}
+      {result.selected_option && !selectedLabel ? qualityWarning(1, "Выбор") : null}
+      {qualityWarning(hiddenCount, "Пояснения совета")}
     </>
   );
 }
@@ -40,28 +111,44 @@ function branchState(state: string): string {
   return "Недоступно";
 }
 
-function ComparePanels({ result }: { result: CompareResult }): ReactElement {
+function ComparePanels({ result, options }: { result: CompareResult; options: readonly Stage7Option[] }): ReactElement {
+  const assistantSelection = displaySelection(result.delta.assistant_selected_option_id, options);
+  const simulateSelection = displaySelection(result.delta.simulate_me_selected_option_id, options);
+  const simulateLabel = result.simulate_me.result?.selected_option
+    ? optionLabel(result.simulate_me.result.selected_option, options)
+    : null;
   return (
     <div className="stage7-result-grid" aria-label="Результат сравнения">
       <article className="stage7-result-panel">
         <div className="stage7-result-title"><Icon name="relation" size={18} /><h3>Независимый совет</h3></div>
         <p className="stage7-status">{branchState(result.assistant.state)}</p>
-        {result.assistant.result ? assistantSummary(result.assistant.result) : <p>Ветка независимого совета не вернула результата.</p>}
+        {result.assistant.result
+          ? assistantSummary(result.assistant.result, options)
+          : result.assistant.error
+            ? <p className="stage7-branch-error" role="alert">{result.assistant.error.message}</p>
+            : <p>Ветка независимого совета не вернула результата.</p>}
       </article>
       <article className="stage7-result-panel">
         <div className="stage7-result-title"><Icon name="simulate" size={18} /><h3>Прогноз моего выбора</h3></div>
         <p className="stage7-status">{branchState(result.simulate_me.state)}</p>
         {result.simulate_me.result?.selected_option
-          ? <p className="stage7-choice">Прогнозируемый вариант: {result.simulate_me.result.selected_option.label}</p>
-          : <p>Прогноз не выбрал вариант.</p>}
+          ? simulateLabel
+            ? <p className="stage7-choice">Прогнозируемый вариант: {simulateLabel}</p>
+            : <p className="stage7-quality-warning">Выбор прогноза скрыт: техническая подпись недоступна.</p>
+          : result.simulate_me.error
+            ? <p className="stage7-branch-error" role="alert">{result.simulate_me.error.message}</p>
+            : <p>Прогноз не выбрал вариант.</p>}
       </article>
       <article className="stage7-result-panel stage7-delta-panel">
         <div className="stage7-result-title"><Icon name="growth" size={18} /><h3>Структурное сравнение</h3></div>
         <p>{result.delta.explanation}</p>
         <dl className="stage7-delta-list">
-          <div><dt>Совет</dt><dd>{result.delta.assistant_selected_option_id ?? "нет выбора"}</dd></div>
-          <div><dt>Прогноз</dt><dd>{result.delta.simulate_me_selected_option_id ?? "нет выбора"}</dd></div>
+          <div><dt>Совет</dt><dd>{assistantSelection.text}</dd></div>
+          <div><dt>Прогноз</dt><dd>{simulateSelection.text}</dd></div>
         </dl>
+        {assistantSelection.hidden || simulateSelection.hidden
+          ? <p className="stage7-quality-warning">Технические идентификаторы структурного результата скрыты; показаны доступные названия вариантов.</p>
+          : null}
       </article>
     </div>
   );
@@ -109,10 +196,10 @@ export function AssistantCompareSurface(): ReactElement {
     try {
       if (kind === "assistant") {
         const data = await requestAssistant(payload, controller.signal);
-        if (version === requestVersion.current) setResult({ kind, data });
+        if (version === requestVersion.current) setResult({ kind, data, options: payload.options });
       } else {
         const data = await requestCompare(payload, controller.signal);
-        if (version === requestVersion.current) setResult({ kind, data });
+        if (version === requestVersion.current) setResult({ kind, data, options: payload.options });
       }
     } catch (caught) {
       if (controller.signal.aborted || version !== requestVersion.current) return;
@@ -183,8 +270,8 @@ export function AssistantCompareSurface(): ReactElement {
       <div className="stage7-live" role="status" aria-live="polite">{busy ? "Запрос выполняется." : error ?? (result ? "Результат обновлён." : "")}</div>
       <AnimatePresence mode="wait">
         {error ? <motion.div className="stage7-error" role="alert" key="error" initial={reduceMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><Icon name="error" size={18} /><span>{error}</span></motion.div> : null}
-        {!error && result?.kind === "assistant" ? <motion.article className="stage7-result-panel stage7-single-result" key="assistant" initial={reduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><div className="stage7-result-title"><Icon name="relation" size={18} /><h3>Независимый совет</h3></div>{assistantSummary(result.data)}</motion.article> : null}
-        {!error && result?.kind === "compare" ? <motion.div key="compare" initial={reduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><ComparePanels result={result.data} /></motion.div> : null}
+        {!error && result?.kind === "assistant" ? <motion.article className="stage7-result-panel stage7-single-result" key="assistant" initial={reduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><div className="stage7-result-title"><Icon name="relation" size={18} /><h3>Независимый совет</h3></div>{assistantSummary(result.data, result.options)}</motion.article> : null}
+        {!error && result?.kind === "compare" ? <motion.div key="compare" initial={reduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><ComparePanels result={result.data} options={result.options} /></motion.div> : null}
       </AnimatePresence>
     </motion.section>
   );

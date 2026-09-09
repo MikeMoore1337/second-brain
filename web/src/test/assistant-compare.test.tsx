@@ -148,6 +148,54 @@ describe("Assistant + Compare Stage 7 surface", () => {
     expect(host.textContent).toContain("Ветки сохранены отдельно.");
   });
 
+  it("keeps technical provider prose out of the UI without inferring a selection", async () => {
+    const technicalResult = {
+      ...assistantResult,
+      kind: "recommendation",
+      recommendation: "option-1",
+      selected_option: null,
+      rationale: ["Поскольку в explicit_constraints указано ограничение."],
+      uncertainty: ["evidence_refs не указаны"],
+    };
+    vi.spyOn(window, "fetch").mockResolvedValue(jsonResponse(technicalResult));
+    const host = await renderSurface();
+    await fillRequired(host);
+    const button = Array.from(host.querySelectorAll<HTMLButtonElement>("button"))
+      .find((item) => item.textContent?.includes("Только независимый совет"));
+
+    await act(async () => button?.click());
+
+    expect(host.textContent).not.toContain("option-1");
+    expect(host.textContent).not.toContain("explicit_constraints");
+    expect(host.textContent).not.toContain("Выбранный вариант:");
+    expect(host.textContent).toContain("технический текст скрыт");
+  });
+
+  it("shows human option labels and keeps backend branch errors visible", async () => {
+    const resultWithError = {
+      ...compareResult,
+      assistant: {
+        state: "error",
+        result: null,
+        error: {
+          code: "COMPARE_BRANCH_RESULT_INVALID",
+          message: "compare branch result failed validation",
+        },
+      },
+    };
+    vi.spyOn(window, "fetch").mockResolvedValue(jsonResponse(resultWithError));
+    const host = await renderSurface();
+    await fillRequired(host);
+    const button = Array.from(host.querySelectorAll<HTMLButtonElement>("button"))
+      .find((item) => item.textContent?.includes("Совет + прогноз + сравнение"));
+
+    await act(async () => button?.click());
+
+    expect(host.textContent).toContain("Второй");
+    expect(host.textContent).not.toContain("option-2");
+    expect(host.textContent).toContain("compare branch result failed validation");
+  });
+
   it("ignores an older response and never steals focus when requests complete out of order", async () => {
     let resolveFirst: ((value: Response) => void) | undefined;
     const first = new Promise<Response>((resolve) => { resolveFirst = resolve; });

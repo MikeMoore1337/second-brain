@@ -227,6 +227,30 @@ def test_request_builder_uses_only_canonical_explicit_envelope() -> None:
     assert set(properties) == set(required)
 
 
+def test_advisor_quality_instructions_keep_prose_human_and_references_grounded() -> None:
+    system = cloudflare._ADVISOR_SYSTEM_MESSAGE
+    required_rules = (
+        "естественным русским языком",
+        "Не показывай в этом тексте имена полей",
+        "recommendation не может быть точным ID варианта",
+        "selected_option обязан содержать exact request-local пару id/label",
+        "Recommendation, rationale и selected_option должны быть согласованы",
+        "при невозможности обоснованного выбора верни typed abstention",
+        "constraints_used",
+        "objectives_used",
+        "evidence_refs",
+        "Не добавляй ссылки на inputs, которые не использовал",
+    )
+    assert all(rule in system for rule in required_rules)
+
+
+def test_request_construction_is_byte_deterministic() -> None:
+    envelope = make_envelope()
+    first = cloudflare.build_advisor_request_body(envelope)
+    second = cloudflare.build_advisor_request_body(envelope)
+    assert first == second
+
+
 def test_advisor_model_does_not_change_shared_llm_model_boundary() -> None:
     assert cloudflare.CLOUDFLARE_ADVISOR_MODEL == "@cf/meta/llama-3.1-8b-instruct-fast"
     assert transport.CLOUDFLARE_MODEL == "@cf/zai-org/glm-4.7-flash"
