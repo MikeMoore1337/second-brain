@@ -39,6 +39,12 @@ const ATLAS = [
 const files = new Set(await readdir("src/assets/icons"));
 const EXPECTED_MENU_ICONS = ["add", "decision", "timeline", "self-model", "simulate", "relation", "self-retrieval", "search", "diagnostics", "memory", "growth"];
 const EXPECTED_MENU_TARGETS = ["capture", "decision-journal", "timeline", "self-model", "simulate-me", "assistant-compare", "self-retrieval", "search", "diagnostics", "memory", "growth"];
+const INITIAL_VIEWPORT = { width: 1200, height: 1000 };
+const INITIAL_PHASE_MS = 750;
+const DEFERRED_IMAGE_CONTRACT = [
+  { name: "Память · фон карточки", selector: "#memory > .pillar-backdrop" },
+  { name: "Развитие · фон карточки", selector: "#growth > .pillar-backdrop" },
+];
 let checks = 0;
 const check = (condition, message) => {
   assert(condition, message);
@@ -60,6 +66,86 @@ async function guardLoopback(context) {
     }
     return route.continue();
   });
+}
+
+function imagePath(url) {
+  try {
+    const parsed = new URL(url, ORIGIN);
+    return parsed.origin === ORIGIN && parsed.pathname.endsWith(".webp") ? parsed.pathname : null;
+  } catch {
+    return null;
+  }
+}
+
+function captureImageRequests(page) {
+  const startedAt = Date.now();
+  const requests = [];
+  page.on("request", (request) => {
+    const path = imagePath(request.url());
+    if (path) requests.push({ path, elapsedMs: Date.now() - startedAt });
+  });
+  return { requests, startedAt };
+}
+
+async function finishInitialPhase(page, capture) {
+  const remaining = Math.max(0, INITIAL_PHASE_MS - (Date.now() - capture.startedAt));
+  if (remaining > 0) await page.waitForTimeout(remaining);
+  return capture.requests.filter((request) => request.elapsedMs <= INITIAL_PHASE_MS);
+}
+
+async function readDeferredImages(page) {
+  return Promise.all(DEFERRED_IMAGE_CONTRACT.map(async ({ name, selector }) => {
+    const image = page.locator(selector);
+    check(await image.count() === 1, `deferred image ${name} is missing from the current React GUI`);
+    const source = await image.getAttribute("src");
+    const path = source ? imagePath(source) : null;
+    check(Boolean(path), `deferred image ${name} has no loopback WebP source`);
+    return { name, selector, path };
+  }));
+}
+
+function deferredRequestViolations(requests, deferredImages) {
+  const requested = new Set(requests.map((request) => request.path));
+  return deferredImages.filter((image) => requested.has(image.path));
+}
+
+function assertNoDeferredRequests(requests, deferredImages) {
+  const violations = deferredRequestViolations(requests, deferredImages);
+  if (violations.length > 0) {
+    throw new Error(`premature deferred image request: ${violations.map(({ name, path }) => `${name} (${path})`).join(", ")}`);
+  }
+}
+
+async function verifyEarlyRequestDetection(deferredImage) {
+  const negativeBrowser = await chromium.launch({
+    headless: true,
+    ...(process.env.SB_QA_CHROMIUM ? { executablePath: process.env.SB_QA_CHROMIUM } : {}),
+  });
+  const context = await negativeBrowser.newContext({ viewport: INITIAL_VIEWPORT });
+  try {
+    await guardLoopback(context);
+    const page = await context.newPage();
+    const capture = captureImageRequests(page);
+    const source = new URL(deferredImage.path, ORIGIN).href;
+    await page.addInitScript((earlySource) => {
+      const image = new Image();
+      image.src = earlySource;
+      window.__secondBrainQaEarlyDeferredImage = image;
+    }, source);
+    await page.goto(ORIGIN, { waitUntil: "domcontentloaded" });
+    const initialRequests = await finishInitialPhase(page, capture);
+    let diagnostic = "";
+    try {
+      assertNoDeferredRequests(initialRequests, [deferredImage]);
+    } catch (error) {
+      diagnostic = error instanceof Error ? error.message : String(error);
+    }
+    check(initialRequests.length < ATLAS.length, `negative early-request scenario loaded ${initialRequests.length} images; expected fewer than ${ATLAS.length}`);
+    check(diagnostic.includes(deferredImage.path), `negative early-request scenario did not detect ${deferredImage.name}`);
+    return { deferredImage, initialImageRequests: initialRequests, diagnostic };
+  } finally {
+    await negativeBrowser.close();
+  }
 }
 
 async function readImageState(image) {
@@ -109,14 +195,18 @@ try {
   await atlas.screenshot({ path: `${out}/icon-family.png`, fullPage: true });
   await atlas.close();
 
-  const context = await browser.newContext({ viewport: { width: 1200, height: 1000 } });
+  const context = await browser.newContext({ viewport: INITIAL_VIEWPORT });
   await guardLoopback(context);
   const page = await context.newPage();
+  const capture = captureImageRequests(page);
   await page.goto(ORIGIN, { waitUntil: "domcontentloaded" });
+  const initialRequests = await finishInitialPhase(page, capture);
+  const deferredImages = await readDeferredImages(page);
+  const deferredViolations = deferredRequestViolations(initialRequests, deferredImages);
+  check(deferredViolations.length === 0, `initial phase requested deferred images: ${deferredViolations.map(({ name, path }) => `${name} (${path})`).join(", ")}`);
+  const negative = await verifyEarlyRequestDetection(deferredImages[0]);
   await page.waitForTimeout(1200);
   const initial = await page.evaluate(() => performance.getEntriesByType("resource").map((entry) => entry.name).filter((name) => name.endsWith(".webp")));
-  const initialSectionAssets = initial.filter((name) => /-(compact|detail)-/.test(name));
-  check(initialSectionAssets.length < ATLAS.length, "the complete icon family loaded before lazy sections were visited");
   check(await page.locator(".quick-nav").count() === 1, "current React quick navigation is missing");
   check(await page.locator(".fold-section").count() === 7, "current React section icon hosts are missing");
 
@@ -158,7 +248,15 @@ try {
   check(visibleIcons.every((item) => item.alt === "" && item.hidden === "true" && item.loaded), "current visible icons violate alt/aria-hidden/loading contract");
   await page.locator("#memory").scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${out}/icons-navigation.png` });
-  report.react = { initialRasterRequests: initial.map((name) => new URL(name).pathname), menuIcons, navigationIcons, visibleIcons };
+  report.react = {
+    initialPhase: { viewport: INITIAL_VIEWPORT, durationMs: INITIAL_PHASE_MS, requests: initialRequests },
+    deferredImages,
+    initialRasterRequests: initial.map((name) => new URL(name).pathname),
+    menuIcons,
+    navigationIcons,
+    visibleIcons,
+  };
+  report.negative = negative;
 } finally {
   report.checks = checks;
   await writeFile(`${out}/iconography.json`, JSON.stringify(report, null, 2));
