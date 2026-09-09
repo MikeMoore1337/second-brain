@@ -198,6 +198,7 @@
 }
 
 .stage7-delta-list dt {
+  overflow-wrap: anywhere;
   color: var(--sb-color-text-secondary);
 }
 
