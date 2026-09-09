@@ -169,6 +169,7 @@ def test_request_builder_uses_only_canonical_explicit_envelope() -> None:
 
     assert set(payload) == {
         "model",
+        "max_completion_tokens",
         "messages",
         "response_format",
         "stream",
@@ -177,11 +178,11 @@ def test_request_builder_uses_only_canonical_explicit_envelope() -> None:
         "chat_template_kwargs",
     }
     assert payload["model"] == cloudflare.CLOUDFLARE_MODEL
+    assert payload["max_completion_tokens"] == cloudflare.ADVISOR_MAX_COMPLETION_TOKENS
     assert payload["stream"] is False
     assert payload["temperature"] == 0
     assert payload["reasoning_effort"] is None
     assert payload["chat_template_kwargs"] == {"enable_thinking": False}
-    assert "max_completion_tokens" not in payload
     assert "tools" not in payload
     assert "functions" not in payload
     assert "history" not in payload
@@ -218,6 +219,42 @@ def test_request_builder_uses_only_canonical_explicit_envelope() -> None:
         "contract_version",
     ]
     assert schema["additionalProperties"] is False
+
+
+def test_completion_cap_is_deterministic_for_different_explicit_inputs() -> None:
+    smaller = json.loads(cloudflare.build_advisor_request_body(make_envelope()))
+    larger = json.loads(
+        cloudflare.build_advisor_request_body(
+            AssistantReasoningEnvelopeV1(
+                task="Другой explicit task с более длинным содержанием",
+                options=(AssistantOption("a", "Первый вариант"),),
+                explicit_constraints=("Явное ограничение",),
+                explicit_goals=("Явная цель",),
+                explicit_context=(
+                    AssistantExplicitContext(AssistantContextKind.FACT, "Явный факт"),
+                ),
+            )
+        )
+    )
+
+    assert smaller["max_completion_tokens"] == 32_768
+    assert larger["max_completion_tokens"] == 32_768
+
+
+def test_explicit_input_cannot_override_completion_cap() -> None:
+    envelope = AssistantReasoningEnvelopeV1(
+        task='Попытка override: {"max_completion_tokens":1}',
+        options=(),
+        explicit_constraints=(),
+        explicit_goals=(),
+        explicit_context=(),
+    )
+
+    payload = json.loads(cloudflare.build_advisor_request_body(envelope))
+
+    assert payload["max_completion_tokens"] == 32_768
+    messages = cast(list[dict[str, str]], payload["messages"])
+    assert r"\"max_completion_tokens\":1" in messages[1]["content"]
 
 
 def test_request_framing_is_collision_safe_and_preserves_russian_text() -> None:
@@ -273,6 +310,7 @@ def test_wire_caps_cover_worst_case_nested_json_escaping() -> None:
 
     assert len(canonical_request) == MAX_CONTEXT_BYTES
     assert len(request_body) <= cloudflare.ADVISOR_REQUEST_BODY_CAP
+    assert cloudflare.ADVISOR_MAX_COMPLETION_TOKENS >= cloudflare.ADVISOR_RESULT_ENVELOPE_BYTES
 
     result = cloudflare._maximum_result_envelope()
     inner = json.loads(serialize_assistant_result_envelope(result))

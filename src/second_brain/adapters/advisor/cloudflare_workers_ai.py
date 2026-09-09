@@ -275,6 +275,7 @@ def _advisor_request_payload(canonical_envelope: bytes) -> dict[str, object]:
     )
     return {
         "model": CLOUDFLARE_MODEL,
+        "max_completion_tokens": ADVISOR_MAX_COMPLETION_TOKENS,
         "messages": [
             {"role": "system", "content": _ADVISOR_SYSTEM_MESSAGE},
             {"role": "user", "content": user_message},
@@ -365,6 +366,10 @@ def _maximum_result_envelope() -> AssistantResultEnvelopeV1:
 
 
 _MAX_RESULT_ENVELOPE_BYTES = len(serialize_assistant_result_envelope(_maximum_result_envelope()))
+# The largest valid Assistant result is currently 32,712 canonical UTF-8 bytes.
+# Keep a fixed provider-token ceiling above that bound, without an average
+# bytes/token conversion or caller-controlled result-size setting.
+ADVISOR_MAX_COMPLETION_TOKENS = 32_768
 _ADVISOR_MAX_MARKER_COUNT = MAX_CONTEXT_BYTES // min(
     len(_ADVISOR_BEGIN_MARKER), len(_ADVISOR_END_MARKER)
 )
@@ -650,6 +655,7 @@ class CloudflareWorkersAiAdvisorPort:
 
 __all__ = [
     "ADVISOR_DEFAULT_MAX_CONTEXT_BYTES",
+    "ADVISOR_MAX_COMPLETION_TOKENS",
     "ADVISOR_REQUEST_BODY_CAP",
     "ADVISOR_RESPONSE_BODY_CAP",
     "ADVISOR_RESULT_ENVELOPE_BYTES",
