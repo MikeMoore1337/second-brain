@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "motion/react";
+import { revealDestination } from "./fold-section";
 import { Icon, type IconName } from "./icons";
 import { usePageMotion } from "./page-motion";
 
@@ -24,10 +25,10 @@ export function SectionMenu({ navigation }: { navigation: readonly (readonly [st
       <div className="dropdown-heading"><span>Твоё пространство</span><button type="button" aria-label="Закрыть список разделов" onClick={() => { setOpen(false); trigger.current?.focus(); }}><Icon name="close" size={18} /></button></div>
       <nav aria-label="Все разделы">{navigation.map(([href, label, icon]) => <a href={href} key={href} onClick={() => {
         setOpen(false);
-        const target = document.getElementById(href.slice(1));
+        const target = revealDestination(href);
         if (target) { target.tabIndex = -1; target.focus({ preventScroll: true }); }
       }}><Icon name={icon} size={24} /><span>{label}</span></a>)}</nav>
-      {reduced ? <p className="dropdown-motion">Движение отключено настройкой устройства</p> : <button className="dropdown-motion" type="button" aria-pressed={paused} onClick={() => setPaused(!paused)}><Icon name={paused ? "play" : "pause"} size={18} />{paused ? "Включить эффекты страницы" : "Приостановить эффекты страницы"}</button>}
+      {reduced ? <p className="dropdown-motion">Движение отключено настройкой устройства</p> : <label className="dropdown-motion motion-setting"><span>Анимация</span><input type="checkbox" role="switch" checked={!paused} onChange={event => setPaused(!event.target.checked)} /><span className="motion-switch" aria-hidden="true" /></label>}
     </div> : null}
   </div>;
 }

@@ -1,7 +1,8 @@
 import { MotionConfig } from "motion/react";
 import { useEffect, type ReactElement } from "react";
 import { CinematicHero } from "./cinematic-hero";
-import { PageMotion, ChapterInterlude } from "./page-motion";
+import { PageMotion } from "./page-motion";
+import { FoldSection, revealDestination } from "./fold-section";
 import { SectionMenu } from "./section-menu";
 import brainMark from "./assets/brain-mark-48.webp";
 import brainMark2x from "./assets/brain-mark-96.webp";
@@ -17,7 +18,7 @@ import {
   TimelineSurface,
 } from "./parity";
 import { DiagnosticsSurface } from "./diagnostics-surface";
-import { Icon, type IconName } from "./icons";
+import { Icon } from "./icons";
 
 const navigation = [
   ["#decision-journal", "Журнал решений", "decision"],
@@ -39,7 +40,7 @@ export function App(): ReactElement {
     const navigate = () => {
       window.clearTimeout(timer);
       previous?.classList.remove("context-enter");
-      const target = document.getElementById(window.location.hash.slice(1));
+      const target = revealDestination(window.location.hash);
       if (!target) return;
       target.tabIndex = -1;
       target.focus({ preventScroll: true });
@@ -47,8 +48,15 @@ export function App(): ReactElement {
       previous = target;
       timer = window.setTimeout(() => target.classList.remove("context-enter"), 350);
     };
+    const followLink = (event: MouseEvent) => {
+      const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>('a[href^="#"]') : null;
+      if (link) revealDestination(link.hash);
+    };
+    document.addEventListener("click", followLink, true);
+    navigate();
     window.addEventListener("hashchange", navigate);
     return () => {
+      document.removeEventListener("click", followLink, true);
       window.removeEventListener("hashchange", navigate);
       window.clearTimeout(timer);
       previous?.classList.remove("context-enter");
@@ -74,26 +82,22 @@ export function App(): ReactElement {
             <main id="main-content" tabIndex={-1}>
               <CinematicHero />
               <CaptureSurface />
-              <ChapterInterlude number="01" title="От мысли — к выбору." text="Сохраняй не только решение, но и то, что к нему привело." icon="decision" secondary="memory" />
-              <DecisionJournalSurface />
-              <TimelineSurface />
-              <ChapterInterlude number="02" title="Увидеть себя в контексте." text="Возвращайся к наблюдениям, решениям и опыту." icon="self-model" secondary="timeline" />
-              <SelfModelSurface />
-              <SimulateMeSurface />
-              <AssistantCompareSurface />
-              <SelfRetrievalSurface />
-              <ChapterInterlude number="03" title="Важное — ближе." text="Находи нужный фрагмент и продолжай мысль." icon="search" secondary="memory" />
               <SearchSurface />
-              <DiagnosticsSurface />
+              <div className="tools-heading"><h2>Твоё пространство</h2><p>Открой нужный раздел — остальное подождёт.</p></div>
+              <div className="fold-list">
+                <FoldSection id="decision-journal" title="Журнал решений" icon="decision"><DecisionJournalSurface /></FoldSection>
+                <FoldSection id="timeline" title="Хронология" icon="timeline"><TimelineSurface /></FoldSection>
+                <FoldSection id="self-model" title="Модель себя" icon="self-model"><SelfModelSurface /></FoldSection>
+                <FoldSection id="simulate-me" title="Прогноз" icon="simulate"><SimulateMeSurface /></FoldSection>
+                <FoldSection id="assistant-compare" title="Совет и сравнение" icon="relation"><AssistantCompareSurface /></FoldSection>
+                <FoldSection id="self-retrieval" title="Сбор контекста" icon="self-retrieval"><SelfRetrievalSurface /></FoldSection>
+                <FoldSection id="diagnostics" title="Диагностика" icon="diagnostics"><DiagnosticsSurface /></FoldSection>
+              </div>
               <section className="pillars" aria-labelledby="pillars-title"><div className="section-heading"><p className="eyebrow">Две центральные части</p><h2 id="pillars-title">Система, которая растёт вместе с тобой.</h2></div><div className="pillar-grid"><article className="pillar-card pillar-card-memory" id="memory"><div className="card-topline"><span className="card-index">01</span><span className="card-dot" aria-hidden="true" /></div><Icon name="memory" size={64} className="section-art" /><h3>Память</h3><p>Собирай идеи, источники и наблюдения в надёжную личную память.</p><div className="card-meta"><span>База знаний</span><Icon name="open" size={18} /></div></article><article className="pillar-card pillar-card-growth" id="growth"><div className="card-topline"><span className="card-index">02</span><span className="card-dot" aria-hidden="true" /></div><Icon name="growth" size={64} className="section-art" /><h3>Развитие</h3><p>Превращай накопленное знание в ясность, навыки и следующий шаг.</p><div className="card-meta"><span>Личное развитие</span><Icon name="open" size={18} /></div></article></div></section>
             </main>
             <footer className="footer"><span>Локально по умолчанию</span><span className="footer-line" aria-hidden="true" /><span>Приватные знания, осознанное развитие</span></footer>
           </div>
-          <aside id="workspace-navigation" className="workspace-rail" aria-label="Навигация рабочего пространства">
-            <div className="rail-intro"><span className="rail-kicker">Твоё пространство</span><span className="rail-title">Мысли становятся знанием</span></div>
-            <nav className="topnav" aria-label="Основные разделы"><>{navigation.map(([href, label, icon]) => <a href={href} key={href}><Icon name={icon as IconName} size={18} /><span>{label}</span></a>)}</></nav>
-            <span className="status-pill"><span aria-hidden="true" /> Локальная основа</span>
-          </aside>
+
         </div>
       </div>
     </PageMotion></MotionConfig>

@@ -19,25 +19,6 @@
 .section-dropdown a:hover,.section-dropdown a:focus-visible { background:var(--sb-color-focus); border-color:#8d68a8; }
 .dropdown-motion { display:flex; align-items:center; justify-content:center; gap:10px; padding:12px; min-height:48px; width:100%; border:1px solid #60476e; border-radius:12px; background:var(--sb-color-ink); color:var(--sb-color-text-secondary); cursor:pointer; font-size:13px; }
 
-/* Three visual chapters connect the existing tools without blocking entry. */
-.chapter-interlude { position:relative; isolation:isolate; max-width:1200px; min-height:360px; margin:80px auto 40px; display:grid; grid-template-columns:1.1fr 1fr; align-items:center; gap:32px; padding:24px 40px; }
-.chapter-copy { z-index:2; }
-.chapter-copy .eyebrow { color:var(--sb-color-accent); font-size:11px; letter-spacing:.16em; margin:0 0 24px; }
-.chapter-copy h2 { font:550 clamp(36px,4.4vw,64px)/1.05 var(--sb-font-sans); letter-spacing:-.065em; color:var(--sb-color-text-primary); max-width:12ch; margin:0 0 22px; }
-.chapter-copy > p:last-child { color:var(--sb-color-text-secondary); max-width:36ch; line-height:1.65; font-size:16px; }
-.chapter-scene { position:relative; height:320px; pointer-events:none; perspective:700px; }
-.chapter-aura { position:absolute; inset:-15%; background:radial-gradient(ellipse,#8b5cf647,transparent 65%); animation:chapter-breathe 13s ease-in-out infinite alternate; }
-.chapter-scene svg { position:absolute; width:100%; height:100%; }
-.chapter-thread { stroke:#c49aff66; stroke-width:1; }
-.chapter-signal { stroke:#e9d5ff; stroke-width:2; stroke-linecap:round; stroke-dasharray:8 110; animation:thought-travel 12s ease-in-out infinite; }
-.chapter-symbol { position:absolute; left:calc(50% - 120px); top:38px; animation:chapter-float 12s ease-in-out infinite alternate; }
-.chapter-symbol img { width:240px; height:240px; }
-.chapter-satellite { position:absolute; left:8%; top:64%; rotate:-14deg; animation:chapter-float 15s ease-in-out infinite alternate-reverse; }
-.chapter-fragment { position:absolute; right:6%; top:12%; width:76px; height:96px; padding:20px 12px; border:1px solid #a879ef80; border-radius:12px; background:linear-gradient(145deg,#352045,#100b18); rotate:13deg; animation:chapter-float 14s ease-in-out infinite alternate; }
-.chapter-fragment span { display:block; height:1px; background:#c49aff66; margin:12px 0; }
-.chapter-fragment span:last-child { width:60%; }
-.chapter-interlude[data-revealed=true] .chapter-scene { animation:chapter-appear 700ms var(--sb-ease-out) both; }
-
 /* Light stays in the header/margins. Editing and reading planes remain still. */
 .motion-world main > section:not(.cinematic-hero) { border-color:#694680; background:linear-gradient(145deg,#261538a6,transparent 55%),var(--sb-color-ink); }
 .motion-world main > section:not(.cinematic-hero)::before { display:block; content:""; position:absolute; z-index:-1; pointer-events:none; inset:0; border-radius:inherit; background:radial-gradient(ellipse 55% 260px at 100% 0%,#8b5cf62b,transparent 90%); animation:section-breathe 14s ease-in-out infinite alternate; }

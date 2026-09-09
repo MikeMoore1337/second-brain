@@ -50,12 +50,12 @@ try {
     report.motion.push({width,phase:'active',...await states()});
     await p.mouse.move(width*.9,300);await p.waitForTimeout(400);
     report.motion.push({width,phase:'pointer',...await states()});
-    await p.getByRole('button',{name:'Остановить движение'}).click();
+    await p.getByRole('button',{name:'Разделы',exact:true}).click();await p.getByRole('switch',{name:'Анимация'}).uncheck();await p.keyboard.press('Escape');
     await p.waitForTimeout(400); const first=await states();await p.waitForTimeout(650);const second=await states();
     assert.equal(second.moving,'false');assert.deepEqual(first.animations,second.animations);
     report.motion.push({width,phase:'paused-stable-650ms',...second});
     await shot(p,`paused-${width}`,'.cinematic-hero');
-    await p.getByRole('button',{name:'Включить движение'}).click();
+    await p.getByRole('button',{name:'Разделы',exact:true}).click();await p.getByRole('switch',{name:'Анимация'}).check();await p.keyboard.press('Escape');
     await p.locator('#search').scrollIntoViewIfNeeded();await p.waitForTimeout(200);assert.equal((await states()).moving,'false');
     report.motion.push({width,phase:'offscreen',...await states()});
     await p.evaluate(()=>scrollTo(0,0));await p.waitForTimeout(300);

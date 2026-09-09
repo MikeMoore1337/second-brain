@@ -5,7 +5,7 @@ import { CinematicHero } from "../cinematic-hero";
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); document.body.innerHTML = ""; });
 
-it("pauses visible decoration explicitly and keeps capture/search actionable", async () => {
+it("keeps visible decoration and capture/search actionable without a hero pause button", async () => {
   let intersect: IntersectionObserverCallback = () => {};
   vi.stubGlobal("IntersectionObserver", class {
     constructor(callback: IntersectionObserverCallback) { intersect = callback; }
@@ -16,9 +16,7 @@ it("pauses visible decoration explicitly and keeps capture/search actionable", a
   await act(async () => root.render(<CinematicHero />));
   await act(async () => intersect([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver));
   expect(host.querySelector("section")?.getAttribute("data-moving")).toBe("true");
-  await act(async () => host.querySelector<HTMLButtonElement>("button")?.click());
-  expect(host.querySelector("section")?.getAttribute("data-moving")).toBe("false");
-  expect(host.querySelector("button")?.getAttribute("aria-pressed")).toBe("true");
+  expect(host.querySelector("button")).toBeNull();
   expect(host.querySelector('a[href="#capture"]')).not.toBeNull();
   expect(host.querySelector('a[href="#search"]')).not.toBeNull();
   await act(async () => root.unmount());

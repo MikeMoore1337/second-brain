@@ -15,7 +15,7 @@ const thoughtConnections = [
 export function CinematicHero(): ReactElement {
   const root = useRef<HTMLElement>(null);
   const scene = useRef<HTMLDivElement>(null);
-  const { paused, setPaused } = usePageMotion();
+  const { paused } = usePageMotion();
   const [active, setActive] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
 
@@ -105,6 +105,6 @@ export function CinematicHero(): ReactElement {
       <div className="universe-actions"><a className="universe-primary" href="#capture">Добавить мысль <Icon name="add" size={19} /></a><a className="universe-search" href="#search"><Icon name="search" size={19} /> Найти в памяти</a></div>
       <p className="universe-promise">Твои знания. Твой выбор.<br />Сохранение — только после проверки.</p>
     </div>
-    <div className="universe-caption"><span>Больше связей. Больше ясности.</span>{reducedMotion ? <span className="motion-preference">Движение отключено настройкой устройства</span> : <button type="button" className="scene-toggle" aria-pressed={paused} onClick={() => setPaused(!paused)}><Icon name={paused ? "play" : "pause"} size={18} />{paused ? "Включить движение" : "Остановить движение"}</button>}</div>
+    <div className="universe-caption"><span>Больше связей. Больше ясности.</span>{reducedMotion ? <span className="motion-preference">Движение отключено настройкой устройства</span> : null}</div>
   </section>;
 }

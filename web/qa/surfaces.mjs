@@ -28,6 +28,7 @@ try{
       return fixtures[u.pathname]?route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(fixtures[u.pathname])}):route.continue();
     });
     const page=await c.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('http://127.0.0.1:8137');
+    await page.locator('.fold-section').evaluateAll(items=>items.forEach(e=>e.open=true));
     await page.locator('#self-model').getByRole('button',{name:'Построить / обновить'}).click();
     await page.getByLabel('Запрос для контекста').fill('идеи');await page.locator('#self-retrieval').getByRole('button',{name:'Собрать',exact:true}).click();
     await page.locator('#simulate-me').getByLabel('Задача или запрос').fill('Как вернуться к идеям?');

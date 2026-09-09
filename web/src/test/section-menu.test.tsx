@@ -35,10 +35,10 @@ it("shares pause with the whole page and suspends decoration when the document i
   await act(async () => root.render(<PageMotion><SectionMenu navigation={[]} /><Probe /></PageMotion>));
   expect(host.querySelector(".motion-world")?.getAttribute("data-page-motion")).toBe("true");
   await act(async () => host.querySelector<HTMLButtonElement>(".sections-trigger")!.click());
-  await act(async () => host.querySelector<HTMLButtonElement>(".dropdown-motion")!.click());
+  await act(async () => host.querySelector<HTMLInputElement>(".motion-setting input")!.click());
   expect(host.querySelector("output")?.textContent).toBe("Пауза");
   expect(host.querySelector(".motion-world")?.getAttribute("data-page-motion")).toBe("false");
-  await act(async () => host.querySelector<HTMLButtonElement>(".dropdown-motion")!.click());
+  await act(async () => host.querySelector<HTMLInputElement>(".motion-setting input")!.click());
   hidden.mockReturnValue(true);
   await act(async () => document.dispatchEvent(new Event("visibilitychange")));
   expect(host.querySelector(".motion-world")?.getAttribute("data-page-motion")).toBe("false");

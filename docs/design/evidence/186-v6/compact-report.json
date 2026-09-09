@@ -1,0 +1,46 @@
+[
+  {
+    "width": 320,
+    "height": 3312
+  },
+  {
+    "width": 360,
+    "height": 3323
+  },
+  {
+    "width": 390,
+    "height": 3242,
+    "axe": []
+  },
+  {
+    "width": 390,
+    "state": "expanded",
+    "axe": []
+  },
+  {
+    "width": 430,
+    "height": 3249
+  },
+  {
+    "width": 768,
+    "height": 3146
+  },
+  {
+    "width": 1024,
+    "height": 2825
+  },
+  {
+    "width": 1440,
+    "height": 2861,
+    "axe": []
+  },
+  {
+    "width": 1440,
+    "state": "expanded",
+    "axe": []
+  },
+  {
+    "width": 1920,
+    "height": 2924
+  }
+]

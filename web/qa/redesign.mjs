@@ -19,7 +19,7 @@ async function audit(page, name) {
   report.accessibility.push({ name, violations: results.violations.map(v => ({ id:v.id, impact:v.impact, nodes:v.nodes.map(n=>({target:n.target,summary:n.failureSummary})) })) });
 }
 async function screenshot(page, name, selector) {
-  if (selector) await page.locator(selector).evaluate(e=>e.scrollIntoView({block:'start'}));
+  if (selector) await page.locator(selector).evaluate(e=>{const d=e.closest('details');if(d)d.open=true;e.scrollIntoView({block:'start'});});
   await page.waitForTimeout(450);
   await page.screenshot({ path: `${out}/${name}.png` });
 }
@@ -43,7 +43,7 @@ try {
     if(width===390 || width===1440) {
       await page.locator('.cinematic-hero').screenshot({path:`${out}/home-full-${width}.png`});
       await audit(page,`initial-${width}`);
-      for (const id of ['capture','decision-journal','timeline','self-model','simulate-me','assistant-compare','self-retrieval','search','diagnostics','workspace-navigation']) {
+      for (const id of ['capture','decision-journal','timeline','self-model','simulate-me','assistant-compare','self-retrieval','search','diagnostics']) {
         await screenshot(page,`${id}-${width}`,`#${id}`);
         report.surfaces.push({id,width,...await layout(page)});
       }
