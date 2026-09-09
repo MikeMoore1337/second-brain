@@ -84,7 +84,7 @@ from second_brain.application.assistant import (
 from second_brain.application.ports import CancellationToken
 
 CLOUDFLARE_ADVISOR_PROVIDER = CLOUDFLARE_PROVIDER
-CLOUDFLARE_ADVISOR_MODEL = CLOUDFLARE_MODEL
+CLOUDFLARE_ADVISOR_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast"
 CLOUDFLARE_ADVISOR_API_HOST = CLOUDFLARE_API_HOST
 CLOUDFLARE_ADVISOR_PATH = CLOUDFLARE_CHAT_COMPLETIONS_PATH
 
@@ -274,7 +274,7 @@ def _advisor_request_payload(canonical_envelope: bytes) -> dict[str, object]:
         f"{_ADVISOR_END_MARKER}"
     )
     return {
-        "model": CLOUDFLARE_MODEL,
+        "model": CLOUDFLARE_ADVISOR_MODEL,
         "max_completion_tokens": ADVISOR_MAX_COMPLETION_TOKENS,
         "messages": [
             {"role": "system", "content": _ADVISOR_SYSTEM_MESSAGE},
@@ -366,9 +366,9 @@ def _maximum_result_envelope() -> AssistantResultEnvelopeV1:
 
 
 _MAX_RESULT_ENVELOPE_BYTES = len(serialize_assistant_result_envelope(_maximum_result_envelope()))
-# The largest valid Assistant result is currently 32,712 canonical UTF-8 bytes.
-# Keep a fixed provider-token ceiling above that bound, without an average
-# bytes/token conversion or caller-controlled result-size setting.
+# Fixed bounded provider ceiling for the Advisor's Llama fast completion. This
+# is a model-level request control, not a conversion from application result
+# bytes to model tokens; application byte validation remains authoritative.
 ADVISOR_MAX_COMPLETION_TOKENS = 32_768
 _ADVISOR_MAX_MARKER_COUNT = MAX_CONTEXT_BYTES // min(
     len(_ADVISOR_BEGIN_MARKER), len(_ADVISOR_END_MARKER)
