@@ -178,6 +178,7 @@ def web_serve(
         application,
         host=WEB_HOST,
         port=port,
+        access_log=False,
     )
 
 

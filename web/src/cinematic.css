@@ -16,8 +16,19 @@ button,input,textarea,select { font-family:var(--sb-font-sans); }
 .brand > .icon { color:var(--sb-color-accent); }
 .brand-eyebrow { display:none; }
 .brand-name { font-size:19px; font-weight:620; letter-spacing:-.04em; }
+.topbar-actions { display:flex; align-items:center; gap:12px; min-width:0; }
 .quick-nav { display:flex; gap:24px; align-items:center; }
 .quick-nav a { display:flex; min-height:44px; align-items:center; gap:8px; color:var(--sb-color-text-secondary); text-decoration:none; padding:4px 10px; border-radius:24px; }
+.account-menu { position:relative; flex:0 0 auto; }
+.account-menu summary { display:flex; align-items:center; gap:10px; min-height:44px; padding:4px 12px; border:1px solid var(--sb-color-line-strong); border-radius:24px; background:var(--sb-color-ink); color:var(--sb-color-text-secondary); cursor:pointer; font-size:12px; list-style:none; }
+.account-menu summary::-webkit-details-marker { display:none; }
+.account-menu summary:hover,.account-menu[open] summary { border-color:var(--sb-color-accent); background:var(--sb-color-focus); color:var(--sb-color-text-primary); }
+.account-menu-chevron { width:7px; height:7px; border-right:1px solid currentColor; border-bottom:1px solid currentColor; transform:rotate(45deg) translateY(-2px); transition:transform 180ms var(--sb-ease-out); }
+.account-menu[open] .account-menu-chevron { transform:rotate(225deg) translate(-1px,-1px); }
+.account-menu-popover { position:absolute; top:calc(100% + 12px); right:0; z-index:50; display:grid; gap:8px; min-width:156px; padding:12px; border:1px solid #8d68a8; border-radius:14px; background:var(--sb-color-ink); box-shadow:0 18px 48px #0008; }
+.account-menu-caption { padding:4px 8px; color:var(--sb-color-text-tertiary); font-size:11px; }
+.account-menu-popover a { display:flex; align-items:center; min-height:44px; padding:8px; border:1px solid transparent; border-radius:10px; color:var(--sb-color-text-primary); font-size:13px; text-decoration:none; }
+.account-menu-popover a:hover,.account-menu-popover a:focus-visible { border-color:var(--sb-color-accent); background:var(--sb-color-focus); }
 .workspace-frame { display:flex; flex-direction:column; gap:0; }
 .workspace-content { min-width:0; width:100%; }
 .workspace-rail { position:relative; width:100%; height:auto; min-height:0; margin:48px 0; padding:32px; border:1px solid var(--sb-color-line); border-radius:20px; background:var(--sb-color-ink); }
@@ -156,6 +167,9 @@ main > section.context-enter::after { display:block; content:""; position:absolu
   html { scroll-padding-top:24px; }
   .page-shell { width:100%; padding:0 16px 100px; }
   .topbar { min-height:76px; padding:max(12px,env(safe-area-inset-top)) 4px 12px; }
+  .topbar-actions { margin-left:auto; }
+  .account-menu summary { max-width:140px; padding-inline:10px; }
+  .account-menu summary > span:first-child { max-width:98px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .brand-name { font-size:17px; }
   .quick-nav { position:fixed; z-index:20; bottom:0; left:0; right:0; justify-content:space-around; gap:4px; padding:8px 10px max(10px,env(safe-area-inset-bottom)); background:#0c0911f5; border-top:1px solid #60476e; }
   .quick-nav a { flex:1; justify-content:center; flex-direction:column; gap:3px; min-height:48px; font-size:12px; }

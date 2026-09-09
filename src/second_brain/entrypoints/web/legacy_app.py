@@ -11,7 +11,7 @@ from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr
 from starlette.concurrency import run_in_threadpool
@@ -77,6 +77,15 @@ from second_brain.application.writes import (
 from second_brain.config import ConfigurationError
 from second_brain.domain.models import NoteType, parse_uuid7
 
+from .auth import (
+    AUTH_MODE_APP_STATE_KEY,
+    WEB_AUTH_DISABLED,
+    WEB_AUTH_GITHUB,
+    WebAuthMode,
+    configured_authority_port,
+    trusted_authorities_from_scope,
+    web_index_response,
+)
 from .diagnostics import (
     DiagnosticsRequestPayload,
     DiagnosticsService,
@@ -775,7 +784,7 @@ class SearchRequestBoundaryMiddleware:
         self.max_body_bytes = max_body_bytes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        """Require search-v1, loopback same-origin metadata and bounded JSON."""
+        """Require search-v1, trusted same-origin metadata and bounded JSON."""
 
         if (
             scope["type"] != "http"
@@ -870,7 +879,7 @@ class TimelineRequestBoundaryMiddleware:
         self.max_body_bytes = max_body_bytes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        """Require timeline-v1, loopback same-origin metadata and bounded JSON."""
+        """Require timeline-v1, trusted same-origin metadata and bounded JSON."""
 
         if (
             scope["type"] != "http"
@@ -965,7 +974,7 @@ class SelfModelRequestBoundaryMiddleware:
         self.max_body_bytes = max_body_bytes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        """Require self-model-v1, loopback same-origin metadata and bounded JSON."""
+        """Require self-model-v1, trusted same-origin metadata and bounded JSON."""
 
         if (
             scope["type"] != "http"
@@ -1071,7 +1080,7 @@ class SelfRetrievalRequestBoundaryMiddleware:
         self.request_header_value = request_header_value
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        """Require self-retrieval-v1, loopback same-origin metadata and bounded JSON."""
+        """Require self-retrieval-v1, trusted same-origin metadata and bounded JSON."""
 
         if (
             scope["type"] != "http"
@@ -1335,7 +1344,7 @@ def _is_json_content_type(value: str) -> bool:
 
 
 def _origin_matches(scope: Scope, origin: str) -> bool:
-    """Разрешить только same-origin loopback Origin с тем же Host/port."""
+    """Разрешить same-origin loopback или exact configured Origin с тем же Host/port."""
 
     scheme = str(scope.get("scheme", "")).casefold()
     if scheme not in {"http", "https"}:
@@ -1359,17 +1368,33 @@ def _origin_matches(scope: Scope, origin: str) -> bool:
         return False
     origin_host = _loopback_host_port(parsed_origin.netloc, scheme)
     request_host = _loopback_host_port(host_header, scheme)
-    return origin_host is not None and origin_host == request_host
+    if origin_host is not None or request_host is not None:
+        return origin_host is not None and origin_host == request_host
+    authorities = trusted_authorities_from_scope(scope)
+    configured_origin = configured_authority_port(parsed_origin.netloc, scheme, authorities)
+    configured_request = configured_authority_port(host_header, scheme, authorities)
+    return configured_origin is not None and configured_origin == configured_request
 
 
 def _trusted_request_host(scope: Scope) -> bool:
-    """Разрешить только trusted loopback Host для draft boundary."""
+    """Разрешить trusted loopback или exact configured Host для draft boundary."""
 
     scheme = str(scope.get("scheme", "")).casefold()
     if scheme not in {"http", "https"}:
         return False
     host_present, host = _single_header(scope, "host")
-    return host_present and host is not None and _loopback_host_port(host, scheme) is not None
+    if not host_present or host is None:
+        return False
+    if _loopback_host_port(host, scheme) is not None:
+        return True
+    return (
+        configured_authority_port(
+            host,
+            scheme,
+            trusted_authorities_from_scope(scope),
+        )
+        is not None
+    )
 
 
 def _loopback_host_port(value: str, scheme: str) -> tuple[str, int] | None:
@@ -1403,7 +1428,7 @@ def _loopback_host_port(value: str, scheme: str) -> tuple[str, int] | None:
 
 
 class _LoopbackTrustedHostMiddleware(TrustedHostMiddleware):
-    """Проверить Host строгим loopback authority parser, включая bracketed IPv6."""
+    """Проверить Host strict parser для loopback и configured public authority."""
 
     def __init__(self, app: ASGIApp) -> None:
         super().__init__(
@@ -1427,7 +1452,15 @@ class _LoopbackTrustedHostMiddleware(TrustedHostMiddleware):
             scheme in {"http", "https"}
             and host_present
             and host is not None
-            and _loopback_host_port(host, scheme) is not None
+            and (
+                _loopback_host_port(host, scheme) is not None
+                or configured_authority_port(
+                    host,
+                    scheme,
+                    trusted_authorities_from_scope(scope),
+                )
+                is not None
+            )
         ):
             await self.app(scope, receive, send)
             return
@@ -2090,21 +2123,21 @@ def create_app(
         )
 
     @app.get("/", include_in_schema=False)
-    def index() -> Response:
-        return react_index()
+    def index(request: Request) -> Response:
+        return react_index(request)
 
     @app.get("/react", include_in_schema=False)
     @app.get("/react/", include_in_schema=False)
-    def react_index() -> Response:
+    def react_index(request: Request) -> Response:
         """Serve the single production React GUI after the parity build."""
 
-        if not REACT_INDEX_FILE.is_file():
-            return Response(
-                content="Для запуска нужен собранный React-интерфейс.",
-                status_code=503,
-                media_type="text/plain",
-            )
-        return FileResponse(REACT_INDEX_FILE, media_type="text/html")
+        auth_mode = cast(
+            WebAuthMode,
+            getattr(request.app.state, AUTH_MODE_APP_STATE_KEY, WEB_AUTH_DISABLED),
+        )
+        if auth_mode not in {WEB_AUTH_DISABLED, WEB_AUTH_GITHUB}:
+            auth_mode = WEB_AUTH_DISABLED
+        return web_index_response(REACT_INDEX_FILE, auth_mode=auth_mode)
 
     @app.get("/healthz", include_in_schema=False)
     def healthz() -> JSONResponse:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from fastapi import FastAPI
@@ -17,6 +18,11 @@ from second_brain.entrypoints.web.assistant_compare import (
     AssistantWebService,
     CompareWebService,
     install_assistant_compare_routes,
+)
+from second_brain.entrypoints.web.auth import (
+    WebAuthConfig,
+    install_web_auth,
+    load_web_auth_config,
 )
 from second_brain.entrypoints.web.legacy_app import (
     DIAGNOSTICS_REQUEST_HEADER_NAME,
@@ -81,9 +87,14 @@ def create_app(**kwargs: Any) -> FastAPI:
 
     assistant_service = kwargs.pop("assistant_web_service", None)
     compare_service = kwargs.pop("compare_web_service", None)
+    auth_config = kwargs.pop("web_auth_config", None)
+    auth_gateway = kwargs.pop("web_auth_gateway", None)
+    auth_clock = kwargs.pop("web_auth_clock", None)
     simulate_me_service = kwargs.get("simulate_me_service")
     env_file = kwargs.get("env_file")
     vault_path_override = kwargs.get("vault_path_override")
+    if auth_config is None:
+        auth_config = load_web_auth_config(env_file=env_file)
     _sync_legacy_patchable_seams()
     app = _legacy_create_app(**kwargs)
     install_assistant_compare_routes(
@@ -93,6 +104,13 @@ def create_app(**kwargs: Any) -> FastAPI:
         simulate_me_service=simulate_me_service,
         env_file=env_file,
         vault_path_override=vault_path_override,
+    )
+    install_web_auth(
+        app,
+        config=auth_config,
+        index_file=REACT_INDEX_FILE,
+        gateway=auth_gateway,
+        clock=auth_clock or time.time,
     )
     return app
 
@@ -115,5 +133,6 @@ __all__ = [
     "MAX_RAW_COMPARE_BODY_BYTES",
     "AssistantWebService",
     "CompareWebService",
+    "WebAuthConfig",
     "create_app",
 ]

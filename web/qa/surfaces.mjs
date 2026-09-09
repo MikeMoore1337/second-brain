@@ -36,7 +36,7 @@ try{
     await page.locator('#simulate-me button[type=submit]').click();
     await page.locator('#assistant-compare textarea').first().fill('Как вернуться к идеям?');
     await page.locator('.stage7-option-row input').nth(0).fill('Вернуться к заметкам');await page.locator('.stage7-option-row input').nth(1).fill('Собрать новый материал');
-    await page.getByRole('button',{name:'Совет + прогноз + сравнение',exact:true}).click();
+    await page.getByRole('button',{name:'Независимый совет + прогноз + сравнение',exact:true}).click();
     await page.locator('.stage7-delta-panel').waitFor();
     await page.locator('#diagnostics').getByRole('button',{name:'Обновить',exact:true}).click();
     for(const selector of ['#timeline','#self-model','.self-retrieval-item','.simulate-me-result','.stage7-result-grid','#diagnostics']){
