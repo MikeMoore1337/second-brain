@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import { Icon } from "./icons";
+import { usePageMotion } from "./page-motion";
 import brainSmall from "./assets/memory-brain-480.webp";
 import brainLarge from "./assets/memory-brain-800.webp";
 
@@ -14,7 +15,7 @@ const thoughtConnections = [
 export function CinematicHero(): ReactElement {
   const root = useRef<HTMLElement>(null);
   const scene = useRef<HTMLDivElement>(null);
-  const [paused, setPaused] = useState(false);
+  const { paused, setPaused } = usePageMotion();
   const [active, setActive] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
 

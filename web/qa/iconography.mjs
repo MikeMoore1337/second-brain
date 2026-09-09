@@ -2,7 +2,7 @@ import { chromium } from '@playwright/test';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 
-const out='../.local/design-v4';
+const out=process.env.SB_QA_OUT ?? '../.local/design-v4';
 const labels={add:'Добавить',search:'Поиск',memory:'Память',timeline:'Хронология',decision:'Решения','self-model':'Модель себя',growth:'Развитие',simulate:'Прогноз',relation:'Связь / совет','self-retrieval':'Сбор контекста',diagnostics:'Диагностика',voice:'Голос',close:'Закрыть',expand:'Раскрыть',open:'Открыть',refresh:'Обновить',info:'Информация',warning:'Предупреждение',success:'Подтверждение',copy:'Копировать',pause:'Пауза',play:'Продолжить'};
 const files=await readdir('src/assets/icons');
 const browser=await chromium.launch({headless:true,executablePath:process.env.SB_QA_CHROMIUM});

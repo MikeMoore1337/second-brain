@@ -1,7 +1,7 @@
 import { chromium } from '@playwright/test';
 import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
-const out='../.local/design-v4';
+const out=process.env.SB_QA_OUT ?? '../.local/design-v4';
 const browser=await chromium.launch({headless:true,executablePath:process.env.SB_QA_CHROMIUM});
 const cards=[];
 try {

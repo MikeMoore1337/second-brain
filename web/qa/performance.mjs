@@ -21,5 +21,5 @@ try{
     })));
     await context.close();
   }
-}finally{await writeFile('../.local/design-v4/after-metrics.json',JSON.stringify(metrics,null,2));await browser.close();}
+}finally{await writeFile(`${process.env.SB_QA_OUT ?? '../.local/design-v4'}/after-metrics.json`,JSON.stringify(metrics,null,2));await browser.close();}
 console.log(metrics);

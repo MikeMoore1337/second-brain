@@ -1,6 +1,10 @@
 import { MotionConfig } from "motion/react";
 import { useEffect, type ReactElement } from "react";
 import { CinematicHero } from "./cinematic-hero";
+import { PageMotion, ChapterInterlude } from "./page-motion";
+import { SectionMenu } from "./section-menu";
+import brainMark from "./assets/brain-mark-48.webp";
+import brainMark2x from "./assets/brain-mark-96.webp";
 
 import { AssistantCompareSurface } from "./assistant-compare-surface";
 import {
@@ -51,7 +55,7 @@ export function App(): ReactElement {
     };
   }, []);
   return (
-    <MotionConfig reducedMotion="user">
+    <MotionConfig reducedMotion="user"><PageMotion>
       <a className="skip-link" href="#main-content" onClick={(event) => {
         event.preventDefault();
         const target = document.getElementById("main-content");
@@ -61,21 +65,24 @@ export function App(): ReactElement {
       <div className="page-shell" data-shell>
         <header className="topbar">
           <a className="brand" href="#main-content" aria-label="Second Brain — начало">
-            <Icon name="memory" size={26} />
+            <img className="brand-brain" src={brainMark} srcSet={`${brainMark} 1x, ${brainMark2x} 2x`} width={44} height={44} alt="" />
             <span className="brand-copy"><span className="brand-eyebrow">Личная система знаний</span><span className="brand-name">Second Brain</span></span>
-          </a><nav className="quick-nav" aria-label="Быстрые действия"><a href="#capture"><Icon name="add" size={18} />Добавить</a><a href="#search"><Icon name="search" size={18} />Поиск</a><a href="#workspace-navigation"><Icon name="expand" size={18} />Разделы</a></nav>
+          </a><nav className="quick-nav" aria-label="Быстрые действия"><a href="#capture"><Icon name="add" size={18} />Добавить</a><a href="#search"><Icon name="search" size={18} />Поиск</a><SectionMenu navigation={[["#capture", "Добавить материал", "add"], ...navigation]} /></nav>
         </header>
         <div className="workspace-frame">
           <div className="workspace-content">
             <main id="main-content" tabIndex={-1}>
               <CinematicHero />
               <CaptureSurface />
+              <ChapterInterlude number="01" title="От мысли — к выбору." text="Сохраняй не только решение, но и то, что к нему привело." icon="decision" secondary="memory" />
               <DecisionJournalSurface />
               <TimelineSurface />
+              <ChapterInterlude number="02" title="Увидеть себя в контексте." text="Возвращайся к наблюдениям, решениям и опыту." icon="self-model" secondary="timeline" />
               <SelfModelSurface />
               <SimulateMeSurface />
               <AssistantCompareSurface />
               <SelfRetrievalSurface />
+              <ChapterInterlude number="03" title="Важное — ближе." text="Находи нужный фрагмент и продолжай мысль." icon="search" secondary="memory" />
               <SearchSurface />
               <DiagnosticsSurface />
               <section className="pillars" aria-labelledby="pillars-title"><div className="section-heading"><p className="eyebrow">Две центральные части</p><h2 id="pillars-title">Система, которая растёт вместе с тобой.</h2></div><div className="pillar-grid"><article className="pillar-card pillar-card-memory" id="memory"><div className="card-topline"><span className="card-index">01</span><span className="card-dot" aria-hidden="true" /></div><Icon name="memory" size={64} className="section-art" /><h3>Память</h3><p>Собирай идеи, источники и наблюдения в надёжную личную память.</p><div className="card-meta"><span>База знаний</span><Icon name="open" size={18} /></div></article><article className="pillar-card pillar-card-growth" id="growth"><div className="card-topline"><span className="card-index">02</span><span className="card-dot" aria-hidden="true" /></div><Icon name="growth" size={64} className="section-art" /><h3>Развитие</h3><p>Превращай накопленное знание в ясность, навыки и следующий шаг.</p><div className="card-meta"><span>Личное развитие</span><Icon name="open" size={18} /></div></article></div></section>
@@ -89,6 +96,6 @@ export function App(): ReactElement {
           </aside>
         </div>
       </div>
-    </MotionConfig>
+    </PageMotion></MotionConfig>
   );
 }

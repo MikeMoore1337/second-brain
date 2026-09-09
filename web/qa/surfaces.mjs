@@ -18,7 +18,7 @@ const fixtures={
   '/api/compare':{option_ids:['a','b'],assistant:{state:'result',result:assistant,error:null},simulate_me:{state:'result',result:prediction,error:null},delta:{relation:'assistant_only_selected',assistant_state:'result',simulate_me_state:'result',assistant_selected_option_id:null,simulate_me_selected_option_id:'a',explanation:'Независимый совет и прогноз показаны раздельно.'}},
   '/api/diagnostics':{status:'healthy',generated_at:stamp,config:{resolvable:true},vault:{manifest_available:true,content_roots_available:true,attachments_scan_complete:true},manifest:{available:true,schema_version:1},counts:{managed_notes:4,enrolled_personal_memory:2,valid_decision_journals:1,valid_outcome_observations:1},notes:4,enrolled_personal_memory:2,valid_decision_journals:1,valid_outcome_observations:1,attachments:{scan_complete:true,count:0,total_bytes:0},attachment_total:0,attachment_bytes:0,timeline:layer,self_model:layer,self_retrieval:layer,errors:0,warnings:0,diagnostics:[],exit_code:0},
 };
-const out='../.local/design-v4';const results=[];
+const out=process.env.SB_QA_OUT ?? '../.local/design-v4';const results=[];
 const browser=await chromium.launch({headless:true,executablePath:process.env.SB_QA_CHROMIUM});
 try{
   for(const width of [1440,390]){

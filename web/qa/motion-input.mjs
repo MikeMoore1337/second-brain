@@ -3,7 +3,7 @@ import AxeBuilder from '@axe-core/playwright';
 import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
 const origin='http://127.0.0.1:8137';
-const out='../.local/design-v4';
+const out=process.env.SB_QA_OUT ?? '../.local/design-v4';
 const browser=await chromium.launch({headless:true,executablePath:process.env.SB_QA_CHROMIUM});
 const report={motion:[],inputs:[],fonts:[],colors:[],keyboard:[],accessibility:[]};
 async function context(options={}) {

@@ -1,0 +1,160 @@
+{
+  "menus": [
+    {
+      "width": 320,
+      "left": 12,
+      "right": 308,
+      "top": 242.625,
+      "bottom": 764,
+      "overflow": false,
+      "small": 0
+    },
+    {
+      "width": 360,
+      "left": 12,
+      "right": 348,
+      "top": 264.71875,
+      "bottom": 764,
+      "overflow": false,
+      "small": 0
+    },
+    {
+      "width": 390,
+      "left": 12,
+      "right": 378,
+      "top": 269.8125,
+      "bottom": 764,
+      "overflow": false,
+      "small": 0
+    },
+    {
+      "width": 430,
+      "left": 12,
+      "right": 418,
+      "top": 280,
+      "bottom": 764,
+      "overflow": false,
+      "small": 0
+    },
+    {
+      "width": 768,
+      "left": 286,
+      "right": 726,
+      "top": 81.5,
+      "bottom": 573.5,
+      "overflow": false,
+      "small": 0
+    },
+    {
+      "width": 1024,
+      "left": 542,
+      "right": 982,
+      "top": 81.5,
+      "bottom": 573.5,
+      "overflow": false,
+      "small": 0
+    },
+    {
+      "width": 1440,
+      "left": 946,
+      "right": 1386,
+      "top": 81.5,
+      "bottom": 573.5,
+      "overflow": false,
+      "small": 0
+    },
+    {
+      "width": 1920,
+      "left": 1330,
+      "right": 1770,
+      "top": 81.5,
+      "bottom": 573.5,
+      "overflow": false,
+      "small": 0
+    }
+  ],
+  "motion": [
+    {
+      "width": 390,
+      "pause": "stable",
+      "animations": 9
+    },
+    {
+      "width": 390,
+      "offscreen": "chapter paused"
+    },
+    {
+      "width": 390,
+      "reduced": "no decorative animations"
+    },
+    {
+      "width": 1440,
+      "pause": "stable",
+      "animations": 20
+    },
+    {
+      "width": 1440,
+      "offscreen": "chapter paused"
+    },
+    {
+      "width": 1440,
+      "reduced": "no decorative animations"
+    }
+  ],
+  "axe": [
+    {
+      "width": 390,
+      "state": "menu",
+      "violations": []
+    },
+    {
+      "width": 390,
+      "state": "chapter",
+      "violations": []
+    },
+    {
+      "width": 1440,
+      "state": "menu",
+      "violations": []
+    },
+    {
+      "width": 1440,
+      "state": "chapter",
+      "violations": []
+    }
+  ],
+  "navigation": [
+    {
+      "width": 390,
+      "id": "timeline"
+    },
+    {
+      "width": 390,
+      "id": "self-model"
+    },
+    {
+      "width": 390,
+      "id": "search"
+    },
+    {
+      "width": 390,
+      "id": "memory"
+    },
+    {
+      "width": 1440,
+      "id": "timeline"
+    },
+    {
+      "width": 1440,
+      "id": "self-model"
+    },
+    {
+      "width": 1440,
+      "id": "search"
+    },
+    {
+      "width": 1440,
+      "id": "memory"
+    }
+  ]
+}

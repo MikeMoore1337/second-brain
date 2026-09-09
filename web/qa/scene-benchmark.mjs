@@ -1,13 +1,15 @@
 import { chromium } from '@playwright/test';
 import { mkdir,writeFile } from 'node:fs/promises';
 const phase=process.env.SB_QA_PHASE??'after';
-const out='../.local/design-v4';await mkdir(out,{recursive:true});
+const out=process.env.SB_QA_OUT ?? '../.local/design-v4';await mkdir(out,{recursive:true});
 const browser=await chromium.launch({headless:true,executablePath:process.env.SB_QA_CHROMIUM});
 const report={browser:browser.version(),phase,frames:[]};
 try{
   for(const width of [1440,390]){
     const context=await browser.newContext({viewport:{width,height:width===390?844:1000},isMobile:width===390,hasTouch:width===390});
-    const page=await context.newPage();await page.goto('http://127.0.0.1:8137');await page.waitForTimeout(1500);
+    const page=await context.newPage();await page.goto('http://127.0.0.1:8137');
+    if(process.env.SB_QA_SELECTOR)await page.locator(process.env.SB_QA_SELECTOR).first().scrollIntoViewIfNeeded();
+    await page.waitForTimeout(1500);
     await page.screenshot({path:`${out}/${phase}-${width}.png`});
     const cdp=await context.newCDPSession(page);
     for(const rate of [1,4]){
