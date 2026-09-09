@@ -4,6 +4,10 @@ import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 
 const ORIGIN = "http://127.0.0.1:8137";
 const out = process.env.SB_QA_OUT ?? "../.local/design-v7";
+const IMAGE_TIMEOUT_MS = Math.max(250, Number.parseInt(process.env.SB_QA_IMAGE_TIMEOUT_MS ?? "4000", 10) || 4000);
+const IMAGE_POLL_MS = 50;
+const IMAGE_DELAY_MS = Math.max(0, Number.parseInt(process.env.SB_QA_IMAGE_DELAY_MS ?? "0", 10) || 0);
+const FAILED_ICON = (process.env.SB_QA_FAIL_ICON ?? "").trim();
 await mkdir(out, { recursive: true });
 
 // This list describes the local asset family. Aliases are checked through the
@@ -33,6 +37,8 @@ const ATLAS = [
   ["play", "Совместимый alias play", false],
 ];
 const files = new Set(await readdir("src/assets/icons"));
+const EXPECTED_MENU_ICONS = ["add", "decision", "timeline", "self-model", "simulate", "relation", "self-retrieval", "search", "diagnostics", "memory", "growth"];
+const EXPECTED_MENU_TARGETS = ["capture", "decision-journal", "timeline", "self-model", "simulate-me", "assistant-compare", "self-retrieval", "search", "diagnostics", "memory", "growth"];
 let checks = 0;
 const check = (condition, message) => {
   assert(condition, message);
@@ -44,6 +50,40 @@ const browser = await chromium.launch({
   ...(process.env.SB_QA_CHROMIUM ? { executablePath: process.env.SB_QA_CHROMIUM } : {}),
 });
 
+async function guardLoopback(context) {
+  await context.route("**/*", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.origin !== ORIGIN) return route.abort();
+    if (url.pathname.endsWith(".webp")) {
+      if (FAILED_ICON && url.pathname.includes(`/${FAILED_ICON}-`)) return route.abort("failed");
+      if (IMAGE_DELAY_MS > 0) await new Promise((resolve) => setTimeout(resolve, IMAGE_DELAY_MS));
+    }
+    return route.continue();
+  });
+}
+
+async function readImageState(image) {
+  return image.evaluate((item) => ({
+    complete: item.complete,
+    naturalWidth: item.naturalWidth,
+    naturalHeight: item.naturalHeight,
+    alt: item.alt,
+    hidden: item.getAttribute("aria-hidden"),
+    name: item.dataset.icon,
+  }));
+}
+
+async function waitForImageLoaded(image, name) {
+  const deadline = Date.now() + IMAGE_TIMEOUT_MS;
+  let last;
+  while (Date.now() <= deadline) {
+    last = await readImageState(image);
+    if (last.complete && last.naturalWidth > 0) return last;
+    await new Promise((resolve) => setTimeout(resolve, IMAGE_POLL_MS));
+  }
+  throw new Error(`icon ${name} did not load within ${IMAGE_TIMEOUT_MS}ms (complete=${last?.complete ?? "unknown"}, naturalWidth=${last?.naturalWidth ?? "unknown"})`);
+}
+
 const imageData = async (name, variant, size) => {
   const suffix = variant === "detail" ? 96 : 48;
   const file = `${name}-${variant}-${suffix}.webp`;
@@ -53,7 +93,7 @@ const imageData = async (name, variant, size) => {
   return `<img width="${size}" height="${size}" src="data:image/webp;base64,${source.toString("base64")}" srcset="data:image/webp;base64,${source2x.toString("base64")} 2x" alt="">`;
 };
 
-const report = { staticAtlas: { assets: ATLAS.length, checks: 0 }, react: {}, checks: 0 };
+const report = { configuration: { imageDelayMs: IMAGE_DELAY_MS, failedIcon: FAILED_ICON || null }, staticAtlas: { assets: ATLAS.length, checks: 0 }, react: {}, checks: 0 };
 try {
   const cards = await Promise.all(ATLAS.map(async ([name, label, detail]) => {
     const variant = detail ? "detail" : "compact";
@@ -69,7 +109,9 @@ try {
   await atlas.screenshot({ path: `${out}/icon-family.png`, fullPage: true });
   await atlas.close();
 
-  const page = await browser.newPage({ viewport: { width: 1200, height: 1000 } });
+  const context = await browser.newContext({ viewport: { width: 1200, height: 1000 } });
+  await guardLoopback(context);
+  const page = await context.newPage();
   await page.goto(ORIGIN, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(1200);
   const initial = await page.evaluate(() => performance.getEntriesByType("resource").map((entry) => entry.name).filter((name) => name.endsWith(".webp")));
@@ -84,13 +126,24 @@ try {
   const dropdown = page.locator("#section-dropdown");
   check(await dropdown.count() === 1 && await dropdown.isVisible(), "current section dropdown is missing");
   const links = dropdown.locator("nav a");
-  check(await links.count() === 11, "current disclosure does not expose all sections");
+  check(await links.count() === EXPECTED_MENU_TARGETS.length, "current disclosure does not expose all sections");
+  const hrefs = await links.evaluateAll((items) => items.map((link) => link.getAttribute("href")));
+  check(hrefs.length === EXPECTED_MENU_TARGETS.length, "current disclosure has an incomplete href set");
+  for (const target of EXPECTED_MENU_TARGETS) check(hrefs.includes(`#${target}`), `current disclosure target #${target} is missing`);
+  const linkCount = await links.count();
+  for (let index = 0; index < linkCount; index += 1) {
+    const link = links.nth(index);
+    const icon = link.locator("img[data-icon]");
+    check(await icon.count() === 1, `current disclosure link ${EXPECTED_MENU_TARGETS[index]} is missing its icon`);
+    await link.scrollIntoViewIfNeeded();
+    check(await icon.isVisible(), `current disclosure icon ${EXPECTED_MENU_ICONS[index]} is not visible`);
+    await waitForImageLoaded(icon, EXPECTED_MENU_ICONS[index]);
+  }
   const menuIcons = await links.locator("img[data-icon]").evaluateAll((items) => items.map((item) => ({ name: item.dataset.icon, alt: item.alt, hidden: item.getAttribute("aria-hidden"), loaded: item.complete && item.naturalWidth > 0 })));
-  check(menuIcons.length === 11, "current disclosure links are missing icons");
+  check(menuIcons.length === EXPECTED_MENU_ICONS.length, "current disclosure links are missing icons");
   check(menuIcons.every((item) => item.alt === "" && item.hidden === "true" && item.loaded), "current disclosure icon accessibility or loading contract failed");
-  for (const link of await links.all()) await link.scrollIntoViewIfNeeded();
   const menuNames = new Set(menuIcons.map((item) => item.name));
-  for (const name of ["add", "decision", "timeline", "self-model", "simulate", "relation", "self-retrieval", "search", "diagnostics", "memory", "growth"]) check(menuNames.has(name), `current disclosure icon ${name} is missing`);
+  for (const name of EXPECTED_MENU_ICONS) check(menuNames.has(name), `current disclosure icon ${name} is missing`);
   check(await dropdown.getByRole("switch", { name: "Анимация", exact: true }).count() === 1, "current animation switch is missing from disclosure");
   await page.keyboard.press("Escape");
 

@@ -29,12 +29,24 @@ switch `role="switch"` с именем «Анимация», текущие `det
 ошибку. `npm run qa:design`, `node qa/compact-glass.mjs` и `node qa/open-edges.mjs`
 остаются отдельными текущими проверками своих контрактов.
 
+Для проверки гонки lazy-изображений runner поддерживает изолированный режим
+`SB_QA_IMAGE_DELAY_MS=250 node qa/iconography.mjs`: ответ WebP задерживается,
+но условие `complete && naturalWidth > 0` ожидается polling’ом. Негативный
+`SB_QA_IMAGE_TIMEOUT_MS=250 SB_QA_FAIL_ICON=timeline node qa/iconography.mjs`
+намеренно завершается ошибкой с именем и состоянием недоступной иконки; его
+нельзя считать успешным evidence.
+
+В сценарии reduced-motion `page-motion.mjs` сначала меняет media preference на
+видимой и работающей сцене, а затем перезагружает тот же изолированный контекст:
+текущий `useReducedMotion` получает preference при монтировании, после чего
+runner проверяет замену switch в disclosure-навигации русским пояснением.
+
 ## Решения по трём runner’ам
 
 | Вход | Решение | Что проверяет сейчас |
 | --- | --- | --- |
-| `web/qa/page-motion.mjs` | обновлён для v7 | disclosure-навигацию, keyboard focus, switch «Анимация», остановку/возобновление PageMotion, offscreen и reduced-motion |
-| `web/qa/iconography.mjs` | обновлён для v7 | локальный статический atlas как provenance и реальные React `data-icon`, alt/aria-hidden, lazy-загрузку и иконки меню |
+| `web/qa/page-motion.mjs` | обновлён для v7 | disclosure-навигацию, keyboard focus, switch «Анимация», фактическое `currentTime` одной hero-анимации при stop/resume, отдельные offscreen/reduced-motion состояния |
+| `web/qa/iconography.mjs` | обновлён для v7 | локальный статический atlas как provenance и реальные React `data-icon`, видимость, bounded image polling, alt/aria-hidden, lazy-загрузку и иконки меню |
 | `web/qa/scene-recording.mjs` | обновлён для v7 | композицию hero, два блока «Память / Развитие», восемь ширин и запись переходов через текущее меню/switch |
 
 Статический atlas внутри `iconography.mjs` — проверка файлов и размеров,

@@ -6,6 +6,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 const ORIGIN = "http://127.0.0.1:8137";
 const WIDTHS = [320, 360, 390, 430, 768, 1024, 1440, 1920];
 const REPRESENTATIVE_TARGETS = ["timeline", "self-model", "assistant-compare", "search", "memory"];
+const HERO_ANIMATION = { selector: ".brain-region-front", name: "thought-awaken", key: "brain-region-front:thought-awaken" };
 const out = process.env.SB_QA_OUT ?? "../.local/design-v7";
 await mkdir(out, { recursive: true });
 
@@ -44,6 +45,61 @@ async function decorationStates(page) {
     .flatMap((element) => element.getAnimations({ subtree: true }))
     .filter((animation) => animation.animationName && animation.effect?.target?.closest?.(".cinematic-hero, .page-atmosphere, .pillar-backdrop"))
     .map((animation) => ({ name: animation.animationName, state: animation.playState, time: animation.currentTime })));
+}
+
+async function readHeroAnimation(page) {
+  return page.locator(HERO_ANIMATION.selector).evaluate((element, expected) => {
+    const animation = element.getAnimations().find((candidate) => candidate.animationName === expected.name);
+    if (!animation) return null;
+    return { key: `${expected.className}:${animation.animationName}`, name: animation.animationName, state: animation.playState, currentTime: animation.currentTime };
+  }, { name: HERO_ANIMATION.name, className: HERO_ANIMATION.selector.slice(1) });
+}
+
+async function waitForHeroAnimation(page, predicate, message, timeout = 2500) {
+  const deadline = Date.now() + timeout;
+  let last = null;
+  while (Date.now() <= deadline) {
+    last = await readHeroAnimation(page);
+    if (last && predicate(last)) return last;
+    await page.waitForTimeout(50);
+  }
+  throw new Error(`${message}; last=${JSON.stringify(last)}`);
+}
+
+async function observeHeroAnimation(page, duration = 250) {
+  const deadline = Date.now() + duration;
+  let last = await readHeroAnimation(page);
+  while (Date.now() < deadline) {
+    await page.waitForTimeout(Math.min(50, deadline - Date.now()));
+    last = await readHeroAnimation(page);
+  }
+  return last;
+}
+
+async function waitForHeroInView(page, timeout = 2500) {
+  const deadline = Date.now() + timeout;
+  let last = null;
+  while (Date.now() <= deadline) {
+    last = await page.locator(".cinematic-hero").evaluate((element) => ({
+      visible: Boolean(element.getClientRects().length),
+      inView: element.dataset.inView,
+      moving: element.dataset.moving,
+    }));
+    if (last.visible && last.inView === "true" && last.moving === "true") return last;
+    await page.waitForTimeout(50);
+  }
+  throw new Error(`hero did not return to the viewport; last=${JSON.stringify(last)}`);
+}
+
+async function waitForNoRunningDecorations(page, message, timeout = 2500) {
+  const deadline = Date.now() + timeout;
+  let last = [];
+  while (Date.now() <= deadline) {
+    last = await decorationStates(page);
+    if (last.every((animation) => animation.state !== "running")) return last;
+    await page.waitForTimeout(50);
+  }
+  throw new Error(`${message}; last=${JSON.stringify(last)}`);
 }
 
 try {
@@ -116,36 +172,70 @@ try {
       }
 
       await page.evaluate(() => scrollTo(0, 0));
-      await page.waitForTimeout(350);
-      const running = await decorationStates(page);
-      check(running.some((animation) => animation.state === "running"), `no decorative animation is running at ${width}px`);
+      await waitForHeroInView(page);
+      const running = await waitForHeroAnimation(page, (animation) => animation.key === HERO_ANIMATION.key && animation.state === "running" && typeof animation.currentTime === "number", `hero animation ${HERO_ANIMATION.name} did not start at ${width}px`);
+      check(running.key === HERO_ANIMATION.key, `hero animation identity changed at ${width}px`);
+      check(await page.locator(".cinematic-hero").getAttribute("data-moving") === "true", `hero movement state is not enabled at ${width}px`);
+      report.motion.push({ width, state: "running", animation: running });
 
       const motionMenu = await openMenu(page);
       const motionSwitch = motionMenu.dropdown.getByRole("switch", { name: "Анимация", exact: true });
       check(await motionSwitch.isChecked(), "Анимация is not enabled by default");
       await motionSwitch.uncheck();
       check(await page.locator(".motion-world").getAttribute("data-page-motion") === "false", "Анимация did not pause PageMotion");
-      await page.waitForTimeout(250);
-      const paused = await decorationStates(page);
-      check(paused.length > 0 && paused.every((animation) => animation.state !== "running"), "paused PageMotion left a decorative animation running");
-      report.motion.push({ width, state: "paused", animations: paused.length });
+      const paused = await waitForHeroAnimation(page, (animation) => animation.key === running.key && animation.state !== "running" && typeof animation.currentTime === "number", "the selected hero animation did not pause");
+      check(paused.key === running.key && paused.state !== "running", "paused PageMotion changed the selected animation");
+      const pausedAfter = await observeHeroAnimation(page);
+      check(pausedAfter?.key === running.key && pausedAfter.state !== "running", "paused PageMotion left the selected animation running");
+      check(typeof pausedAfter?.currentTime === "number" && Math.abs(pausedAfter.currentTime - paused.currentTime) < 1, "paused hero animation currentTime was not stable");
+      report.motion.push({ width, state: "paused", animation: paused, stableAnimation: pausedAfter });
       await motionSwitch.check();
       check(await page.locator(".motion-world").getAttribute("data-page-motion") === "true", "Анимация did not resume PageMotion");
+      const resumed = await waitForHeroAnimation(page, (animation) => animation.key === running.key && animation.state === "running" && typeof animation.currentTime === "number" && typeof pausedAfter?.currentTime === "number" && animation.currentTime > pausedAfter.currentTime + 1, "the selected hero animation did not resume or advance");
+      check(resumed.key === running.key && resumed.state === "running", "resumed PageMotion changed the selected animation");
+      check(typeof resumed.currentTime === "number" && typeof pausedAfter?.currentTime === "number" && resumed.currentTime > pausedAfter.currentTime + 1, "resumed hero animation currentTime did not advance");
+      report.motion.push({ width, state: "resumed", animation: resumed });
       await page.keyboard.press("Escape");
 
       await page.locator("#search").scrollIntoViewIfNeeded();
-      await page.waitForTimeout(500);
+      const offscreen = await waitForHeroAnimation(page, (animation) => animation.key === running.key && animation.state !== "running", "offscreen hero animation kept running");
       check(await page.locator(".cinematic-hero").getAttribute("data-moving") === "false", "offscreen hero kept moving");
-      report.motion.push({ width, state: "offscreen", hero: "paused" });
+      const offscreenAfter = await observeHeroAnimation(page);
+      check(offscreen.key === running.key && offscreen.state !== "running", "offscreen check did not observe the selected animation");
+      check(offscreenAfter?.key === running.key && offscreenAfter.state !== "running", "offscreen hero animation resumed unexpectedly");
+      check(typeof offscreenAfter?.currentTime === "number" && typeof offscreen.currentTime === "number" && Math.abs(offscreenAfter.currentTime - offscreen.currentTime) < 1, "offscreen hero animation currentTime was not stable");
+      report.motion.push({ width, state: "offscreen", animation: offscreen, stableAnimation: offscreenAfter });
 
+      await page.evaluate(() => scrollTo(0, 0));
+      await waitForHeroInView(page);
+      const preReduced = await waitForHeroAnimation(page, (animation) => animation.key === running.key && animation.state === "running" && typeof animation.currentTime === "number" && typeof offscreenAfter?.currentTime === "number" && animation.currentTime > offscreenAfter.currentTime + 1, "hero animation did not resume before reduced-motion check");
+      check(await page.locator(".motion-world").getAttribute("data-page-motion") === "true", "user pause remained enabled before reduced-motion check");
+      const preReducedMenu = await openMenu(page);
+      const preReducedSwitch = preReducedMenu.dropdown.getByRole("switch", { name: "Анимация", exact: true });
+      check(await preReducedSwitch.isChecked(), "Анимация was not enabled before reduced-motion check");
+      await page.keyboard.press("Escape");
+      report.motion.push({ width, state: "before-reduced-motion", animation: preReduced });
       await page.emulateMedia({ reducedMotion: "reduce" });
-      await page.waitForTimeout(300);
+      await page.waitForFunction(() => document.querySelector(".cinematic-hero")?.getAttribute("data-moving") === "false", undefined, { timeout: 2500 });
       check(await page.locator(".cinematic-hero").getAttribute("data-moving") === "false", "reduced-motion hero kept moving");
-      const reduced = await decorationStates(page);
-      check(reduced.every((animation) => animation.state !== "running"), "reduced-motion left decorative animation running");
+      const reduced = await waitForNoRunningDecorations(page, "reduced-motion left a decorative animation running");
+      const reducedHero = await readHeroAnimation(page);
+      check(reducedHero === null || (reducedHero.key === running.key && reducedHero.state !== "running"), "reduced-motion did not stop the selected hero animation");
+      await page.waitForFunction(() => document.querySelector(".motion-preference")?.textContent?.trim() === "Движение отключено настройкой устройства", undefined, { timeout: 2500 });
+      check((await page.locator(".motion-preference").textContent())?.trim() === "Движение отключено настройкой устройства", "reduced-motion did not expose the Russian explanation in the hero");
+
+      // Motion's useReducedMotion reads the media preference on mount. Reloading
+      // this isolated page makes the disclosure replacement observable without
+      // changing the production component or relying on a stale hook snapshot.
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.getByRole("button", { name: "Разделы", exact: true }).waitFor({ state: "visible", timeout: 2500 });
+      check(await page.locator(".cinematic-hero").getAttribute("data-moving") === "false", "reduced-motion hero moved after reload");
+      const reducedMenu = await openMenu(page);
+      check(await reducedMenu.dropdown.getByText("Движение отключено настройкой устройства", { exact: true }).count() === 1, "reduced-motion did not replace the switch with the Russian explanation");
+      check(await reducedMenu.dropdown.getByRole("switch", { name: "Анимация", exact: true }).count() === 0, "reduced-motion still exposed the animation switch");
       const axeReduced = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       check(axeReduced.violations.length === 0, `axe violations in reduced-motion at ${width}px`);
-      report.motion.push({ width, state: "reduced-motion", animations: reduced.length });
+      report.motion.push({ width, state: "reduced-motion", animations: reduced.length, heroAnimation: reducedHero });
       report.accessibility.push({ width, state: "reduced-motion", violations: axeReduced.violations });
     }
     await context.close();
