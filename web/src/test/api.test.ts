@@ -9,6 +9,7 @@ import {
   prepareDecision,
   prepareSave,
   searchNotes,
+  retrieveNote,
   transcribeAudio,
   type FetchLike,
 } from "../api";
@@ -26,6 +27,13 @@ function ok(payload: unknown): Response {
 }
 
 describe("same-origin API seam", () => {
+  it("unwraps the canonical retrieval response before rendering a note", async () => {
+    const note = { id: "0198f4c5-6a00-7000-8000-000000000010", type: "resource", relative_path: "30 Resources/Идеи.md", title: "Идеи", content: "Проверенное содержание" };
+    const fetcher = vi.fn<FetchLike>().mockResolvedValue(ok({ note }));
+    expect(await retrieveNote(note.id, fetcher)).toEqual(note);
+    expect(fetcher.mock.calls[0][0]).toBe("/api/retrieval/note");
+    expect(fetcher.mock.calls[0][1]?.body).toBe(JSON.stringify({ id: note.id }));
+  });
   it("uses the explicit diagnostics refresh contract", async () => {
     const fetcher = vi.fn<FetchLike>().mockResolvedValue(ok({ status: "healthy" }));
 
