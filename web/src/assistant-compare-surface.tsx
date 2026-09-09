@@ -138,8 +138,7 @@ export function AssistantCompareSurface(): ReactElement {
       aria-labelledby="assistant-compare-title"
       aria-busy={busy !== null}
       initial={reduceMotion ? false : { opacity: 0, y: 12 }}
-      whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.12 }}
+      animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
     >
       <div className="section-heading stage7-heading">
         <p className="eyebrow">Две независимые перспективы</p>
