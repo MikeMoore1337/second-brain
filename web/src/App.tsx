@@ -1,5 +1,5 @@
 import { MotionConfig } from "motion/react";
-import { type ReactElement } from "react";
+import { useEffect, type ReactElement } from "react";
 import { CinematicHero } from "./cinematic-hero";
 
 import { AssistantCompareSurface } from "./assistant-compare-surface";
@@ -29,6 +29,27 @@ const navigation = [
 ] as const;
 
 export function App(): ReactElement {
+  useEffect(() => {
+    let timer = 0;
+    let previous: HTMLElement | null = null;
+    const navigate = () => {
+      window.clearTimeout(timer);
+      previous?.classList.remove("context-enter");
+      const target = document.getElementById(window.location.hash.slice(1));
+      if (!target) return;
+      target.tabIndex = -1;
+      target.focus({ preventScroll: true });
+      target.classList.add("context-enter");
+      previous = target;
+      timer = window.setTimeout(() => target.classList.remove("context-enter"), 350);
+    };
+    window.addEventListener("hashchange", navigate);
+    return () => {
+      window.removeEventListener("hashchange", navigate);
+      window.clearTimeout(timer);
+      previous?.classList.remove("context-enter");
+    };
+  }, []);
   return (
     <MotionConfig reducedMotion="user">
       <a className="skip-link" href="#main-content" onClick={(event) => {

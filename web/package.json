@@ -4,6 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "qa:design": "node qa/redesign.mjs && node qa/surfaces.mjs && node qa/motion-input.mjs",
+    "qa:performance": "node qa/performance.mjs",
     "build": "npm run typecheck && vite build",
     "check": "npm run typecheck && npm run test:run",
     "dev": "vite",
@@ -17,6 +19,8 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.63.0",
     "@tailwindcss/vite": "4.3.3",
     "@types/node": "26.4.1",
     "@types/react": "19.2.18",

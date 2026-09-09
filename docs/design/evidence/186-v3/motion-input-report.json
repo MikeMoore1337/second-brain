@@ -1,0 +1,1026 @@
+{
+  "motion": [
+    {
+      "width": 1440,
+      "phase": "active",
+      "moving": "true",
+      "animations": [
+        {
+          "name": "haze-breathe",
+          "state": "running",
+          "time": 1116.6759999602439
+        },
+        {
+          "name": "orbit-revolve",
+          "state": "running",
+          "time": 1116.6759999602439
+        },
+        {
+          "name": "orbit-revolve",
+          "state": "running",
+          "time": 1116.6759999602439
+        },
+        {
+          "name": "orbit-revolve",
+          "state": "running",
+          "time": 1116.6759999602439
+        },
+        {
+          "name": "core-assemble",
+          "state": "finished",
+          "time": 800
+        },
+        {
+          "name": "core-breathe",
+          "state": "running",
+          "time": 1116.6759999602439
+        },
+        {
+          "name": "corona-breathe",
+          "state": "running",
+          "time": 1116.6759999602439
+        },
+        {
+          "name": "thought-float",
+          "state": "running",
+          "time": 1116.6759999602439
+        },
+        {
+          "name": "thought-float",
+          "state": "running",
+          "time": 1116.6759999602439
+        },
+        {
+          "name": "thought-float",
+          "state": "running",
+          "time": 1116.6759999602439
+        },
+        {
+          "name": "thought-float",
+          "state": "running",
+          "time": 1116.6759999602439
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1116.6759999602439
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1116.6759999602439
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1116.6759999602439
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1116.6759999602439
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1116.6759999602439
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1116.6759999602439
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1116.6759999602439
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1116.6759999602439
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1116.6759999602439
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1116.6759999602439
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1116.6759999602439
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1116.6759999602439
+        }
+      ],
+      "transforms": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "width": 1440,
+      "phase": "pointer",
+      "moving": "true",
+      "animations": [
+        {
+          "name": "haze-breathe",
+          "state": "running",
+          "time": 1533.2779999602437
+        },
+        {
+          "name": "orbit-revolve",
+          "state": "running",
+          "time": 1533.2779999602437
+        },
+        {
+          "name": "orbit-revolve",
+          "state": "running",
+          "time": 1533.2779999602437
+        },
+        {
+          "name": "orbit-revolve",
+          "state": "running",
+          "time": 1533.2779999602437
+        },
+        {
+          "name": "core-assemble",
+          "state": "finished",
+          "time": 800
+        },
+        {
+          "name": "core-breathe",
+          "state": "running",
+          "time": 1533.2779999602437
+        },
+        {
+          "name": "corona-breathe",
+          "state": "running",
+          "time": 1533.2779999602437
+        },
+        {
+          "name": "thought-float",
+          "state": "running",
+          "time": 1533.2779999602437
+        },
+        {
+          "name": "thought-float",
+          "state": "running",
+          "time": 1533.2779999602437
+        },
+        {
+          "name": "thought-float",
+          "state": "running",
+          "time": 1533.2779999602437
+        },
+        {
+          "name": "thought-float",
+          "state": "running",
+          "time": 1533.2779999602437
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1533.2779999602437
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1533.2779999602437
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1533.2779999602437
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1533.2779999602437
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1533.2779999602437
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1533.2779999602437
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1533.2779999602437
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1533.2779999602437
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1533.2779999602437
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1533.2779999602437
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1533.2779999602437
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1533.2779999602437
+        }
+      ],
+      "transforms": [
+        "translate3d(4.18605px, -1.43741px, 0px)",
+        "translate3d(7.53488px, -2.58733px, 0px)",
+        "translate3d(5.02326px, -1.72489px, 0px)",
+        "translate3d(13.3953px, -4.5997px, 0px)",
+        "translate3d(16.7442px, -5.74963px, 0px)",
+        "translate3d(23.4419px, -8.04948px, 0px)"
+      ]
+    },
+    {
+      "width": 1440,
+      "phase": "paused-stable-650ms",
+      "moving": "false",
+      "animations": [
+        {
+          "name": "haze-breathe",
+          "state": "paused",
+          "time": 1650.0119999602437
+        },
+        {
+          "name": "orbit-revolve",
+          "state": "paused",
+          "time": 1650.0119999602437
+        },
+        {
+          "name": "orbit-revolve",
+          "state": "paused",
+          "time": 1650.0119999602437
+        },
+        {
+          "name": "orbit-revolve",
+          "state": "paused",
+          "time": 1650.0119999602437
+        },
+        {
+          "name": "core-assemble",
+          "state": "paused",
+          "time": 800
+        },
+        {
+          "name": "core-breathe",
+          "state": "paused",
+          "time": 1650.0119999602437
+        },
+        {
+          "name": "corona-breathe",
+          "state": "paused",
+          "time": 1650.0119999602437
+        },
+        {
+          "name": "thought-float",
+          "state": "paused",
+          "time": 1650.0119999602437
+        },
+        {
+          "name": "thought-float",
+          "state": "paused",
+          "time": 1650.0119999602437
+        },
+        {
+          "name": "thought-float",
+          "state": "paused",
+          "time": 1650.0119999602437
+        },
+        {
+          "name": "thought-float",
+          "state": "paused",
+          "time": 1650.0119999602437
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1650.0119999602437
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1650.0119999602437
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1650.0119999602437
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1650.0119999602437
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1650.0119999602437
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1650.0119999602437
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1650.0119999602437
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1650.0119999602437
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1650.0119999602437
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1650.0119999602437
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1650.0119999602437
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1650.0119999602437
+        }
+      ],
+      "transforms": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "width": 1440,
+      "phase": "offscreen",
+      "moving": "false",
+      "animations": [
+        {
+          "name": "haze-breathe",
+          "state": "paused",
+          "time": 1700.0439999611117
+        },
+        {
+          "name": "orbit-revolve",
+          "state": "paused",
+          "time": 1700.0439999611117
+        },
+        {
+          "name": "orbit-revolve",
+          "state": "paused",
+          "time": 1700.0439999611117
+        },
+        {
+          "name": "orbit-revolve",
+          "state": "paused",
+          "time": 1700.0439999611117
+        },
+        {
+          "name": "core-assemble",
+          "state": "paused",
+          "time": 800
+        },
+        {
+          "name": "core-breathe",
+          "state": "paused",
+          "time": 1700.0439999611117
+        },
+        {
+          "name": "corona-breathe",
+          "state": "paused",
+          "time": 1700.0439999611117
+        },
+        {
+          "name": "thought-float",
+          "state": "paused",
+          "time": 1700.0439999611117
+        },
+        {
+          "name": "thought-float",
+          "state": "paused",
+          "time": 1700.0439999611117
+        },
+        {
+          "name": "thought-float",
+          "state": "paused",
+          "time": 1700.0439999611117
+        },
+        {
+          "name": "thought-float",
+          "state": "paused",
+          "time": 1700.0439999611117
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1700.0439999611117
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1700.0439999611117
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1700.0439999611117
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1700.0439999611117
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1700.0439999611117
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1700.0439999611117
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1700.0439999611117
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1700.0439999611117
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1700.0439999611117
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1700.0439999611117
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1700.0439999611117
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1700.0439999611117
+        }
+      ],
+      "transforms": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "width": 1440,
+      "phase": "raf-4seconds",
+      "cpu": 1,
+      "frames": 152,
+      "median": 33.29999999999927,
+      "p95": 33.400000000000546,
+      "over33ms": 14,
+      "max": 33.400000000000546
+    },
+    {
+      "width": 1440,
+      "phase": "raf-4seconds",
+      "cpu": 4,
+      "frames": 143,
+      "median": 33.29999999999927,
+      "p95": 33.400000000001455,
+      "over33ms": 10,
+      "max": 50.100000000000364
+    },
+    {
+      "width": 1440,
+      "phase": "reduced",
+      "moving": "false",
+      "animations": [],
+      "transforms": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "width": 390,
+      "phase": "active",
+      "moving": "true",
+      "animations": [
+        {
+          "name": "orbit-revolve",
+          "state": "running",
+          "time": 1166.6340000482835
+        },
+        {
+          "name": "orbit-revolve",
+          "state": "running",
+          "time": 1166.6340000482835
+        },
+        {
+          "name": "core-assemble",
+          "state": "finished",
+          "time": 800
+        },
+        {
+          "name": "core-breathe",
+          "state": "running",
+          "time": 1166.6340000482835
+        },
+        {
+          "name": "corona-breathe",
+          "state": "running",
+          "time": 1166.6340000482835
+        },
+        {
+          "name": "thought-float",
+          "state": "running",
+          "time": 1166.6340000482835
+        },
+        {
+          "name": "thought-float",
+          "state": "running",
+          "time": 1166.6340000482835
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1166.6340000482835
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1166.6340000482835
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1166.6340000482835
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1166.6340000482835
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1166.6340000482835
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1166.6340000482835
+        }
+      ],
+      "transforms": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "width": 390,
+      "phase": "pointer",
+      "moving": "true",
+      "animations": [
+        {
+          "name": "orbit-revolve",
+          "state": "running",
+          "time": 1583.3280000482835
+        },
+        {
+          "name": "orbit-revolve",
+          "state": "running",
+          "time": 1583.3280000482835
+        },
+        {
+          "name": "core-assemble",
+          "state": "finished",
+          "time": 800
+        },
+        {
+          "name": "core-breathe",
+          "state": "running",
+          "time": 1583.3280000482835
+        },
+        {
+          "name": "corona-breathe",
+          "state": "running",
+          "time": 1583.3280000482835
+        },
+        {
+          "name": "thought-float",
+          "state": "running",
+          "time": 1583.3280000482835
+        },
+        {
+          "name": "thought-float",
+          "state": "running",
+          "time": 1583.3280000482835
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1583.3280000482835
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1583.3280000482835
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1583.3280000482835
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1583.3280000482835
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1583.3280000482835
+        },
+        {
+          "name": "particle-drift",
+          "state": "running",
+          "time": 1583.3280000482835
+        }
+      ],
+      "transforms": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "width": 390,
+      "phase": "paused-stable-650ms",
+      "moving": "false",
+      "animations": [
+        {
+          "name": "orbit-revolve",
+          "state": "paused",
+          "time": 1666.6440000482835
+        },
+        {
+          "name": "orbit-revolve",
+          "state": "paused",
+          "time": 1666.6440000482835
+        },
+        {
+          "name": "core-assemble",
+          "state": "paused",
+          "time": 800
+        },
+        {
+          "name": "core-breathe",
+          "state": "paused",
+          "time": 1666.6440000482835
+        },
+        {
+          "name": "corona-breathe",
+          "state": "paused",
+          "time": 1666.6440000482835
+        },
+        {
+          "name": "thought-float",
+          "state": "paused",
+          "time": 1666.6440000482835
+        },
+        {
+          "name": "thought-float",
+          "state": "paused",
+          "time": 1666.6440000482835
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1666.6440000482835
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1666.6440000482835
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1666.6440000482835
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1666.6440000482835
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1666.6440000482835
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1666.6440000482835
+        }
+      ],
+      "transforms": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "width": 390,
+      "phase": "offscreen",
+      "moving": "false",
+      "animations": [
+        {
+          "name": "orbit-revolve",
+          "state": "paused",
+          "time": 1700.0020000565796
+        },
+        {
+          "name": "orbit-revolve",
+          "state": "paused",
+          "time": 1700.0020000565796
+        },
+        {
+          "name": "core-assemble",
+          "state": "paused",
+          "time": 800
+        },
+        {
+          "name": "core-breathe",
+          "state": "paused",
+          "time": 1700.0020000565796
+        },
+        {
+          "name": "corona-breathe",
+          "state": "paused",
+          "time": 1700.0020000565796
+        },
+        {
+          "name": "thought-float",
+          "state": "paused",
+          "time": 1700.0020000565796
+        },
+        {
+          "name": "thought-float",
+          "state": "paused",
+          "time": 1700.0020000565796
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1700.0020000565796
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1700.0020000565796
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1700.0020000565796
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1700.0020000565796
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1700.0020000565796
+        },
+        {
+          "name": "particle-drift",
+          "state": "paused",
+          "time": 1700.0020000565796
+        }
+      ],
+      "transforms": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "width": 390,
+      "phase": "raf-4seconds",
+      "cpu": 1,
+      "frames": 241,
+      "median": 16.699999999999818,
+      "p95": 16.799999999999272,
+      "over33ms": 0,
+      "max": 16.800000000000182
+    },
+    {
+      "width": 390,
+      "phase": "raf-4seconds",
+      "cpu": 4,
+      "frames": 241,
+      "median": 16.69999999999891,
+      "p95": 16.700000000000728,
+      "over33ms": 0,
+      "max": 16.800000000000182
+    },
+    {
+      "width": 390,
+      "phase": "reduced",
+      "moving": "false",
+      "animations": [],
+      "transforms": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    }
+  ],
+  "inputs": [
+    "URL → synthetic DI draft",
+    "Synthetic WAV → DI transcription → editable text → draft",
+    "Deferred HTTP → busy state → localized 503 error → editable recovery",
+    {
+      "emulatedKeyboardViewport": {
+        "height": 430,
+        "fieldBottom": 381.953125,
+        "navigationVisible": false,
+        "navigationTop": 0,
+        "overflow": false
+      }
+    }
+  ],
+  "fonts": [
+    {
+      "width": 1440,
+      "selector": "#hero-title",
+      "fonts": [
+        {
+          "familyName": "Onest",
+          "postScriptName": "Onest-SemiBold",
+          "isCustomFont": true,
+          "glyphCount": 11
+        }
+      ]
+    },
+    {
+      "width": 1440,
+      "selector": ".universe-thesis",
+      "fonts": [
+        {
+          "familyName": "Onest",
+          "postScriptName": "Onest-Medium",
+          "isCustomFont": true,
+          "glyphCount": 21
+        }
+      ]
+    },
+    {
+      "width": 1440,
+      "selector": "#entry-title",
+      "fonts": [
+        {
+          "familyName": "Onest",
+          "postScriptName": "Onest-SemiBold",
+          "isCustomFont": true,
+          "glyphCount": 15
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "selector": "#hero-title",
+      "fonts": [
+        {
+          "familyName": "Onest",
+          "postScriptName": "Onest-SemiBold",
+          "isCustomFont": true,
+          "glyphCount": 11
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "selector": ".universe-thesis",
+      "fonts": [
+        {
+          "familyName": "Onest",
+          "postScriptName": "Onest-Medium",
+          "isCustomFont": true,
+          "glyphCount": 21
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "selector": "#entry-title",
+      "fonts": [
+        {
+          "familyName": "Onest",
+          "postScriptName": "Onest-SemiBold",
+          "isCustomFont": true,
+          "glyphCount": 15
+        }
+      ]
+    }
+  ],
+  "colors": [
+    {
+      "name": "initial-1440",
+      "greens": [],
+      "unexpectedFonts": []
+    },
+    {
+      "name": "initial-390",
+      "greens": [],
+      "unexpectedFonts": []
+    },
+    {
+      "name": "error",
+      "greens": [],
+      "unexpectedFonts": []
+    }
+  ],
+  "keyboard": [
+    "Tab → skip → main → add → text → draft → preview → prepare → confirm → search → open → reading focus; keyboard only"
+  ],
+  "accessibility": [
+    {
+      "state": "error",
+      "violations": []
+    }
+  ]
+}

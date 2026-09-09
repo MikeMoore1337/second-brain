@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./fonts.css";
 @import "../../src/second_brain/entrypoints/web/static/app.css";
 
 .icon {
@@ -23,24 +24,24 @@
 }
 
 @theme {
-  --color-sb-void: #07070a;
-  --color-sb-ink: #0e0e15;
-  --color-sb-basin: #151425;
-  --color-sb-focus: #211a3b;
-  --color-sb-line: #302844;
-  --color-sb-accent: #9b7bff;
-  --color-sb-accent-strong: #7658e8;
-  --color-sb-text-primary: #f4f1fa;
-  --color-sb-text-secondary: #b7b0c8;
-  --color-sb-text-tertiary: #898198;
-  --font-sans: ui-sans-serif, system-ui, sans-serif;
+  --color-sb-void: var(--sb-color-void);
+  --color-sb-ink: var(--sb-color-ink);
+  --color-sb-basin: var(--sb-color-basin);
+  --color-sb-focus: var(--sb-color-focus);
+  --color-sb-line: var(--sb-color-line);
+  --color-sb-accent: var(--sb-color-accent);
+  --color-sb-accent-strong: var(--sb-color-accent-hover);
+  --color-sb-text-primary: var(--sb-color-text-primary);
+  --color-sb-text-secondary: var(--sb-color-text-secondary);
+  --color-sb-text-tertiary: var(--sb-color-text-tertiary);
+  --font-sans: "Onest", ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 :root {
   color-scheme: dark;
   font-family: var(--sb-font-sans);
-  background: #07070a;
+  background: var(--sb-color-void);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -99,6 +100,11 @@ input:focus-visible {
 .skip-link {
   display: inline-flex;
   align-items: center;
+  opacity: 0;
+}
+
+.skip-link:focus {
+  opacity: 1;
 }
 
 .signal-plane {
@@ -147,7 +153,7 @@ input:focus-visible {
 
 .primary-control,
 .secondary-control {
-  min-height: 2.75rem;
+  min-height: 44px;
   border-radius: 6px;
   padding: 0.65rem 0.9rem;
   font-size: 0.875rem;
@@ -156,15 +162,15 @@ input:focus-visible {
 }
 
 .primary-control {
-  border: 1px solid #9b7bff;
-  background: #9b7bff;
-  color: #07070a;
+  border: 1px solid var(--sb-color-accent);
+  background: var(--sb-color-accent);
+  color: var(--sb-color-on-accent);
 }
 
 .secondary-control {
-  border: 1px solid #302844;
+  border: 1px solid var(--sb-color-line-strong);
   background: transparent;
-  color: #f4f1fa;
+  color: var(--sb-color-text-primary);
 }
 
 .primary-control:active:not(:disabled),
@@ -265,7 +271,7 @@ input:focus-visible {
 .diagnostics-control-label,
 .diagnostics-kicker {
   color: var(--sb-color-accent);
-  font-family: var(--sb-font-mono);
+  font-family: var(--sb-font-sans);
   font-size: var(--sb-type-label);
   letter-spacing: 0.08em;
   text-transform: uppercase;

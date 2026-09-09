@@ -34,3 +34,30 @@ it("reports reduced motion and never enables continuous movement", async () => {
   expect(host.querySelector("button")).toBeNull();
   await act(async () => root.unmount());
 });
+
+it("stops on visibilitychange and offscreen, and resumes only when both are visible", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.spyOn(window, "matchMedia").mockImplementation((query) => ({ matches: false, media: query, addEventListener: vi.fn(), removeEventListener: vi.fn() } as unknown as MediaQueryList));
+  let intersect: IntersectionObserverCallback = () => {};
+  vi.stubGlobal("IntersectionObserver", class {
+    constructor(callback: IntersectionObserverCallback) { intersect = callback; }
+    observe() {} disconnect() {}
+  });
+  const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(false);
+  const host = document.createElement("div"); document.body.append(host);
+  const root = createRoot(host);
+  await act(async () => root.render(<CinematicHero />));
+  const visible = async (isIntersecting: boolean) => act(async () => intersect([{ isIntersecting } as IntersectionObserverEntry], {} as IntersectionObserver));
+  await visible(true);
+  expect(host.querySelector("section")?.dataset.moving).toBe("true");
+  hidden.mockReturnValue(true);
+  await act(async () => document.dispatchEvent(new Event("visibilitychange")));
+  expect(host.querySelector("section")?.dataset.moving).toBe("false");
+  await visible(false);
+  hidden.mockReturnValue(false);
+  await act(async () => document.dispatchEvent(new Event("visibilitychange")));
+  expect(host.querySelector("section")?.dataset.moving).toBe("false");
+  await visible(true);
+  expect(host.querySelector("section")?.dataset.moving).toBe("true");
+  await act(async () => root.unmount());
+});
