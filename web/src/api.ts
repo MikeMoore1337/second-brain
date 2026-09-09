@@ -414,8 +414,9 @@ export function searchNotes(query: string, fetcher: FetchLike = fetchDefault): P
   return requestJson("/api/search", "search-v1", { query, limit: 20 }, fetcher, "Не удалось выполнить поиск.");
 }
 
-export function retrieveNote(id: string, fetcher: FetchLike = fetchDefault): Promise<RetrievedNote> {
-  return requestJson("/api/retrieval/note", "search-v1", { id }, fetcher, "Не удалось открыть заметку.");
+export async function retrieveNote(id: string, fetcher: FetchLike = fetchDefault): Promise<RetrievedNote> {
+  const response = await requestJson<{ note: RetrievedNote }>("/api/retrieval/note", "search-v1", { id }, fetcher, "Не удалось открыть заметку.");
+  return response.note;
 }
 
 export function prepareDecision(decision: DecisionPayload, fetcher: FetchLike = fetchDefault): Promise<SavePlanResponse> {

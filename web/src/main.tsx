@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import { App } from "./App";
 import "./styles.css";
+import "./cinematic.css";
 
 const rootElement = document.getElementById("root");
 

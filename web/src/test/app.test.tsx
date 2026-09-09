@@ -189,7 +189,7 @@ describe("React Web parity shell", () => {
 
     expect(host.querySelector("main#main-content")).not.toBeNull();
     expect(host.querySelector('[aria-label="Основные разделы"]')).not.toBeNull();
-    expect(host.querySelector("#hero-title")?.textContent).toContain("Сохраняй идеи");
+    expect(host.querySelector("#hero-title")?.textContent).toContain("Second");
     for (const id of ["decision-journal", "timeline", "self-model", "simulate-me", "self-retrieval", "search", "memory", "growth"]) {
       expect(host.querySelector(`#${id}`), id).not.toBeNull();
     }

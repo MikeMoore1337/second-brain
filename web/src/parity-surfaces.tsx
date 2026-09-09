@@ -444,7 +444,7 @@ export function CaptureSurface(): ReactElement {
   }
 
   return (
-    <section className="entry-point" aria-labelledby="entry-title">
+    <section className="entry-point" id="capture" aria-labelledby="entry-title">
       <div className="entry-icon" aria-hidden="true"><Icon name="add" size={24} /></div>
       <div className="entry-copy">
         <p className="entry-kicker">Новая заметка</p>

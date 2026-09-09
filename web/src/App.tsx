@@ -1,5 +1,6 @@
 import { MotionConfig } from "motion/react";
 import { type ReactElement } from "react";
+import { CinematicHero } from "./cinematic-hero";
 
 import { AssistantCompareSurface } from "./assistant-compare-surface";
 import {
@@ -39,22 +40,14 @@ export function App(): ReactElement {
       <div className="page-shell" data-shell>
         <header className="topbar">
           <a className="brand" href="#main-content" aria-label="Second Brain — начало">
-            <span className="brand-mark" aria-hidden="true">SB</span>
+            <Icon name="memory" size={26} />
             <span className="brand-copy"><span className="brand-eyebrow">Личная система знаний</span><span className="brand-name">Second Brain</span></span>
-          </a>
+          </a><nav className="quick-nav" aria-label="Быстрые действия"><a href="#capture"><Icon name="add" size={18} />Добавить</a><a href="#search"><Icon name="search" size={18} />Поиск</a><a href="#workspace-navigation"><Icon name="expand" size={18} />Разделы</a></nav>
         </header>
         <div className="workspace-frame">
-          <aside className="workspace-rail" aria-label="Навигация рабочего пространства">
-            <div className="rail-intro"><span className="rail-kicker">Карта рабочего пространства</span><span className="rail-title">Сигнальное поле</span></div>
-            <nav className="topnav" aria-label="Основные разделы"><>{navigation.map(([href, label, icon]) => <a href={href} key={href}><Icon name={icon as IconName} size={18} /><span>{label}</span></a>)}</></nav>
-            <span className="status-pill"><span aria-hidden="true" /> Локальная основа</span>
-          </aside>
           <div className="workspace-content">
             <main id="main-content" tabIndex={-1}>
-              <section className="hero" aria-labelledby="hero-title">
-                <div className="hero-copy"><p className="eyebrow">Память <span aria-hidden="true">+</span> развитие</p><h1 id="hero-title">Сохраняй идеи.<br /><em>Развивай<br className="hero-mobile-break" /> понимание.</em></h1><p className="hero-lede">Локальная точка входа в личную систему знаний — спокойное место, где память становится опорой для роста.</p></div>
-                <div className="hero-orbit" aria-hidden="true"><div className="orbit orbit-outer" /><div className="orbit orbit-inner" /><div className="orbit-core"><span>SB</span></div><span className="orbit-label orbit-label-top">помни</span><span className="orbit-label orbit-label-bottom">развивай</span></div>
-              </section>
+              <CinematicHero />
               <CaptureSurface />
               <DecisionJournalSurface />
               <TimelineSurface />
@@ -68,6 +61,11 @@ export function App(): ReactElement {
             </main>
             <footer className="footer"><span>Локально по умолчанию</span><span className="footer-line" aria-hidden="true" /><span>Приватные знания, осознанное развитие</span></footer>
           </div>
+          <aside id="workspace-navigation" className="workspace-rail" aria-label="Навигация рабочего пространства">
+            <div className="rail-intro"><span className="rail-kicker">Твоё пространство</span><span className="rail-title">Мысли становятся знанием</span></div>
+            <nav className="topnav" aria-label="Основные разделы"><>{navigation.map(([href, label, icon]) => <a href={href} key={href}><Icon name={icon as IconName} size={18} /><span>{label}</span></a>)}</></nav>
+            <span className="status-pill"><span aria-hidden="true" /> Локальная основа</span>
+          </aside>
         </div>
       </div>
     </MotionConfig>
