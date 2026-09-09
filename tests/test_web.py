@@ -153,6 +153,7 @@ def test_web_serve_uses_fixed_loopback_and_fake_runner(
     assert len(calls) == 1
     assert calls[0]["host"] == "127.0.0.1"
     assert calls[0]["port"] == 8000
+    assert calls[0]["access_log"] is False
     assert "factory" not in calls[0]
     assert getattr(calls[0]["application"], "title", None) == "Second Brain"
 
@@ -173,6 +174,7 @@ def test_web_serve_defaults_to_second_brain_port(
     assert len(calls) == 1
     assert calls[0]["host"] == "127.0.0.1"
     assert calls[0]["port"] == 8123
+    assert calls[0]["access_log"] is False
 
 
 def test_web_serve_forwards_global_vault_options_to_app_object(
@@ -210,7 +212,9 @@ def test_web_serve_forwards_global_vault_options_to_app_object(
 
     assert result.exit_code == 0
     assert app_calls == [{"env_file": env_file, "vault_path_override": "relative-vault"}]
-    assert runner_calls == [{"application": sentinel, "host": "127.0.0.1", "port": 8123}]
+    assert runner_calls == [
+        {"application": sentinel, "host": "127.0.0.1", "port": 8123, "access_log": False}
+    ]
 
 
 @pytest.mark.parametrize("port", ["0", "65536", "not-a-port"])

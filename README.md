@@ -85,8 +85,9 @@ binary запрос на transcription и возвращает только plai
 (`--env-file`/`--vault-path`) загружается только при подготовке или применении
 явного Save. Browser не
 выбирает path, identity, timestamp, apply или Git metadata и не сохраняет
-review state в persistent browser storage. Authentication, public bind, deploy
-и PWA в этот этап не входят. Для source-free Text draft (включая уже
+review state в persistent browser storage. Публичное включение GitHub OAuth,
+public bind, deploy и PWA в этот этап локального GUI не входят. Для source-free
+Text draft (включая уже
 проверенный Voice transcript) доступен отдельный явный режим `Сохранить как
 Personal Memory`, выключенный по умолчанию. Пользователь вручную выбирает
 только Stage 1 `evidence_kind`/`self_kind`, optional `domain` и `exact` либо
@@ -144,9 +145,11 @@ uv run python -m second_brain.benchmarks.rebuild_cost_v1 --format json
 Подробности и формат artifact описаны в
 [rebuild-cost benchmark v1](docs/benchmarks/rebuild-cost-v1.md).
 
-Private Search/Retrieval API принимает только same-origin loopback `POST` с
-`X-Second-Brain-Request: search-v1` и `Content-Type: application/json`; для
-успешных и ошибочных ответов используется `Cache-Control: no-store`. Query —
+Private Search/Retrieval API принимает только same-origin `POST` с
+`X-Second-Brain-Request: search-v1` и `Content-Type: application/json`: в
+локальном режиме — loopback Host/Origin, в public GitHub OAuth mode — exact
+configured public authority. Для успешных и ошибочных ответов используется
+`Cache-Control: no-store`. Query —
 обычный bounded literal text с deterministic `AND` semantics, а не raw FTS5
 syntax. SQLite FTS5 использует `unicode61 remove_diacritics 2` и BM25 с
 приоритетом `title > tags > relative_path > body`; Russian morphology и
@@ -283,6 +286,11 @@ post-write validation и receipt-based rollback.
 Первичный user-level bootstrap и безопасное обновление Linux layout описаны в
 [runbook VPS runtime](docs/deployment/vps.md). Реальный SSH/deploy, web/API,
 systemd и reverse proxy в текущий этап не входят.
+
+Owner-only GitHub OAuth для будущего публичного Web GUI описан в
+[руководстве Web авторизации](docs/deployment/web-auth.md). Создание OAuth App,
+production secrets, DNS/Caddy/VPS и deployment остаются отдельным
+owner/external checkpoint.
 
 ## Безопасное создание managed note
 

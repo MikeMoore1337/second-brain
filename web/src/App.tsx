@@ -1,6 +1,7 @@
 import { MotionConfig } from "motion/react";
 import { useEffect, type ReactElement } from "react";
 import { CinematicHero } from "./cinematic-hero";
+import { LoginScreen, type LoginError } from "./login-screen";
 import { PageMotion } from "./page-motion";
 import { FoldSection, revealDestination } from "./fold-section";
 import { SectionMenu } from "./section-menu";
@@ -35,8 +36,27 @@ const navigation = [
   ["#growth", "Развитие", "growth"],
 ] as const;
 
+export function AccountControl(): ReactElement {
+  return (
+    <details className="account-menu">
+      <summary aria-label="Меню аккаунта MikeMoore1337">
+        <span>MikeMoore1337</span>
+        <span className="account-menu-chevron" aria-hidden="true" />
+      </summary>
+      <div className="account-menu-popover">
+        <span className="account-menu-caption">Владелец</span>
+        <a href="/auth/logout">Выйти</a>
+      </div>
+    </details>
+  );
+}
+
 export function App(): ReactElement {
+  const pathname = window.location.pathname;
+  const authError = document.body.dataset.secondBrainAuthError;
+  const isAuthSurface = pathname === "/login" || pathname === "/auth/github/callback";
   useEffect(() => {
+    if (isAuthSurface) return;
     let timer = 0;
     let previous: HTMLElement | null = null;
     const navigate = () => {
@@ -63,7 +83,11 @@ export function App(): ReactElement {
       window.clearTimeout(timer);
       previous?.classList.remove("context-enter");
     };
-  }, []);
+  }, [isAuthSurface]);
+  if (isAuthSurface) {
+    const error: LoginError | undefined = authError === "oauth" || authError === "denied" ? authError : undefined;
+    return <LoginScreen error={error} />;
+  }
   return (
     <MotionConfig reducedMotion="user"><PageMotion>
       <a className="skip-link" href="#main-content" onClick={(event) => {
@@ -77,7 +101,7 @@ export function App(): ReactElement {
           <a className="brand" href="#main-content" aria-label="Second Brain — начало">
             <img className="brand-brain" src={brainMark} srcSet={`${brainMark} 1x, ${brainMark2x} 2x`} width={44} height={44} alt="" />
             <span className="brand-copy"><span className="brand-eyebrow">Личная система знаний</span><span className="brand-name">Second Brain</span></span>
-          </a><nav className="quick-nav" aria-label="Быстрые действия"><a href="#capture"><Icon name="add" size={18} />Добавить</a><a href="#search"><Icon name="search" size={18} />Поиск</a><SectionMenu navigation={[["#capture", "Добавить материал", "add"], ...navigation]} /></nav>
+          </a><div className="topbar-actions"><nav className="quick-nav" aria-label="Быстрые действия"><a href="#capture"><Icon name="add" size={18} />Добавить</a><a href="#search"><Icon name="search" size={18} />Поиск</a><SectionMenu navigation={[["#capture", "Добавить материал", "add"], ...navigation]} /></nav><AccountControl /></div>
         </header>
         <div className="workspace-frame">
           <div className="workspace-content">

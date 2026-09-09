@@ -18,6 +18,7 @@ from second_brain.application.research import SourceProvenance
 from second_brain.application.research_draft import ResearchDraftResult
 from second_brain.domain.models import NoteType
 from second_brain.entrypoints.web.app import create_app
+from second_brain.entrypoints.web.auth import load_web_auth_config
 from tests.test_web_review_save import (
     RecordingSaveService,
     make_created_result,
@@ -108,6 +109,7 @@ if __name__ == "__main__":
             save_service=Save(),
             search_service=Search(),
             transcription_service=RecordingTranscriptionService(),
+            web_auth_config=load_web_auth_config(),
             env_file=Path(temporary) / "absent.env",
             vault_path_override=str(Path(temporary) / "absent-vault"),
         )
@@ -131,4 +133,4 @@ if __name__ == "__main__":
                 )
             return await call_next(request)
 
-        uvicorn.run(app, host="127.0.0.1", port=8137)
+        uvicorn.run(app, host="127.0.0.1", port=8137, access_log=False)

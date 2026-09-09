@@ -44,6 +44,10 @@ from second_brain.application.compare import (
 )
 from second_brain.application.ports import AdvisorPort, CancellationTokenSource
 from second_brain.application.simulate_me import SimulateMeRequest, SimulateMeResult
+from second_brain.entrypoints.web.auth import (
+    configured_authority_port,
+    trusted_authorities_from_scope,
+)
 from second_brain.entrypoints.web.simulate_me import (
     SimulateMeService,
     build_production_simulate_me_service,
@@ -357,11 +361,23 @@ def _loopback_host_port(host_header: str | None, scheme: str) -> tuple[str, int]
     return hostname.casefold(), port
 
 
-def _loopback_host(host_header: str | None, scheme: str) -> bool:
-    return _loopback_host_port(host_header, scheme) is not None
+def _loopback_host(
+    host_header: str | None,
+    scheme: str,
+    authorities: frozenset[tuple[str, int]] = frozenset(),
+) -> bool:
+    return (
+        _loopback_host_port(host_header, scheme) is not None
+        or configured_authority_port(host_header or "", scheme, authorities) is not None
+    )
 
 
-def _same_origin(origin: str | None, host_header: str | None, scheme: str) -> bool:
+def _same_origin(
+    origin: str | None,
+    host_header: str | None,
+    scheme: str,
+    authorities: frozenset[tuple[str, int]] = frozenset(),
+) -> bool:
     if origin is None:
         return True
     if not origin or any(character.isspace() for character in origin):
@@ -382,9 +398,17 @@ def _same_origin(origin: str | None, host_header: str | None, scheme: str) -> bo
         or parsed.password is not None
     ):
         return False
-    return _loopback_host_port(parsed.netloc, normalized_scheme) == _loopback_host_port(
-        host_header, normalized_scheme
+    origin_authority = _loopback_host_port(parsed.netloc, normalized_scheme)
+    request_authority = _loopback_host_port(host_header, normalized_scheme)
+    if origin_authority is not None or request_authority is not None:
+        return origin_authority is not None and origin_authority == request_authority
+    configured_origin = configured_authority_port(parsed.netloc, normalized_scheme, authorities)
+    configured_request = configured_authority_port(
+        host_header or "",
+        normalized_scheme,
+        authorities,
     )
+    return configured_origin is not None and configured_origin == configured_request
 
 
 async def _send_json_response(
@@ -394,7 +418,7 @@ async def _send_json_response(
 
 
 class AssistantCompareRequestBoundaryMiddleware:
-    """Fail-closed request boundary for the two explicit Stage 7 POST endpoints."""
+    """Fail-closed trusted same-origin boundary for Stage 7 POST endpoints."""
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
@@ -425,7 +449,13 @@ class AssistantCompareRequestBoundaryMiddleware:
         host = _decode_header(headers, b"host")
         origin = _decode_header(headers, b"origin")
         scheme = str(scope.get("scheme", "")).casefold()
-        if not _loopback_host(host, scheme) or not _same_origin(origin, host, scheme):
+        authorities = trusted_authorities_from_scope(scope)
+        if not _loopback_host(host, scheme, authorities) or not _same_origin(
+            origin,
+            host,
+            scheme,
+            authorities,
+        ):
             await _send_json_response(_invalid_request(path), scope, receive, send)
             return
         purpose = _decode_header(headers, b"x-second-brain-request")
