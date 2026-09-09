@@ -1,5 +1,7 @@
 import { chromium } from '@playwright/test';
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
+const output=process.env.SB_QA_OUT ?? '../.local/design-v4';
+await mkdir(output,{recursive:true});
 const browser=await chromium.launch({headless:true,executablePath:process.env.SB_QA_CHROMIUM});
 const metrics=[];
 try{
@@ -21,5 +23,5 @@ try{
     })));
     await context.close();
   }
-}finally{await writeFile(`${process.env.SB_QA_OUT ?? '../.local/design-v4'}/after-metrics.json`,JSON.stringify(metrics,null,2));await browser.close();}
+}finally{await writeFile(`${output}/after-metrics.json`,JSON.stringify(metrics,null,2));await browser.close();}
 console.log(metrics);
