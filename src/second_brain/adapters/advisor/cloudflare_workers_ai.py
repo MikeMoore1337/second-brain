@@ -77,6 +77,7 @@ from second_brain.application.assistant import (
     AssistantResultKind,
     AssistantResultTooLargeError,
     AssistantTimeoutError,
+    _validated_reasoning_envelope,
     normalize_assistant_result_structure,
     serialize_assistant_reasoning_envelope,
     serialize_assistant_result_envelope,
@@ -106,7 +107,15 @@ _ADVISOR_SYSTEM_MESSAGE = (
     "Assistant envelope. Не утверждай, что знаешь пользователя сверх envelope; "
     "не выдумывай hidden goals, preferences или history; не считай background "
     "проверенным фактом. Верни только один JSON-объект по exact Assistant v1 "
-    "schema. Не используй tools, write или history."
+    "schema. Не используй tools, write или history. "
+    "Для kind=recommendation: recommendation — непустая строка, abstention_code=null; "
+    "selected_option=null либо exact пара id/label из options. "
+    "Для kind=analysis: recommendation=null, selected_option=null, abstention_code=null. "
+    "Для kind=abstention: recommendation=null, selected_option=null, abstention_code "
+    "— один из разрешённых кодов, не null. Не повторяй ссылки внутри массивов. "
+    "Ordinal начинается с 1 и относится только к соответствующему explicit массиву. "
+    "Для context kind=fact роль reported_fact; для kind=background роль background. "
+    "Пустой входной массив означает пустой массив ссылок."
 )
 _ADVISOR_RESULT_FIELDS = frozenset(
     {
@@ -157,7 +166,7 @@ def escape_advisor_envelope(raw: str) -> str:
     return "".join(pieces)
 
 
-def _advisor_result_schema() -> dict[str, object]:
+def _advisor_result_schema(request: AssistantReasoningEnvelopeV1) -> dict[str, object]:
     """Return the closed provider schema; application validation remains final."""
 
     return {
@@ -185,6 +194,10 @@ def _advisor_result_schema() -> dict[str, object]:
             "recommendation": {"type": ["string", "null"]},
             "selected_option": {
                 "type": ["object", "null"],
+                "enum": [
+                    None,
+                    *({"id": option.id, "label": option.label} for option in request.options),
+                ],
                 "additionalProperties": False,
                 "required": ["id", "label"],
                 "properties": {"id": {"type": "string"}, "label": {"type": "string"}},
@@ -197,17 +210,33 @@ def _advisor_result_schema() -> dict[str, object]:
             },
             "evidence_refs": {
                 "type": "array",
-                "maxItems": MAX_EVIDENCE_REFS,
+                "maxItems": min(MAX_EVIDENCE_REFS, len(request.explicit_context)),
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
                     "required": ["source", "ordinal", "role"],
+                    **(
+                        {
+                            "enum": [
+                                {
+                                    "source": "explicit_context",
+                                    "ordinal": ordinal,
+                                    "role": "reported_fact"
+                                    if context.kind == AssistantContextKind.FACT
+                                    else "background",
+                                }
+                                for ordinal, context in enumerate(request.explicit_context, 1)
+                            ]
+                        }
+                        if request.explicit_context
+                        else {}
+                    ),
                     "properties": {
                         "source": {"type": "string", "enum": ["explicit_context"]},
                         "ordinal": {
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": MAX_CONTEXT_ENTRIES,
+                            "maximum": max(1, len(request.explicit_context)),
                         },
                         "role": {
                             "type": "string",
@@ -218,27 +247,35 @@ def _advisor_result_schema() -> dict[str, object]:
             },
             "constraints_used": {
                 "type": "array",
-                "maxItems": MAX_INPUT_REFS,
+                "maxItems": min(MAX_INPUT_REFS, len(request.explicit_constraints)),
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
                     "required": ["source", "ordinal"],
                     "properties": {
                         "source": {"type": "string", "enum": ["explicit_constraint"]},
-                        "ordinal": {"type": "integer", "minimum": 1, "maximum": MAX_CONSTRAINTS},
+                        "ordinal": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": max(1, len(request.explicit_constraints)),
+                        },
                     },
                 },
             },
             "objectives_used": {
                 "type": "array",
-                "maxItems": MAX_OBJECTIVE_REFS,
+                "maxItems": min(MAX_OBJECTIVE_REFS, len(request.explicit_goals)),
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
                     "required": ["source", "ordinal"],
                     "properties": {
                         "source": {"type": "string", "enum": ["explicit_goal"]},
-                        "ordinal": {"type": "integer", "minimum": 1, "maximum": MAX_GOALS},
+                        "ordinal": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": max(1, len(request.explicit_goals)),
+                        },
                     },
                 },
             },
@@ -259,7 +296,9 @@ def _advisor_result_schema() -> dict[str, object]:
     }
 
 
-def _advisor_request_payload(canonical_envelope: bytes) -> dict[str, object]:
+def _advisor_request_payload(
+    canonical_envelope: bytes, request: AssistantReasoningEnvelopeV1
+) -> dict[str, object]:
     """Build the one fixed request shape around canonical explicit envelope bytes."""
 
     try:
@@ -280,7 +319,7 @@ def _advisor_request_payload(canonical_envelope: bytes) -> dict[str, object]:
             {"role": "system", "content": _ADVISOR_SYSTEM_MESSAGE},
             {"role": "user", "content": user_message},
         ],
-        "response_format": {"type": "json_schema", "json_schema": _advisor_result_schema()},
+        "response_format": {"type": "json_schema", "json_schema": _advisor_result_schema(request)},
         "stream": False,
         "temperature": 0,
         "reasoning_effort": None,
@@ -373,9 +412,13 @@ ADVISOR_MAX_COMPLETION_TOKENS = 32_768
 _ADVISOR_MAX_MARKER_COUNT = MAX_CONTEXT_BYTES // min(
     len(_ADVISOR_BEGIN_MARKER), len(_ADVISOR_END_MARKER)
 )
-_ADVISOR_REQUEST_FIXED_BYTES = len(_compact_json_bytes(_advisor_request_payload(b"")))
+_ADVISOR_REQUEST_FIXED_BYTES = len(
+    _compact_json_bytes(_advisor_request_payload(b"", _maximum_reasoning_envelope()))
+)
 ADVISOR_REQUEST_BODY_CAP = (
     _ADVISOR_REQUEST_FIXED_BYTES
+    # Extra schema copies of option text: conservative ensure_ascii byte bound.
+    + 6 * MAX_OPTIONS * (MAX_OPTION_ID_BYTES + MAX_OPTION_LABEL_BYTES)
     + _ADVISOR_ASCII_JSON_EXPANSION_FACTOR * MAX_CONTEXT_BYTES
     + _ADVISOR_ESCAPED_MARKER_EXTRA_BYTES * _ADVISOR_MAX_MARKER_COUNT
 )
@@ -403,11 +446,12 @@ ADVISOR_RESPONSE_BODY_CAP = (
 def build_advisor_request_body(request: object) -> bytes:
     """Validate the exact envelope and build one bounded Cloudflare request body."""
 
-    canonical_envelope = serialize_assistant_reasoning_envelope(request)
+    validated = _validated_reasoning_envelope(request)
+    canonical_envelope = serialize_assistant_reasoning_envelope(validated)
     if len(canonical_envelope) > MAX_CONTEXT_BYTES:
         raise AssistantInvalidRequestError()
     try:
-        body = _compact_json_bytes(_advisor_request_payload(canonical_envelope))
+        body = _compact_json_bytes(_advisor_request_payload(canonical_envelope, validated))
     except TypeError, UnicodeEncodeError, ValueError:
         raise AssistantInvalidRequestError() from None
     if len(body) > ADVISOR_REQUEST_BODY_CAP:

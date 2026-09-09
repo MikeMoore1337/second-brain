@@ -6,6 +6,7 @@ import json
 import os
 import time
 from collections.abc import Callable
+from dataclasses import replace
 from typing import Any, cast
 
 import pytest
@@ -16,6 +17,7 @@ from second_brain.application.assistant import (
     ASSISTANT_CONTRACT_VERSION,
     ASSISTANT_OUTPUT_LABEL,
     MAX_CONTEXT_BYTES,
+    MAX_OPTION_LABEL_BYTES,
     AssistantAbstentionCode,
     AssistantCancelledError,
     AssistantContextKind,
@@ -273,7 +275,9 @@ def test_explicit_input_cannot_override_completion_cap() -> None:
     assert payload["max_completion_tokens"] == cloudflare.ADVISOR_MAX_COMPLETION_TOKENS
     assert (
         payload["response_format"]
-        == json.loads(cloudflare.build_advisor_request_body(make_envelope()))["response_format"]
+        == json.loads(cloudflare.build_advisor_request_body(replace(envelope, task="Safe")))[
+            "response_format"
+        ]
     )
     messages = cast(list[dict[str, str]], payload["messages"])
     assert r"\"max_completion_tokens\":1" in messages[1]["content"]
@@ -601,3 +605,125 @@ def test_authenticated_advisor_smoke_when_approved_credentials_exist() -> None:
     )
     assert result.output_label == ASSISTANT_OUTPUT_LABEL
     assert result.contract_version == ASSISTANT_CONTRACT_VERSION
+
+
+def test_schema_exact_option_pairs_and_context_roles() -> None:
+    properties = cast(
+        dict[str, Any], cloudflare._advisor_result_schema(make_envelope())["properties"]
+    )
+    assert properties["selected_option"]["enum"] == [
+        None,
+        {"id": "a", "label": "Первый вариант"},
+        {"id": "b", "label": "Второй вариант"},
+    ]
+    assert {"id": "a", "label": "Второй вариант"} not in properties["selected_option"]["enum"]
+    assert properties["evidence_refs"]["items"]["enum"] == [
+        {"source": "explicit_context", "ordinal": 1, "role": "reported_fact"},
+        {"source": "explicit_context", "ordinal": 2, "role": "background"},
+    ]
+
+
+@pytest.mark.parametrize("size", [0, 1, 3])
+def test_schema_actual_input_counts(size: int) -> None:
+    envelope = replace(
+        make_envelope(),
+        options=(),
+        explicit_context=tuple(AssistantExplicitContext("fact", "x") for _ in range(size)),
+        explicit_constraints=tuple("x" for _ in range(size)),
+        explicit_goals=tuple("x" for _ in range(size)),
+    )
+    properties = cast(dict[str, Any], cloudflare._advisor_result_schema(envelope)["properties"])
+    assert properties["selected_option"]["enum"] == [None]
+    for field in ("evidence_refs", "constraints_used", "objectives_used"):
+        assert properties[field]["maxItems"] == size
+        assert properties[field]["items"]["properties"]["ordinal"]["maximum"] == max(1, size)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("selected_option", {"id": "a", "label": "Wrong label"}),
+        ("evidence_refs", [{"source": "explicit_context", "ordinal": 3, "role": "reported_fact"}]),
+        ("evidence_refs", [{"source": "explicit_context", "ordinal": 2, "role": "reported_fact"}]),
+        (
+            "evidence_refs",
+            [{"source": "explicit_context", "ordinal": 1, "role": "reported_fact"}] * 2,
+        ),
+        ("constraints_used", [{"source": "explicit_constraint", "ordinal": 2}]),
+        ("objectives_used", [{"source": "explicit_goal", "ordinal": 2}]),
+        ("kind", "analysis"),
+        ("abstention_code", "insufficient_basis"),
+    ],
+)
+def test_invalid_provider_output_fails_closed_with_identical_entrypoint_requests(
+    field: str,
+    value: object,
+) -> None:
+    from second_brain.application.compare import CompareExecutionContextV1
+    from second_brain.application.simulate_me import SimulateMeRequest, SimulateMeResult
+    from second_brain.entrypoints.web.assistant_compare import (
+        ProductionAssistantWebService,
+        ProductionCompareWebService,
+        Stage7RequestPayload,
+        _CompareAssistantAdapter,
+    )
+
+    class UnavailableSimulate:
+        def execute(
+            self, request: SimulateMeRequest, *, execution: CompareExecutionContextV1
+        ) -> SimulateMeResult:
+            raise TimeoutError
+
+    raw = json.loads(serialize_assistant_reasoning_envelope(make_envelope()))
+    raw.pop("contract_version", None)
+    payload = Stage7RequestPayload.model_validate(raw)
+    port, runner = make_port(worker_result(make_outer({**make_result(), field: value})))
+    with pytest.raises(AssistantResultInvalidError):
+        ProductionAssistantWebService(port).execute(payload)
+    assert runner.request is not None
+    standalone_body = runner.request.body
+    compared = ProductionCompareWebService(
+        _CompareAssistantAdapter(port), UnavailableSimulate()
+    ).execute(payload)
+    assert isinstance(compared, dict)
+    assert (
+        cast(dict[str, Any], compared["assistant"])["error"]["code"]
+        == "COMPARE_BRANCH_RESULT_INVALID"
+    )
+    assert runner.request.body == standalone_body
+    assert runner.calls == 2
+
+
+def test_schema_uses_same_normalized_options_as_canonical_envelope() -> None:
+    envelope = replace(make_envelope(), options=(AssistantOption("a", " e\u0301 "),))
+    payload = json.loads(cloudflare.build_advisor_request_body(envelope))
+    assert payload["response_format"]["json_schema"]["properties"]["selected_option"]["enum"] == [
+        None,
+        {"id": "a", "label": "é"},
+    ]
+
+
+@pytest.mark.parametrize("text", ['"', "я", "\U0001f600"])
+def test_request_local_schema_text_fits_wire_and_private_ipc_caps(text: str) -> None:
+    envelope = cloudflare._maximum_reasoning_envelope()
+    envelope = replace(
+        envelope,
+        options=tuple(
+            AssistantOption(option.id, text * (MAX_OPTION_LABEL_BYTES // len(text.encode("utf-8"))))
+            for option in envelope.options
+        ),
+    )
+    body = cloudflare.build_advisor_request_body(envelope)
+    assert len(body) <= cloudflare.ADVISOR_REQUEST_BODY_CAP <= transport.REQUEST_BODY_CAP
+    request = transport._WorkerRequest(
+        account_id=ACCOUNT_ID,
+        api_token=SECRET,
+        body=body,
+        max_output_bytes=1,
+        response_cap=cloudflare.ADVISOR_RESPONSE_BODY_CAP,
+    )
+    frame = transport._encode_worker_request(request, timeout_micros=1_000_000)
+    decoded = transport._decode_worker_request(
+        transport._decode_frame(frame, max_payload_bytes=transport._max_request_payload_bytes())
+    )
+    assert decoded is not None and decoded.body == body

@@ -895,3 +895,47 @@ capability-boundary decision`. Accepted v1 — explicit-context-only independent
 advice without automatic private retrieval. Stage 5/Personal Memory/private
 transmission и любой privacy/DLP mechanism остаются clearly deferred; #162 не
 создаёт их runtime и не блокирует независимые Stage 5/6 maintenance tasks.
+
+## Advisor request-aware schema: remediation #184 / #185
+
+Manual evidence владельца: standalone Advisor на Llama fast — PASS;
+Compare на тех же данных — FAIL дважды: `COMPARE_BRANCH_RESULT_INVALID`,
+Simulate Me — `no_matching_evidence`, delta — `assistant_error`.
+Точное provider runtime значение не установлено; raw output и credentials
+не собирались. Доказанный класс причины: прежняя provider schema шире
+application semantic contract.
+
+Путь: `ProductionCompareWebService` → `_CompareAssistantAdapter` →
+`CloudflareWorkersAiAdvisorPort` → structural provider decode →
+`BuildCompare._run_assistant` → `validate_assistant_result`.
+Последний отклоняет чужую пару option id/label, ordinal вне фактического
+массива, неверный context role, дубликаты refs и несогласованные kind fields.
+`ASSISTANT_RESULT_INVALID` отображается в `COMPARE_BRANCH_RESULT_INVALID`.
+Сам внешний код ошибки не доказывает, какой именно invariant нарушен.
+
+Оба entrypoint используют один builder из validated/normalized
+`AssistantReasoningEnvelopeV1`: selected_option — enum из null и exact
+request options; evidence — exact source/ordinal/role enum; ordinal bounds и
+maxItems зависят от фактических context/constraints/goals. Пустые inputs дают
+maxItems=0, options без вариантов — enum [null]. Caller-owned значения
+проходят прежнюю input normalization до генерации; ответ не исправляется.
+Wire cap учитывает повторённые в schema option strings и JSON escaping.
+
+[Cloudflare JSON Mode](https://developers.cloudflare.com/workers-ai/features/json-mode/)
+документирует valid JSON Schema и поддержку этой модели, но не публикует
+матрицу поддержки conditional keywords. Здесь используются существующие
+keywords, включая enum с целыми JSON objects, без if/then/else или новых
+combinators. Полные kind relations и отсутствие дубликатов заданы точными
+system rules; application validation остаётся окончательной, fail-closed.
+Поддержка конкретного schema payload провайдером требует authenticated smoke.
+
+[Карточка модели](https://developers.cloudflare.com/workers-ai/models/llama-3.1-8b-instruct-fast/)
+указывает context window 128000 и параметр max_tokens без опубликованного
+верхнего ограничения. Существующий max_completion_tokens=32768 сохранён
+как bounded provider ceiling, не как гарантия длины ответа или перевод bytes
+в tokens. Проверка acceptance этого ceiling с новой schema — часть smoke.
+Сохранены 30-second deadline, один request, отсутствие retry/fallback/repair,
+application byte limits, explicit-input-only и shared NoteDraft GLM boundary.
+
+`env change required: no`: код не меняет env keys, credentials loading или
+deployment contract. Authenticated smoke для нового head — PENDING.
