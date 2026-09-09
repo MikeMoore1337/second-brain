@@ -36,6 +36,13 @@ switch `role="switch"` с именем «Анимация», текущие `det
 намеренно завершается ошибкой с именем и состоянием недоступной иконки; его
 нельзя считать успешным evidence.
 
+`iconography.mjs` до `page.goto` слушает начало loopback-запросов и в начальной
+фазе (viewport 1200×1000, 750 мс) проверяет конкретные lazy-фоны
+`#memory > .pillar-backdrop` и `#growth > .pillar-backdrop`. Остальные ресурсы
+не считаются нарушением только по факту нахождения ниже первого экрана. Встроенный
+изолированный негативный браузер намеренно запрашивает фон «Память» раньше времени
+и должен обнаружить его путь даже при общем числе запросов меньше `ATLAS`.
+
 В сценарии reduced-motion `page-motion.mjs` сначала меняет media preference на
 видимой и работающей сцене, а затем перезагружает тот же изолированный контекст:
 текущий `useReducedMotion` получает preference при монтировании, после чего
@@ -46,7 +53,7 @@ runner проверяет замену switch в disclosure-навигации �
 | Вход | Решение | Что проверяет сейчас |
 | --- | --- | --- |
 | `web/qa/page-motion.mjs` | обновлён для v7 | disclosure-навигацию, keyboard focus, switch «Анимация», фактическое `currentTime` одной hero-анимации при stop/resume, отдельные offscreen/reduced-motion состояния |
-| `web/qa/iconography.mjs` | обновлён для v7 | локальный статический atlas как provenance и реальные React `data-icon`, видимость, bounded image polling, alt/aria-hidden, lazy-загрузку и иконки меню |
+| `web/qa/iconography.mjs` | обновлён для v7 | локальный статический atlas как provenance, реальные React `data-icon`, видимость, bounded image polling, alt/aria-hidden, иконки меню и конкретные deferred request-start проверки |
 | `web/qa/scene-recording.mjs` | обновлён для v7 | композицию hero, два блока «Память / Развитие», восемь ширин и запись переходов через текущее меню/switch |
 
 Статический atlas внутри `iconography.mjs` — проверка файлов и размеров,
@@ -69,7 +76,25 @@ runner проверяет замену switch в disclosure-навигации �
 исходники/static fixture. Они защищают текстовый контракт и не должны
 выдаваться за проверку браузера, физического телефона или screen reader.
 
-## Повторный проход PR #190
+## Точечный проход PR #190 — текущий head `1b4e997e2433e256613fdaf60d3fae8527b13e8a`
+
+Все результаты этого блока получены на одном и том же head `1b4e997e2433e256613fdaf60d3fae8527b13e8a`.
+
+- Обычный synthetic Edge-прогон `iconography.mjs`: 132 проверки; начальная фаза
+  содержала 16 WebP-запросов и не содержала запросов к двум конкретным deferred-фонам.
+- Задержка synthetic WebP-ответов 250 мс: 132 проверки; deferred-контракт прошёл.
+- Изолированный ранний запрос: нарушение обнаружено для
+  `/assets/memory-detail-192-DqK4JmCH.webp`; 17 запросов при размере `ATLAS` 22.
+- Повреждённая `timeline`-иконка: ожидаемая ошибка
+  `icon timeline did not load within 300ms (complete=true, naturalWidth=0)`;
+  это отдельный негативный сценарий.
+- `node --check web/qa/iconography.mjs`, `npm run check` (8 файлов / 37 тестов),
+  `npm run build`, targeted Python-контракты (3 passed) и `git diff --check` прошли.
+- Обязательный [CI run 34406544190](https://github.com/MikeMoore1337/second-brain/actions/runs/34406544190)
+  на этом head успешно завершил `quality`, обе frontend-проверки и
+  `windows-ssl-regression`.
+
+## Исторический проход PR #190 до проверки конкретных deferred-ресурсов
 
 Кодовые исправления внесены в head `43698f29de5ab1de6361c128f94e234bdef10c0b`
 (коммит `43698f2`), а итоговый head PR после обновления отчёта —
