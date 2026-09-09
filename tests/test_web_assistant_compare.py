@@ -341,6 +341,94 @@ def test_stage7_boundary_accepts_valid_localhost_port() -> None:
     assert len(assistant.calls) == 1
 
 
+@pytest.mark.parametrize(
+    "authority", ["[::1]", "[::1]:8080"], ids=["default-port", "explicit-port"]
+)
+def test_assistant_api_accepts_ipv6_loopback_and_reaches_service(authority: str) -> None:
+    assistant = RecordingAssistantWebService()
+    app = create_app(
+        assistant_web_service=assistant,
+        compare_web_service=RecordingCompareWebService(),
+    )
+
+    with TestClient(app, base_url=BASE_URL) as client:
+        response = client.post(
+            "/api/assistant",
+            json=_payload(),
+            headers={
+                "X-Second-Brain-Request": ASSISTANT_REQUEST_HEADER_VALUE,
+                "Host": authority,
+                "Origin": f"http://{authority}",
+            },
+        )
+
+    assert response.status_code == 200
+    assert len(assistant.calls) == 1
+
+
+@pytest.mark.parametrize(
+    "authority", ["[::1]", "[::1]:8080"], ids=["default-port", "explicit-port"]
+)
+def test_compare_api_accepts_ipv6_loopback_and_reaches_service(authority: str) -> None:
+    compare = RecordingCompareWebService()
+    app = create_app(
+        assistant_web_service=RecordingAssistantWebService(),
+        compare_web_service=compare,
+    )
+
+    with TestClient(app, base_url=BASE_URL) as client:
+        response = client.post(
+            "/api/compare",
+            json=_payload(),
+            headers={
+                "X-Second-Brain-Request": COMPARE_REQUEST_HEADER_VALUE,
+                "Host": authority,
+                "Origin": f"http://{authority}",
+            },
+        )
+
+    assert response.status_code == 200
+    assert len(compare.calls) == 1
+
+
+@pytest.mark.parametrize(
+    "authority",
+    ["[2001:db8::1]", "[::1", "[::1]:evil", "::1"],
+    ids=["non-loopback", "unclosed-bracket", "malformed-port", "unbracketed"],
+)
+@pytest.mark.parametrize(
+    ("path", "purpose"),
+    [
+        ("/api/assistant", ASSISTANT_REQUEST_HEADER_VALUE),
+        ("/api/compare", COMPARE_REQUEST_HEADER_VALUE),
+    ],
+    ids=["assistant", "compare"],
+)
+def test_stage7_rejects_non_loopback_or_malformed_ipv6_host_without_service_call(
+    authority: str,
+    path: str,
+    purpose: str,
+) -> None:
+    assistant = RecordingAssistantWebService()
+    compare = RecordingCompareWebService()
+    app = create_app(assistant_web_service=assistant, compare_web_service=compare)
+
+    with TestClient(app, base_url=BASE_URL) as client:
+        response = client.post(
+            path,
+            json=_payload(),
+            headers={
+                "X-Second-Brain-Request": purpose,
+                "Host": authority,
+                "Origin": f"http://{authority}",
+            },
+        )
+
+    assert response.status_code == 400
+    assert assistant.calls == []
+    assert compare.calls == []
+
+
 def test_compare_api_uses_separate_purpose_and_preserves_branch_separation() -> None:
     assistant = RecordingAssistantWebService()
     compare = RecordingCompareWebService()

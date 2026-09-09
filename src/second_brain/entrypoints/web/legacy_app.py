@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.responses import PlainTextResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from second_brain.application.decision_journal import (
@@ -225,7 +226,7 @@ _SAVE_PREFLIGHT_CODES: Final[frozenset[str]] = frozenset(
         "OUTCOME_DECISION_TARGET_INVALID",
     }
 )
-_TRUSTED_LOOPBACK_HOSTS: Final[frozenset[str]] = frozenset({"127.0.0.1", "localhost"})
+_TRUSTED_LOOPBACK_HOSTS: Final[frozenset[str]] = frozenset({"127.0.0.1", "localhost", "::1"})
 CONTENT_SECURITY_POLICY: Final[str] = (
     "default-src 'self'; "
     "base-uri 'none'; "
@@ -1372,7 +1373,7 @@ def _trusted_request_host(scope: Scope) -> bool:
 
 
 def _loopback_host_port(value: str, scheme: str) -> tuple[str, int] | None:
-    """Распознать только localhost/127.0.0.1 и нормализовать default port."""
+    """Распознать только loopback authorities и нормализовать default port."""
 
     if not value or any(character.isspace() for character in value):
         return None
@@ -1380,7 +1381,7 @@ def _loopback_host_port(value: str, scheme: str) -> tuple[str, int] | None:
         parsed = urlsplit(f"//{value}")
         hostname = parsed.hostname
         port = parsed.port
-    except ValueError:
+    except UnicodeError, ValueError:
         return None
     if (
         hostname is None
@@ -1390,11 +1391,49 @@ def _loopback_host_port(value: str, scheme: str) -> tuple[str, int] | None:
         or parsed.fragment
         or parsed.username is not None
         or parsed.password is not None
+        or parsed.netloc.endswith(":")
     ):
         return None
+    normalized_scheme = scheme.casefold()
     if port is None:
-        port = 443 if scheme == "https" else 80
+        port = 443 if normalized_scheme == "https" else 80
+    if not 1 <= port <= 65535:
+        return None
     return hostname.casefold(), port
+
+
+class _LoopbackTrustedHostMiddleware(TrustedHostMiddleware):
+    """Проверить Host строгим loopback authority parser, включая bracketed IPv6."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        super().__init__(
+            app,
+            allowed_hosts=["127.0.0.1", "localhost", "::1"],
+            www_redirect=False,
+        )
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] not in ("http", "websocket"):
+            await self.app(scope, receive, send)
+            return
+
+        host_present, host = _single_header(scope, "host")
+        scheme = str(scope.get("scheme", "")).casefold()
+        if scheme == "ws":
+            scheme = "http"
+        elif scheme == "wss":
+            scheme = "https"
+        if (
+            scheme in {"http", "https"}
+            and host_present
+            and host is not None
+            and _loopback_host_port(host, scheme) is not None
+        ):
+            await self.app(scope, receive, send)
+            return
+
+        response = PlainTextResponse("Invalid host header", status_code=400)
+        await response(scope, receive, send)
 
 
 def _invalid_request_code(path: str) -> str:
@@ -1537,8 +1576,7 @@ def create_app(
         openapi_url=None,
     )
     app.add_middleware(
-        TrustedHostMiddleware,
-        allowed_hosts=["127.0.0.1", "localhost"],
+        _LoopbackTrustedHostMiddleware,
     )
     app.add_middleware(
         DraftRequestBoundaryMiddleware,
