@@ -293,7 +293,9 @@ DTO, поэтому clock не является частью determinism contrac
 3. **#91 CLI Self Retrieval:** headless text/JSON projection exact DTO #89.
    CLI не получает path/body/UUID authority и не реализует core policy.
 4. После каждого slice — focused tests, затем один final Python 3.14 suite,
-   exact-head CI и независимый GitHub review по Night Shift protocol.
+   deterministic exact-head CI, aggregate GitHub status `checks` и применимые
+   task-specific human/external gates. Отдельный LLM/code-review verdict не
+   является частью release eligibility.
 
 Web/CLI могут быть начаты только после merged #89 и без `HUMAN_REQUIRED`.
 

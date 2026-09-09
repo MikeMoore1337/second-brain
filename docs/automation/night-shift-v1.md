@@ -2,7 +2,26 @@
 
 Этот документ фиксирует ограниченный протокол репозитория для issue [#79](https://github.com/MikeMoore1337/second-brain/issues/79). Он не является автономным runtime, daemon, scheduler или хранилищем изменяемого состояния.
 
-Машиночитаемая policy находится в [`config/night-shift-v1.yaml`](../../config/night-shift-v1.yaml), а детерминированный parser и gate helpers — в [`src/second_brain/application/night_shift.py`](../../src/second_brain/application/night_shift.py). Состояния GitHub issue/PR, комментарии, review threads, commit SHA и CI остаются операционным источником истины. Policy описывает правила, но не хранит историю запусков.
+Машиночитаемая policy находится в [`config/night-shift-v1.yaml`](../../config/night-shift-v1.yaml), а детерминированный parser и gate helpers — в [`src/second_brain/application/night_shift.py`](../../src/second_brain/application/night_shift.py). Состояния GitHub issue/PR, комментарии, существующие review threads, commit SHA и CI остаются операционным источником истины. Policy описывает правила, но не хранит историю запусков.
+
+## Постоянная политика качества
+
+По owner-level решению Codex Code Review отключён и не используется как gate
+релиза: он расходует Codex usage. Каноническая формулировка:
+
+```text
+Codex Code Review is disabled and must not be used as a release gate because it consumes Codex usage. Quality gates are deterministic CI/testing/static-analysis checks plus task-specific human/external gates where explicitly required.
+```
+
+Внутри текущей рабочей сессии implementer выполняет ограниченный self-review
+перед commit. Это не отдельная review-задача и не отдельный агент. Для PR
+проверяются только уже существующие GitHub review threads: если такие threads
+есть, их findings должны быть фактически исправлены или resolved; новый LLM
+review для этого не запускается.
+
+Внешняя настройка Codex Cloud/GitHub, если она автоматически запускает
+reviews, не хранится в этом репозитории. Это единственное действие вне repo:
+owner должен отключить её вручную, если она включена.
 
 ## Явная активация
 
@@ -33,7 +52,7 @@ blocked
 | Уровень | Реализация | Слияние |
 | --- | --- | --- |
 | `GREEN` | разрешена в утверждённом scope | возможно только при полном exact-SHA gate |
-| `YELLOW` | разрешены реализация, tests, PR и исправления review | требуется слияние человеком; зависимые задачи ждут решения |
+| `YELLOW` | разрешены реализация, tests, PR и исправления CI/QA findings | требуется слияние человеком; зависимые задачи ждут решения |
 | `RED` | жёсткая остановка | `HUMAN_REQUIRED`, без самостоятельного решения |
 
 RED включает canonical schema/version, `evidence_kind`, `self_kind`, migration, confidence/conflict/stale/supersede/preferences/values policy, границу Assistant/Simulate Me, provider/public Web/auth/privacy, destructive operation, новую БД/очередь/постоянный компонент, замену архитектуры, изменение roadmap и нерешённое продуктовое решение.
@@ -53,32 +72,50 @@ RED включает canonical schema/version, `evidence_kind`, `self_kind`, mig
 
 ```text
 max_tasks_per_night: 4
-max_review_fix_cycles_per_task: 3
 max_ci_fix_cycles_per_task: 3
 max_scope_expansion: 0
 ```
 
 Превышение любого лимита переводит задачу в `HUMAN_REQUIRED`. Повтор flaky CI не считается циклом исправления с изменением кода только при явном evidence и отсутствии изменения кода; повторение без evidence само становится human gate.
 
-## Проверка и слияние
+## Проверка, слияние и release gate
 
-Каждый PR должен содержать ссылку на issue, exact base/head SHA, краткое описание scope и checks. Reviewer независимо сверяет состояние GitHub и выдаёт verdict с exact reviewed head:
+Каждый PR должен содержать ссылку на issue, exact base/head SHA, краткое
+описание scope и checks. Последовательность unattended/autopilot workflow:
 
 ```text
-NIGHT_SHIFT: FIX_REQUIRED
-NIGHT_SHIFT: MERGE_READY
-NIGHT_SHIFT: HUMAN_REQUIRED
+implementation
+  -> targeted verification
+  -> self-review
+  -> commit/push
+  -> exact-head CI
+  -> PR
+  -> required GitHub checks
+  -> merge
+  -> deploy
+  -> production smoke/closeout
 ```
 
-`MERGE_READY` старого SHA нельзя применять к новому head. GREEN merge возможен только одновременно при выполнении всех условий:
+Шаги после commit выполняются только при отсутствии явного
+owner/human/external/destructive gate. Между CI и merge нет отдельного LLM
+review stage или verdict dependency.
 
-- exact reviewed head совпадает с current PR head;
-- проверки `quality` и `windows-ssl-regression` завершились успешно;
-- нет нерешённых review threads и accepted blockers;
+GREEN merge возможен только одновременно при выполнении всех условий:
+
+- current PR head и base — полные SHA, а все evidence привязаны к current head и
+  current base `main`;
+- `quality` и `windows-ssl-regression` завершились успешно;
+- обязательный aggregate GitHub status `checks` завершился успешно;
+- нет нерешённых существующих GitHub review threads и известных unresolved
+  BLOCKER/HIGH из реализации или QA;
 - PR имеет состояние `CLEAN`/mergeable;
 - scope не изменился;
 - dependency и human gates отсутствуют;
 - risk lane равен `GREEN`.
+
+`quality` включает relevant targeted tests, lint/format/typecheck и применимые
+integration/e2e checks. Отдельный review verdict не нужен. После merge для
+production-facing задачи обязательны штатные deploy, smoke и closeout.
 
 Метод merge — одобренный репозиторием squash. После merge нужно проверить новый SHA ветки `main` и закрытие issue.
 
@@ -122,8 +159,8 @@ orchestrator. `--dry-run`/`--list` только классифицирует к�
 разрешает один обычный `git worktree prune`. Helper никогда не использует
 `--force`, raw filesystem deletion, remote/local branch deletion или очистку по
 имени соседней папки. Ошибка cleanup даёт
-`cleanup_deferred`, сохраняет worktree и не является failure задачи, review/CI
-fix cycle или поводом для retry.
+`cleanup_deferred`, сохраняет worktree и не является failure задачи, CI-fix
+cycle или поводом для retry.
 
 После merge #128 этот lifecycle обязателен для всех последующих задач.
 

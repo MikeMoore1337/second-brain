@@ -15,7 +15,6 @@ from second_brain.application.night_shift import (
     MergeGateEvidence,
     NightShiftConfigError,
     NightShiftPolicy,
-    NightShiftVerdict,
     PostTaskCleanupEvidence,
     RiskLane,
     TaskCandidate,
@@ -40,18 +39,20 @@ def test_repository_policy_is_disabled_by_default_and_has_bounded_contract() -> 
     loaded = policy()
 
     assert loaded.enabled_by_default is False
+    assert loaded.schema_version == 2
     assert loaded.morning_cutoff_local == "08:00"
     assert loaded.timezone == "Europe/Moscow"
     assert loaded.failure_budget.max_tasks_per_night == 4
-    assert loaded.failure_budget.max_review_fix_cycles_per_task == 3
     assert loaded.failure_budget.max_ci_fix_cycles_per_task == 3
     assert loaded.failure_budget.max_scope_expansion == 0
     assert loaded.failure_budget.flaky_ci_retry_requires_no_code_change is True
     assert loaded.required_checks == ("quality", "windows-ssl-regression")
     assert loaded.merge_method == "squash"
+    assert not hasattr(loaded, "verdicts")
     assert loaded.allow_roadmap_next_task is False
     assert loaded.allow_create_next_issue is False
     assert loaded.post_task_cleanup.enabled_after_verified_green_merge is True
+    assert loaded.required_statuses == ("checks",)
     assert loaded.post_task_cleanup.helper == "scripts/worktree_cleanup.py"
     assert loaded.post_task_cleanup.prune_after_successful_removals is True
     assert loaded.post_task_cleanup.allow_force is False
@@ -294,7 +295,7 @@ def test_selection_hard_stops_on_persisted_red_human_gate() -> None:
     assert result.reasons == ("red_risk_lane",)
 
 
-def test_failure_budget_stops_review_loops_but_evidence_bound_flaky_retry_is_free() -> None:
+def test_failure_budget_stops_ci_fix_loops_but_evidence_bound_flaky_retry_is_free() -> None:
     loaded = policy()
 
     within = evaluate_failure_budget(
@@ -309,10 +310,10 @@ def test_failure_budget_stops_review_loops_but_evidence_bound_flaky_retry_is_fre
 
     exceeded = evaluate_failure_budget(
         loaded,
-        FailureBudgetUsage(review_fix_cycles=4),
+        FailureBudgetUsage(ci_fix_cycles=4),
     )
     assert exceeded.status is GateStatus.HUMAN_REQUIRED
-    assert "max_review_fix_cycles_per_task" in exceeded.reasons[0]
+    assert "max_ci_fix_cycles_per_task" in exceeded.reasons[0]
 
     no_evidence = evaluate_failure_budget(
         loaded,
@@ -352,16 +353,6 @@ def test_failure_budget_stops_review_loops_but_evidence_bound_flaky_retry_is_fre
             "failure_budget_exceeded:max_tasks_per_night",
         ),
         (
-            FailureBudgetUsage(review_fix_cycles=2),
-            GateStatus.READY,
-            "failure_budget_within_bounds",
-        ),
-        (
-            FailureBudgetUsage(review_fix_cycles=3),
-            GateStatus.HUMAN_REQUIRED,
-            "failure_budget_exceeded:max_review_fix_cycles_per_task",
-        ),
-        (
             FailureBudgetUsage(ci_fix_cycles=2),
             GateStatus.READY,
             "failure_budget_within_bounds",
@@ -387,33 +378,28 @@ def test_failure_budget_requires_remaining_operation_capacity(
 def _green_merge_evidence(
     *,
     risk_lane: RiskLane = RiskLane.GREEN,
-    review_verdict: NightShiftVerdict = NightShiftVerdict.MERGE_READY,
-    review_is_latest: bool | None = True,
     current_head_sha: str = "a" * 40,
-    reviewed_head_sha: str | None = None,
     current_base_ref: str = "main",
-    reviewed_base_ref: str | None = None,
     current_base_sha: str = "c" * 40,
-    reviewed_base_sha: str | None = None,
     check_heads: dict[str, str] | None = None,
     check_evidence: dict[str, CheckRunEvidence] | None = None,
     unresolved_review_threads: int = 0,
-    accepted_blockers: int = 0,
+    unresolved_blockers: int = 0,
     mergeable_clean: bool = True,
     dependency_satisfied: bool = True,
     human_gate: bool = False,
     scope_unchanged: bool = True,
 ) -> MergeGateEvidence:
+    loaded = policy()
+    default_check_heads = check_heads or {
+        gate_name: current_head_sha
+        for gate_name in (*loaded.required_checks, *loaded.required_statuses)
+    }
     return MergeGateEvidence(
         risk_lane=risk_lane,
-        review_verdict=review_verdict,
-        review_is_latest=review_is_latest,
         current_head_sha=current_head_sha,
-        reviewed_head_sha=reviewed_head_sha or current_head_sha,
         current_base_ref=current_base_ref,
-        reviewed_base_ref=reviewed_base_ref or current_base_ref,
         current_base_sha=current_base_sha,
-        reviewed_base_sha=reviewed_base_sha or current_base_sha,
         check_evidence=check_evidence
         or {
             check: CheckRunEvidence(
@@ -423,19 +409,10 @@ def _green_merge_evidence(
                 run_is_latest=True,
                 base_sha=current_base_sha,
             )
-            for index, (check, head_sha) in enumerate(
-                (
-                    check_heads
-                    or {
-                        "quality": current_head_sha,
-                        "windows-ssl-regression": current_head_sha,
-                    }
-                ).items(),
-                start=1,
-            )
+            for index, (check, head_sha) in enumerate(default_check_heads.items(), start=1)
         },
         unresolved_review_threads=unresolved_review_threads,
-        accepted_blockers=accepted_blockers,
+        unresolved_blockers=unresolved_blockers,
         mergeable_clean=mergeable_clean,
         dependency_satisfied=dependency_satisfied,
         human_gate=human_gate,
@@ -443,23 +420,29 @@ def _green_merge_evidence(
     )
 
 
-def test_merge_gate_requires_exact_reviewed_head_and_all_required_checks() -> None:
+def test_merge_gate_requires_exact_current_head_and_all_required_gates() -> None:
     loaded = policy()
     ready = evaluate_merge_gate(loaded, _green_merge_evidence())
     assert ready.status is GateStatus.MERGE_READY
 
-    stale_review = evaluate_merge_gate(
+    missing_aggregate_status = evaluate_merge_gate(
         loaded,
-        _green_merge_evidence(reviewed_head_sha="b" * 40),
+        _green_merge_evidence(
+            check_heads={
+                "quality": "a" * 40,
+                "windows-ssl-regression": "a" * 40,
+            }
+        ),
     )
-    assert stale_review.status is GateStatus.BLOCKED
+    assert missing_aggregate_status.status is GateStatus.BLOCKED
+    assert missing_aggregate_status.reasons == ("required_check_not_green:checks",)
 
-    abbreviated_review = evaluate_merge_gate(
+    abbreviated_head = evaluate_merge_gate(
         loaded,
-        _green_merge_evidence(current_head_sha="a" * 7, reviewed_head_sha="a" * 7),
+        _green_merge_evidence(current_head_sha="a" * 7),
     )
-    assert abbreviated_review.status is GateStatus.BLOCKED
-    assert abbreviated_review.reasons == ("reviewed_head_sha_is_not_full_commit_sha",)
+    assert abbreviated_head.status is GateStatus.BLOCKED
+    assert abbreviated_head.reasons == ("current_head_sha_is_not_full_commit_sha",)
 
     stale_check = evaluate_merge_gate(
         loaded,
@@ -542,34 +525,34 @@ def test_merge_gate_requires_exact_reviewed_head_and_all_required_checks() -> No
     assert stale_check_base.reasons == ("required_check_not_bound_to_current_base:quality",)
 
 
-def test_merge_gate_preserves_human_required_reviewer_verdict() -> None:
+def test_merge_gate_requires_existing_github_threads_to_be_resolved() -> None:
     result = evaluate_merge_gate(
         policy(),
-        _green_merge_evidence(review_verdict=NightShiftVerdict.HUMAN_REQUIRED),
+        _green_merge_evidence(unresolved_review_threads=1),
+    )
+
+    assert result.status is GateStatus.BLOCKED
+    assert result.reasons == ("unresolved_review_threads_present",)
+
+
+def test_merge_gate_requires_no_unresolved_blockers_from_implementation_or_qa() -> None:
+    result = evaluate_merge_gate(
+        policy(),
+        _green_merge_evidence(unresolved_blockers=1),
     )
 
     assert result.status is GateStatus.HUMAN_REQUIRED
-    assert result.reasons == ("review_verdict_is_human_required",)
+    assert result.reasons == ("unresolved_blockers_present",)
 
 
-def test_merge_gate_rejects_superseded_review_verdict() -> None:
+def test_merge_gate_requires_full_current_base_sha() -> None:
     result = evaluate_merge_gate(
         policy(),
-        _green_merge_evidence(review_is_latest=False),
+        _green_merge_evidence(current_base_sha="d" * 7),
     )
 
     assert result.status is GateStatus.BLOCKED
-    assert result.reasons == ("review_verdict_not_latest",)
-
-
-def test_merge_gate_rejects_stale_base_evidence() -> None:
-    result = evaluate_merge_gate(
-        policy(),
-        _green_merge_evidence(reviewed_base_sha="d" * 40),
-    )
-
-    assert result.status is GateStatus.BLOCKED
-    assert result.reasons == ("reviewed_base_sha_is_not_current_base",)
+    assert result.reasons == ("current_base_sha_is_not_full_commit_sha",)
 
 
 def test_current_merge_ready_task_remains_before_later_candidates() -> None:
