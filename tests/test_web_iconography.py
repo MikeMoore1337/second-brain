@@ -1,3 +1,9 @@
+"""Source checks for the React icon component and its local raster boundary.
+
+This module does not load a browser or prove that every icon is visible at
+runtime; ``web/qa/iconography.mjs`` covers that browser contract.
+"""
+
 import re
 from pathlib import Path
 

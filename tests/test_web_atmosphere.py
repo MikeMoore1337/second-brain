@@ -1,4 +1,8 @@
-"""Regression contracts for the React atmospheric layer in #116."""
+"""Source-level contracts for the React atmospheric layer.
+
+The assertions inspect ``web/src/styles.css``; they are not a browser or device
+check and do not replace the v7 Playwright runners.
+"""
 
 from __future__ import annotations
 

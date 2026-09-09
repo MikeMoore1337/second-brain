@@ -1,6 +1,11 @@
 # Visual Direction v1 — Cognitive Signal Lattice
 
-Статус: GREEN-контракт дизайна для production design track.
+Статус: исторический exploratory-документ направления v1. Действующий визуальный
+контракт production React GUI описан в [`DESIGN.md`](../../DESIGN.md), а его
+принятые v7-доказательства собраны в [`docs/design/evidence/186-v7/README.md`](evidence/186-v7/README.md).
+Этот документ сохранён для provenance; описанные ниже Cognitive Signal Lattice,
+IBM Plex и ранние rail/plate-ограничения не следует трактовать как обязательные
+правила текущего v7.
 
 Issue #108 — REDESIGN, не cosmetic polish. Production UI здесь не меняется:
 этот документ и [`DESIGN.md`](../../DESIGN.md) создают durable visual truth для

@@ -1,4 +1,8 @@
-"""Static contract tests for the #109 visual foundation."""
+"""Source-level checks for the active v7 token foundation.
+
+These tests read the shared static stylesheet and packaged HTML. They document
+the React import boundary but are not a browser rendering or accessibility run.
+"""
 
 from __future__ import annotations
 

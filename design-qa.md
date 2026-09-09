@@ -1,12 +1,130 @@
-Текущий проход: [v7 — открытые края и компактный нижний блок](docs/design/evidence/186-v7/README.md).
+# QA-контракт v7
 
-Текущий проход: [v6 — компактность и стекло](docs/design/evidence/186-v6/README.md).
+Текущий проход: [v7 — открытые края и компактное завершение](docs/design/evidence/186-v7/README.md).
+Канонический визуальный контракт: [`DESIGN.md`](DESIGN.md). PR #187 уже слит
+в `main` merge-коммитом `9382cc25a87a29c07c5613b109845304958f665e`; это не
+разрешение на deploy. Deploy, VPS, DNS, production-конфигурация, секреты и
+`second-brain-vault` остаются вне этой проверки.
 
-# Актуальная доработка v5: логотип, меню и сквозное движение
+## Текущие команды и входы
 
-[Результаты нового прохода, скриншоты и запись страницы](docs/design/evidence/186-v5/README.md).
-Логотип-мозг, выпадающие «Разделы», три крупные композиции и общая пауза.
-Ниже сохранён отчёт предыдущего прохода v4; актуальные замеры и проверки — по ссылке выше.
+Команды ниже относятся к production React GUI v7 и запускаются только на
+синтетическом loopback-сервере:
+
+```text
+uv run python -m web.qa.serve
+cd web
+npm ci
+npm run check
+npm run build
+SB_QA_OUT=../.local/design-v7 node qa/page-motion.mjs
+SB_QA_OUT=../.local/design-v7 node qa/iconography.mjs
+SB_QA_OUT=../.local/design-v7 node qa/scene-recording.mjs
+```
+
+`SB_QA_CHROMIUM` задаёт путь к локальному Chromium, если Playwright не видит
+свою установку. Эти runner’ы проверяют настоящие `Разделы`/`section-dropdown`,
+switch `role="switch"` с именем «Анимация», текущие `details/summary`, разделы
+и `data-icon`; отсутствие целевого элемента или нулевое число проверок даёт
+ошибку. `npm run qa:design`, `node qa/compact-glass.mjs` и `node qa/open-edges.mjs`
+остаются отдельными текущими проверками своих контрактов.
+
+Для проверки гонки lazy-изображений runner поддерживает изолированный режим
+`SB_QA_IMAGE_DELAY_MS=250 node qa/iconography.mjs`: ответ WebP задерживается,
+но условие `complete && naturalWidth > 0` ожидается polling’ом. Негативный
+`SB_QA_IMAGE_TIMEOUT_MS=250 SB_QA_FAIL_ICON=timeline node qa/iconography.mjs`
+намеренно завершается ошибкой с именем и состоянием недоступной иконки; его
+нельзя считать успешным evidence.
+
+`iconography.mjs` до `page.goto` слушает начало loopback-запросов и в начальной
+фазе (viewport 1200×1000, 750 мс) проверяет конкретные lazy-фоны
+`#memory > .pillar-backdrop` и `#growth > .pillar-backdrop`. Остальные ресурсы
+не считаются нарушением только по факту нахождения ниже первого экрана. Встроенный
+изолированный негативный браузер намеренно запрашивает фон «Память» раньше времени
+и должен обнаружить его путь даже при общем числе запросов меньше `ATLAS`.
+
+В сценарии reduced-motion `page-motion.mjs` сначала меняет media preference на
+видимой и работающей сцене, а затем перезагружает тот же изолированный контекст:
+текущий `useReducedMotion` получает preference при монтировании, после чего
+runner проверяет замену switch в disclosure-навигации русским пояснением.
+
+## Решения по трём runner’ам
+
+| Вход | Решение | Что проверяет сейчас |
+| --- | --- | --- |
+| `web/qa/page-motion.mjs` | обновлён для v7 | disclosure-навигацию, keyboard focus, switch «Анимация», фактическое `currentTime` одной hero-анимации при stop/resume, отдельные offscreen/reduced-motion состояния |
+| `web/qa/iconography.mjs` | обновлён для v7 | локальный статический atlas как provenance, реальные React `data-icon`, видимость, bounded image polling, alt/aria-hidden, иконки меню и конкретные deferred request-start проверки |
+| `web/qa/scene-recording.mjs` | обновлён для v7 | композицию hero, два блока «Память / Развитие», восемь ширин и запись переходов через текущее меню/switch |
+
+Статический atlas внутри `iconography.mjs` — проверка файлов и размеров,
+а не браузерное доказательство React-рендера. Исторические runner’ы и их
+артефакты v3–v6 сохранены по ссылкам ниже и не переписываются.
+
+## Матрица затрагиваемых контрактов
+
+| Документ / селектор | Реализация | Тест или runner |
+| --- | --- | --- |
+| `DESIGN.md` v7; `.sections-trigger`, `#section-dropdown`, `role="switch"` «Анимация» | `web/src/section-menu.tsx`, `web/src/page-motion.tsx` | `web/src/test/section-menu.test.tsx`, `web/qa/page-motion.mjs` |
+| `details/summary`, текущие `#decision-journal` … `#diagnostics` | `web/src/fold-section.tsx`, `web/src/App.tsx` | `web/src/test/fold-section.test.tsx`, `web/qa/page-motion.mjs` |
+| `data-icon`, локальные WebP и логотип | `web/src/icons.tsx`, `web/src/App.tsx` | `web/src/test/iconography.test.tsx`, `tests/test_web_iconography.py`, `web/qa/iconography.mjs` |
+| hero `data-moving`, `data-depth`, `#memory`/`#growth` | `web/src/cinematic-hero.tsx`, `web/src/App.tsx` | `web/src/test/cinematic-hero.test.tsx`, `web/qa/scene-recording.mjs` |
+| `--sb-*` palette/gradient/focus/motion tokens | `src/second_brain/entrypoints/web/static/app.css`, импорт через `web/src/styles.css` | `tests/test_design_tokens.py`, `tests/test_web_motion.py` (source-level, не browser) |
+| bounded atmosphere selectors в `web/src/styles.css` | React stylesheet source | `tests/test_web_atmosphere.py` (source-level, не browser) |
+
+`tests/test_web_atmosphere.py`, `tests/test_design_tokens.py`,
+`tests/test_web_motion.py` и `tests/test_web_iconography.py` намеренно читают
+исходники/static fixture. Они защищают текстовый контракт и не должны
+выдаваться за проверку браузера, физического телефона или screen reader.
+
+## Точечный проход PR #190 — текущий head `1b4e997e2433e256613fdaf60d3fae8527b13e8a`
+
+Все результаты этого блока получены на одном и том же head `1b4e997e2433e256613fdaf60d3fae8527b13e8a`.
+
+- Обычный synthetic Edge-прогон `iconography.mjs`: 132 проверки; начальная фаза
+  содержала 16 WebP-запросов и не содержала запросов к двум конкретным deferred-фонам.
+- Задержка synthetic WebP-ответов 250 мс: 132 проверки; deferred-контракт прошёл.
+- Изолированный ранний запрос: нарушение обнаружено для
+  `/assets/memory-detail-192-DqK4JmCH.webp`; 17 запросов при размере `ATLAS` 22.
+- Повреждённая `timeline`-иконка: ожидаемая ошибка
+  `icon timeline did not load within 300ms (complete=true, naturalWidth=0)`;
+  это отдельный негативный сценарий.
+- `node --check web/qa/iconography.mjs`, `npm run check` (8 файлов / 37 тестов),
+  `npm run build`, targeted Python-контракты (3 passed) и `git diff --check` прошли.
+- Обязательный [CI run 34406544190](https://github.com/MikeMoore1337/second-brain/actions/runs/34406544190)
+  на этом head успешно завершил `quality`, обе frontend-проверки и
+  `windows-ssl-regression`.
+
+## Исторический проход PR #190 до проверки конкретных deferred-ресурсов
+
+Кодовые исправления внесены в head `43698f29de5ab1de6361c128f94e234bdef10c0b`
+(коммит `43698f2`), а итоговый head PR после обновления отчёта —
+`6867c04c04f0d60da0daa0007b88afdc94c4cfa5`; база PR —
+`1814ce74bc9a02a81ccf42d1502945ef206124b9`. CI run `34400232997` на кодовом
+head и финальный run `34400528312` на итоговом head завершились успешно для
+всех четырёх job: `quality`, `windows-ssl-regression`, `frontend
+(ubuntu-latest)` и `frontend (windows-latest)`. PR #190 остаётся открытым;
+merge и deploy не выполнялись.
+
+- `iconography.mjs`: 126 проверок в обычном контексте и 126 при задержке WebP
+  250 мс; отдельный изолированный сценарий с повреждённой `timeline` ожидаемо
+  завершился диагностикой `complete=true, naturalWidth=0` после 300 мс.
+- `page-motion.mjs`: 326 проверок на ширинах 320/360/390/430/768/1024/1440/1920;
+  одна и та же `brain-region-front:thought-awaken` подтверждена как running,
+  paused со стабильным `currentTime`, resumed с продвижением, остановленная
+  вне экрана и остановленная reduced-motion. `scene-recording.mjs` прошёл с
+  85 проверками и сохранил видео/скриншоты в `.local/design-v7`.
+- Локально прошли `npm run check`, `npm run build`, targeted Python-контракты
+  (13 passed), `ruff format --check`, `ruff check`, `mypy` и полный Python 3.14
+  suite (1867 passed, 10 skipped, 2 warnings). Физический телефон, реальная
+  вкладка hidden, screen reader и live/provider операции не проверялись.
+
+## Исторический отчёт v5 / до v7
+
+Ниже сохранены результаты и ограничения прежнего прохода. Его числовые
+замеры, старые head’ы и команды не являются текущим v7 evidence; актуальные
+команды находятся выше. Ссылки на v5 и v6 оставлены для сравнения.
+
+[Исторические материалы v5: логотип, меню и сквозное движение](docs/design/evidence/186-v5/README.md).
 
 # Проверка смыслового редизайна — Issue #186 / PR #187
 
@@ -131,9 +249,10 @@ Mobile — браузерная эмуляция. INP полевых польз�
 новая графика сохраняет тот же контроллер. Остановка именно при настоящем скрытии
 вкладки **не подтверждена** и не выдаётся за проверку физического устройства.
 
-## Воспроизведение и доставка
+## Историческое воспроизведение и доставка
 
-Из корня: `uv run python -m web.qa.serve`. Из `web/`:
+Следующие команды сохранены как воспроизводимость исторического отчёта, а не
+как единственный текущий v7 вход. Из корня: `uv run python -m web.qa.serve`. Из `web/`:
 `npm ci`, `npm run build`, `npx playwright install chromium`,
 `npm run qa:design`. Дополнительно: `node qa/iconography.mjs`,
 `node qa/scene-recording.mjs`. Для замеров отдельно:
@@ -145,7 +264,8 @@ Mobile — браузерная эмуляция. INP полевых польз�
 Расширенные локальные артефакты: `.local/design-v4/`.
 Предыдущие доказательства сохранены в `docs/design/evidence/186-v3/`.
 
-Один существующий PR #187. Независимое review окончательного head фиксируется
-отдельно в PR; старое review неприменимо к новым изменениям.
-Merge/deploy не выполняются по прямому указанию владельца.
+Исторический отчёт относится к PR #187; его старые review/evidence не являются
+проверкой этой задачи. GitHub Codex Code Review для этой задачи не запрашивался.
+Merge #187 уже состоялся (см. точный SHA в начале файла); deploy по-прежнему
+не выполняется.
 
