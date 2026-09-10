@@ -8,9 +8,7 @@ import pytest
 
 REPOSITORY_ROOT = Path(__file__).parents[1]
 AUTODEPLOY_SCRIPT = REPOSITORY_ROOT / "deploy" / "autodeploy.sh"
-AUTODEPLOY_WORKFLOW = (
-    REPOSITORY_ROOT / ".github" / "workflows" / "deploy-production.yml"
-)
+AUTODEPLOY_WORKFLOW = REPOSITORY_ROOT / ".github" / "workflows" / "deploy-production.yml"
 
 
 def test_autodeploy_script_has_strict_exact_sha_release_contract() -> None:
