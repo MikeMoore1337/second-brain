@@ -126,6 +126,9 @@ settings или другие артефакты installer cache.
   MIT; локальная копия [LICENSE](licenses/emil-skills-LICENSE.txt) сохранена
   рядом с payload.
 * Installer для Emil skills: [vercel-labs/skills](https://github.com/vercel-labs/skills).
+* Bundled `modern-screenshot.umd.js`: пакет `modern-screenshot`, MIT; локальная
+  копия [LICENSE](licenses/modern-screenshot-LICENSE.txt) сохранена рядом с
+  остальными notices.
 
 Внешние upstream-ссылки здесь нужны для обновления и аудита происхождения; они
 не превращают design tooling в runtime dependency приложения.
