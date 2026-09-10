@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+# This workflow is intentionally limited to a successful CI workflow_run for a
+# push to this repository's main branch. Fork and pull-request contexts never
+# receive the production environment or SSH secrets.
 concurrency:
   group: second-brain-production
   cancel-in-progress: false
@@ -34,7 +37,7 @@ jobs:
 
     steps:
       - name: Checkout exact tested SHA
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ env.DEPLOY_SHA }}
           persist-credentials: false

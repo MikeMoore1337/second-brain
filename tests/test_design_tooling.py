@@ -128,3 +128,6 @@ def test_provenance_and_licenses_are_present() -> None:
     assert (PROJECT_ROOT / "docs" / "design" / "licenses" / "impeccable-LICENSE.txt").is_file()
     assert (PROJECT_ROOT / "docs" / "design" / "licenses" / "impeccable-NOTICE.md").is_file()
     assert (PROJECT_ROOT / "docs" / "design" / "licenses" / "emil-skills-LICENSE.txt").is_file()
+    assert (
+        PROJECT_ROOT / "docs" / "design" / "licenses" / "modern-screenshot-LICENSE.txt"
+    ).is_file()

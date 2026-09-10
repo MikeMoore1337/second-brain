@@ -39,7 +39,7 @@ OWNER_ID = "42142321"
 BASE_URL = "https://brain.example.test"
 CLIENT_ID = "github-client-id"
 CLIENT_SECRET = "github-client-secret"
-SESSION_SECRET = "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY"
+SESSION_SECRET = "test-session-secret-not-a-credential-000000"
 FIXED_NOW = 1_800_000_000.0
 
 
