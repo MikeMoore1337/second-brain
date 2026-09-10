@@ -8,6 +8,7 @@ import pytest
 
 REPOSITORY_ROOT = Path(__file__).parents[1]
 AUTODEPLOY_SCRIPT = REPOSITORY_ROOT / "deploy" / "autodeploy.sh"
+RELEASE_CONTROL = REPOSITORY_ROOT / "deploy" / "root" / "second-brain-release-control"
 AUTODEPLOY_WORKFLOW = REPOSITORY_ROOT / ".github" / "workflows" / "deploy-production.yml"
 
 
@@ -28,8 +29,9 @@ def test_autodeploy_script_has_strict_exact_sha_release_contract() -> None:
         "npm ci",
         "npm run check",
         "npm run build",
-        'mv -T -- "$NEXT_LINK" "$CURRENT_LINK"',
-        "/usr/bin/sudo -n /usr/bin/systemctl restart second-brain-web.service",
+        "/usr/local/sbin/second-brain-release-control",
+        '"$RELEASE_CONTROL" activate "$TARGET_SHA"',
+        '"$RELEASE_CONTROL" rollback "$PREVIOUS_SHA"',
         "rollback_and_fail",
         "http://127.0.0.1:8123/healthz",
         "https://brain.mikemoore.top/healthz",
@@ -40,9 +42,10 @@ def test_autodeploy_script_has_strict_exact_sha_release_contract() -> None:
 def test_autodeploy_script_keeps_root_config_and_vault_fail_closed() -> None:
     script = AUTODEPLOY_SCRIPT.read_text(encoding="utf-8")
 
-    assert 'diff --quiet "$PREVIOUS_SHA" "$TARGET_SHA" -- deploy/systemd deploy/caddy' in script
+    assert "deploy/systemd deploy/caddy deploy/root" in script
     assert "autodeploy его не обновляет" in script
     assert "первый production deploy выполняется owner-managed" in script
+    assert '[[ -w "$SECOND_BRAIN_ROOT" ]]' not in script
 
     lowered = script.lower()
     for forbidden in (
@@ -60,16 +63,48 @@ def test_autodeploy_script_keeps_root_config_and_vault_fail_closed() -> None:
         assert forbidden not in lowered
 
 
-@pytest.mark.skipif(shutil.which("bash") is None, reason="bash is required")
-def test_autodeploy_script_has_valid_bash_syntax() -> None:
-    completed = subprocess.run(
-        ["bash", "-n", str(AUTODEPLOY_SCRIPT)],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+def test_release_control_is_narrow_root_owned_contract() -> None:
+    helper = RELEASE_CONTROL.read_text(encoding="utf-8")
 
-    assert completed.returncode == 0, completed.stderr
+    assert helper.startswith("#!/usr/bin/env bash\nset -euo pipefail")
+    for required in (
+        "CONTRACT_VERSION=1",
+        '[[ "$(id -u)" == "0" ]]',
+        "activate|rollback",
+        '[[ "$SHA" =~ ^[0-9a-f]{40}$ ]]',
+        'TARGET="$RELEASES_ROOT/$SHA"',
+        '/usr/bin/ln -s "releases/$SHA" "$NEXT_LINK"',
+        '/usr/bin/mv -T -- "$NEXT_LINK" "$CURRENT_LINK"',
+        '/usr/bin/systemctl restart "$SERVICE"',
+    ):
+        assert required in helper
+
+    lowered = helper.lower()
+    for forbidden in (
+        "eval ",
+        "bash -c",
+        "sh -c",
+        "git reset",
+        "git clean",
+        "rm -rf",
+        "chmod",
+        "chown",
+        "caddy",
+        "firewall",
+    ):
+        assert forbidden not in lowered
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash is required")
+def test_deployment_shell_scripts_have_valid_bash_syntax() -> None:
+    for script in (AUTODEPLOY_SCRIPT, RELEASE_CONTROL):
+        completed = subprocess.run(
+            ["bash", "-n", str(script)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert completed.returncode == 0, completed.stderr
 
 
 def test_production_workflow_is_ci_gated_and_least_privilege() -> None:
