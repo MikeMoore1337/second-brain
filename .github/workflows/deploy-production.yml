@@ -1,0 +1,87 @@
+name: Deploy production
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: second-brain-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      ${{
+        vars.PRODUCTION_DEPLOY_ENABLED == 'true' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.head_repository.full_name == github.repository
+      }}
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+      PRODUCTION_SSH_HOST: ${{ vars.PRODUCTION_SSH_HOST }}
+      PRODUCTION_SSH_PORT: ${{ vars.PRODUCTION_SSH_PORT }}
+      PRODUCTION_SSH_USER: ${{ vars.PRODUCTION_SSH_USER }}
+      PRODUCTION_SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+      PRODUCTION_SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
+
+    steps:
+      - name: Checkout exact tested SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+          persist-credentials: false
+
+      - name: Validate trusted deploy inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify HEAD)" = "$DEPLOY_SHA"
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$PRODUCTION_SSH_HOST" =~ ^[A-Za-z0-9._:-]+$ ]]
+          [[ "$PRODUCTION_SSH_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]
+          [[ "$PRODUCTION_SSH_PORT" =~ ^[0-9]{1,5}$ ]]
+          (( PRODUCTION_SSH_PORT >= 1 && PRODUCTION_SSH_PORT <= 65535 ))
+          test -n "$PRODUCTION_SSH_PRIVATE_KEY"
+          test -n "$PRODUCTION_SSH_KNOWN_HOSTS"
+
+      - name: Configure pinned SSH identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$PRODUCTION_SSH_PRIVATE_KEY" > "$HOME/.ssh/production_deploy_key"
+          printf '%s\n' "$PRODUCTION_SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/production_deploy_key" "$HOME/.ssh/known_hosts"
+
+      - name: Deploy exact CI SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh \
+            -i "$HOME/.ssh/production_deploy_key" \
+            -p "$PRODUCTION_SSH_PORT" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=3 \
+            "$PRODUCTION_SSH_USER@$PRODUCTION_SSH_HOST" \
+            "bash -s -- --sha '$DEPLOY_SHA'" < deploy/autodeploy.sh
+
+      - name: Remove runner SSH material
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$HOME/.ssh/production_deploy_key" "$HOME/.ssh/known_hosts"
