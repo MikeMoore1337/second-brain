@@ -316,12 +316,14 @@ post-write validation и receipt-based rollback.
 ## VPS runtime
 
 Первичный user-level bootstrap и безопасное обновление Linux layout описаны в
-[runbook VPS runtime](docs/deployment/vps.md). Реальный SSH/deploy, web/API,
-systemd и reverse proxy в текущий этап не входят.
+[runbook VPS runtime](docs/deployment/vps.md). Отдельный воспроизводимый
+ручной контракт будущего production Web deployment описан в
+[web production runbook](docs/deployment/web-production.md); этот repository
+не выполняет реальный SSH/deploy, DNS/VPS mutation или создание secrets.
 
 Owner-only GitHub OAuth для будущего публичного Web GUI описан в
 [руководстве Web авторизации](docs/deployment/web-auth.md). Создание OAuth App,
-production secrets, DNS/Caddy/VPS и deployment остаются отдельным
+production secrets, DNS/Caddy/VPS и реальный deployment остаются отдельным
 owner/external checkpoint.
 
 ## Безопасное создание managed note

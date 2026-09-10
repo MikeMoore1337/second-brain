@@ -2,7 +2,10 @@
 
 Этот runbook подготавливает воспроизводимое user-level окружение для текущих
 CLI use cases Second Brain. На этом этапе приложение не является long-running
-service и не публикует web/API endpoint.
+service и не публикует web/API endpoint. Production Web contract для
+`brain.mikemoore.top` описан отдельно в
+[web production runbook](web-production.md); этот документ остаётся базовым
+CLI/bootstrap runbook и сам не устанавливает или не изменяет service/proxy.
 
 ## Границы и результат
 
@@ -250,11 +253,9 @@ files или вывод диагностики.
 `vault validate`. Сохраните состояние для ручного разбора; bootstrap не пытается
 лечить repository или vault.
 
-В issue #9 сознательно не входят: real SSH/deploy на VPS, systemd service или
-timer/cron, Docker/Compose, Caddy/Nginx, DNS/TLS и
-`brain.mikemoore.top`, FastAPI/Web UI/API, Telegram, LLM, Search/FTS, Agent
-Reach, RAG/embeddings, Redis/Celery/Kafka, monitoring/alerts, auto-update daemon
-и backup system сверх Git. systemd появится только вместе с реальным
-long-running worker/scheduler use case; Agent Reach должен жить в отдельном
-environment/config location и не добавляется в `pyproject.toml`, vault или
-runtime bootstrap.
+Этот bootstrap по-прежнему не выполняет real SSH/deploy на VPS, не меняет
+systemd, timer/cron, Docker/Compose, Caddy/Nginx, DNS/TLS, FastAPI/Web
+UI/API, firewall или system packages. Для отдельного ручного production Web
+deployment используйте [web production runbook](web-production.md).
+Agent Reach должен жить в отдельном environment/config location и не
+добавляется в `pyproject.toml`, vault или runtime bootstrap.
