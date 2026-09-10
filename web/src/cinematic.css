@@ -62,11 +62,11 @@ button,input,textarea,select { font-family:var(--sb-font-sans); }
 .thought-link-2 .connection-pulse { animation-duration:17s;animation-delay:-11s; }
 .thought-link-3 .connection-pulse { animation-duration:19s;animation-delay:-3s; }
 .stage-fragments { z-index:4; }
-.thought-fragment { position:absolute; display:flex; flex-direction:column; gap:16px; padding:20px; width:144px; border:1px solid #c49aff50; border-radius:14px; background:linear-gradient(145deg,#352045eb,#100b18ed); box-shadow:0 16px 36px #0006,inset 0 1px #e9d5ff20; color:#e9d5ff; animation:thought-float 10s ease-in-out infinite alternate; }
+.thought-fragment { position:absolute; display:flex; flex-direction:column; gap:16px; padding:20px; width:184px; border:1px solid #c49aff50; border-radius:14px; background:linear-gradient(145deg,#352045eb,#100b18ed); box-shadow:0 16px 36px #0006,inset 0 1px #e9d5ff20; color:#e9d5ff; animation:thought-float 10s ease-in-out infinite alternate; }
 .fragment-one { left:7%; top:18%; transform:rotate(-12deg); animation-delay:-2s; }
-.fragment-two { right:0; top:33%; width:126px; transform:rotate(10deg); animation-duration:13s; animation-delay:-7s; }
-.fragment-three { left:18%; bottom:10%; width:132px; transform:rotate(-8deg); animation-duration:12s; animation-delay:-4s; }
-.fragment-four { right:17%; top:3%; width:100px; opacity:.7; transform:rotate(14deg); animation-duration:15s; animation-delay:-10s; }
+.fragment-two { right:0; top:33%; width:176px; transform:rotate(10deg); animation-duration:13s; animation-delay:-7s; }
+.fragment-three { left:18%; bottom:10%; width:172px; transform:rotate(-8deg); animation-duration:12s; animation-delay:-4s; }
+.fragment-four { right:17%; top:3%; width:176px; opacity:.7; transform:rotate(14deg); animation-duration:15s; animation-delay:-10s; }
 .fragment-label { font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:#c49aff; }
 .fragment-thought { font-size:18px; font-weight:450; line-height:1.35; letter-spacing:-.03em; }
 .fragment-rule { display:block; width:80%; height:1px; background:linear-gradient(90deg,#c49aff80,transparent); }
@@ -185,11 +185,11 @@ main > section.context-enter::after { display:block; content:""; position:absolu
   .universe-search { padding:10px 8px; }
   .memory-stage { width:450px; height:450px; left:50%; margin-left:-225px; top:416px; }
   .brain-assembly { width:76%; left:12%; top:16%; }
-  .thought-fragment { width:105px; padding:13px; gap:10px; border-radius:10px; }
+  .thought-fragment { width:142px; padding:13px; gap:10px; border-radius:10px; }
   .fragment-thought { font-size:14px; }
   .fragment-label { font-size:9px; }
   .fragment-one { left:18%;top:16%; }
-  .fragment-two { right:15%;top:57%;width:96px; font-size:12px; }
+  .fragment-two { right:15%;top:57%;width:140px; font-size:12px; }
   .fragment-three,.fragment-four,.thought-link-2,.thought-link-3,.particle-6,.particle-7,.particle-8,.particle-9,.particle-10,.particle-11,.pointer-light { display:none; }
   .haze-breath,.brain-region-back { animation:none; }
   .universe-caption { left:24px; right:24px; bottom:12px; flex-wrap:wrap; gap:8px; }

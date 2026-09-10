@@ -88,10 +88,10 @@ export function CinematicHero(): ReactElement {
         </div>
         <div className="stage-brain" data-depth="6"><div className="brain-assembly"><img className="memory-brain" src={brainLarge} srcSet={`${brainSmall} 480w, ${brainLarge} 800w`} sizes="(max-width: 600px) 330px, 540px" alt="" width="800" height="800" /><div className="brain-region brain-region-front" /><div className="brain-region brain-region-middle" /><div className="brain-region brain-region-back" /></div></div>
         <div className="stage-fragments" data-depth="16">
-          <div className="thought-fragment fragment-one"><span className="fragment-label">Наблюдение</span><span className="fragment-thought">Всё начинается<br />с мысли.</span><span className="fragment-rule" /></div>
-          <div className="thought-fragment fragment-two"><Icon name="relation" size={22} /><span>Связь с идеей</span><span className="fragment-rule" /></div>
+          <div className="thought-fragment fragment-one"><span className="fragment-label">Наблюдение</span><span className="fragment-thought">Всё начинается<br />с мысли.</span></div>
+          <div className="thought-fragment fragment-two"><span className="fragment-label">Связи</span><span className="fragment-thought">Одна мысль.<br />Новая идея.</span></div>
           <div className="thought-fragment fragment-three"><span className="fragment-label">К важному</span><span className="fragment-thought">Вернуться.<br />Осмыслить.</span></div>
-          <div className="thought-fragment fragment-four"><Icon name="memory" size={20} /><span className="fragment-rule" /><span className="fragment-rule" /></div>
+          <div className="thought-fragment fragment-four"><span className="fragment-label">Память</span><span className="fragment-thought">Сохранить<br />важное.</span></div>
         </div>
         <div className="stage-particles" data-depth="20">{Array.from({length: 12}, (_, i) => <i key={i} className={`light-particle particle-${i}`} />)}</div>
         <div className="pointer-light" data-depth="28" />
