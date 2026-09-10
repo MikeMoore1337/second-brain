@@ -7,7 +7,7 @@ After=network-online.target
 Type=simple
 User=second-brain
 Group=second-brain
-WorkingDirectory=/srv/second-brain/second-brain
+WorkingDirectory=/srv/second-brain/current
 
 # Замените этот абсолютный путь результатом `command -v uv` на VPS.
 # Environment file находится вне обоих repositories и должен иметь mode 600.

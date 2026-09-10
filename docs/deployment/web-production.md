@@ -51,7 +51,7 @@ host option, а `uvicorn.run` запускается с `host="127.0.0.1"`, вы
 Tracked artifacts:
 
 - [systemd unit template](../../deploy/systemd/second-brain-web.service);
-- [Caddyfile template](../../deploy/caddy/Caddyfile.example);
+- [Caddy site snippet](../../deploy/caddy/brain.mikemoore.top.caddy);
 - [базовый VPS/bootstrap runbook](vps.md);
 - [существующий OAuth contract](web-auth.md).
 
@@ -61,20 +61,27 @@ Tracked artifacts:
 
 ```text
 /srv/second-brain/
-├── second-brain/
+├── second-brain/                         # control/source checkout
 ├── second-brain-vault/
+├── releases/
+│   └── <APPLICATION_SHA>/                # clean detached release worktree
+├── current -> releases/<ACTIVE_SHA>
 └── runtime/
     └── web.env
 ```
 
-`second-brain/` и `second-brain-vault/` должны быть отдельными обычными Git
-worktrees. `runtime/web.env` находится вне обоих repositories, не копируется в
+`second-brain/` — только control/source checkout для fetch и fast-forward
+обновления. Production service никогда не работает из этого mutable path.
+Каждый candidate строится в отдельном clean detached worktree
+`releases/<APPLICATION_SHA>`, а `current` — стабильная ссылка на последний
+активированный release. `second-brain-vault/` остаётся отдельным обычным Git
+worktree. `runtime/web.env` находится вне обоих repositories, не копируется в
 vault и не добавляется в Git.
 
 Systemd template использует:
 
 - `User=second-brain` и `Group=second-brain`;
-- `WorkingDirectory=/srv/second-brain/second-brain`;
+- `WorkingDirectory=/srv/second-brain/current`;
 - protected `EnvironmentFile=/srv/second-brain/runtime/web.env`;
 - `ExecStart` через абсолютный путь к `uv`, `--python 3.14`, `--no-sync`,
   текущий CLI и явный `--port 8123`.
@@ -82,11 +89,12 @@ Systemd template использует:
 Путь `/usr/local/bin/uv` в template — безопасный placeholder для абсолютного
 пути. До установки unit его нужно заменить на фактический результат
 `command -v uv` на выбранном VPS. В unit нет secrets, OAuth values или
-Cloudflare credentials.
+Cloudflare credentials. `current` должен быть symlink на готовый release; unit
+не запускает fetch, sync, npm или build.
 
 `--no-sync` намеренно запрещает изменять или обновлять environment при старте
-service. Locked dependency installation выполняется отдельным release step:
-`uv sync --locked --python 3.14`.
+service. Locked dependency installation выполняется отдельным release step в
+candidate worktree: `uv sync --locked --python 3.14`.
 
 Hardening ограничен совместимыми настройками: `ProtectSystem=full` делает
 системные области read-only, но не блокирует Safe Write в sibling vault под
@@ -150,9 +158,10 @@ repository task:
 1. Выбрать Linux VPS и отдельного непривилегированного service user. Убедиться,
    что user может читать application files и выполнять Safe Write в private
    vault.
-2. Создать два независимых sibling checkout в layout выше и private
-   `runtime/web.env` с mode `600`. Не создавать файл с production values в
-   repository.
+2. Создать control checkout, private sibling vault, `releases/` и
+   `runtime/web.env` с mode `600` в layout выше. `current` должен отсутствовать
+   при first deployment или уже быть symlink на release. Не создавать файл с
+   production values в repository.
 3. Создать DNS `A` и/или `AAAA` record для `brain.mikemoore.top`, указывающий
    на VPS. Конкретный DNS provider этим repository не предполагается.
 4. До TLS enablement проверить, что DNS резолвится на ожидаемый VPS и что
@@ -236,6 +245,11 @@ command -v python3.14
 test -r /srv/second-brain/runtime/web.env
 test -d /srv/second-brain/second-brain
 test -d /srv/second-brain/second-brain-vault
+test -d /srv/second-brain/releases
+if [ -e /srv/second-brain/current ] || [ -L /srv/second-brain/current ]; then
+    test -L /srv/second-brain/current
+    readlink /srv/second-brain/current
+fi
 ```
 
 `node`/`npm` обязательны только если frontend build выполняется на VPS. Для
@@ -281,6 +295,8 @@ application SHA во внешнем deployment record:
 SECOND_BRAIN_ROOT=/srv/second-brain
 APP_ROOT="$SECOND_BRAIN_ROOT/second-brain"
 VAULT_ROOT="$SECOND_BRAIN_ROOT/second-brain-vault"
+RELEASES_ROOT="$SECOND_BRAIN_ROOT/releases"
+CURRENT_LINK="$SECOND_BRAIN_ROOT/current"
 RUNTIME_ENV="$SECOND_BRAIN_ROOT/runtime/web.env"
 PUBLIC_BASE_URL=https://brain.mikemoore.top
 
@@ -289,7 +305,25 @@ test "$(git -C "$APP_ROOT" symbolic-ref --quiet --short HEAD)" = main
 test -z "$(git -C "$APP_ROOT" status --porcelain=v1 --untracked-files=all)"
 test "$(git -C "$VAULT_ROOT" symbolic-ref --quiet --short HEAD)" = main
 test -z "$(git -C "$VAULT_ROOT" status --porcelain=v1 --untracked-files=all)"
-PREVIOUS_KNOWN_GOOD_SHA="$(git -C "$APP_ROOT" rev-parse --verify HEAD)"
+if [ -L "$CURRENT_LINK" ]; then
+    PREVIOUS_CURRENT_TARGET="$(readlink "$CURRENT_LINK")"
+    PREVIOUS_KNOWN_GOOD_SHA="${PREVIOUS_CURRENT_TARGET#releases/}"
+    test "$PREVIOUS_CURRENT_TARGET" = "releases/$PREVIOUS_KNOWN_GOOD_SHA"
+    test "${#PREVIOUS_KNOWN_GOOD_SHA}" -eq 40
+    case "$PREVIOUS_KNOWN_GOOD_SHA" in
+        (*[!0-9a-f]*)
+            echo 'current does not point to a hexadecimal release SHA' >&2
+            exit 1
+            ;;
+    esac
+    test -d "$RELEASES_ROOT/$PREVIOUS_KNOWN_GOOD_SHA"
+elif [ -e "$CURRENT_LINK" ]; then
+    echo 'current exists but is not a symlink; stop' >&2
+    exit 1
+else
+    PREVIOUS_CURRENT_TARGET=""
+    PREVIOUS_KNOWN_GOOD_SHA=""
+fi
 printf 'previous known-good application SHA: %s\n' "$PREVIOUS_KNOWN_GOOD_SHA"
 ```
 
@@ -303,13 +337,17 @@ git -C "$APP_ROOT" fetch --no-tags origin main
 git -C "$VAULT_ROOT" fetch --no-tags origin main
 ```
 
-Для application release разрешён только fast-forward local `main`:
+Для application release разрешён только fast-forward local `main`. Этот
+control checkout не является build target:
 
 ```bash
 git -C "$APP_ROOT" merge-base --is-ancestor main origin/main
 git -C "$APP_ROOT" merge --ff-only origin/main
 APP_SHA="$(git -C "$APP_ROOT" rev-parse --verify HEAD)"
-test -n "$APP_SHA"
+test "${#APP_SHA}" -eq 40
+case "$APP_SHA" in
+    (*[!0-9a-f]*) echo 'application SHA is not hexadecimal' >&2; exit 1 ;;
+esac
 ```
 
 После fetch vault должен оставаться чистым и синхронизированным. Web release
@@ -326,47 +364,62 @@ HEAD, local-only commit или fast-forward не проходит — STOP. Не
 implicit merge, rebase, hard reset, clean, force push или automatic conflict
 resolution.
 
-### 2. Locked Python runtime
+### 2. Immutable release worktree и locked Python runtime
 
-В application checkout выполните ровно locked sync на поддерживаемом Python:
+Создайте candidate только как отдельный detached worktree, адресованный
+recorded exact SHA. Если путь уже существует, остановитесь: не переиспользуйте
+и не очищайте старый release автоматически.
 
 ```bash
-cd "$APP_ROOT"
+mkdir -p "$RELEASES_ROOT"
+CANDIDATE_RELEASE="$RELEASES_ROOT/$APP_SHA"
+test ! -e "$CANDIDATE_RELEASE"
+test ! -L "$CANDIDATE_RELEASE"
+git -C "$APP_ROOT" worktree add --detach "$CANDIDATE_RELEASE" "$APP_SHA"
+test "$(git -C "$CANDIDATE_RELEASE" rev-parse --verify HEAD)" = "$APP_SHA"
+
+cd "$CANDIDATE_RELEASE"
 uv sync --locked --python 3.14
+test "$(git -C "$CANDIDATE_RELEASE" rev-parse --verify HEAD)" = "$APP_SHA"
 ```
 
-Если locked sync не проходит, service и Caddy не обновляются.
+`releases/<SHA>` не является active path до отдельной activation step. Если
+worktree registration, locked sync или последующая проверка не проходит,
+оставьте candidate и diagnostics для owner review; `current` и работающий
+service не изменяйте.
 
-### 3. Deterministic frontend build из того же SHA
+### 3. Deterministic frontend build внутри candidate release
 
-React bundle строится в том же checkout и до service restart. `vite` очищает
-`web/dist` согласно текущему `vite.config.ts`; результатом считается только
-bundle, созданный после успешного build из recorded `APP_SHA`:
+React bundle строится только в immutable candidate worktree. `vite` очищает
+только `web/dist` этого candidate, поэтому неудачный или прерванный build не
+может удалить bundle из active release:
 
 ```bash
-test "$(git -C "$APP_ROOT" rev-parse --verify HEAD)" = "$APP_SHA"
-cd "$APP_ROOT/web"
+test "$(git -C "$CANDIDATE_RELEASE" rev-parse --verify HEAD)" = "$APP_SHA"
+cd "$CANDIDATE_RELEASE/web"
 npm ci
 npm run check
 npm run build
 test -s dist/index.html
-cd "$APP_ROOT"
-test "$(git -C "$APP_ROOT" rev-parse --verify HEAD)" = "$APP_SHA"
+cd "$CANDIDATE_RELEASE"
+test "$(git -C "$CANDIDATE_RELEASE" rev-parse --verify HEAD)" = "$APP_SHA"
 ```
 
 `web/dist` не коммитится и не переносится из другого release. Stale bundle,
 собранный из неизвестного SHA, является STOP condition. Если `npm ci`, check
-или build не проходит, service не обновляется. `npm ci` и build не являются
-частью production service; Node runtime в systemd unit не нужен.
+или build не проходит, active release и service не обновляются. `npm ci` и
+build не являются частью production service; Node runtime в systemd unit не
+нужен.
 
-### 4. Read-only application validation
+### 4. Read-only application validation из candidate
 
-Используйте тот же protected env file, что и systemd:
+Используйте тот же protected env file, что и systemd, но запускайте проверки
+из candidate и без implicit dependency sync:
 
 ```bash
-cd "$APP_ROOT"
-uv run --python 3.14 second-brain --env-file "$RUNTIME_ENV" doctor
-uv run --python 3.14 second-brain --env-file "$RUNTIME_ENV" vault validate
+cd "$CANDIDATE_RELEASE"
+uv run --python 3.14 --no-sync second-brain --env-file "$RUNTIME_ENV" doctor
+uv run --python 3.14 --no-sync second-brain --env-file "$RUNTIME_ENV" vault validate
 ```
 
 Обе команды должны завершиться с code `0`. Они не создают canonical test note
@@ -375,42 +428,121 @@ uv run --python 3.14 second-brain --env-file "$RUNTIME_ENV" vault validate
 ### 5. Systemd verification
 
 Сначала проверьте фактический путь к `uv`, service user и права на
-`EnvironmentFile`. Если `command -v uv` не равен `/usr/local/bin/uv`, внесите
-только это path adjustment во внешний rendered unit, не добавляя credentials.
+`EnvironmentFile`. Устанавливайте unit только из уже проверенного candidate
+artifact. Если `command -v uv` не равен `/usr/local/bin/uv`, внесите только
+это path adjustment во внешний rendered unit, не добавляя credentials.
+Проверка не выполняет restart и не меняет `current`.
 
 ```bash
 command -v uv
 sudo install --owner=root --group=root --mode=0644 \
-  "$APP_ROOT/deploy/systemd/second-brain-web.service" \
+  "$CANDIDATE_RELEASE/deploy/systemd/second-brain-web.service" \
   /etc/systemd/system/second-brain-web.service
 sudo systemd-analyze verify /etc/systemd/system/second-brain-web.service
-sudo systemctl daemon-reload
-sudo systemctl cat second-brain-web.service
 ```
 
 Проверка должна подтвердить `User=second-brain`, non-root `Group`, указанное
-`WorkingDirectory`, существующий protected `EnvironmentFile`,
+`WorkingDirectory=/srv/second-brain/current`, существующий protected
+`EnvironmentFile`,
 `Restart=on-failure`, loopback port `8123`, `KillSignal=SIGTERM` и отсутствие
 secret assignments в unit/argv. Не используйте `systemctl show` с выводом
 полного environment.
 
-### 6. Caddy verification и controlled reload
+### 6. Caddy topology, preserve-existing integration и validation
 
-Скопируйте template во внешний Caddy configuration path после DNS preflight,
-сохранив ровно site address и upstream из template:
+Second Brain поставляет только site snippet
+`deploy/caddy/brain.mikemoore.top.caddy`. Он никогда не является заменой
+глобального `/etc/caddy/Caddyfile`. Перед любым изменением определите фактическую
+топологию и config path из owner-managed Caddy service. Если path отличается,
+задайте его в `CADDY_CONFIG`; не предполагайте exclusive ownership. Сохраните
+конфигурацию без вывода credentials в issue, PR или diagnostics:
 
 ```bash
+command -v caddy
+CADDY_CONFIG=/etc/caddy/Caddyfile
+CADDY_SITE_DIR=/etc/caddy/sites.d
+if sudo test -d /etc/caddy; then
+    sudo find /etc/caddy -maxdepth 2 -type f -print
+fi
+if sudo test -f "$CADDY_CONFIG"; then
+    sudo sed -n '1,240p' "$CADDY_CONFIG"
+else
+    echo 'Caddyfile is absent: evaluate explicit first-install path' >&2
+fi
+```
+
+Если Caddy уже использует owner-managed imported site directory, owner должен
+указать именно существующий directory и существующий `import` glob из
+глобального config. Только в этой ветке установите отдельный snippet внутрь
+этого directory; сначала проверьте, что exact hostname не определён там уже
+другим site block. Глобальный config не изменяется:
+
+```bash
+# Пример значений; замените их на фактический существующий import из inspection.
+CADDY_SITE_DIR=/etc/caddy/sites.d
+CADDY_IMPORT_GLOB=/etc/caddy/sites.d/*.caddy
+sudo test -d "$CADDY_SITE_DIR"
+sudo awk -v expected="import $CADDY_IMPORT_GLOB" \
+  'BEGIN { found = 0 }
+   /^[[:space:]]*#/ { next }
+   { line = $0; sub(/^[[:space:]]+/, "", line); sub(/[[:space:]]+$/, "", line)
+     if (line == expected) found = 1 }
+   END { exit !found }' "$CADDY_CONFIG"
 sudo install --owner=root --group=root --mode=0644 \
-  "$APP_ROOT/deploy/caddy/Caddyfile.example" /etc/caddy/Caddyfile
-sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+  "$CANDIDATE_RELEASE/deploy/caddy/brain.mikemoore.top.caddy" \
+  "$CADDY_SITE_DIR/brain.mikemoore.top.caddy"
 ```
 
-Если `caddy validate` не проходит, Caddy не reload-ится. После успешной
-валидации и подтверждения DNS/ports разрешён только controlled reload:
+Для новой или подтверждённо пустой Caddy installation разрешён только explicit
+first-install path. Сначала создайте site directory и snippet, затем вручную
+создайте глобальный config с единственным owner-managed import через
+`sudoedit`; это не команда замены существующего файла:
 
 ```bash
-sudo systemctl reload caddy
+CADDY_SITE_DIR=/etc/caddy/sites.d
+sudo install --directory --owner=root --group=root --mode=0755 "$CADDY_SITE_DIR"
+sudo install --owner=root --group=root --mode=0644 \
+  "$CANDIDATE_RELEASE/deploy/caddy/brain.mikemoore.top.caddy" \
+  "$CADDY_SITE_DIR/brain.mikemoore.top.caddy"
+sudoedit "$CADDY_CONFIG"
 ```
+
+Содержимое нового глобального `/etc/caddy/Caddyfile` в этом first-install
+path — только:
+
+```text
+import /etc/caddy/sites.d/*.caddy
+```
+
+Если существующий глобальный config содержит другие workloads и не использует
+imports, это отдельный operator integration checkpoint. Не используйте
+`install`, `cp`, `tee` или redirect поверх этого config. Сначала сохраните
+backup и осмотрите файл, затем owner вручную добавляет import существующего
+или нового site directory с сохранением всех текущих routes:
+
+```bash
+BACKUP_DIR=/var/backups/caddy
+sudo install --directory --owner=root --group=root --mode=0700 "$BACKUP_DIR"
+sudo cp --preserve=mode,ownership,timestamps "$CADDY_CONFIG" \
+  "$BACKUP_DIR/Caddyfile.$(date -u +%Y%m%dT%H%M%SZ)"
+sudoedit "$CADDY_CONFIG"
+```
+
+После ручной интеграции snippet directory и import должны быть проверены
+вместе с существующими routes. Если безопасно добавить import без потери
+existing config нельзя — STOP, не overwrite.
+
+Во всех ветках `caddy validate` выполняется на фактическом полном config и
+является обязательным gate перед reload:
+
+```bash
+sudo caddy validate --config "$CADDY_CONFIG" --adapter caddyfile
+```
+
+Если `caddy validate` не проходит, deployment останавливается и Caddy не
+reload-ится. Сам controlled reload выполняется после activation и успешной
+локальной проверки service в шаге 8. Не используйте отдельный partial config
+для подмены global topology.
 
 Template не содержит wildcard host, arbitrary upstream, TLS verification
 disable, permissive CORS или Cloudflare Tunnel. Caddy сохраняет incoming Host
@@ -425,22 +557,55 @@ Access log включён в JSON и направлен в Caddy service journal
 log уже отключён текущим `web serve`. Не добавляйте отдельный proxy logger,
 который пишет полный callback query.
 
-### 7. Controlled service start/restart
+### 7. Atomic-ish activation of the candidate
+
+Переключайте `current` только после успешных `uv sync`, frontend `check` и
+`build`, `dist/index.html`, `doctor`, `vault validate`, systemd verification и
+combined Caddy validation. `releases/` и `current` должны находиться на одной
+filesystem. Временный symlink и `mv -T` дают короткую atomic-ish замену
+symlink entry без удаления active release:
+
+```bash
+test -d "$CANDIDATE_RELEASE"
+test "$(git -C "$CANDIDATE_RELEASE" rev-parse --verify HEAD)" = "$APP_SHA"
+SWITCH_LINK="$SECOND_BRAIN_ROOT/.current.$APP_SHA.next"
+test ! -e "$SWITCH_LINK"
+test ! -L "$SWITCH_LINK"
+sudo ln -s "releases/$APP_SHA" "$SWITCH_LINK"
+sudo mv -T -- "$SWITCH_LINK" "$CURRENT_LINK"
+test -L "$CURRENT_LINK"
+test "$(readlink "$CURRENT_LINK")" = "releases/$APP_SHA"
+test "$(git -C "$CURRENT_LINK" rev-parse --verify HEAD)" = "$APP_SHA"
+```
+
+Если `current` отсутствовал, это создаёт его впервые. Если `current` был
+symlink на previous known-good release, его target остаётся доступен в
+`releases/` для rollback до окончания всех smoke. `current` — только symlink:
+если на его месте обнаружен обычный файл или directory, stop вместо замены.
+Не используйте `ln -sfn`, `rm`, `git reset`, rebase или force operation.
+
+### 8. Controlled service start/restart и Caddy reload
 
 Первый запуск активирует unit только после всех предыдущих gates; последующие
 релизы выполняют restart только после нового `APP_SHA` build/validation:
 
 ```bash
+sudo systemctl daemon-reload
 sudo systemctl enable second-brain-web.service
 sudo systemctl restart second-brain-web.service
 sudo systemctl is-active --quiet second-brain-web.service
 sudo journalctl --unit=second-brain-web.service --no-pager --lines=100
+curl --fail --silent --show-error http://127.0.0.1:8123/healthz
+sudo systemctl reload caddy
 ```
 
-В journal сохраняйте diagnostics без env dump, tokens, callback query или
-secret values. Если service не active, deployment считается failed.
+`systemctl reload caddy` выполняется только после успешного combined
+`caddy validate` из шага 6 и успешного local health. В journal сохраняйте
+diagnostics без env dump, tokens, callback query или secret values. Если
+service не active, local health не проходит или Caddy reload завершается с
+ошибкой, deployment считается failed.
 
-### 8. Network and unauthenticated smoke
+### 9. Network and unauthenticated smoke
 
 Проверка с VPS:
 
@@ -482,7 +647,7 @@ curl --silent --show-error --dump-header - \
 redirect на `/login`, а private `/api/*` без session возвращает safe `401` с
 `Cache-Control: no-store`. Protected UI/API и vault content не раскрываются.
 
-### 9. OAuth и functional smoke
+### 10. OAuth и functional smoke
 
 В этой repository task real authenticated smoke не выполняется:
 
@@ -510,36 +675,46 @@ owner confirmation.
 Deployment fail-closed:
 
 - build, `check`, `doctor` или `vault validate` не проходят — service не
-  обновлять;
+  обновлять и `current` не переключать;
 - systemd verification/start не проходит — сохранить bounded diagnostics без
   secrets и остановиться;
 - Caddy validation не проходит — не выполнять reload;
 - health, redirect, unauthenticated или последующий auth smoke не проходит —
   считать deployment `FAILED`;
-- previous known-good SHA фиксируется до application update.
+- previous known-good target фиксируется до candidate activation и сохраняется
+  в `releases/` до успешного полного smoke.
 
-Автоматический destructive rollback не используется. Этот v1 не применяет
-reset/rebase и не пытается переписать `main` назад.
+Автоматический destructive rollback не используется. Этот v1 не меняет
+production `main`, не удаляет releases и не выполняет repo-wide cleanup.
 
-Рекомендуемый manual rollback — отдельный release worktree для уже
-зафиксированного `PREVIOUS_KNOWN_GOOD_SHA`:
+Rollback для уже активированного release — это только возврат stable `current`
+к сохранённому previous known-good release и controlled restart. Он не требует
+нового build, не заменяет systemd `WorkingDirectory` drop-in и не использует
+reset/rebase/force operation:
 
-1. Остановить service и сохранить `systemctl status`/journal без secrets.
-2. Проверить, что SHA существует локально и не является недоверенным input.
-3. Создать новый adjacent detached release worktree из previous SHA, собрать
-   в нём frontend обычной последовательностью `npm ci`, `npm run check`,
-   `npm run build` и повторить `doctor`/`vault validate`.
-4. После успешных проверок применить временный systemd drop-in только для
-   `WorkingDirectory`/`ExecStart` этого release path, выполнить
-   `systemd-analyze verify`, затем controlled restart и полный smoke.
-5. Сохранить failed release и diagnostics до отдельного owner cleanup. Не
-   удалять или перезаписывать неизвестные worktrees автоматически.
+```bash
+test -n "$PREVIOUS_KNOWN_GOOD_SHA"
+test -d "$RELEASES_ROOT/$PREVIOUS_KNOWN_GOOD_SHA"
+test "$(git -C "$RELEASES_ROOT/$PREVIOUS_KNOWN_GOOD_SHA" rev-parse --verify HEAD)" = \
+     "$PREVIOUS_KNOWN_GOOD_SHA"
+ROLLBACK_LINK="$SECOND_BRAIN_ROOT/.current.$PREVIOUS_KNOWN_GOOD_SHA.rollback"
+test ! -e "$ROLLBACK_LINK"
+test ! -L "$ROLLBACK_LINK"
+sudo ln -s "releases/$PREVIOUS_KNOWN_GOOD_SHA" "$ROLLBACK_LINK"
+sudo mv -T -- "$ROLLBACK_LINK" "$CURRENT_LINK"
+test "$(readlink "$CURRENT_LINK")" = \
+     "releases/$PREVIOUS_KNOWN_GOOD_SHA"
+sudo systemctl restart second-brain-web.service
+sudo systemctl is-active --quiet second-brain-web.service
+curl --fail --silent --show-error http://127.0.0.1:8123/healthz
+```
 
-Если previous release worktree не был подготовлен заранее, безопасный исход —
-остановить service и выполнить manual rebuild из recorded SHA в новом path;
-не переводить production `main` назад принудительно. Rollback не откатывает
-vault contents и не изменяет DNS. После исправления повторяется весь release
-gate с новым exact application SHA.
+Не удаляйте failed candidate или previous release автоматически: они нужны для
+diagnostics и повторяемого rollback. При first deployment, когда `current`
+отсутствовал и `PREVIOUS_KNOWN_GOOD_SHA` пуст, rollback target не существует;
+при failure после activation остановите service, сохраните diagnostics и
+разберите новый release вручную. Rollback не откатывает vault contents и не
+изменяет DNS/Caddy topology.
 
 ## Current task boundary
 

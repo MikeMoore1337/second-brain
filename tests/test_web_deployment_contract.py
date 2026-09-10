@@ -7,7 +7,8 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parents[1]
 UNIT_PATH = PROJECT_ROOT / "deploy" / "systemd" / "second-brain-web.service"
-CADDY_PATH = PROJECT_ROOT / "deploy" / "caddy" / "Caddyfile.example"
+CADDY_PATH = PROJECT_ROOT / "deploy" / "caddy" / "brain.mikemoore.top.caddy"
+CADDY_TEMPLATE_PATH = PROJECT_ROOT / "deploy" / "caddy" / "Caddyfile.example"
 RUNBOOK_PATH = PROJECT_ROOT / "docs" / "deployment" / "web-production.md"
 
 
@@ -25,7 +26,8 @@ def test_systemd_template_is_loopback_non_root_and_secret_free() -> None:
     assert "User=second-brain" in unit
     assert "Group=second-brain" in unit
     assert "User=root" not in unit
-    assert "WorkingDirectory=/srv/second-brain/second-brain" in unit
+    assert "WorkingDirectory=/srv/second-brain/current" in unit
+    assert "WorkingDirectory=/srv/second-brain/second-brain" not in unit
     assert "EnvironmentFile=/srv/second-brain/runtime/web.env" in unit
     assert (
         "ExecStart=/usr/local/bin/uv run --python 3.14 --no-sync second-brain "
@@ -50,6 +52,7 @@ def test_systemd_template_is_loopback_non_root_and_secret_free() -> None:
 def test_caddy_template_has_exact_https_boundary_and_oauth_log_policy() -> None:
     caddy = _read(CADDY_PATH)
 
+    assert not CADDY_TEMPLATE_PATH.exists()
     assert re.search(r"(?m)^brain\.mikemoore\.top\s*\{", caddy)
     assert "reverse_proxy 127.0.0.1:8123" in caddy
     assert "log_skip /auth/github*" in caddy
@@ -70,6 +73,14 @@ def test_runbook_records_current_cli_build_oauth_and_external_boundaries() -> No
         "https://brain.mikemoore.top",
         "https://brain.mikemoore.top/auth/github/callback",
         "uv sync --locked --python 3.14",
+        'RELEASES_ROOT="$SECOND_BRAIN_ROOT/releases"',
+        "current -> releases/<ACTIVE_SHA>",
+        'CANDIDATE_RELEASE="$RELEASES_ROOT/$APP_SHA"',
+        'git -C "$APP_ROOT" worktree add --detach',
+        'git -C "$CANDIDATE_RELEASE"',
+        "releases/<SHA>",
+        "mv -T",
+        "PREVIOUS_KNOWN_GOOD_SHA",
         "npm ci",
         "npm run check",
         "npm run build",
@@ -79,6 +90,14 @@ def test_runbook_records_current_cli_build_oauth_and_external_boundaries() -> No
         "vault validate",
         "systemd-analyze verify",
         "caddy validate",
+        "brain.mikemoore.top.caddy",
+        "CADDY_SITE_DIR",
+        "CADDY_IMPORT_GLOB",
+        'sudoedit "$CADDY_CONFIG"',
+        "import /etc/caddy/sites.d/*.caddy",
+        "preserve-existing",
+        "existing config",
+        "systemctl reload caddy",
         "127.0.0.1:8123",
         "A",
         "AAAA",
@@ -125,6 +144,33 @@ def test_runbook_code_blocks_do_not_offer_destructive_git_commands() -> None:
         "git push -f",
     ):
         assert forbidden not in code
+
+
+def test_release_and_caddy_procedures_are_preserve_by_default() -> None:
+    runbook = _read(RUNBOOK_PATH)
+    code = _fenced_code(runbook)
+
+    assert 'git -C "$APP_ROOT" worktree add --detach "$CANDIDATE_RELEASE" "$APP_SHA"' in code
+    assert 'cd "$CANDIDATE_RELEASE/web"' in code
+    assert 'cd "$APP_ROOT/web"' not in code
+    assert "WorkingDirectory=/srv/second-brain/current" in runbook
+    assert 'sudo mv -T -- "$SWITCH_LINK" "$CURRENT_LINK"' in code
+    assert 'sudo mv -T -- "$ROLLBACK_LINK" "$CURRENT_LINK"' in code
+    assert "sudo install --owner=root --group=root --mode=0644" in code
+    assert '"$CANDIDATE_RELEASE/deploy/caddy/brain.mikemoore.top.caddy"' in code
+    assert (
+        re.search(
+            r"(?m)^\s*sudo\s+install\b.*(?:/etc/caddy/Caddyfile|\"\$CADDY_CONFIG\")",
+            code,
+        )
+        is None
+    )
+    assert 'sudo caddy validate --config "$CADDY_CONFIG" --adapter caddyfile' in code
+    assert code.index(
+        'sudo caddy validate --config "$CADDY_CONFIG" --adapter caddyfile'
+    ) < code.index("sudo systemctl reload caddy")
+    assert "current exists but is not a symlink; stop" in runbook
+    assert "Не удаляйте failed candidate или previous release автоматически" in runbook
 
 
 def test_tracked_deployment_examples_contain_no_known_secret_values() -> None:
