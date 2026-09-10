@@ -53,15 +53,19 @@ def test_caddy_template_has_exact_https_boundary_and_oauth_log_policy() -> None:
     caddy = _read(CADDY_PATH)
 
     assert not CADDY_TEMPLATE_PATH.exists()
-    assert re.search(r"(?m)^brain\.mikemoore\.top\s*\{", caddy)
-    assert not re.search(r"(?m)^brain\.mikemoore\.top\s*:\d+\s*\{", caddy)
+    assert re.search(r"(?m)^https://brain\.mikemoore\.top:8444\s*\{", caddy)
+    assert re.search(r"(?m)^http://brain\.mikemoore\.top\s*\{", caddy)
+    assert not re.search(r"(?m)^brain\.mikemoore\.top\s*\{", caddy)
     assert "reverse_proxy 127.0.0.1:8123" in caddy
     assert "log_skip /auth/github*" in caddy
     assert "output stderr" in caddy
     assert "format json" in caddy
+    assert "redir https://brain.mikemoore.top{uri} 308" in caddy
+    assert "redir https://brain.mikemoore.top:8444" not in caddy
     assert (
         "tls /etc/caddy/certs/brain.mikemoore.top.pem /etc/caddy/certs/brain.mikemoore.top.key"
     ) in caddy
+    assert "https_port" not in caddy
     assert not re.search(r"(?m)^\s*\*\.", caddy)
     assert "tls_insecure_skip_verify" not in caddy
     assert "tls internal" not in caddy.casefold()
@@ -78,7 +82,13 @@ def test_runbook_records_current_cli_build_oauth_and_external_boundaries() -> No
         "https://brain.mikemoore.top",
         "https://brain.mikemoore.top/auth/github/callback",
         "Cloudflare edge HTTPS :443",
-        "https_port 8444",
+        "site-scoped",
+        "https://brain.mikemoore.top:8444",
+        "http://brain.mikemoore.top",
+        "redir https://brain.mikemoore.top{uri} 308",
+        "global Caddy options",
+        "другие Caddy sites",
+        "explicit portless HTTP-to-HTTPS redirect",
         ":8444",
         ":80",
         'http.host eq "brain.mikemoore.top" and ssl',
@@ -160,8 +170,11 @@ def test_runbook_records_current_cli_build_oauth_and_external_boundaries() -> No
     assert "CLOUDFLARE_API_TOKEN=" not in runbook
     assert "ghp_" not in runbook
     assert "github_pat_" not in runbook
-    assert "https://brain.mikemoore.top:8444" not in runbook
-    assert "http://brain.mikemoore.top:8444" not in runbook
+    assert "https_port" not in runbook
+    assert "PUBLIC_BASE_URL=https://brain.mikemoore.top:8444" not in runbook
+    assert "Homepage URL: `https://brain.mikemoore.top:8444" not in runbook
+    assert "Authorization callback URL:\n     `https://brain.mikemoore.top:8444" not in runbook
+    assert "redir https://brain.mikemoore.top:8444" not in runbook
     assert "111.88.215.204" not in runbook
 
 
@@ -204,6 +217,10 @@ def test_release_and_caddy_procedures_are_preserve_by_default() -> None:
     runbook = _read(RUNBOOK_PATH)
     code = _fenced_code(runbook)
 
+    assert "https_port" not in runbook
+    assert "https://brain.mikemoore.top:8444 {" in code
+    assert "http://brain.mikemoore.top {" in code
+    assert "redir https://brain.mikemoore.top{uri} 308" in code
     assert 'git -C "$APP_ROOT" worktree add --detach "$CANDIDATE_RELEASE" "$APP_SHA"' in code
     assert 'cd "$CANDIDATE_RELEASE/web"' in code
     assert 'cd "$APP_ROOT/web"' not in code

@@ -23,7 +23,7 @@ second-brain-vault
 
 Cloudflare edge HTTP :80
    |
-VPS Caddy HTTP :80 -> automatic HTTP-to-HTTPS redirect
+VPS Caddy HTTP :80 -> explicit portless HTTP-to-HTTPS redirect
 ```
 
 Сохраняются следующие invariants:
@@ -32,10 +32,11 @@ VPS Caddy HTTP :80 -> automatic HTTP-to-HTTPS redirect
   только Caddy;
 - существующий Xray сохраняет свой listener на `:443`; Caddy не занимает его и
   не останавливает, не перезапускает и не перенастраивает Xray;
-- Caddy принимает HTTPS origin traffic на `:8444` через глобальную опцию
-  `https_port 8444`; это внутренний origin port, а не часть public authority;
+- Caddy принимает HTTPS origin traffic на `:8444` через site-scoped address
+  `https://brain.mikemoore.top:8444`; это внутренний origin port, а не часть
+  public authority;
 - TLS терминируется Caddy с owner-managed Origin CA cert/key, а HTTP на `:80`
-  для hostname штатно перенаправляется на public HTTPS без `:8444`;
+  explicit site block перенаправляет на public HTTPS без `:8444`;
 - public URL, OAuth callback, browser links и Cloudflare hostname остаются
   `https://brain.mikemoore.top`, без explicit port;
 - Web runtime работает от отдельного непривилегированного пользователя;
@@ -189,8 +190,9 @@ repository task:
    Secret. Values размещаются только в protected `web.env`.
 6. Установить и проверить Caddy 2.x, поддерживающий текущую директиву
    `log_skip` (Caddy 2.8+), а также открыть его configuration path и service
-   journal operator-ом. Глобальный Caddy config должен быть отрендерен с
-   `https_port 8444`, а site snippet — с explicit `tls <cert_file> <key_file>`.
+   journal operator-ом. Site snippet должен объявлять
+   `https://brain.mikemoore.top:8444` и explicit
+   `tls <cert_file> <key_file>`; global Caddy options менять нельзя.
    Cloudflare Tunnel и wildcard hosts в этот contract не входят.
 7. Вручную получить Origin CA certificate, покрывающий exact hostname
    `brain.mikemoore.top`, и сохранить cert/key только на VPS в путях из Caddy
@@ -523,25 +525,37 @@ Second Brain поставляет только site snippet
 задайте его в `CADDY_CONFIG`; не предполагайте exclusive ownership. Сохраните
 конфигурацию без вывода credentials в issue, PR или diagnostics:
 
-В этой v1.1 global options block Caddy должен содержать `https_port 8444` и
-находиться в начале полного Caddyfile, до `import` и site blocks. Это меняет
-только внутренний HTTPS origin listener: public HTTPS authority по-прежнему
-остаётся `https://brain.mikemoore.top` через Cloudflare edge `:443`; public URL
-не получает `:8444`. HTTP listener остаётся на `:80` для automatic redirect.
+Site snippet является self-contained и объявляет только собственные listener
+адреса: HTTPS `https://brain.mikemoore.top:8444` и отдельный HTTP
+`http://brain.mikemoore.top`. Никакие global Caddy options для переноса HTTPS
+port не требуются или не изменяются; это предотвращает изменение listener/default
+port других Caddy sites.
 
-Для новой или подтверждённо пустой installation итоговый global config имеет
-такой вид:
+Полный tracked site contract:
 
 ```text
-{
-    https_port 8444
+https://brain.mikemoore.top:8444 {
+    log {
+        output stderr
+        format json
+    }
+    log_skip /auth/github*
+    tls /etc/caddy/certs/brain.mikemoore.top.pem /etc/caddy/certs/brain.mikemoore.top.key
+    reverse_proxy 127.0.0.1:8123
 }
 
-import /etc/caddy/sites.d/*.caddy
+http://brain.mikemoore.top {
+    redir https://brain.mikemoore.top{uri} 308
+}
 ```
 
-Site snippet сохраняет exact hostname `brain.mikemoore.top`, upstream
-`127.0.0.1:8123`, JSON access-log policy и explicit custom TLS:
+HTTP `redir` — explicit deterministic portless redirect на public authority;
+он не зависит от automatic HTTPS redirect. `:80` остаётся стандартным HTTP
+listener для explicit `http://` site, а `:8444` существует только как
+Second Brain origin listener и не появляется в public `Location`.
+
+Site snippet сохраняет upstream `127.0.0.1:8123`, JSON access-log policy и
+explicit custom TLS:
 
 ```text
 tls /etc/caddy/certs/brain.mikemoore.top.pem /etc/caddy/certs/brain.mikemoore.top.key
@@ -570,11 +584,10 @@ fi
 Если Caddy уже использует owner-managed imported site directory, owner должен
 указать именно существующий directory и существующий `import` glob из
 глобального config. Только в этой ветке установите отдельный snippet внутрь
-этого directory; сначала проверьте, что exact hostname не определён там уже
-другим site block. Если global options block уже существует, owner добавляет в
-него `https_port 8444`, сохраняя все существующие options. Если его нет,
-создайте его вручную в начале полного config; существующие routes и import
-нельзя терять:
+этого directory; сначала проверьте, что exact hostname и `:8444` не определены
+там уже другим site block. Global config не изменяйте: self-contained snippet
+не требует server-wide port/default mutation, поэтому другие Caddy sites
+сохраняют свои listeners:
 
 ```bash
 # Пример значений; замените их на фактический существующий import из inspection.
@@ -594,8 +607,7 @@ sudo install --owner=root --group=root --mode=0644 \
 
 Для новой или подтверждённо пустой Caddy installation разрешён только explicit
 first-install path. Сначала создайте site directory и snippet, затем вручную
-создайте глобальный config с `https_port 8444` и единственным owner-managed
-import через
+создайте глобальный config с единственным owner-managed import через
 `sudoedit`; это не команда замены существующего файла:
 
 ```bash
@@ -608,22 +620,18 @@ sudoedit "$CADDY_CONFIG"
 ```
 
 Содержимое нового глобального `/etc/caddy/Caddyfile` в этом first-install
-path — только этот options block и import:
+path — только import site directory:
 
 ```text
-{
-    https_port 8444
-}
-
 import /etc/caddy/sites.d/*.caddy
 ```
 
 Если существующий глобальный config содержит другие workloads и не использует
 imports, это отдельный operator integration checkpoint. Не используйте
 `install`, `cp`, `tee` или redirect поверх этого config. Сначала сохраните
-backup и осмотрите файл, затем owner вручную добавляет `https_port 8444` в
-первый global options block (или создаёт такой block в начале) и import
-существующего или нового site directory с сохранением всех текущих routes:
+backup и осмотрите файл, затем owner вручную добавляет import существующего
+или нового site directory с сохранением всех текущих routes. Не добавляйте
+server-wide port/default overrides:
 
 ```bash
 BACKUP_DIR=/var/backups/caddy
@@ -635,8 +643,9 @@ sudoedit "$CADDY_CONFIG"
 
 После ручной интеграции snippet directory и import должны быть проверены
 вместе с существующими routes, а фактические cert/key paths должны быть
-readable Caddy service user. Если безопасно добавить global option и import без
-потери existing config нельзя — STOP, не overwrite.
+readable Caddy service user. Если безопасно добавить import без потери existing config
+нельзя — STOP, не overwrite. Если exact hostname или `:8444` конфликтует
+с существующей site definition — STOP.
 
 Во всех ветках `caddy validate` выполняется на фактическом полном config и
 является обязательным gate перед reload:
