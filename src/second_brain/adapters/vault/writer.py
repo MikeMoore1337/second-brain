@@ -17,6 +17,11 @@ from uuid import UUID
 from ruamel.yaml import YAML
 
 from second_brain.adapters.vault.frontmatter import FrontMatterResult, parse_front_matter
+from second_brain.adapters.vault.operation_lock import (
+    VaultOperationBusy,
+    VaultOperationLock,
+    VaultOperationLockError,
+)
 from second_brain.application.personal_memory import PERSONAL_MEMORY_MARKER
 from second_brain.application.writes import CreateNotePlan, WriteReceipt, WriteSafetyError
 from second_brain.domain.models import NoteType, VaultManifest
@@ -81,7 +86,7 @@ _STAGE2_CONTROLLED_FIELDS = frozenset(
 class FileSystemVaultWriter:
     """Подготовить и атомарно создать файл внутри настроенного vault."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, *, operation_lock_path: Path | None = None) -> None:
         try:
             resolved_root = root.resolve(strict=True)
         except OSError as exc:
@@ -89,6 +94,7 @@ class FileSystemVaultWriter:
         if not resolved_root.is_dir():
             raise WriteSafetyError("CREATE_VAULT_ROOT_INVALID", "vault root is not a directory")
         self.root = resolved_root
+        self.operation_lock_path = operation_lock_path
 
     def prepare(
         self,
@@ -314,6 +320,25 @@ class FileSystemVaultWriter:
         )
 
     def write(self, plan: CreateNotePlan) -> WriteReceipt:
+        """Записать plan через shared lock, temp file и no-overwrite publication."""
+
+        if self.operation_lock_path is None:
+            return self._write_unlocked(plan)
+        try:
+            with VaultOperationLock(self.operation_lock_path, operation="safe-write"):
+                return self._write_unlocked(plan)
+        except VaultOperationBusy as exc:
+            raise WriteSafetyError(
+                "CREATE_VAULT_OPERATION_BUSY",
+                "another vault sync/write operation is active",
+            ) from exc
+        except VaultOperationLockError as exc:
+            raise WriteSafetyError(
+                "CREATE_VAULT_LOCK_FAILED",
+                "shared vault operation lock is unavailable",
+            ) from exc
+
+    def _write_unlocked(self, plan: CreateNotePlan) -> WriteReceipt:
         """Записать plan через temp file и no-overwrite publication."""
 
         target = self._target_from_plan(plan)
@@ -370,6 +395,17 @@ class FileSystemVaultWriter:
 
     def rollback(self, receipt: WriteReceipt) -> bool:
         """Удалить файл только при совпадении identity и SHA-256 receipt."""
+
+        if self.operation_lock_path is None:
+            return self._rollback_unlocked(receipt)
+        try:
+            with VaultOperationLock(self.operation_lock_path, operation="safe-write-rollback"):
+                return self._rollback_unlocked(receipt)
+        except VaultOperationBusy, VaultOperationLockError:
+            return False
+
+    def _rollback_unlocked(self, receipt: WriteReceipt) -> bool:
+        """Выполнить receipt rollback под уже захваченным или отсутствующим lock."""
 
         target = Path(receipt.target_path)
         if not _is_relative_to(target, self.root) or _is_link_like(target):

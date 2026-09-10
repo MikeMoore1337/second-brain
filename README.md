@@ -318,7 +318,9 @@ post-write validation и receipt-based rollback.
 Первичный user-level bootstrap и безопасное обновление Linux layout описаны в
 [runbook VPS runtime](docs/deployment/vps.md). Отдельный воспроизводимый
 ручной контракт будущего production Web deployment описан в
-[web production runbook](docs/deployment/web-production.md); этот repository
+[web production runbook](docs/deployment/web-production.md). Отдельный
+контракт persistent-vault sync с backup, exact-SHA и FF-only описан в
+[Vault Git Sync & Backup v1](docs/deployment/vault-sync.md). Этот repository
 не выполняет реальный SSH/deploy, DNS/VPS mutation или создание secrets.
 
 Owner-only GitHub OAuth для будущего публичного Web GUI описан в

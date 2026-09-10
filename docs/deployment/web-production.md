@@ -77,7 +77,9 @@ Tracked artifacts:
 │   └── <APPLICATION_SHA>/                # clean detached release worktree
 ├── current -> releases/<ACTIVE_SHA>
 └── runtime/
-    └── web.env
+    ├── web.env
+    ├── vault-sync.lock                    # shared Safe Write/sync lock
+    └── vault-backups/                     # local vault snapshots
 ```
 
 `second-brain/` — только control/source checkout для fetch и fast-forward
@@ -135,6 +137,7 @@ Owner создаёт `/srv/second-brain/runtime/web.env` вручную вне r
 Required variable names текущего public Web runtime:
 
 - `SECOND_BRAIN_VAULT_PATH`;
+- `SECOND_BRAIN_VAULT_OPERATION_LOCK_PATH`;
 - `SECOND_BRAIN_WEB_AUTH`;
 - `SECOND_BRAIN_PUBLIC_BASE_URL`;
 - `SECOND_BRAIN_GITHUB_CLIENT_ID`;
@@ -159,6 +162,12 @@ smoke.
 каталога `web.env` и должен указывать на sibling `second-brain-vault`. Не
 используйте `deploy/env.example` как production Web env file: его строгий
 bootstrap contract предназначен только для `SECOND_BRAIN_VAULT_PATH`.
+
+`SECOND_BRAIN_VAULT_OPERATION_LOCK_PATH` — non-secret absolute path вне vault,
+например `/srv/second-brain/runtime/vault-sync.lock`. Web/CLI Safe Write и
+[отдельный Vault Git Sync & Backup v1](vault-sync.md) обязаны использовать один
+и тот же lock path. Application release не fetch-ит, не fast-forward-ит и не
+заменяет persistent vault; vault sync не строит release и не перезапускает Web.
 
 ## External owner actions
 

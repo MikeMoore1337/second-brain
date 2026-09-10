@@ -321,9 +321,14 @@ def _guard_vault_reader_init(self: FileSystemVaultReader, root: Path) -> None:
     _ORIGINAL_VAULT_READER_INIT(self, root)
 
 
-def _guard_vault_writer_init(self: FileSystemVaultWriter, root: Path) -> None:
+def _guard_vault_writer_init(
+    self: FileSystemVaultWriter,
+    root: Path,
+    *,
+    operation_lock_path: Path | None = None,
+) -> None:
     _ensure_temporary_vault(root)
-    _ORIGINAL_VAULT_WRITER_INIT(self, root)
+    _ORIGINAL_VAULT_WRITER_INIT(self, root, operation_lock_path=operation_lock_path)
 
 
 _ORIGINAL_VAULT_READER_INIT = FileSystemVaultReader.__init__

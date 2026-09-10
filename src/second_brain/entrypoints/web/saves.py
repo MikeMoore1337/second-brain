@@ -262,7 +262,13 @@ class LazyVaultDraftSaveService:
             env_file=self.env_file,
             vault_path_override=self.vault_path_override,
         )
-        return FileSystemVaultReader(config.vault_path), FileSystemVaultWriter(config.vault_path)
+        return (
+            FileSystemVaultReader(config.vault_path),
+            FileSystemVaultWriter(
+                config.vault_path,
+                operation_lock_path=config.vault_operation_lock_path,
+            ),
+        )
 
 
 def build_production_save_service(

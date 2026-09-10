@@ -52,6 +52,10 @@ deploy/autodeploy.sh --sha <CI_SHA>
   пропускается вместо отката production назад.
 - `second-brain-vault` автоматически не обновляется. Он обязан быть clean и
   иметь `main == origin/main`; иначе deploy останавливается.
+- Если vault нужно обновить после push в его `main`, owner использует отдельный
+  [Vault Git Sync & Backup v1](vault-sync.md) exact-SHA workflow. Autodeploy
+  остаётся application release operation: он только проверяет vault и не
+  выполняет его fetch/fast-forward или backup.
 - Изменение tracked `deploy/systemd`, `deploy/caddy` или `deploy/root` между
   active и candidate release блокирует autodeploy. Root-managed integration
   выполняется owner-ом отдельно, после чего новый release можно выпустить

@@ -155,6 +155,17 @@ adapter делает ровно один binary `POST` на
 Vault является каноническим источником истины. Индексы, SQLite, embeddings и
 кэш относятся к производному состоянию и могут быть пересозданы из vault.
 
+### Production application release и persistent vault sync
+
+Application release использует immutable candidate worktree и atomic `current`
+по [Web production runbook](../deployment/web-production.md). Persistent vault
+остаётся отдельным sibling repository и обновляется только отдельной
+[Vault Git Sync & Backup v1](../deployment/vault-sync.md) операцией: shared
+lock, fetch exact target, clean relation check, recoverable backup, FF-only и
+post-sync `vault validate`. Ни одна из операций не выполняет скрытый
+двунаправленный merge; application deploy не заменяет vault, а vault sync не
+перезапускает application service.
+
 ## Слои Foundation и Safe Write Operations
 
 ```text

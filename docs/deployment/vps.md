@@ -21,7 +21,9 @@ sibling Git repositories. Git submodule не используется, а vault 
 ├── second-brain/
 ├── second-brain-vault/
 └── runtime/
-    └── .env
+    ├── .env
+    ├── vault-sync.lock                    # when production sync is enabled
+    └── vault-backups/                     # when production sync is enabled
 ```
 
 `<SECOND_BRAIN_ROOT>` — только операторский пример; приложение его не
@@ -257,5 +259,12 @@ files или вывод диагностики.
 systemd, timer/cron, Docker/Compose, Caddy/Nginx, DNS/TLS, FastAPI/Web
 UI/API, firewall или system packages. Для отдельного ручного production Web
 deployment используйте [web production runbook](web-production.md).
+
+Отдельная persistent-vault операция описана в
+[Vault Git Sync & Backup v1](vault-sync.md). Она не является bootstrap или
+application deployment. Для production Web в выбранный env-файл добавляется
+тот же non-secret `SECOND_BRAIN_VAULT_OPERATION_LOCK_PATH`, что и в vault sync;
+lock находится вне vault, а backup directory не добавляется ни в один Git
+repository.
 Agent Reach должен жить в отдельном environment/config location и не
 добавляется в `pyproject.toml`, vault или runtime bootstrap.
