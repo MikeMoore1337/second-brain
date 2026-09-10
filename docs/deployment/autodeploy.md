@@ -34,8 +34,8 @@ deploy/autodeploy.sh --sha <CI_SHA>
        +-> uv sync --locked
        +-> npm ci/check/build
        +-> doctor + vault validate
-       +-> current symlink switch
-       +-> systemd restart
+       +-> sudo root-owned release-control helper
+       +-> current symlink switch + systemd restart
        +-> local/public health
        +-> bounded rollback при post-activation failure
 ```
@@ -52,12 +52,18 @@ deploy/autodeploy.sh --sha <CI_SHA>
   пропускается вместо отката production назад.
 - `second-brain-vault` автоматически не обновляется. Он обязан быть clean и
   иметь `main == origin/main`; иначе deploy останавливается.
-- Изменение tracked `deploy/systemd` или `deploy/caddy` между active и candidate
-  release блокирует autodeploy. Root-managed integration выполняется owner-ом
-  отдельно, после чего новый release можно выпустить штатным способом.
+- Изменение tracked `deploy/systemd`, `deploy/caddy` или `deploy/root` между
+  active и candidate release блокирует autodeploy. Root-managed integration
+  выполняется owner-ом отдельно, после чего новый release можно выпустить
+  штатным способом.
 - Candidate создаётся только как detached worktree `releases/<SHA>` и до
   activation проходит locked Python sync, frontend check/build, `doctor` и
   `vault validate`.
+- `/srv/second-brain` остаётся root-owned. Пользователю `second-brain` не нужен
+  write-доступ к production root или `current` symlink.
+- Переключение `current` и restart выполняет только заранее установленный
+  root-owned helper `/usr/local/sbin/second-brain-release-control`. Он принимает
+  только `activate|rollback` и exact 40-character release SHA.
 - До изменения `current` проверяется health текущего known-good release. Новый
   release не используется как автоматический recovery для уже сломанного
   production.
@@ -86,23 +92,56 @@ deploy/autodeploy.sh --sha <CI_SHA>
 4. `/srv/second-brain/second-brain` и
    `/srv/second-brain/second-brain-vault` имеют unattended read-only доступ к
    своим private GitHub repositories. Autodeploy не создаёт Git credentials.
-5. Непривилегированный user `second-brain` может создавать release worktrees,
-   lock-файл в `runtime` и атомарно менять `current` symlink.
+5. Непривилегированный user `second-brain` может создавать release worktrees в
+   `/srv/second-brain/releases` и lock-файл в `/srv/second-brain/runtime`, но
+   сам `/srv/second-brain` остаётся root-owned.
 6. На VPS доступны `git`, `uv`, Python 3.14, Node 24.x, `npm`, `curl`, `flock`,
    `/usr/bin/sudo` и `/usr/bin/systemctl`.
 
-### Минимальное sudo permission
+## Root-owned release-control helper
 
-Autodeploy не устанавливает systemd unit и не меняет Caddy. Единственная
-privileged mutation - restart уже существующего service. Owner вручную создаёт
-узкое sudoers rule через `visudo`:
+Autodeploy не получает произвольный root shell и не запускает `sudo ln`,
+`sudo mv` или общий `sudo systemctl` напрямую. Owner один раз устанавливает
+узкий helper из проверенного `main`:
 
-```text
-second-brain ALL=(root) NOPASSWD: /usr/bin/systemctl restart second-brain-web.service
+```bash
+sudo install \
+  --owner=root \
+  --group=root \
+  --mode=0755 \
+  /srv/second-brain/second-brain/deploy/root/second-brain-release-control \
+  /usr/local/sbin/second-brain-release-control
+
+/usr/local/sbin/second-brain-release-control version
 ```
 
+Ожидаемая версия контракта - `1`.
+
+Helper фиксирован на `/srv/second-brain`, допускает только actions `activate`
+и `rollback`, принимает только 40-character lowercase SHA, переключает только
+`/srv/second-brain/current` на существующий `/srv/second-brain/releases/<SHA>`
+и перезапускает только `second-brain-web.service`.
+
+После проверки owner создаёт отдельное sudoers rule через `visudo`:
+
+```bash
+sudo visudo -f /etc/sudoers.d/second-brain-release-control
+```
+
+Содержимое:
+
+```text
+second-brain ALL=(root) NOPASSWD: /usr/local/sbin/second-brain-release-control *
+```
+
+Wildcard разрешает передать helper только аргументы. Сам root-owned helper
+повторно валидирует их и не выполняет shell/eval из пользовательского ввода.
 Не добавляйте `NOPASSWD: ALL`, shell, package manager, Caddy или произвольные
 `systemctl *` permissions.
+
+Изменение repository-версии `deploy/root/second-brain-release-control`
+автоматически блокирует следующий deploy, пока owner не установит новую
+проверенную версию helper вручную.
 
 ## Dedicated SSH key для GitHub Actions
 
@@ -153,7 +192,7 @@ private key или GitHub repository credentials в Git.
 ## Включение
 
 Autodeploy включается только после успешного первого manual deploy и проверки
-SSH/sudo prerequisites:
+SSH/release-control prerequisites:
 
 ```text
 PRODUCTION_DEPLOY_ENABLED=true
@@ -173,8 +212,9 @@ PRODUCTION_DEPLOY_ENABLED=true
 
 Если failure произошёл до activation, старый `current` и service не меняются.
 Если failure произошёл после activation, скрипт пытается вернуть предыдущий
-known-good release. Если rollback сам не проходит health, дальнейшие
-автоматические mutation прекращаются и требуется owner intervention.
+known-good release через тот же root-owned helper. Если rollback сам не
+проходит health, дальнейшие автоматические mutation прекращаются и требуется
+owner intervention.
 
 Существующий failed `releases/<SHA>` не переиспользуется и не удаляется
 автоматически. После диагностики owner отдельно решает, удалить ли его через
