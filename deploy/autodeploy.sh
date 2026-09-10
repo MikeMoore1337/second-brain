@@ -86,26 +86,16 @@ wait_public_health() {
 
 rollback_and_fail() {
   local reason="$1"
-  local rollback_link="$SECOND_BRAIN_ROOT/.current.$PREVIOUS_SHA.rollback"
 
   printf 'Новый release не прошёл post-activation smoke: %s\n' "$reason" >&2
   printf 'Возвращаю current на предыдущий known-good SHA %s.\n' "$PREVIOUS_SHA" >&2
 
-  if [[ -e "$rollback_link" || -L "$rollback_link" ]]; then
-    printf 'Rollback остановлен: временный symlink уже существует: %s\n' "$rollback_link" >&2
+  if ! /usr/bin/sudo -n "$RELEASE_CONTROL" rollback "$PREVIOUS_SHA"; then
+    printf 'Rollback release-control завершился ошибкой; дальнейшие mutation остановлены.\n' >&2
     exit 1
   fi
-
-  if ! ln -s "releases/$PREVIOUS_SHA" "$rollback_link"; then
-    printf 'Rollback не смог создать временный symlink.\n' >&2
-    exit 1
-  fi
-  if ! mv -T -- "$rollback_link" "$CURRENT_LINK"; then
-    printf 'Rollback не смог вернуть current symlink.\n' >&2
-    exit 1
-  fi
-  if ! /usr/bin/sudo -n /usr/bin/systemctl restart second-brain-web.service; then
-    printf 'Rollback вернул current, но restart предыдущего release завершился ошибкой.\n' >&2
+  if [[ "$(readlink "$CURRENT_LINK" 2>/dev/null)" != "releases/$PREVIOUS_SHA" ]]; then
+    printf 'Rollback завершился, но current не указывает на предыдущий release.\n' >&2
     exit 1
   fi
   if ! /usr/bin/systemctl is-active --quiet second-brain-web.service; then
@@ -151,7 +141,7 @@ done
 for command in git uv npm curl readlink flock seq; do
   require_command "$command"
 done
-[[ -x /usr/bin/sudo ]] || die "ожидается /usr/bin/sudo для narrowly-scoped service restart"
+[[ -x /usr/bin/sudo ]] || die "ожидается /usr/bin/sudo для narrowly-scoped release control"
 [[ -x /usr/bin/systemctl ]] || die "ожидается /usr/bin/systemctl"
 
 SECOND_BRAIN_ROOT=/srv/second-brain
@@ -162,6 +152,7 @@ CURRENT_LINK="$SECOND_BRAIN_ROOT/current"
 RUNTIME_ROOT="$SECOND_BRAIN_ROOT/runtime"
 RUNTIME_ENV="$RUNTIME_ROOT/web.env"
 LOCK_FILE="$RUNTIME_ROOT/autodeploy.lock"
+RELEASE_CONTROL=/usr/local/sbin/second-brain-release-control
 
 [[ -d "$APP_ROOT" ]] || die "не найден control checkout second-brain"
 [[ -d "$VAULT_ROOT" ]] || die "не найден sibling second-brain-vault"
@@ -170,7 +161,8 @@ LOCK_FILE="$RUNTIME_ROOT/autodeploy.lock"
 [[ -r "$RUNTIME_ENV" && -f "$RUNTIME_ENV" ]] || die "production web.env недоступен"
 [[ -w "$RUNTIME_ROOT" ]] || die "runtime directory недоступен для deploy lock"
 [[ -w "$RELEASES_ROOT" ]] || die "releases directory недоступен для candidate"
-[[ -w "$SECOND_BRAIN_ROOT" ]] || die "production root недоступен для atomic current switch"
+[[ -x "$RELEASE_CONTROL" ]] || die "root-owned release-control helper не установлен"
+[[ "$($RELEASE_CONTROL version)" == "1" ]] || die "неподдерживаемая версия release-control helper"
 
 exec 9>"$LOCK_FILE"
 flock -n 9 || die "другой production deploy уже выполняется"
@@ -221,8 +213,9 @@ fi
 
 git -C "$APP_ROOT" cat-file -e "$PREVIOUS_SHA^{commit}" \
   || die "previous known-good SHA отсутствует в control checkout"
-if ! git -C "$APP_ROOT" diff --quiet "$PREVIOUS_SHA" "$TARGET_SHA" -- deploy/systemd deploy/caddy; then
-  die "root-managed systemd/Caddy contract изменился; требуется owner-managed integration до autodeploy"
+if ! git -C "$APP_ROOT" diff --quiet "$PREVIOUS_SHA" "$TARGET_SHA" -- \
+  deploy/systemd deploy/caddy deploy/root; then
+  die "root-managed deployment contract изменился; требуется owner-managed integration до autodeploy"
 fi
 
 /usr/bin/systemctl is-active --quiet second-brain-web.service \
@@ -258,21 +251,19 @@ git -C "$APP_ROOT" worktree add --detach "$CANDIDATE_RELEASE" "$TARGET_SHA"
 [[ -z "$(git -C "$CANDIDATE_RELEASE" status --porcelain=v1 --untracked-files=no)" ]] \
   || die "tracked files candidate изменились во время build"
 
-NEXT_LINK="$SECOND_BRAIN_ROOT/.current.$TARGET_SHA.next"
-[[ ! -e "$NEXT_LINK" && ! -L "$NEXT_LINK" ]] \
-  || die "временный activation symlink уже существует"
-ln -s "releases/$TARGET_SHA" "$NEXT_LINK"
-mv -T -- "$NEXT_LINK" "$CURRENT_LINK"
+if ! /usr/bin/sudo -n "$RELEASE_CONTROL" activate "$TARGET_SHA"; then
+  if [[ "$(readlink "$CURRENT_LINK" 2>/dev/null || true)" == "releases/$TARGET_SHA" ]]; then
+    rollback_and_fail "release-control переключил current, но activation завершился ошибкой"
+  fi
+  die "release-control activation завершился ошибкой до переключения current"
+fi
 
 [[ "$(readlink "$CURRENT_LINK")" == "releases/$TARGET_SHA" ]] \
   || rollback_and_fail "current не указывает на новый release после activation"
 [[ "$(git -C "$CURRENT_LINK" rev-parse --verify HEAD 2>/dev/null)" == "$TARGET_SHA" ]] \
   || rollback_and_fail "active release не соответствует exact CI SHA"
-
-/usr/bin/sudo -n /usr/bin/systemctl restart second-brain-web.service \
-  || rollback_and_fail "systemd restart завершился ошибкой"
 /usr/bin/systemctl is-active --quiet second-brain-web.service \
-  || rollback_and_fail "systemd service не active после restart"
+  || rollback_and_fail "systemd service не active после activation"
 wait_local_health || rollback_and_fail "local /healthz не восстановился"
 wait_public_health || rollback_and_fail "public /healthz не прошёл через Cloudflare/Caddy"
 
