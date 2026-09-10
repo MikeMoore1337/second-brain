@@ -40,10 +40,7 @@ def test_autodeploy_script_has_strict_exact_sha_release_contract() -> None:
 def test_autodeploy_script_keeps_root_config_and_vault_fail_closed() -> None:
     script = AUTODEPLOY_SCRIPT.read_text(encoding="utf-8")
 
-    assert (
-        'diff --quiet "$PREVIOUS_SHA" "$TARGET_SHA" -- deploy/systemd deploy/caddy'
-        in script
-    )
+    assert 'diff --quiet "$PREVIOUS_SHA" "$TARGET_SHA" -- deploy/systemd deploy/caddy' in script
     assert "autodeploy его не обновляет" in script
     assert "первый production deploy выполняется owner-managed" in script
 
