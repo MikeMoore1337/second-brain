@@ -5,8 +5,11 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
+WORKFLOW_SUFFIXES = (".yml", ".yaml")
 IMMUTABLE_ACTION = re.compile(
     r"^\s*uses:\s+\S+@[0-9a-f]{40}(?:\s+#.*)?$",
 )
@@ -16,15 +19,39 @@ def _workflow(name: str) -> str:
     return (WORKFLOWS / name).read_text(encoding="utf-8")
 
 
-def test_all_workflow_actions_use_immutable_commit_pins() -> None:
+def _workflow_paths(root: Path = WORKFLOWS) -> tuple[Path, ...]:
+    return tuple(
+        sorted(
+            (path for suffix in WORKFLOW_SUFFIXES for path in root.glob(f"*{suffix}")),
+            key=str,
+        ),
+    )
+
+
+def _assert_workflow_actions_are_pinned(paths: tuple[Path, ...]) -> None:
     action_lines: list[str] = []
-    for path in WORKFLOWS.glob("*.yml"):
+    for path in paths:
         action_lines.extend(
             line for line in path.read_text(encoding="utf-8").splitlines() if "uses:" in line
         )
 
     assert action_lines
     assert all(IMMUTABLE_ACTION.fullmatch(line) for line in action_lines), action_lines
+
+
+def test_all_workflow_actions_use_immutable_commit_pins() -> None:
+    _assert_workflow_actions_are_pinned(_workflow_paths())
+
+
+def test_yaml_workflow_with_mutable_action_ref_fails_guard(tmp_path: Path) -> None:
+    workflow = tmp_path / "mutable.yaml"
+    workflow.write_text(
+        "name: fixture\njobs:\n  check:\n    steps:\n      - uses: actions/checkout@v4\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AssertionError):
+        _assert_workflow_actions_are_pinned(_workflow_paths(tmp_path))
 
 
 def test_pull_request_ci_is_unprivileged() -> None:
