@@ -514,7 +514,10 @@ def create(
         config = load_config(env_file=options.env_file, vault_path_override=options.vault_path)
         result = CreateManagedNote(
             FileSystemVaultReader(config.vault_path),
-            FileSystemVaultWriter(config.vault_path),
+            FileSystemVaultWriter(
+                config.vault_path,
+                operation_lock_path=config.vault_operation_lock_path,
+            ),
         ).execute(CreateManagedNoteRequest(note_type, title, apply=apply))
     except (ConfigurationError, WriteSafetyError) as exc:
         typer.echo(f"Ошибка конфигурации записи: {exc}", err=True)
@@ -559,7 +562,10 @@ def create_from_draft(
         config = load_config(env_file=options.env_file, vault_path_override=options.vault_path)
         result = CreateManagedNoteFromDraft(
             FileSystemVaultReader(config.vault_path),
-            FileSystemVaultWriter(config.vault_path),
+            FileSystemVaultWriter(
+                config.vault_path,
+                operation_lock_path=config.vault_operation_lock_path,
+            ),
         ).execute(CreateManagedNoteFromDraftRequest(draft, apply=apply))
     except (ConfigurationError, WriteSafetyError) as exc:
         typer.echo(f"Ошибка конфигурации записи: {exc}", err=True)
@@ -612,7 +618,10 @@ def proposal_create(
         config = load_config(env_file=options.env_file, vault_path_override=options.vault_path)
         note_creator = CreateManagedNote(
             FileSystemVaultReader(config.vault_path),
-            FileSystemVaultWriter(config.vault_path),
+            FileSystemVaultWriter(
+                config.vault_path,
+                operation_lock_path=config.vault_operation_lock_path,
+            ),
         )
         result = CreateNoteProposal(
             note_creator,
