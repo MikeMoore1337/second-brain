@@ -31,8 +31,6 @@ jobs:
       PRODUCTION_SSH_HOST: ${{ vars.PRODUCTION_SSH_HOST }}
       PRODUCTION_SSH_PORT: ${{ vars.PRODUCTION_SSH_PORT }}
       PRODUCTION_SSH_USER: ${{ vars.PRODUCTION_SSH_USER }}
-      PRODUCTION_SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
-      PRODUCTION_SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
 
     steps:
       - name: Checkout exact tested SHA
@@ -51,13 +49,16 @@ jobs:
           [[ "$PRODUCTION_SSH_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]
           [[ "$PRODUCTION_SSH_PORT" =~ ^[0-9]{1,5}$ ]]
           (( PRODUCTION_SSH_PORT >= 1 && PRODUCTION_SSH_PORT <= 65535 ))
-          test -n "$PRODUCTION_SSH_PRIVATE_KEY"
-          test -n "$PRODUCTION_SSH_KNOWN_HOSTS"
 
       - name: Configure pinned SSH identity
         shell: bash
+        env:
+          PRODUCTION_SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+          PRODUCTION_SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
+          test -n "$PRODUCTION_SSH_PRIVATE_KEY"
+          test -n "$PRODUCTION_SSH_KNOWN_HOSTS"
           install -m 700 -d "$HOME/.ssh"
           printf '%s\n' "$PRODUCTION_SSH_PRIVATE_KEY" > "$HOME/.ssh/production_deploy_key"
           printf '%s\n' "$PRODUCTION_SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
