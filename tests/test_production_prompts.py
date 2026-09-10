@@ -39,6 +39,7 @@ def test_vault_prompt_is_exact_sha_sync_not_application_deploy() -> None:
     assert "HUMAN_REQUIRED" in prompt
     assert "deployment" not in prompt.casefold()
     assert re.search(r"--target-sha\s+" + SHA, prompt)
+    assert "--apply" in prompt
 
 
 def test_application_prompt_strategy_remains_available() -> None:

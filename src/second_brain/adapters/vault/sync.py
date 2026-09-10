@@ -454,6 +454,7 @@ class VaultSync:
                     "merge",
                     "--ff-only",
                     "--no-edit",
+                    "--no-overwrite-ignore",
                     target_head,
                 ),
                 "FAST_FORWARD_FAILED",
@@ -1045,6 +1046,11 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--expected-branch", default="main")
     parser.add_argument("--retention-count", type=int, default=DEFAULT_RETENTION_COUNT)
     parser.add_argument("--timeout-seconds", type=float, default=DEFAULT_TIMEOUT_SECONDS)
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="allow verified backup and fast-forward mutation; default is non-mutating",
+    )
     parser.add_argument("--format", choices=("text", "json"), default="text")
     return parser
 
@@ -1053,6 +1059,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     """CLI entry point used by the generated owner prompt."""
 
     args = _build_parser().parse_args(argv)
+    if not args.apply:
+        print(
+            "Vault production sync STOP: explicit --apply is required; "
+            "no backup or merge was attempted",
+            file=sys.stderr,
+        )
+        return 2
     try:
         config = VaultSyncConfig(
             vault_root=args.vault_root,

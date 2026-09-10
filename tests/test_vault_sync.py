@@ -25,6 +25,7 @@ from second_brain.adapters.vault.sync import (
     VaultSyncStatus,
     run_sync_command,
 )
+from second_brain.adapters.vault.sync import main as vault_sync_main
 from second_brain.adapters.vault.writer import FileSystemVaultWriter
 from second_brain.application.writes import CreateNotePlan, WriteSafetyError
 from second_brain.domain.models import NoteType
@@ -84,6 +85,28 @@ def _advance_remote(origin: Path, tmp_path: Path) -> str:
     _run_git(publisher, "commit", "-m", "advance vault")
     _run_git(publisher, "push", "origin", "main")
     return _run_git(publisher, "rev-parse", "HEAD")
+
+
+def _make_vault_with_ignored_credential(tmp_path: Path) -> tuple[Path, Path, Path]:
+    seed = tmp_path / "ignored-seed"
+    origin = tmp_path / "ignored-vault.git"
+    clone = tmp_path / "ignored-vault"
+    app_root = tmp_path / "ignored-app"
+    seed.mkdir()
+    _private_directory(app_root)
+    _run_git(seed, "init", "-b", "main")
+    _run_git(seed, "config", "user.name", "Sync Test")
+    _run_git(seed, "config", "user.email", "sync@example.invalid")
+    (seed / ".gitignore").write_text(".env\n", encoding="utf-8")
+    (seed / "vault.md").write_text("synthetic vault data\n", encoding="utf-8")
+    _run_git(seed, "add", "--", ".gitignore", "vault.md")
+    _run_git(seed, "commit", "-m", "initial vault")
+    _run_git(tmp_path, "init", "--bare", str(origin))
+    _run_git(seed, "remote", "add", "origin", str(origin))
+    _run_git(seed, "push", "origin", "main")
+    _run_git(tmp_path, "--git-dir", str(origin), "symbolic-ref", "HEAD", "refs/heads/main")
+    _run_git(tmp_path, "clone", str(origin), str(clone))
+    return clone, origin, app_root
 
 
 def _config(
@@ -162,6 +185,33 @@ def test_clean_behind_uses_backup_then_fast_forward_only(tmp_path: Path) -> None
     assert "vault.md" in names
     assert ".env" not in names
     assert ".git" not in names
+
+
+def test_ignored_credential_collision_cannot_be_overwritten(tmp_path: Path) -> None:
+    vault, origin, app_root = _make_vault_with_ignored_credential(tmp_path)
+    source = _run_git(vault, "rev-parse", "HEAD")
+    secret = "LOCAL_SECRET_MUST_SURVIVE"
+    (vault / ".env").write_text(secret + "\n", encoding="utf-8")
+
+    publisher = tmp_path / "ignored-publisher"
+    _run_git(tmp_path, "clone", str(origin), str(publisher))
+    _run_git(publisher, "config", "user.name", "Remote Publisher")
+    _run_git(publisher, "config", "user.email", "publisher@example.invalid")
+    (publisher / ".env").write_text("REMOTE_SECRET\n", encoding="utf-8")
+    _run_git(publisher, "add", "--force", ".env")
+    _run_git(publisher, "commit", "-m", "track credential-shaped path")
+    _run_git(publisher, "push", "origin", "main")
+    target = _run_git(publisher, "rev-parse", "HEAD")
+
+    config, _ = _config(tmp_path, vault, origin, app_root, target)
+    result = _sync(config)
+
+    assert result.status is VaultSyncStatus.HUMAN_REQUIRED
+    assert result.code == "FAST_FORWARD_FAILED"
+    assert result.mutation_performed is True
+    assert _run_git(vault, "rev-parse", "HEAD") == source
+    assert (vault / ".env").read_text(encoding="utf-8") == secret + "\n"
+    assert result.backup_path is not None and result.backup_path.is_file()
 
 
 class _FailingBackupStore(BackupStore):
@@ -391,3 +441,33 @@ def test_subprocess_failure_does_not_leak_stderr_or_note_content(tmp_path: Path)
     assert result.code == "REMOTE_UNAVAILABLE"
     assert secret not in result.message
     assert secret not in json.dumps(result.as_dict())
+
+
+def test_sync_cli_requires_explicit_apply(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    def unexpected_execute(self: VaultSync) -> VaultSyncResult:
+        raise AssertionError("non-apply CLI mode must not execute sync")
+
+    monkeypatch.setattr(VaultSync, "execute", unexpected_execute)
+    exit_code = vault_sync_main(
+        [
+            "--vault-root",
+            str(tmp_path / "vault"),
+            "--backup-root",
+            str(tmp_path / "backups"),
+            "--lock-path",
+            str(tmp_path / "lock"),
+            "--app-root",
+            str(tmp_path / "app"),
+            "--target-sha",
+            "0" * 40,
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "explicit --apply" in captured.err
+    assert captured.out == ""

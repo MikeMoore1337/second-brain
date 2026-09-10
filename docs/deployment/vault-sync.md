@@ -62,7 +62,9 @@ workflow или считать vault sync deploy-ом.
 
 `python -m second_brain.adapters.vault.sync` выполняет bounded explicit-argv
 операцию с `shell=False`, `GIT_TERMINAL_PROMPT=0` и без вывода Git stderr,
-stdout или содержимого заметок.
+stdout или содержимого заметок. Без явного `--apply` CLI является
+неизменяющим режимом и останавливается до backup и merge; generated owner
+prompt добавляет `--apply` только для уже подтверждённой операции.
 
 Порядок действий:
 
@@ -83,9 +85,10 @@ stdout или содержимого заметок.
 5. Классифицировать relation local `HEAD` к fetched `origin/main`.
 6. Для clean strictly-behind состояния создать и проверить backup до
    fast-forward mutation. Equal state — validated no-op без backup.
-7. Выполнить только `git merge --ff-only --no-edit origin/main`, после чего
-   проверить exact final SHA, clean tree, path integrity и application
-   `vault validate`.
+7. Выполнить только `git merge --ff-only --no-edit --no-overwrite-ignore
+   origin/main`, после чего проверить exact final SHA, clean tree, path
+   integrity и application `vault validate`. Ignored local credential collision
+   останавливает merge до перезаписи.
 8. При успехе вернуть bounded `NO_OP` или `SYNCED`. Retention cleanup удаляет
    только собственные paired snapshots и всегда сохраняет минимум два
    последних известных backup; ошибка cleanup не откатывает и не удаляет

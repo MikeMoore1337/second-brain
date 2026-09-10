@@ -67,6 +67,7 @@ def _render_vault_sync(context: ProductionPromptContext) -> str:
     command = " \\\n  ".join(
         (
             "uv run --python 3.14 --no-sync python -m second_brain.adapters.vault.sync",
+            "--apply",
             f"--vault-root {shlex.quote(context.production_path)}",
             f"--backup-root {shlex.quote(context.backup_root)}",
             f"--lock-path {shlex.quote(context.lock_path)}",
