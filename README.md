@@ -27,6 +27,38 @@ uv run second-brain --env-file .env doctor
 uv run second-brain --env-file .env vault validate
 ```
 
+## second-brain + second-brain-vault
+
+Для постоянной работы используйте два независимых sibling-каталога:
+
+```text
+second-brain-workspace/
+├── second-brain/
+└── second-brain-vault/
+```
+
+В таком layout `SECOND_BRAIN_VAULT_PATH=../second-brain-vault` в явно
+выбранном `.env` разрешается относительно каталога этого `.env`. Тот же
+контракт можно переопределить абсолютным `--vault-path`; второй способ
+конфигурации не нужен. Markdown/YAML в vault — canonical source of truth,
+Obsidian — необязательный клиент над теми же файлами, а Search/Retrieval и UI —
+производные read-only projections.
+
+Safe Write сначала показывает reviewed draft и полный diff, а записывает только
+после отдельного явного подтверждения/apply. UUID, path, `created` и остальные
+application-owned metadata normal Safe Write создаёт сам. Git backup/version
+history остаётся отдельной capability boundary и не является частью atomic
+Safe Write; текущая production-синхронизация vault не включена автоматически.
+
+Перед packaged GUI из checkout один раз соберите frontend из каталога `web`
+(`npm ci`, `npm run check`, `npm run build`); `web/dist` остаётся локальным
+игнорируемым артефактом. Открывайте vault в Obsidian через `Open folder as vault`.
+Проверки `doctor` и
+`vault validate` read-only; normal Web GUI capture/review и явный Safe Write
+apply — операции, которые могут изменить только выбранный vault. Production
+credentials, public runtime, backup policy и deployment требуют отдельного
+owner-controlled setup; запуск Obsidian для приложения не нужен.
+
 ## Тесты и границы изоляции
 
 Обычный запуск тестов полностью локальный и не должен читать или изменять
