@@ -3,7 +3,7 @@
 # Подключите его только через уже существующий owner-managed import либо через
 # explicit first-install bootstrap с import site-directory.
 
-brain.mikemoore.top {
+https://brain.mikemoore.top:8444 {
     # Operational access logs идут в Caddy service journal, но GitHub OAuth
     # endpoints с потенциальными code/state в query не логируются.
     log {
@@ -12,7 +12,18 @@ brain.mikemoore.top {
     }
     log_skip /auth/github*
 
+    # Owner-managed Origin CA certificate. The certificate and key
+    # are provisioned outside this repository and their values never belong in
+    # Git, issue, PR, or diagnostics.
+    tls /etc/caddy/certs/brain.mikemoore.top.pem /etc/caddy/certs/brain.mikemoore.top.key
+
     # Caddy сохраняет входящий Host и передаёт стандартные
     # X-Forwarded-Host/X-Forwarded-Proto к loopback upstream.
     reverse_proxy 127.0.0.1:8123
+}
+
+# Explicit HTTP listener on VPS :80. The public redirect target is always
+# portless; :8444 is an origin-only listener and never appears in Location.
+http://brain.mikemoore.top {
+    redir https://brain.mikemoore.top{uri} 308
 }

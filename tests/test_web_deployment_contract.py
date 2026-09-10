@@ -53,13 +53,22 @@ def test_caddy_template_has_exact_https_boundary_and_oauth_log_policy() -> None:
     caddy = _read(CADDY_PATH)
 
     assert not CADDY_TEMPLATE_PATH.exists()
-    assert re.search(r"(?m)^brain\.mikemoore\.top\s*\{", caddy)
+    assert re.search(r"(?m)^https://brain\.mikemoore\.top:8444\s*\{", caddy)
+    assert re.search(r"(?m)^http://brain\.mikemoore\.top\s*\{", caddy)
+    assert not re.search(r"(?m)^brain\.mikemoore\.top\s*\{", caddy)
     assert "reverse_proxy 127.0.0.1:8123" in caddy
     assert "log_skip /auth/github*" in caddy
     assert "output stderr" in caddy
     assert "format json" in caddy
+    assert "redir https://brain.mikemoore.top{uri} 308" in caddy
+    assert "redir https://brain.mikemoore.top:8444" not in caddy
+    assert (
+        "tls /etc/caddy/certs/brain.mikemoore.top.pem /etc/caddy/certs/brain.mikemoore.top.key"
+    ) in caddy
+    assert "https_port" not in caddy
     assert not re.search(r"(?m)^\s*\*\.", caddy)
     assert "tls_insecure_skip_verify" not in caddy
+    assert "tls internal" not in caddy.casefold()
     assert "Access-Control-Allow-Origin" not in caddy
     assert "allow_origins" not in caddy
     assert "cloudflare" not in caddy.casefold()
@@ -72,6 +81,33 @@ def test_runbook_records_current_cli_build_oauth_and_external_boundaries() -> No
     for required in (
         "https://brain.mikemoore.top",
         "https://brain.mikemoore.top/auth/github/callback",
+        "Cloudflare edge HTTPS :443",
+        "site-scoped",
+        "https://brain.mikemoore.top:8444",
+        "http://brain.mikemoore.top",
+        "redir https://brain.mikemoore.top{uri} 308",
+        "global Caddy options",
+        "другие Caddy sites",
+        "explicit portless HTTP-to-HTTPS redirect",
+        ":8444",
+        ":80",
+        'http.host eq "brain.mikemoore.top" and ssl',
+        '(http.host eq "brain.mikemoore.top" and ssl)',
+        "Destination port",
+        "Host header override",
+        "SNI override",
+        "Full (strict)",
+        "Flexible SSL",
+        "/etc/caddy/certs/brain.mikemoore.top.pem",
+        "/etc/caddy/certs/brain.mikemoore.top.key",
+        "Origin CA",
+        "Xray",
+        "x-ui",
+        ":2096",
+        ":25566",
+        "Reminder Bot",
+        "UFW",
+        "firewall hardening",
         "uv sync --locked --python 3.14",
         'RELEASES_ROOT="$SECOND_BRAIN_ROOT/releases"',
         "current -> releases/<ACTIVE_SHA>",
@@ -107,6 +143,10 @@ def test_runbook_records_current_cli_build_oauth_and_external_boundaries() -> No
         "Caddy/Nginx",
         "Docker/Compose",
         "PRODUCTION_AUTHENTICATED_SMOKE = PENDING_OWNER_EXTERNAL_SETUP",
+        "CLOUDFLARE_CHANGED = NO",
+        "XRAY_CHANGED = NO",
+        "MTPROXY_CHANGED = NO",
+        "FIREWALL_CHANGED = NO",
     ):
         assert required in runbook
 
@@ -130,6 +170,12 @@ def test_runbook_records_current_cli_build_oauth_and_external_boundaries() -> No
     assert "CLOUDFLARE_API_TOKEN=" not in runbook
     assert "ghp_" not in runbook
     assert "github_pat_" not in runbook
+    assert "https_port" not in runbook
+    assert "PUBLIC_BASE_URL=https://brain.mikemoore.top:8444" not in runbook
+    assert "Homepage URL: `https://brain.mikemoore.top:8444" not in runbook
+    assert "Authorization callback URL:\n     `https://brain.mikemoore.top:8444" not in runbook
+    assert "redir https://brain.mikemoore.top:8444" not in runbook
+    assert "111.88.215.204" not in runbook
 
 
 def test_runbook_code_blocks_do_not_offer_destructive_git_commands() -> None:
@@ -146,10 +192,35 @@ def test_runbook_code_blocks_do_not_offer_destructive_git_commands() -> None:
         assert forbidden not in code
 
 
+def test_runbook_does_not_mutate_protected_workloads_or_firewall() -> None:
+    code = _fenced_code(_read(RUNBOOK_PATH)).casefold()
+
+    for forbidden in (
+        "systemctl stop xray",
+        "systemctl restart xray",
+        "systemctl reload xray",
+        "systemctl stop x-ui",
+        "systemctl restart x-ui",
+        "systemctl stop mtproxy",
+        "systemctl restart mtproxy",
+        "docker stop",
+        "docker restart",
+        "docker compose down",
+        "ufw enable",
+        "iptables",
+        "nft ",
+    ):
+        assert forbidden not in code
+
+
 def test_release_and_caddy_procedures_are_preserve_by_default() -> None:
     runbook = _read(RUNBOOK_PATH)
     code = _fenced_code(runbook)
 
+    assert "https_port" not in runbook
+    assert "https://brain.mikemoore.top:8444 {" in code
+    assert "http://brain.mikemoore.top {" in code
+    assert "redir https://brain.mikemoore.top{uri} 308" in code
     assert 'git -C "$APP_ROOT" worktree add --detach "$CANDIDATE_RELEASE" "$APP_SHA"' in code
     assert 'cd "$CANDIDATE_RELEASE/web"' in code
     assert 'cd "$APP_ROOT/web"' not in code

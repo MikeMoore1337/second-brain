@@ -1,34 +1,44 @@
-# Production Web Deployment v1
+# Production Web Deployment v1.1
 
 Статус этого документа — repository-side contract для ручного owner-managed
 deployment. Он не выполняет SSH, DNS/VPS mutation, установку Caddy, создание
-OAuth App, создание secrets, выдачу сертификата, real login или production
-deploy.
+OAuth App, создание secrets, выдачу Origin CA сертификата, real login или
+production deploy. Cloudflare и защищённые существующие workloads в этой
+repository task не изменяются.
 
 ## Границы и архитектура
 
 Целевой public authority — `https://brain.mikemoore.top`. Схема deployment:
 
 ```text
-Internet
-   |
-HTTPS :443
-   |
-Caddy (единственная public HTTP/HTTPS boundary)
-   |
+Cloudflare edge HTTPS :443
+   |  Origin Rule для HTTPS brain.mikemoore.top -> origin port 8444
+VPS Caddy HTTPS :8444
+   |  explicit Origin CA tls cert/key
 127.0.0.1:8123
    |
 Second Brain Web (`second-brain web serve`)
    |
 second-brain-vault
+
+Cloudflare edge HTTP :80
+   |
+VPS Caddy HTTP :80 -> explicit portless HTTP-to-HTTPS redirect
 ```
 
 Сохраняются следующие invariants:
 
 - приложение слушает только `127.0.0.1:8123`; публичным интерфейсом владеет
   только Caddy;
-- TLS терминируется Caddy, а HTTP для hostname штатно перенаправляется на
-  HTTPS средствами automatic HTTPS;
+- существующий Xray сохраняет свой listener на `:443`; Caddy не занимает его и
+  не останавливает, не перезапускает и не перенастраивает Xray;
+- Caddy принимает HTTPS origin traffic на `:8444` через site-scoped address
+  `https://brain.mikemoore.top:8444`; это внутренний origin port, а не часть
+  public authority;
+- TLS терминируется Caddy с owner-managed Origin CA cert/key, а HTTP на `:80`
+  explicit site block перенаправляет на public HTTPS без `:8444`;
+- public URL, OAuth callback, browser links и Cloudflare hostname остаются
+  `https://brain.mikemoore.top`, без explicit port;
 - Web runtime работает от отдельного непривилегированного пользователя;
 - `second-brain` и приватный `second-brain-vault` остаются независимыми
   sibling repositories;
@@ -163,10 +173,13 @@ repository task:
    при first deployment или уже быть symlink на release. Не создавать файл с
    production values в repository.
 3. Создать DNS `A` и/или `AAAA` record для `brain.mikemoore.top`, указывающий
-   на VPS. Конкретный DNS provider этим repository не предполагается.
-4. До TLS enablement проверить, что DNS резолвится на ожидаемый VPS и что
-   inbound TCP ports `80` и `443` доступны Caddy. Не направлять public DNS на
-   `8123`.
+   на owner-verified VPS origin; конкретный DNS provider этим repository не
+   предполагается. DNS record должен оставаться proxied через Cloudflare и не
+   должен указывать public traffic на `8123` или публиковать `:8444`.
+4. До TLS enablement выполнить read-only VPS preflight ниже: `:443` может быть
+   занят защищённым Xray, `:8444` обязан быть свободен для Caddy, а `:80` —
+   доступен для HTTP redirect. Если `:8444` занят, STOP; другой origin port
+   автоматически не выбирается.
 5. Вручную создать GitHub OAuth App с такими значениями:
 
    - Homepage URL: `https://brain.mikemoore.top`;
@@ -177,11 +190,55 @@ repository task:
    Secret. Values размещаются только в protected `web.env`.
 6. Установить и проверить Caddy 2.x, поддерживающий текущую директиву
    `log_skip` (Caddy 2.8+), а также открыть его configuration path и service
-   journal operator-ом. Cloudflare Tunnel и wildcard hosts в этот contract не
-   входят.
-7. Перед запуском проверить текущие mtproxy listeners/workloads и сохранить
-   подтверждение, что deployment не занимает их ports и не изменяет их
-   service.
+   journal operator-ом. Site snippet должен объявлять
+   `https://brain.mikemoore.top:8444` и explicit
+   `tls <cert_file> <key_file>`; global Caddy options менять нельзя.
+   Cloudflare Tunnel и wildcard hosts в этот contract не входят.
+7. Вручную получить Origin CA certificate, покрывающий exact hostname
+   `brain.mikemoore.top`, и сохранить cert/key только на VPS в путях из Caddy
+   snippet. Repository task не создаёт сертификат и не получает его значения.
+8. Перед запуском проверить и зафиксировать текущие Xray `:443`, x-ui `:2096`,
+   MTProxy `:8443`, SSH `:25566` и Reminder Bot Docker workload. Deployment не
+   занимает их ports и не изменяет, не перезапускает и не перенастраивает их.
+
+### Cloudflare owner actions: documented, not performed here
+
+Следующие действия выполняет только owner вручную после отдельного deployment
+authorization. В этой repository task не вызываются Cloudflare API/UI и не
+изменяются DNS, SSL/TLS или Rules:
+
+1. В Cloudflare DNS сохранить proxied `A`/`AAAA` record
+   `brain.mikemoore.top`, направленный на owner-verified VPS origin. Не
+   фиксировать публичный IP в application/runtime artifact; при operator
+   preflight использовать внешний placeholder `VPS_ORIGIN_IPV4`.
+2. В Cloudflare SSL/TLS установить и проверить `Full (strict)`. Не использовать
+   Flexible SSL или промежуточный `Full` без strict verification.
+3. В Cloudflare Origin CA выпустить сертификат exact hostname
+   `brain.mikemoore.top`. Owner размещает его вне Git в:
+
+   ```text
+   /etc/caddy/certs/brain.mikemoore.top.pem
+   /etc/caddy/certs/brain.mikemoore.top.key
+   ```
+
+   Приватный key не вставляется в issue, PR, shell history, logs или
+   diagnostics; значения сертификата и key в repository не появляются.
+4. В Rules -> Origin Rules создать правило только для HTTPS hostname с
+   expression:
+
+   ```text
+   http.host eq "brain.mikemoore.top" and ssl
+   ```
+
+   Destination port: `8444`. Не задавать Host header override и SNI override.
+   Для документационного примера допустима та же expression во внешних
+   скобках: `(http.host eq "brain.mikemoore.top" and ssl)`.
+5. Не-HTTPS запросы (`ssl` не совпадает) оставить на origin `:80`, чтобы Caddy
+   выполнил redirect на `https://brain.mikemoore.top/...` без `:8444`.
+6. После фактического owner-managed deploy выполнить Cloudflare Trace и
+   внешний functional request: HTTPS hostname должен идти на origin `:8444`,
+   HTTP — на origin `:80`, а public Location/authority не должен раскрывать
+   `:8444`. Trace до deploy в этой task не выполняется.
 
 ## VPS preflight: read-only checklist
 
@@ -215,10 +272,16 @@ systemctl list-unit-files --type=service --no-pager
 
 В выводе нужно отдельно зафиксировать:
 
-- свободны ли `80` и `443` для Caddy;
+- `:443` может быть занят protected Xray: это ожидаемое состояние, которое
+  нельзя исправлять остановкой, restart или изменением Xray;
+- `:8444` должен быть свободен для Caddy. Если он занят любым process/service,
+  это безусловный STOP; не выбирайте другой port автоматически;
+- `:80` должен быть доступен Caddy для HTTP listener и redirect;
 - занят ли `8123`, и если занят — слушает ли именно `127.0.0.1:8123` текущий
   Second Brain Web;
-- нет ли existing Caddy/Nginx/Apache/httpd conflict;
+- сохранены ли protected listeners `:2096` x-ui, `:8443` MTProxy и `:25566`
+  SSH, а также Reminder Bot Docker workload;
+- нет ли existing Caddy/Nginx/Apache/httpd conflict на `:80` или `:8444`;
 - какие Docker/Compose workloads активны, если `docker` установлен:
 
 ```bash
@@ -229,6 +292,11 @@ command -v docker >/dev/null 2>&1 && docker ps --all
 зафиксируйте его фактический unit/process и listener из read-only вывода,
 затем повторно проверьте его после Caddy/service smoke. Не выполняйте restart
 mtproxy ради проверки.
+
+Состояние firewall проверяйте только read-only. Не включайте UFW и не меняйте
+firewall rules в рамках этого deployment: firewall hardening — отдельный
+checkpoint, а `ufw inactive` не является основанием для `ufw enable`. Не
+публикуйте `8123` наружу.
 
 ### Runtime tools и vault access
 
@@ -457,6 +525,48 @@ Second Brain поставляет только site snippet
 задайте его в `CADDY_CONFIG`; не предполагайте exclusive ownership. Сохраните
 конфигурацию без вывода credentials в issue, PR или diagnostics:
 
+Site snippet является self-contained и объявляет только собственные listener
+адреса: HTTPS `https://brain.mikemoore.top:8444` и отдельный HTTP
+`http://brain.mikemoore.top`. Никакие global Caddy options для переноса HTTPS
+port не требуются или не изменяются; это предотвращает изменение listener/default
+port других Caddy sites.
+
+Полный tracked site contract:
+
+```text
+https://brain.mikemoore.top:8444 {
+    log {
+        output stderr
+        format json
+    }
+    log_skip /auth/github*
+    tls /etc/caddy/certs/brain.mikemoore.top.pem /etc/caddy/certs/brain.mikemoore.top.key
+    reverse_proxy 127.0.0.1:8123
+}
+
+http://brain.mikemoore.top {
+    redir https://brain.mikemoore.top{uri} 308
+}
+```
+
+HTTP `redir` — explicit deterministic portless redirect на public authority;
+он не зависит от automatic HTTPS redirect. `:80` остаётся стандартным HTTP
+listener для explicit `http://` site, а `:8444` существует только как
+Second Brain origin listener и не появляется в public `Location`.
+
+Site snippet сохраняет upstream `127.0.0.1:8123`, JSON access-log policy и
+explicit custom TLS:
+
+```text
+tls /etc/caddy/certs/brain.mikemoore.top.pem /etc/caddy/certs/brain.mikemoore.top.key
+```
+
+Это только logical paths. Owner заранее размещает соответствующий Origin CA
+cert/key вне repository; реальные значения, private key и ACME credentials не
+попадают в Git. При отсутствии или неверном чтении cert/key — STOP. Не
+используйте `tls_insecure_skip_verify`, отключение TLS verification, `tls
+internal` или wildcard certificate для другого hostname.
+
 ```bash
 command -v caddy
 CADDY_CONFIG=/etc/caddy/Caddyfile
@@ -474,8 +584,10 @@ fi
 Если Caddy уже использует owner-managed imported site directory, owner должен
 указать именно существующий directory и существующий `import` glob из
 глобального config. Только в этой ветке установите отдельный snippet внутрь
-этого directory; сначала проверьте, что exact hostname не определён там уже
-другим site block. Глобальный config не изменяется:
+этого directory; сначала проверьте, что exact hostname и `:8444` не определены
+там уже другим site block. Global config не изменяйте: self-contained snippet
+не требует server-wide port/default mutation, поэтому другие Caddy sites
+сохраняют свои listeners:
 
 ```bash
 # Пример значений; замените их на фактический существующий import из inspection.
@@ -508,7 +620,7 @@ sudoedit "$CADDY_CONFIG"
 ```
 
 Содержимое нового глобального `/etc/caddy/Caddyfile` в этом first-install
-path — только:
+path — только import site directory:
 
 ```text
 import /etc/caddy/sites.d/*.caddy
@@ -518,7 +630,8 @@ import /etc/caddy/sites.d/*.caddy
 imports, это отдельный operator integration checkpoint. Не используйте
 `install`, `cp`, `tee` или redirect поверх этого config. Сначала сохраните
 backup и осмотрите файл, затем owner вручную добавляет import существующего
-или нового site directory с сохранением всех текущих routes:
+или нового site directory с сохранением всех текущих routes. Не добавляйте
+server-wide port/default overrides:
 
 ```bash
 BACKUP_DIR=/var/backups/caddy
@@ -529,8 +642,10 @@ sudoedit "$CADDY_CONFIG"
 ```
 
 После ручной интеграции snippet directory и import должны быть проверены
-вместе с существующими routes. Если безопасно добавить import без потери
-existing config нельзя — STOP, не overwrite.
+вместе с существующими routes, а фактические cert/key paths должны быть
+readable Caddy service user. Если безопасно добавить import без потери existing config
+нельзя — STOP, не overwrite. Если exact hostname или `:8444` конфликтует
+с существующей site definition — STOP.
 
 Во всех ветках `caddy validate` выполняется на фактическом полном config и
 является обязательным gate перед reload:
@@ -625,6 +740,14 @@ curl --silent --show-error --dump-header - --output /dev/null \
 
 Вторая команда должна показать HTTP-to-HTTPS redirect с `Location` на
 `https://brain.mikemoore.top/healthz`; первая — успешный HTTPS health.
+Ни один public URL или redirect не должен содержать `:8444`: этот port
+используется только между Cloudflare edge и VPS origin Caddy по Origin Rule.
+
+После owner-managed deploy отдельно проверьте Cloudflare Trace для exact
+hostname. HTTPS (`ssl`) должен resolve в origin port `8444`, HTTP — в origin
+port `80`; Trace не должен показывать Host header или SNI override. Если
+Cloudflare SSL/TLS не подтверждён как `Full (strict)` или Origin CA certificate
+не совпадает с exact hostname, deployment считается `FAILED`.
 
 С отдельной external network owner подтверждает, что `127.0.0.1:8123` не
 доступен извне. `ss -ltnp` на VPS должен показывать loopback listener и не
@@ -674,10 +797,15 @@ owner confirmation.
 
 Deployment fail-closed:
 
+- `:8444` занят, exact Origin Rule отсутствует/не совпадает, либо Caddy
+  certificate/key не читаются — не продолжать и не выбирать другой port;
 - build, `check`, `doctor` или `vault validate` не проходят — service не
   обновлять и `current` не переключать;
 - systemd verification/start не проходит — сохранить bounded diagnostics без
   secrets и остановиться;
+- Cloudflare state не `Full (strict)`, TLS verification отключена, firewall
+  изменён вне отдельного checkpoint, либо protected workload отличается от
+  preflight — считать deployment `FAILED` и не продолжать;
 - Caddy validation не проходит — не выполнять reload;
 - health, redirect, unauthenticated или последующий auth smoke не проходит —
   считать deployment `FAILED`;
@@ -724,5 +852,9 @@ PRODUCTION_DEPLOY = NOT_PERFORMED
 DNS_CHANGED = NO
 VPS_CHANGED = NO
 SECRETS_CREATED = NO
+CLOUDFLARE_CHANGED = NO
+XRAY_CHANGED = NO
+MTPROXY_CHANGED = NO
+FIREWALL_CHANGED = NO
 second-brain-vault = UNTOUCHED
 ```
