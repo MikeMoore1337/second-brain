@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+ROOT=/srv/second-brain
+RELEASES_ROOT="$ROOT/releases"
+CURRENT_LINK="$ROOT/current"
+SERVICE=second-brain-web.service
+CONTRACT_VERSION=1
+
+die() {
+  printf 'Ошибка release-control: %s\n' "$*" >&2
+  exit 1
+}
+
+if [[ "${1:-}" == "version" && $# -eq 1 ]]; then
+  printf '%s\n' "$CONTRACT_VERSION"
+  exit 0
+fi
+
+[[ "$(id -u)" == "0" ]] || die "команда должна выполняться через sudo от root"
+[[ $# -eq 2 ]] || die "ожидаются ACTION и 40-character release SHA"
+
+ACTION="$1"
+SHA="$2"
+
+case "$ACTION" in
+  activate|rollback) ;;
+  *) die "разрешены только actions activate и rollback" ;;
+esac
+
+[[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || die "release SHA имеет неверный формат"
+[[ -d "$RELEASES_ROOT" && ! -L "$RELEASES_ROOT" ]] || die "releases root недоступен"
+
+TARGET="$RELEASES_ROOT/$SHA"
+[[ -d "$TARGET" && ! -L "$TARGET" ]] || die "release directory недоступен: $SHA"
+[[ -f "$TARGET/pyproject.toml" ]] || die "release не похож на Second Brain application tree"
+
+if [[ -e "$CURRENT_LINK" || -L "$CURRENT_LINK" ]]; then
+  [[ -L "$CURRENT_LINK" ]] || die "current существует, но не является symlink"
+fi
+
+NEXT_LINK="$ROOT/.current.$SHA.$ACTION"
+[[ ! -e "$NEXT_LINK" && ! -L "$NEXT_LINK" ]] || die "временный symlink уже существует"
+
+cleanup_next() {
+  if [[ -L "$NEXT_LINK" ]]; then
+    /usr/bin/unlink -- "$NEXT_LINK" || true
+  fi
+}
+trap cleanup_next EXIT
+
+/usr/bin/ln -s "releases/$SHA" "$NEXT_LINK"
+/usr/bin/mv -T -- "$NEXT_LINK" "$CURRENT_LINK"
+trap - EXIT
+
+[[ -L "$CURRENT_LINK" ]] || die "current не является symlink после switch"
+[[ "$(/usr/bin/readlink "$CURRENT_LINK")" == "releases/$SHA" ]] \
+  || die "current не указывает на ожидаемый release после switch"
+
+/usr/bin/systemctl restart "$SERVICE"
+
+printf 'release-control %s: current -> releases/%s; %s restarted\n' \
+  "$ACTION" "$SHA" "$SERVICE"
