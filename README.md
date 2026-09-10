@@ -5,6 +5,13 @@ Markdown/YAML-файлы внешнего vault являются канонич�
 Obsidian — основной поддерживаемый клиент, но ядро не зависит ни от Obsidian,
 ни от Git.
 
+Публичная граница проекта намеренно отделена от пользовательских данных:
+этот репозиторий содержит код, документацию и синтетические fixtures, но не
+реальные заметки, вложения, Obsidian state, production environment-файлы или
+credentials. `second-brain-vault` — отдельный приватный репозиторий данных; он
+не является submodule/subtree этого проекта и не входит в его публичную
+дистрибуцию.
+
 ## Agent & Role Pack v1
 
 Навигация по ролям и повторяемым workflow: [AGENTS.md](AGENTS.md),
@@ -26,6 +33,10 @@ Copy-Item .env.example .env
 uv run second-brain --env-file .env doctor
 uv run second-brain --env-file .env vault validate
 ```
+
+`.env` предназначен только для локальных значений и игнорируется Git; реальные
+credentials не следует переносить в репозиторий или в CLI arguments. Production
+environment и секреты хранятся вне checkout, см. [web production runbook](docs/deployment/web-production.md).
 
 ## second-brain + second-brain-vault
 
@@ -431,3 +442,8 @@ Retrieval реализованы как bounded reviewed/read-only projections. 
 
 Проект распространяется по лицензии Apache-2.0. Полный текст находится в
 `LICENSE` и сохраняется на языке оригинала.
+Уведомления и тексты лицензий для включённых third-party assets и design
+tooling сохранены в [third-party notices](third_party/licenses/),
+[design licenses](docs/design/licenses/),
+[font license](web/src/assets/fonts/OFL.txt) и
+[tooling provenance](docs/design/tooling.md).

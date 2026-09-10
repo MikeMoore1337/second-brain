@@ -22,18 +22,38 @@ htmlcov/
 
 # Runtime-состояние и производные данные
 .local/
+runtime/
+data/vault/
 *.db
 *.sqlite
 *.sqlite3
+*.db-*
+*.sqlite-*
+*.sqlite3-*
+*.db-journal
+*.sqlite-journal
+*.sqlite3-journal
 *.log
 *.pid
 
 # Локальная конфигурация и секреты
 .env
 .env.*
+*.env
 !.env.example
 *.pem
 *.key
+
+# Тестовые и browser/QA-артефакты
+.pytest-tmp*/
+.tmp_pytest*/
+test-results/
+playwright-report/
+blob-report/
+*.trace.zip
+*.har
+storage-state*.json
+auth-state*.json
 
 # Редакторы и операционные системы
 .idea/
