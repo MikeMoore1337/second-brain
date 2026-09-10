@@ -1,0 +1,40 @@
+[Unit]
+Description=Second Brain Web GUI
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=second-brain
+Group=second-brain
+WorkingDirectory=/srv/second-brain/second-brain
+
+# Замените этот абсолютный путь результатом `command -v uv` на VPS.
+# Environment file находится вне обоих repositories и должен иметь mode 600.
+EnvironmentFile=/srv/second-brain/runtime/web.env
+ExecStart=/usr/local/bin/uv run --python 3.14 --no-sync second-brain --env-file /srv/second-brain/runtime/web.env web serve --port 8123
+
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=60s
+TimeoutStopSec=30s
+KillSignal=SIGTERM
+KillMode=control-group
+UMask=0077
+
+# `web serve` не имеет public host option и bind-ит приложение на
+# 127.0.0.1:8123. Не заменяйте listener на другой.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=full
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

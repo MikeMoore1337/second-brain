@@ -1,0 +1,17 @@
+# Production example для Caddy.
+# Устанавливайте rendered file как /etc/caddy/Caddyfile только после DNS и
+# успешного VPS preflight из docs/deployment/web-production.md.
+
+brain.mikemoore.top {
+    # Operational access logs идут в Caddy service journal, но GitHub OAuth
+    # endpoints с потенциальными code/state в query не логируются.
+    log {
+        output stderr
+        format json
+    }
+    log_skip /auth/github*
+
+    # Caddy сохраняет входящий Host и передаёт стандартные
+    # X-Forwarded-Host/X-Forwarded-Proto к loopback upstream.
+    reverse_proxy 127.0.0.1:8123
+}
