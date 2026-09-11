@@ -477,16 +477,17 @@ cd "$CANDIDATE_RELEASE/web"
 npm ci
 npm run check
 npm run build
+npm run qa:pwa
 test -s dist/index.html
 cd "$CANDIDATE_RELEASE"
 test "$(git -C "$CANDIDATE_RELEASE" rev-parse --verify HEAD)" = "$APP_SHA"
 ```
 
 `web/dist` не коммитится и не переносится из другого release. Stale bundle,
-собранный из неизвестного SHA, является STOP condition. Если `npm ci`, check
-или build не проходит, active release и service не обновляются. `npm ci` и
-build не являются частью production service; Node runtime в systemd unit не
-нужен.
+собранный из неизвестного SHA, является STOP condition. Если `npm ci`, check,
+build или PWA artifact QA не проходит, active release и service не обновляются.
+`npm ci`, build и PWA QA не являются частью production service; Node runtime в
+systemd unit не нужен.
 
 ### 4. Read-only application validation из candidate
 

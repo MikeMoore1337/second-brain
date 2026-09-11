@@ -29,6 +29,7 @@ def test_autodeploy_script_has_strict_exact_sha_release_contract() -> None:
         "npm ci",
         "npm run check",
         "npm run build",
+        "npm run qa:pwa",
         "/usr/local/sbin/second-brain-release-control",
         '"$RELEASE_CONTROL" activate "$TARGET_SHA"',
         '"$RELEASE_CONTROL" rollback "$PREVIOUS_SHA"',

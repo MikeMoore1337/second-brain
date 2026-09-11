@@ -955,7 +955,14 @@ class WebAuthMiddleware:
             or path == "/react/assets"
             or path.startswith("/react/assets/")
         )
-        if public_path or public_asset:
+        public_pwa_asset = path in {
+            "/manifest.webmanifest",
+            "/sw.js",
+            "/offline.html",
+            "/offline.css",
+            "/icons",
+        } or path.startswith("/icons/")
+        if public_path or public_asset or public_pwa_asset:
             await self.app(scope, receive, send)
             return
 

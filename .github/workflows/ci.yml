@@ -80,3 +80,5 @@ jobs:
         run: npm run check
       - name: Build frontend
         run: npm run build
+      - name: Check production PWA artifact
+        run: npm run qa:pwa

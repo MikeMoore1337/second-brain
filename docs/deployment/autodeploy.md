@@ -32,7 +32,7 @@ deploy/autodeploy.sh --sha <CI_SHA>
        +-> vault sync guard
        +-> immutable releases/<SHA> worktree
        +-> uv sync --locked
-       +-> npm ci/check/build
+       +-> npm ci/check/build/PWA QA
        +-> doctor + vault validate
        +-> sudo root-owned release-control helper
        +-> current symlink switch + systemd restart
@@ -61,8 +61,8 @@ deploy/autodeploy.sh --sha <CI_SHA>
   выполняется owner-ом отдельно, после чего новый release можно выпустить
   штатным способом.
 - Candidate создаётся только как detached worktree `releases/<SHA>` и до
-  activation проходит locked Python sync, frontend check/build, `doctor` и
-  `vault validate`.
+  activation проходит locked Python sync, frontend check/build/PWA artifact QA,
+  `doctor` и `vault validate`.
 - `/srv/second-brain` остаётся root-owned. Пользователю `second-brain` не нужен
   write-доступ к production root или `current` symlink.
 - Переключение `current` и restart выполняет только заранее установленный

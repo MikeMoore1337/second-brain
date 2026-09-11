@@ -243,6 +243,7 @@ git -C "$APP_ROOT" worktree add --detach "$CANDIDATE_RELEASE" "$TARGET_SHA"
   npm ci
   npm run check
   npm run build
+  npm run qa:pwa
   test -s dist/index.html
 )
 
