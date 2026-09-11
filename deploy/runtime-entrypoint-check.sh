@@ -55,7 +55,7 @@ assert_runtime_entrypoint() {
   [[ "$venv_real" == "$candidate_real/.venv" ]] \
     || die "candidate .venv escaped exact candidate"
 
-  entrypoint="$venv_root/$ENTRYPOINT_RELATIVE_PATH"
+  entrypoint="$CANDIDATE_RELEASE/$ENTRYPOINT_RELATIVE_PATH"
   [[ -f "$entrypoint" && ! -L "$entrypoint" && -x "$entrypoint" ]] \
     || die "candidate runtime entrypoint отсутствует, unsafe или не executable"
   entrypoint_real="$(readlink -f -- "$entrypoint" 2>/dev/null)" \
