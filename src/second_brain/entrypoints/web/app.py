@@ -35,6 +35,13 @@ from second_brain.entrypoints.web.legacy_app import (
 from second_brain.entrypoints.web.legacy_app import (
     create_app as _legacy_create_app,
 )
+from second_brain.entrypoints.web.retrospective_calibration import (
+    MAX_RAW_RETROSPECTIVE_CALIBRATION_BODY_BYTES,
+    RETROSPECTIVE_CALIBRATION_REQUEST_HEADER_NAME,
+    RETROSPECTIVE_CALIBRATION_REQUEST_HEADER_VALUE,
+    RetrospectiveCalibrationWebService,
+    install_retrospective_calibration_routes,
+)
 
 # Preserve the historical module surface used by direct imports and monkeypatch-based
 # tests. Star imports intentionally omit private names, so expose the known seams
@@ -97,6 +104,7 @@ def create_app(**kwargs: Any) -> FastAPI:
 
     assistant_service = kwargs.pop("assistant_web_service", None)
     compare_service = kwargs.pop("compare_web_service", None)
+    retrospective_calibration_service = kwargs.pop("retrospective_calibration_service", None)
     auth_config = kwargs.pop("web_auth_config", None)
     auth_gateway = kwargs.pop("web_auth_gateway", None)
     auth_clock = kwargs.pop("web_auth_clock", None)
@@ -112,6 +120,12 @@ def create_app(**kwargs: Any) -> FastAPI:
         assistant_service=assistant_service,
         compare_service=compare_service,
         simulate_me_service=simulate_me_service,
+        env_file=env_file,
+        vault_path_override=vault_path_override,
+    )
+    install_retrospective_calibration_routes(
+        app,
+        service=retrospective_calibration_service,
         env_file=env_file,
         vault_path_override=vault_path_override,
     )
@@ -148,6 +162,10 @@ __all__ = [
     "MAX_RAW_COMPARE_BODY_BYTES",
     "AssistantWebService",
     "CompareWebService",
+    "MAX_RAW_RETROSPECTIVE_CALIBRATION_BODY_BYTES",
+    "RETROSPECTIVE_CALIBRATION_REQUEST_HEADER_NAME",
+    "RETROSPECTIVE_CALIBRATION_REQUEST_HEADER_VALUE",
+    "RetrospectiveCalibrationWebService",
     "WebAuthConfig",
     "create_app",
 ]

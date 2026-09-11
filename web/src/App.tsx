@@ -11,6 +11,7 @@ import brainMark from "./assets/brain-mark-48.webp";
 import brainMark2x from "./assets/brain-mark-96.webp";
 
 import { AssistantCompareSurface } from "./assistant-compare-surface";
+import { RetrospectiveCalibrationSurface } from "./retrospective-calibration-surface";
 import {
   CaptureSurface,
   DecisionJournalSurface,
@@ -30,6 +31,7 @@ const navigation = [
   ["#self-model", "Модель себя", "self-model"],
   ["#simulate-me", "Прогноз", "simulate"],
   ["#assistant-compare", "Совет и сравнение", "relation"],
+  ["#retrospective-calibration", "Ретроспективная проверка", "growth"],
   ["#self-retrieval", "Сбор контекста", "self-retrieval"],
   ["#search", "Поиск", "search"],
   ["#diagnostics", "Диагностика", "diagnostics"],
@@ -156,6 +158,7 @@ export function App(): ReactElement {
                 <FoldSection id="self-model" title="Модель себя" icon="self-model"><SelfModelSurface /></FoldSection>
                 <FoldSection id="simulate-me" title="Прогноз" icon="simulate"><SimulateMeSurface /></FoldSection>
                 <FoldSection id="assistant-compare" title="Совет и сравнение" icon="relation"><AssistantCompareSurface /></FoldSection>
+                <FoldSection id="retrospective-calibration" title="Ретроспективная проверка" icon="growth"><RetrospectiveCalibrationSurface /></FoldSection>
                 <FoldSection id="self-retrieval" title="Сбор контекста" icon="self-retrieval"><SelfRetrievalSurface /></FoldSection>
                 <FoldSection id="diagnostics" title="Диагностика" icon="diagnostics"><DiagnosticsSurface /></FoldSection>
               </div>
