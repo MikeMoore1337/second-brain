@@ -31,6 +31,7 @@ jobs:
       VAULT_SHA: ${{ inputs.vault_sha }}
       APPLY: ${{ inputs.apply }}
       PRODUCTION_VAULT_SYNC_ENABLED: ${{ vars.PRODUCTION_VAULT_SYNC_ENABLED }}
+      PRODUCTION_ROOT: ${{ vars.PRODUCTION_ROOT }}
       PRODUCTION_SSH_HOST: ${{ vars.PRODUCTION_SSH_HOST }}
       PRODUCTION_SSH_PORT: ${{ vars.PRODUCTION_SSH_PORT }}
       PRODUCTION_SSH_USER: ${{ vars.PRODUCTION_SSH_USER }}
@@ -46,6 +47,11 @@ jobs:
           [[ "$VAULT_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$APPLY" = "true"
           test "$PRODUCTION_VAULT_SYNC_ENABLED" = "true"
+          [[ ${#PRODUCTION_ROOT} -ge 2 && ${#PRODUCTION_ROOT} -le 200 ]]
+          [[ "$PRODUCTION_ROOT" =~ ^/([A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+$ ]]
+          case "$PRODUCTION_ROOT" in
+            */./*|*/../*|*/.|*/..) exit 1 ;;
+          esac
 
           [[ ${#PRODUCTION_SSH_HOST} -ge 1 && ${#PRODUCTION_SSH_HOST} -le 253 ]]
           [[ "$PRODUCTION_SSH_HOST" =~ ^[A-Za-z0-9._:-]+$ ]]
@@ -66,6 +72,9 @@ jobs:
     timeout-minutes: 20
     env:
       VAULT_SHA: ${{ inputs.vault_sha }}
+      APPLY: ${{ inputs.apply }}
+      PRODUCTION_VAULT_SYNC_ENABLED: ${{ vars.PRODUCTION_VAULT_SYNC_ENABLED }}
+      PRODUCTION_ROOT: ${{ vars.PRODUCTION_ROOT }}
       PRODUCTION_SSH_HOST: ${{ vars.PRODUCTION_SSH_HOST }}
       PRODUCTION_SSH_PORT: ${{ vars.PRODUCTION_SSH_PORT }}
       PRODUCTION_SSH_USER: ${{ vars.PRODUCTION_SSH_USER }}
@@ -84,6 +93,12 @@ jobs:
           test "$GITHUB_REF" = "refs/heads/main"
           test "$(git rev-parse --verify HEAD)" = "$GITHUB_SHA"
           [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+      - name: Recheck vault sync enable gate before SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$PRODUCTION_VAULT_SYNC_ENABLED" = "true"
 
       - name: Configure pinned SSH identity
         shell: bash
@@ -115,7 +130,7 @@ jobs:
             -o ServerAliveInterval=15 \
             -o ServerAliveCountMax=3 \
             "$PRODUCTION_SSH_USER@$PRODUCTION_SSH_HOST" \
-            bash -s -- --target-sha "$VAULT_SHA" < deploy/vault-sync-production.sh
+            bash -s -- --production-root "$PRODUCTION_ROOT" --target-sha "$VAULT_SHA" < deploy/vault-sync-production.sh
 
       - name: Remove runner SSH material
         if: always()

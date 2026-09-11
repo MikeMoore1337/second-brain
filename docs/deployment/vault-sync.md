@@ -9,7 +9,7 @@
 В production остаются два независимых repository и обычный Git worktree:
 
 ```text
-/srv/second-brain/
+<PRODUCTION_ROOT>/
 ├── second-brain/                         # application/control checkout
 ├── second-brain-vault/                   # persistent vault worktree, main
 ├── releases/                             # application release worktrees
@@ -19,6 +19,14 @@
     ├── vault-sync.lock                    # shared operation lock, mode 600
     └── vault-backups/                     # local recoverable snapshots, mode 700
 ```
+
+`PRODUCTION_ROOT` — bounded absolute path из trusted non-secret repository
+variable с тем же именем. Он не является `workflow_dispatch` input и не
+принимается от произвольного пользователя; после preflight workflow передаёт
+его wrapper-у явно. Значение production-конфигурации может быть, например,
+`/srv/second-brain`, но этот machine-specific путь не зашит в code contract.
+Wrapper производит только фиксированные дочерние paths из этой layout model и
+проверяет их containment.
 
 `second-brain` отвечает за приложение, CLI, Safe Write и этот sync mechanism.
 `second-brain-vault` остаётся canonical Markdown/YAML repository и не становится
@@ -40,11 +48,17 @@ Owner указывает два явных input-а:
   hexadecimal символов;
 - `apply` — отдельное boolean-подтверждение операции, по умолчанию `false`.
 
+Owner также заранее задаёт в repository variables bounded non-secret
+`PRODUCTION_ROOT`. Это конфигурация доверенного deployment environment, а не
+новый secret и не dispatch input. Workflow не позволяет подменить root во время
+запуска.
+
 До любого SSH workflow bounded fail-closed preflight проверяет
 `workflow_dispatch`, repository `MikeMoore1337/second-brain`,
 `refs/heads/main`, exact SHA, `apply=true`, отдельную repository variable
-`PRODUCTION_VAULT_SYNC_ENABLED=true` и bounded значения
-`PRODUCTION_SSH_HOST`, `PRODUCTION_SSH_PORT`, `PRODUCTION_SSH_USER`. Ошибка
+`PRODUCTION_VAULT_SYNC_ENABLED=true`, bounded `PRODUCTION_ROOT` и bounded
+значения `PRODUCTION_SSH_HOST`, `PRODUCTION_SSH_PORT`, `PRODUCTION_SSH_USER`.
+Ошибка
 любого guard-а — failed workflow, а не silent green skip.
 
 `PRODUCTION_VAULT_SYNC_ENABLED` — отдельный owner opt-in. Его следует включить
@@ -53,11 +67,13 @@ Owner указывает два явных input-а:
 из `PRODUCTION_DEPLOY_ENABLED` и не требует изменения production `web.env`.
 
 Только после успешного preflight mutation job получает environment `production`
-и повторно проверяет trusted exact workflow SHA. Он использует существующие
-настройки:
+и повторно проверяет trusted exact workflow SHA. Непосредственно перед
+SSH setup он заново проверяет `PRODUCTION_VAULT_SYNC_ENABLED=true`; если
+owner выключил gate, queued job завершается failed до SSH и до production
+mutation. Он использует существующие настройки и trusted repository variable:
 
 - variables: `PRODUCTION_SSH_HOST`, `PRODUCTION_SSH_PORT`,
-  `PRODUCTION_SSH_USER`;
+  `PRODUCTION_SSH_USER`, `PRODUCTION_ROOT`;
 - secrets: `PRODUCTION_SSH_PRIVATE_KEY`, `PRODUCTION_SSH_KNOWN_HOSTS`.
 
 Новые production credentials, PAT, cross-repository token, vault-specific
@@ -69,14 +85,14 @@ secret или новый SSH key не нужны. Private key и known-hosts с�
 Workflow использует тот же GitHub concurrency domain, что application deploy:
 `group: second-brain-production`, `cancel-in-progress: false`. Это сериализует
 две GitHub production operations, но не заменяет kernel
-`/srv/second-brain/runtime/vault-sync.lock`: тот же lock по-прежнему защищает
+`<PRODUCTION_ROOT>/runtime/vault-sync.lock`: тот же lock по-прежнему защищает
 sync от Safe Write и других VPS writers.
 
-Mutation job передаёт по SSH только explicit `--target-sha` в
-`deploy/vault-sync-production.sh`. Wrapper проверяет Linux, non-root,
-фиксированный production layout и direct
-`/srv/second-brain/current/.venv/bin/python`, после чего запускает
-существующий `second_brain.adapters.vault.sync` с фиксированными paths,
+Mutation job передаёт по SSH explicit `--production-root` из trusted
+repository variable и explicit `--target-sha` в
+`deploy/vault-sync-production.sh`. Wrapper проверяет bounded root, Linux,
+non-root, containment всех derived paths и ожидаемую production layout model,
+после чего запускает direct `$PRODUCTION_ROOT/current/.venv/bin/python` с
 canonical remote, branch `main`, `--apply` и JSON output. Bash не дублирует
 VaultSync logic и не вызывает `autodeploy.sh`, `release-control`, systemd,
 Caddy, application build/restart или `web.env`.
@@ -139,6 +155,17 @@ application-deploy` и продолжает ссылаться на
 workflow или считать vault sync deploy-ом.
 
 ## Protocol
+
+Обычная application/user-facing Safe Write остаётся отдельной операцией для
+одной managed note и сохраняет dry-run/no-overwrite/rollback boundary из
+`AGENTS.md`. Этот workflow — узкий explicitly owner-authorized
+repository-level production Vault Git Sync protocol для Issue #217; он не
+является Safe Write и не является общим разрешением записи в vault. Он
+разрешён только при exact-SHA, explicit
+`--apply`, отдельном `PRODUCTION_VAULT_SYNC_ENABLED=true`, shared lock, clean
+worktree, exact repository/branch, backup-before-FF, FF-only и post-sync
+validation. Любой gate или invariant завершается fail-closed
+`HUMAN_REQUIRED`; reset, rebase, force и auto-conflict-resolution запрещены.
 
 `python -m second_brain.adapters.vault.sync` выполняет bounded explicit-argv
 операцию с `shell=False`, `GIT_TERMINAL_PROMPT=0` и без вывода Git stderr,
@@ -212,9 +239,10 @@ repair. Expected repository не читается из mutable production checko
 
 ## Backup and recovery
 
-Snapshots are local, recoverable and outside both Git repositories. The default
-directory is `/srv/second-brain/runtime/vault-backups`; no paid storage or
-external backup service is required by v1. Each snapshot has:
+Snapshots are local, recoverable and outside both Git repositories. The
+directory is `<PRODUCTION_ROOT>/runtime/vault-backups` (for example,
+`/srv/second-brain/runtime/vault-backups`); no paid storage or external backup
+service is required by v1. Each snapshot has:
 
 - private `tar.gz` archive and paired private `.manifest.json` sidecar;
 - creation timestamp, source HEAD, requested origin target, file count and
@@ -237,11 +265,11 @@ blind overwrite, or a destructive cleanup to make the check green.
 
 ## Shared Safe Write lock
 
-Production `/srv/second-brain/runtime/web.env` must contain this non-secret
+Production `<PRODUCTION_ROOT>/runtime/web.env` must contain this non-secret
 variable in addition to the existing Web settings:
 
 ```dotenv
-SECOND_BRAIN_VAULT_OPERATION_LOCK_PATH=/srv/second-brain/runtime/vault-sync.lock
+SECOND_BRAIN_VAULT_OPERATION_LOCK_PATH=<PRODUCTION_ROOT>/runtime/vault-sync.lock
 ```
 
 The parent `runtime` directory is private and `web.env` remains mode `600`.

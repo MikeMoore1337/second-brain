@@ -2,26 +2,19 @@
 set -Eeuo pipefail
 umask 077
 
-readonly SECOND_BRAIN_ROOT="/srv/second-brain"
-readonly VAULT_ROOT="$SECOND_BRAIN_ROOT/second-brain-vault"
-readonly APP_ROOT="$SECOND_BRAIN_ROOT/current"
-readonly RELEASES_ROOT="$SECOND_BRAIN_ROOT/releases"
-readonly RUNTIME_ROOT="$SECOND_BRAIN_ROOT/runtime"
-readonly BACKUP_ROOT="$RUNTIME_ROOT/vault-backups"
-readonly LOCK_PATH="$RUNTIME_ROOT/vault-sync.lock"
-readonly PYTHON="$APP_ROOT/.venv/bin/python"
-readonly EXPECTED_BRANCH="main"
-readonly EXPECTED_REMOTE="https://github.com/MikeMoore1337/second-brain-vault.git"
-
+PRODUCTION_ROOT=""
 TARGET_SHA=""
 
 usage() {
   cat <<'USAGE'
 Использование:
-  deploy/vault-sync-production.sh --target-sha VAULT_SHA
+  deploy/vault-sync-production.sh \
+    --production-root PRODUCTION_ROOT \
+    --target-sha VAULT_SHA
 
 Узкий непривилегированный wrapper запускает существующий
-second_brain.adapters.vault.sync для фиксированного production layout.
+second_brain.adapters.vault.sync для bounded production layout,
+производного от явно переданного trusted PRODUCTION_ROOT.
 USAGE
 }
 
@@ -32,6 +25,26 @@ die() {
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || die "команда '$1' не найдена в PATH"
+}
+
+assert_bounded_production_root() {
+  local path="$1"
+
+  [[ ${#path} -ge 2 && ${#path} -le 200 ]] \
+    || die "production root должен иметь длину от 2 до 200 символов"
+  [[ "$path" =~ ^/([A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+$ ]] \
+    || die "production root должен быть bounded absolute path"
+  case "$path" in
+    */./*|*/../*|*/.|*/..) die "production root не должен содержать . или .. path component" ;;
+  esac
+}
+
+assert_path_within_root() {
+  local path="$1"
+  local label="$2"
+
+  [[ "$path" == "$PRODUCTION_ROOT/"* ]] \
+    || die "$label находится вне configured production root"
 }
 
 assert_directory() {
@@ -56,9 +69,13 @@ assert_private_directory() {
 
 assert_production_layout() {
   local current_target current_real release_real releases_real release_sha
-  local vault_real runtime_real
+  local production_real vault_real runtime_real
 
-  assert_directory "$SECOND_BRAIN_ROOT" "production root"
+  assert_directory "$PRODUCTION_ROOT" "production root"
+  production_real="$(readlink -f -- "$PRODUCTION_ROOT" 2>/dev/null)" \
+    || die "не удалось разрешить production root"
+  [[ "$production_real" == "$PRODUCTION_ROOT" ]] \
+    || die "production root path escaped configured root"
   assert_directory "$VAULT_ROOT" "production vault"
   assert_directory "$RELEASES_ROOT" "application releases root"
   assert_directory "$RUNTIME_ROOT" "production runtime"
@@ -118,6 +135,11 @@ assert_production_layout() {
 
 while (( $# > 0 )); do
   case "$1" in
+    --production-root)
+      (( $# >= 2 )) || die "для --production-root нужен PRODUCTION_ROOT"
+      PRODUCTION_ROOT="$2"
+      shift 2
+      ;;
     --target-sha)
       (( $# >= 2 )) || die "для --target-sha нужен VAULT_SHA"
       TARGET_SHA="$2"
@@ -133,10 +155,35 @@ while (( $# > 0 )); do
   esac
 done
 
+[[ -n "$PRODUCTION_ROOT" ]] \
+  || die "нужен explicit --production-root из trusted configuration"
+assert_bounded_production_root "$PRODUCTION_ROOT"
 [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] \
   || die "--target-sha должен быть exact 40-character lowercase Git SHA"
 [[ "$(uname -s)" == "Linux" ]] || die "wrapper поддерживает только Linux"
 [[ "$(id -u)" != "0" ]] || die "production sync нельзя запускать от root"
+
+readonly VAULT_ROOT="$PRODUCTION_ROOT/second-brain-vault"
+readonly APP_ROOT="$PRODUCTION_ROOT/current"
+readonly RELEASES_ROOT="$PRODUCTION_ROOT/releases"
+readonly RUNTIME_ROOT="$PRODUCTION_ROOT/runtime"
+readonly BACKUP_ROOT="$RUNTIME_ROOT/vault-backups"
+readonly LOCK_PATH="$RUNTIME_ROOT/vault-sync.lock"
+readonly PYTHON="$APP_ROOT/.venv/bin/python"
+readonly EXPECTED_BRANCH="main"
+readonly EXPECTED_REMOTE="https://github.com/MikeMoore1337/second-brain-vault.git"
+
+for path_spec in \
+  "${VAULT_ROOT}:production vault" \
+  "${APP_ROOT}:application current" \
+  "${RELEASES_ROOT}:application releases root" \
+  "${RUNTIME_ROOT}:production runtime" \
+  "${BACKUP_ROOT}:backup root" \
+  "${LOCK_PATH}:vault operation lock"; do
+  path_value="${path_spec%%:*}"
+  path_label="${path_spec#*:}"
+  assert_path_within_root "$path_value" "$path_label"
+done
 
 for command in git id readlink stat uname; do
   require_command "$command"

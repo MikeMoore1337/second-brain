@@ -62,6 +62,21 @@
 - Секреты и настоящий `.env` не коммитятся.
 - Commit, push, PR, merge и deploy выполняются только по явному запросу.
 
+### Owner-authorized production Vault Git Sync exception (Issue #217)
+
+Граница выше относится к обычной application/user-facing Safe Write одной
+managed note и сохраняется без изменений. Для уже существующего Issue #217
+Vault Sync v1 допускается отдельный explicitly owner-authorized
+repository-level production Git sync protocol; это не Safe Write и не общее
+разрешение произвольной записи в vault. Он разрешён только одновременно при
+exact-SHA, explicit `--apply`, отдельном
+`PRODUCTION_VAULT_SYNC_ENABLED=true`, shared lock, clean worktree, exact
+repository/branch, backup-before-FF, FF-only и post-sync validation. Protocol
+не выполняет reset, rebase, force или auto-conflict-resolution; любое
+нарушение gate или safety invariant завершается fail-closed
+`HUMAN_REQUIRED`. Никакие другие production vault writes этой оговоркой не
+разрешаются.
+
 ## Проверки разработки
 
 Перед предложением изменения выполните:

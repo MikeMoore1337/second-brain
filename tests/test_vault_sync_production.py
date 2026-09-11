@@ -13,6 +13,7 @@ import pytest
 from ruamel.yaml import YAML
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+AGENTS_PATH = PROJECT_ROOT / "AGENTS.md"
 WORKFLOW_PATH = PROJECT_ROOT / ".github" / "workflows" / "vault-sync-production.yml"
 WRAPPER_PATH = PROJECT_ROOT / "deploy" / "vault-sync-production.sh"
 
@@ -67,6 +68,7 @@ def test_workflow_is_dispatch_only_with_a_secret_free_preflight() -> None:
     assert inputs["apply"]["required"] is True
     assert inputs["apply"]["default"] is False
     assert inputs["apply"]["type"] == "boolean"
+    assert set(inputs) == {"vault_sha", "apply"}
 
     jobs = workflow["jobs"]
     preflight = jobs["preflight"]
@@ -98,12 +100,15 @@ def test_workflow_guards_inputs_before_ssh_and_reuses_existing_production_materi
         '[[ "$VAULT_SHA" =~ ^[0-9a-f]{40}$ ]]',
         'test "$APPLY" = "true"',
         'test "$PRODUCTION_VAULT_SYNC_ENABLED" = "true"',
+        "[[ ${#PRODUCTION_ROOT} -ge 2 && ${#PRODUCTION_ROOT} -le 200 ]]",
+        '[[ "$PRODUCTION_ROOT" =~ ^/([A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+$ ]]',
         '[[ "$PRODUCTION_SSH_HOST" =~ ^[A-Za-z0-9._:-]+$ ]]',
         '[[ "$PRODUCTION_SSH_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]',
         '[[ "$PRODUCTION_SSH_PORT" =~ ^[0-9]{1,5}$ ]]',
         "port_value=$((10#$PRODUCTION_SSH_PORT))",
         "group: second-brain-production",
         "cancel-in-progress: false",
+        "vars.PRODUCTION_ROOT",
         "vars.PRODUCTION_SSH_HOST",
         "vars.PRODUCTION_SSH_PORT",
         "vars.PRODUCTION_SSH_USER",
@@ -117,7 +122,10 @@ def test_workflow_guards_inputs_before_ssh_and_reuses_existing_production_materi
         "ConnectTimeout=15",
         "ServerAliveInterval=15",
         "ServerAliveCountMax=3",
-        'bash -s -- --target-sha "$VAULT_SHA" < deploy/vault-sync-production.sh',
+        (
+            'bash -s -- --production-root "$PRODUCTION_ROOT" '
+            '--target-sha "$VAULT_SHA" < deploy/vault-sync-production.sh'
+        ),
         "if: always()",
         'rm -f -- "$SSH_DIR/production_sync_key" "$SSH_DIR/known_hosts"',
     ):
@@ -126,6 +134,12 @@ def test_workflow_guards_inputs_before_ssh_and_reuses_existing_production_materi
     assert workflow.index('test "$GITHUB_EVENT_NAME" = "workflow_dispatch"') < workflow.index(
         "Invoke exact-SHA vault sync over pinned SSH"
     )
+    sync_text = workflow[workflow.index("  sync:") :]
+    assert "PRODUCTION_VAULT_SYNC_ENABLED: ${{ vars.PRODUCTION_VAULT_SYNC_ENABLED }}" in sync_text
+    assert 'test "$PRODUCTION_VAULT_SYNC_ENABLED" = "true"' in sync_text
+    assert sync_text.index('test "$PRODUCTION_VAULT_SYNC_ENABLED" = "true"') < sync_text.index(
+        "Configure pinned SSH identity"
+    )
     assert "PRODUCTION_DEPLOY_ENABLED" not in workflow
     assert "pull_request_target" not in workflow
     assert "github.token" not in workflow
@@ -133,17 +147,21 @@ def test_workflow_guards_inputs_before_ssh_and_reuses_existing_production_materi
         assert forbidden not in workflow.casefold()
 
 
-def test_wrapper_has_fixed_non_root_exact_sha_contract() -> None:
+def test_wrapper_has_bounded_configured_non_root_exact_sha_contract() -> None:
     wrapper = WRAPPER_PATH.read_text(encoding="utf-8")
 
     for required in (
-        'readonly VAULT_ROOT="$SECOND_BRAIN_ROOT/second-brain-vault"',
-        'readonly APP_ROOT="$SECOND_BRAIN_ROOT/current"',
+        'PRODUCTION_ROOT=""',
+        "--production-root PRODUCTION_ROOT",
+        '[[ "$path" =~ ^/([A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+$ ]]',
+        'readonly VAULT_ROOT="$PRODUCTION_ROOT/second-brain-vault"',
+        'readonly APP_ROOT="$PRODUCTION_ROOT/current"',
         'readonly BACKUP_ROOT="$RUNTIME_ROOT/vault-backups"',
         'readonly LOCK_PATH="$RUNTIME_ROOT/vault-sync.lock"',
         'readonly PYTHON="$APP_ROOT/.venv/bin/python"',
         'readonly EXPECTED_BRANCH="main"',
         'readonly EXPECTED_REMOTE="https://github.com/MikeMoore1337/second-brain-vault.git"',
+        'assert_path_within_root "$path_value" "$path_label"',
         '[[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]',
         '[[ "$(uname -s)" == "Linux" ]]',
         '[[ "$(id -u)" != "0" ]]',
@@ -156,6 +174,10 @@ def test_wrapper_has_fixed_non_root_exact_sha_contract() -> None:
     ):
         assert required in wrapper
 
+    assert "/srv/second-brain" not in wrapper
+    assert wrapper.index('assert_bounded_production_root "$PRODUCTION_ROOT"') < wrapper.index(
+        'readonly VAULT_ROOT="$PRODUCTION_ROOT/second-brain-vault"'
+    )
     assert wrapper.index('[[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]') < wrapper.rindex(
         "assert_production_layout"
     )
@@ -181,11 +203,41 @@ def test_wrapper_has_fixed_non_root_exact_sha_contract() -> None:
 @pytest.mark.skipif(_bash_path() is None, reason="bash is required")
 @pytest.mark.parametrize("invalid_sha", ("A" * 40, "0" * 39, "g" * 40))
 def test_wrapper_rejects_invalid_sha_before_any_fixed_path_check(invalid_sha: str) -> None:
-    result = _run_bash(WRAPPER_PATH, "--target-sha", invalid_sha)
+    result = _run_bash(
+        WRAPPER_PATH,
+        "--production-root",
+        "/srv/second-brain",
+        "--target-sha",
+        invalid_sha,
+    )
 
     assert result.returncode != 0
     assert "exact 40-character lowercase" in result.stderr
     assert "/srv/second-brain" not in result.stdout + result.stderr
+
+
+@pytest.mark.skipif(_bash_path() is None, reason="bash is required")
+@pytest.mark.parametrize(
+    "invalid_root",
+    (
+        "relative/path",
+        "/srv//second-brain",
+        "/srv/second-brain/../escape",
+        "/srv/second-brain with-space",
+    ),
+)
+def test_wrapper_rejects_unbounded_root_before_sync_module(invalid_root: str) -> None:
+    result = _run_bash(
+        WRAPPER_PATH,
+        "--production-root",
+        invalid_root,
+        "--target-sha",
+        "0" * 40,
+    )
+
+    assert result.returncode != 0
+    assert "production root" in result.stderr
+    assert "second_brain.adapters.vault.sync" not in result.stdout + result.stderr
 
 
 @pytest.mark.skipif(_bash_path() is None, reason="bash is required")
@@ -204,14 +256,48 @@ def test_wrapper_has_valid_bash_syntax() -> None:
     assert result.returncode == 0
 
 
+def test_agents_distinguishes_safe_write_from_narrow_owner_sync_protocol() -> None:
+    policy = AGENTS_PATH.read_text(encoding="utf-8")
+    normalized_policy = " ".join(policy.split())
+    safe_write_boundary = "Запись в vault требует path containment"
+    owner_protocol = "Для уже существующего Issue #217"
+
+    assert safe_write_boundary in normalized_policy
+    assert owner_protocol in normalized_policy
+    assert "Owner-authorized production Vault Git Sync exception (Issue #217)" in normalized_policy
+    assert normalized_policy.index(safe_write_boundary) < normalized_policy.index(owner_protocol)
+    for required in (
+        "application/user-facing Safe Write",
+        "explicitly owner-authorized",
+        "repository-level production Git sync protocol",
+        "exact-SHA",
+        "explicit `--apply`",
+        "PRODUCTION_VAULT_SYNC_ENABLED=true",
+        "shared lock",
+        "clean worktree",
+        "exact repository/branch",
+        "backup-before-FF",
+        "FF-only",
+        "post-sync validation",
+        "HUMAN_REQUIRED",
+        "auto-conflict-resolution",
+        "произвольной записи в vault",
+    ):
+        assert required in normalized_policy
+
+
 def test_vault_sync_runbook_documents_owner_operation_and_recovery_contract() -> None:
     runbook = (PROJECT_ROOT / "docs" / "deployment" / "vault-sync.md").read_text(encoding="utf-8")
+    normalized_runbook = " ".join(runbook.split())
 
     for required in (
         ".github/workflows/vault-sync-production.yml",
         "workflow_dispatch",
         "vault_sha",
         "apply",
+        "PRODUCTION_ROOT",
+        "--production-root",
+        "не является Safe Write",
         "PRODUCTION_VAULT_SYNC_ENABLED",
         "PRODUCTION_DEPLOY_ENABLED",
         "NO_OP",
@@ -225,5 +311,6 @@ def test_vault_sync_runbook_documents_owner_operation_and_recovery_contract() ->
         "insteadOf",
         "merge implementation PR #217 ничего не синхронизирует",
         "Manual exact-SHA owner prompt fallback",
+        "HUMAN_REQUIRED",
     ):
-        assert required in runbook
+        assert required in normalized_runbook
