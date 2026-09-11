@@ -405,6 +405,10 @@ def test_candidate_recovery_rejects_unprovable_state(tmp_path: Path, kind: str) 
             ".venv/Lib/python3.14/site-packages/private.pem",
             "TOP-SECRET\n",
         ),
+        (
+            ".venv/Lib/python3.14/site-packages/client-secret.json",
+            "TOP-SECRET\n",
+        ),
     ),
 )
 def test_candidate_recovery_rejects_sensitive_ignored_state_without_disclosure(
@@ -480,6 +484,34 @@ def test_candidate_recovery_allows_package_owned_certificate_resources(
 
     assert result.returncode == 0, result.stderr
     assert "package resource" not in result.stdout + result.stderr
+    assert relative_path not in result.stdout + result.stderr
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="POSIX linked worktree and symlink semantics are required"
+)
+@pytest.mark.parametrize(
+    "relative_path",
+    (
+        ".venv/Lib/python3.14/site-packages/markdown_it/token.py",
+        ".venv/Lib/python3.14/site-packages/coverage/phystokens.py",
+        "web/node_modules/postcss/lib/tokenize.js",
+    ),
+)
+def test_candidate_recovery_allows_ordinary_dependency_token_modules(
+    tmp_path: Path,
+    relative_path: str,
+) -> None:
+    fixture = _candidate_fixture(tmp_path)
+    candidate = Path(str(fixture["releases"])) / str(fixture["target_sha"])
+    control = Path(str(fixture["control"]))
+    _run_git(control, "worktree", "add", "--detach", str(candidate), str(fixture["target_sha"]))
+    _write_candidate_state(candidate, relative_path, "ordinary dependency module\n")
+
+    result = _run_candidate_check(fixture, phase="final-post-build")
+
+    assert result.returncode == 0, result.stderr
+    assert "ordinary dependency module" not in result.stdout + result.stderr
     assert relative_path not in result.stdout + result.stderr
 
 

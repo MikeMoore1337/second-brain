@@ -58,6 +58,7 @@ assert_no_git_operation_state() {
 is_env_or_key_like_path() {
   local path="$1"
   local base="${path##*/}"
+  local base_lower="${base,,}"
 
   case "$path" in
     .env|.env.*|*.env|*/.env|*/.env.*)
@@ -65,11 +66,25 @@ is_env_or_key_like_path() {
       ;;
   esac
 
-  case "${base,,}" in
+  case "$base_lower" in
+    *.py|*.pyc|*.pyo|*.js|*.jsx|*.ts|*.tsx|*.mjs|*.cjs|*.d.ts|*.map)
+      return 1
+      ;;
+  esac
+
+  case "$base_lower" in
     *.key|*.p8|*.p12|*.pfx|*.ppk|*.jks|*.keystore|*.pkcs12|*.kdb|\
-    key|key.*|key_*|key-*|*_key|*_key.*|*-key|*-key.*|keypair*|\
-    id_rsa*|id_ed25519*|id_ecdsa*|*.npmrc|.npmrc|.pypirc|.netrc|\
-    *credential*|*secret*|*token*|*password*|*passwd*|*private*)
+    key|key.*|key_*|key-*|*_key|*_key.*|*-key|*-key.*|keypair|keypair.*|\
+    id_rsa|id_rsa.*|id_ed25519|id_ed25519.*|id_ecdsa|id_ecdsa.*|\
+    .npmrc|*.npmrc|.pypirc|.netrc|config.local.*|settings.local.*|\
+    credential|credential.*|credentials|credentials.*|\
+    *[-_.]credential|*[-_.]credential.*|*[-_.]credentials|*[-_.]credentials.*|\
+    secret|secret.*|secrets|secrets.*|*[-_.]secret|*[-_.]secret.*|\
+    *[-_.]secrets|*[-_.]secrets.*|password|password.*|\
+    *[-_.]password|*[-_.]password.*|passwd|passwd.*|\
+    *[-_.]passwd|*[-_.]passwd.*|token|token.*|tokens|tokens.*|\
+    *[-_.]token|*[-_.]token.*|*[-_.]tokens|*[-_.]tokens.*|\
+    private|private.*|*[-_.]private|*[-_.]private.*)
       return 0
       ;;
   esac
