@@ -41,6 +41,7 @@ jobs:
           trap 'rm -rf "$verify_root"' EXIT
           mkdir -p \
             "$verify_root/etc" \
+            "$verify_root/etc/systemd/system" \
             "$verify_root/srv/second-brain/current/.venv/bin" \
             "$verify_root/srv/second-brain/runtime" \
             "$verify_root/usr/lib/systemd/system"
@@ -52,8 +53,9 @@ jobs:
           install -m 0755 "$runtime_executable" \
             "$verify_root/srv/second-brain/current/.venv/bin/second-brain"
           install -m 0600 /dev/null "$verify_root/srv/second-brain/runtime/web.env"
-          systemd-analyze verify --root="$verify_root" \
-            deploy/systemd/second-brain-web.service
+          install -m 0644 deploy/systemd/second-brain-web.service \
+            "$verify_root/etc/systemd/system/second-brain-web.service"
+          systemd-analyze verify --root="$verify_root" second-brain-web.service
 
   windows-ssl-regression:
     runs-on: windows-latest
