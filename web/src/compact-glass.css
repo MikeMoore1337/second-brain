@@ -4,7 +4,10 @@
   --sb-glass-edge:#d9c8ef38;
   --sb-glass-shadow:inset 0 1px 0 #ffffff35,inset 0 -1px 0 #ffffff0a,0 12px 32px #0004;
   --sb-glass-blur:blur(20px) saturate(135%);
+  --sb-radius-button:12px;
 }
+/* One shape for primary, secondary, icon and navigation actions. */
+.motion-world :is(button,.quick-nav a,.universe-actions a) { border-radius:var(--sb-radius-button); }
 .topbar { background:#100c18d9; border-bottom:0; box-shadow:none; backdrop-filter:var(--sb-glass-blur); }
 .section-dropdown { background:var(--sb-glass-fill),#110c1df7; backdrop-filter:var(--sb-glass-blur); border-color:var(--sb-glass-edge); box-shadow:var(--sb-glass-shadow); }
 .sections-trigger,.quick-nav > a { background:var(--sb-glass-fill); box-shadow:inset 0 1px #ffffff20; border-color:var(--sb-glass-edge); }
@@ -38,9 +41,21 @@ main .section-heading { display:block; margin-bottom:20px; }
 .fold-section > summary > .icon { flex-shrink:0; }
 .fold-chevron { transition:transform 200ms var(--sb-ease-out); }
 .fold-section[open] .fold-chevron { transform:rotate(180deg); }
-.fold-section[open] > summary { background:#d8bcff08; }
+.fold-section[open] > summary { background:transparent; }
 .fold-body { padding:8px 28px 28px; }
 .fold-body > section { margin:0; padding:0; border:0; background:none; box-shadow:none; max-width:none; scroll-margin-top:180px; }
+/* The expanded card owns one surface; leave room for control focus outlines. */
+.fold-body > .stage7-surface { padding:8px; overflow:visible; border:0; border-radius:0; background:none; box-shadow:none; }
+.fold-body > .stage7-surface::before { display:none; }
+/* Working groups share their parent surface and reserve space for focus rings. */
+.motion-world .mode-switch { background:transparent; border:0; box-shadow:none; padding:0; gap:8px; }
+.fold-body > .simulate-me-surface { padding:8px; overflow:visible; }
+.motion-world .timeline-controls { align-items:end; }
+.motion-world .timeline-controls > button,
+.motion-world .timeline-controls select,
+.motion-world .simulate-me-option-row input,
+.motion-world .simulate-me-option-row > button { height:52px; min-height:52px; margin-bottom:0; }
+.motion-world select.review-input { appearance:none; padding-right:44px; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c49aff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 14px center; background-size:20px; }
 .fold-body .section-heading h2,.fold-body .section-heading > .section-art { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
 .fold-body .section-heading h2 .section-art { display:none; }
 .fold-body .section-heading { margin:4px 0 18px; }
@@ -92,3 +107,105 @@ main .section-heading { display:block; margin-bottom:20px; }
   .pillar-card-growth .pillar-backdrop { animation:none; }
 }
 @media(prefers-reduced-motion:reduce) { .pillar-backdrop { animation:none; transform:none; } }
+/* Clarity pass: working surfaces use spacing and hierarchy instead of stray rails. */
+.signal-plane,
+.surface-line { border-bottom:0; }
+
+.capture-form,
+.voice-panel,
+.draft-result,
+.personal-memory-panel,
+.save-plan,
+.saved-note,
+.decision-journal-surface { border-left:0; }
+
+.capture-actions,
+.review-actions,
+.journal-actions { padding-top:0; border-top:0; }
+
+.review-status:empty,
+.capture-status:empty,
+.stage7-live:empty { display:none; min-height:0; }
+
+.timeline-surface::before,
+.self-model-surface::before,
+.simulate-me-surface::before,
+.self-retrieval-surface::before,
+.search-surface::before,
+.diagnostics-surface::before,
+.timeline-group:not(.timeline-group-unknown) .timeline-list::before,
+.timeline-group:not(.timeline-group-unknown) .timeline-item::before { display:none; content:none; }
+
+.timeline-controls,
+.self-model-controls,
+.simulate-me-actions,
+.diagnostics-controls,
+.search-form,
+.self-retrieval-form,
+.draft-result,
+.provenance-block,
+.review-editor,
+.personal-memory-fields,
+.journal-form,
+.timeline-group,
+.self-model-list,
+.self-model-claim,
+.self-model-evidence,
+.self-model-evidence-list .self-model-evidence,
+.simulate-me-options,
+.simulate-me-option-row,
+.simulate-me-evidence,
+.simulate-me-evidence-item,
+.search-results,
+.search-hit,
+.retrieved-note,
+.self-retrieval-results,
+.self-retrieval-item,
+.self-retrieval-claim,
+.diagnostics-group,
+.diagnostics-facts > div,
+.diagnostics-layer-row,
+.diagnostics-signal-row {
+  border-top:0;
+  border-bottom:0;
+}
+
+.capture-actions,
+.review-actions,
+.journal-actions,
+.timeline-controls,
+.self-model-controls,
+.simulate-me-actions,
+.diagnostics-controls,
+.search-form,
+.self-retrieval-form { padding-bottom:0; }
+
+.timeline-group,
+.diagnostics-group { padding-top:16px; }
+
+.search-form,
+.self-retrieval-form { margin-bottom:0; }
+
+.timeline-item,
+.self-model-claim,
+.search-hit,
+.self-retrieval-item { border-top:0; border-bottom:0; }
+
+.timeline-item:last-child { border-bottom:0; }
+.timeline-item-unknown { border-top:0; }
+.self-retrieval-exclusions { border-top:1px solid rgb(var(--sb-rgb-warning) / 0.52); }
+
+/* Keep focus feedback on the focused control instead of outlining an entire panel. */
+.motion-world :where(.entry-point,.capture-panel,.journal-panel,.timeline-panel,.self-model-panel,.simulate-me-panel,.search-surface,.self-retrieval-surface,.pillar-card):focus-within:not([aria-busy="true"]),
+.motion-world :where(.timeline-surface,.self-model-surface,.simulate-me-surface,.self-retrieval-surface,.search-surface,.diagnostics-surface):focus-within:not([aria-busy="true"]) {
+  box-shadow:none;
+}
+
+.footer-line { display:none; }
+.motion-world main > section:not(.cinematic-hero)::after { display:none; }
+
+@media(max-width:600px) {
+  .fold-body { min-width:0; overflow:visible; }
+  .fold-section { overflow:visible; }
+  .motion-world main > section:not(.cinematic-hero) { width:100%; }
+}
