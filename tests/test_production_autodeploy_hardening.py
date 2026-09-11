@@ -205,7 +205,7 @@ def test_env_preflight_reads_requirements_from_the_exact_target_sha(tmp_path: Pa
     contract_v1 = "format_version=1\nrequired=PUBLIC_VALUE\n"
     repository, sha_v1 = _init_seed_repository(tmp_path, contract_v1)
     (repository / "deploy" / "production-env-requirements.conf").write_text(
-        "format_version=1\nrequired=NEW_SECRET_VALUE\n",
+        "format_version=1\nrequired=PUBLIC_VALUE\nrequired=NEW_SECRET_VALUE\n",
         encoding="utf-8",
     )
     _run_git(repository, "add", "--", "deploy/production-env-requirements.conf")
