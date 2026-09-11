@@ -111,7 +111,13 @@ check`, `npm run build`, `npm run qa:pwa` и final integrity checks в фазе
 `recovery-pre-build` layout каждого существующего generated root также
 проверяется: root не может быть symlink или обычным файлом. Разрешён только
 узкий generated-state contract, потому что следующий pipeline сначала
-детерминированно пересоздаёт соответствующее состояние:
+детерминированно пересоздаёт соответствующее состояние. Trust model
+фазовая: на `recovery-pre-build` существующее содержимое этих roots считается
+discardable только после проверки layout/containment, а на
+`final-post-build` — результатом уже завершённого deterministic rebuild.
+Внутри такого root filename/suffix heuristic не является security authority:
+dependency-owned файл может называться как credential, token, private, secret,
+password, key или иметь certificate suffix.
 
 - `.venv/**` — перед `uv sync` выполняется только на exact
   `<candidate>/.venv` путь `uv venv --no-project --clear --python 3.14`. Это
@@ -119,8 +125,8 @@ check`, `npm run build`, `npm run qa:pwa` и final integrity checks в фазе
   внутри проверенного candidate `.venv`, symlink/non-directory root и
   неподходящий для безопасного reset state останавливают deploy. Затем
   `uv sync --locked --python 3.14` пересоздаёт locked dependency environment;
-  поэтому package-owned `.pem`, `.crt`, `.cer` или `.der` resources внутри
-  свежего `.venv` допустимы;
+  поэтому все package-owned files/resources внутри свежего `.venv`, включая
+  sensitive-looking names и `.pem`/`.crt`/`.cer`/`.der`, допустимы;
 - `web/node_modules/**` — `npm ci` использует clean-install semantics и
   удаляет/пересоздаёт dependency tree из tracked `package-lock.json` до
   check/build; frontend root предварительно не может быть symlink;
@@ -131,16 +137,18 @@ check`, `npm run build`, `npm run qa:pwa` и final integrity checks в фазе
   `compileall -q -f --invalidation-mode checked-hash` до `doctor` и
   `vault validate`.
 
-`.env`, `.env.*`, `*.env`, credential/key/private/password/token-like paths
-всегда блокируются, в том числе внутри generated roots. Certificate/resource
-suffix сам по себе (`.pem`, `.crt`, `.cer`, `.der`) разрешается только внутри
-этих детерминированных dependency roots; такой path вне generated roots или с
-key/private-like basename блокируется как sensitive. Любой другой ignored
-path, включая arbitrary config, cache или пользовательский файл вне
-generated-state contract, даёт `STOP / HUMAN_REQUIRED`. Helper не удаляет и не
+Вне approved generated roots `.env`, `.env.*`, `*.env`, credential/key/private/
+password/token-like paths, certificates и любой неизвестный ignored path
+всегда дают `STOP / HUMAN_REQUIRED`. Filename/suffix classifier вызывается
+только после структурного исключения approved generated roots и поэтому не
+может ошибочно заблокировать package-owned dependency file внутри них.
+`src/**/__pycache__/*.cpython-314.pyc` остаётся отдельным узким contract без
+root-reset semantics. Для каждого существующего generated root проверяются
+не-symlink layout и canonical containment строго внутри exact candidate; root
+или candidate path escape даёт `STOP / HUMAN_REQUIRED`. Helper не удаляет и не
 перезаписывает неизвестное ignored state. Final `final-post-build` classifier
-повторяет тот же fail-closed contract после полного validation/build, поэтому
-activation невозможна без повторной integrity проверки.
+повторяет структурный fail-closed contract после полного validation/build,
+поэтому activation невозможна без повторной integrity проверки.
 
 Если хотя бы одну проверку нельзя доказать, результат — `STOP / HUMAN_REQUIRED`.
 Автоматический deploy не удаляет такой candidate и не выполняет blind cleanup;

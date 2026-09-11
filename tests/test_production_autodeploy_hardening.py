@@ -400,18 +400,10 @@ def test_candidate_recovery_rejects_unprovable_state(tmp_path: Path, kind: str) 
         ("web/private.key", "TOP-SECRET\n"),
         ("config/local-settings.json", '{"operator_token":"TOP-SECRET"}\n'),
         ("config/fixture.pem", "TOP-SECRET\n"),
-        (".venv/.env", "TOP-SECRET\n"),
-        (
-            ".venv/Lib/python3.14/site-packages/private.pem",
-            "TOP-SECRET\n",
-        ),
-        (
-            ".venv/Lib/python3.14/site-packages/client-secret.json",
-            "TOP-SECRET\n",
-        ),
+        ("config/operator-credentials.json", '{"password":"TOP-SECRET"}\n'),
     ),
 )
-def test_candidate_recovery_rejects_sensitive_ignored_state_without_disclosure(
+def test_candidate_recovery_rejects_external_sensitive_ignored_state_without_disclosure(
     tmp_path: Path,
     relative_path: str,
     secret_value: str,
@@ -434,16 +426,41 @@ def test_candidate_recovery_rejects_sensitive_ignored_state_without_disclosure(
 @pytest.mark.skipif(
     os.name == "nt", reason="POSIX linked worktree and symlink semantics are required"
 )
+def test_candidate_recovery_rejects_unknown_external_ignored_config_without_disclosure(
+    tmp_path: Path,
+) -> None:
+    fixture = _candidate_fixture(tmp_path)
+    candidate = Path(str(fixture["releases"])) / str(fixture["target_sha"])
+    control = Path(str(fixture["control"]))
+    _run_git(control, "worktree", "add", "--detach", str(candidate), str(fixture["target_sha"]))
+    relative_path = "config/operator-settings.json"
+    _write_candidate_state(candidate, relative_path, '{"operator":"local"}\n')
+
+    result = _run_candidate_check(fixture)
+
+    assert result.returncode != 0
+    assert "STOP / HUMAN_REQUIRED" in result.stderr
+    assert "outside the explicit generated-state allowlist" in result.stderr
+    assert relative_path not in result.stdout + result.stderr
+    assert "operator" not in result.stdout + result.stderr
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="POSIX linked worktree and symlink semantics are required"
+)
 @pytest.mark.parametrize(
     "relative_path",
     (
         ".venv/Lib/python3.14/site-packages/generated_marker.py",
+        ".venv/Lib/python3.14/site-packages/client-token-resource.py",
+        ".venv/Lib/python3.14/site-packages/private-resource.pem",
+        ".venv/Lib/python3.14/site-packages/client-secret.json",
         "web/node_modules/.package-lock.json",
         "web/dist/index.html",
         "src/second_brain/__pycache__/generated_marker.cpython-314.pyc",
     ),
 )
-def test_candidate_recovery_allows_only_explicit_generated_state(
+def test_candidate_recovery_allows_discardable_generated_state_before_rebuild(
     tmp_path: Path,
     relative_path: str,
 ) -> None:
@@ -457,6 +474,42 @@ def test_candidate_recovery_allows_only_explicit_generated_state(
 
     assert result.returncode == 0, result.stderr
     assert "generated" not in result.stdout + result.stderr
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="POSIX linked worktree and symlink semantics are required"
+)
+@pytest.mark.parametrize(
+    "relative_path",
+    (
+        ".venv/.env",
+        ".venv/Lib/python3.14/site-packages/client-token-resource.py",
+        ".venv/Lib/python3.14/site-packages/private-resource.pem",
+        ".venv/Lib/python3.14/site-packages/client-secret.json",
+        ".venv/Lib/python3.14/site-packages/credential-fixture.json",
+        ".venv/Lib/python3.14/site-packages/password-fixture.txt",
+        ".venv/Lib/python3.14/site-packages/test-key.pem",
+        "web/node_modules/package/private-resource.key",
+        "web/node_modules/package/secret-resource.json",
+        "web/dist/.env",
+        "web/dist/token-resource.js",
+    ),
+)
+def test_candidate_recovery_trusts_sensitive_looking_generated_state_structurally(
+    tmp_path: Path,
+    relative_path: str,
+) -> None:
+    fixture = _candidate_fixture(tmp_path)
+    candidate = Path(str(fixture["releases"])) / str(fixture["target_sha"])
+    control = Path(str(fixture["control"]))
+    _run_git(control, "worktree", "add", "--detach", str(candidate), str(fixture["target_sha"]))
+    _write_candidate_state(candidate, relative_path, "package-owned generated resource\n")
+
+    result = _run_candidate_check(fixture, phase="final-post-build")
+
+    assert result.returncode == 0, result.stderr
+    assert relative_path not in result.stdout + result.stderr
+    assert "package-owned generated resource" not in result.stdout + result.stderr
 
 
 @pytest.mark.skipif(
@@ -542,6 +595,30 @@ def test_candidate_recovery_rejects_generated_root_symlink(tmp_path: Path) -> No
 @pytest.mark.skipif(
     os.name == "nt", reason="POSIX linked worktree and symlink semantics are required"
 )
+def test_candidate_recovery_rejects_generated_root_path_escape(tmp_path: Path) -> None:
+    fixture = _candidate_fixture(tmp_path)
+    candidate = Path(str(fixture["releases"])) / str(fixture["target_sha"])
+    control = Path(str(fixture["control"]))
+    _run_git(control, "worktree", "add", "--detach", str(candidate), str(fixture["target_sha"]))
+    outside = tmp_path / "outside-dist"
+    outside.mkdir()
+    (outside / "index.html").write_text("DO-NOT-READ\n", encoding="utf-8")
+    web_root = candidate / "web"
+    web_root.mkdir()
+    (web_root / "dist").symlink_to(outside, target_is_directory=True)
+
+    result = _run_candidate_check(fixture, phase="final-post-build")
+
+    assert result.returncode != 0
+    assert "STOP / HUMAN_REQUIRED" in result.stderr
+    assert "DO-NOT-READ" not in result.stdout + result.stderr
+    assert "outside-dist" not in result.stdout + result.stderr
+    assert (web_root / "dist").is_symlink()
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="POSIX linked worktree and symlink semantics are required"
+)
 def test_fresh_candidate_after_pipeline_generated_state_passes_final_integrity(
     tmp_path: Path,
 ) -> None:
@@ -550,6 +627,11 @@ def test_fresh_candidate_after_pipeline_generated_state_passes_final_integrity(
     control = Path(str(fixture["control"]))
     _run_git(control, "worktree", "add", "--detach", str(candidate), str(fixture["target_sha"]))
     for relative_path in (
+        ".venv/Lib/python3.14/site-packages/client-token-resource.py",
+        ".venv/Lib/python3.14/site-packages/private-resource.pem",
+        ".venv/Lib/python3.14/site-packages/client-secret.json",
+        ".venv/Lib/python3.14/site-packages/credential-fixture.json",
+        ".venv/Lib/python3.14/site-packages/test-key.pem",
         ".venv/Lib/python3.14/site-packages/trust_bundle.pem",
         "web/node_modules/package/fixtures/test.crt",
         "web/dist/index.html",
@@ -709,6 +791,9 @@ def test_candidate_checker_covers_identity_state_and_worktree_registration() -> 
         "is_certificate_resource_path",
         "is_allowed_generated_path",
         "assert_generated_root_layout",
+        "structural trust decision",
+        "outside every approved",
+        "escaped the exact candidate",
         ".venv/*",
         "web/node_modules/*",
         "web/dist/*",
@@ -732,6 +817,13 @@ def test_candidate_checker_covers_identity_state_and_worktree_registration() -> 
         assert required in checker
     for forbidden in ("git clean", "git reset", "git rebase", "rm -rf", "git worktree prune"):
         assert forbidden not in checker.casefold()
+
+    generated_gate = checker.index("if is_allowed_generated_path")
+    sensitive_gate = checker.index("if is_sensitive_ignored_path")
+    assert generated_gate < sensitive_gate
+    generated_classifier = checker[checker.index("is_allowed_generated_path()") : sensitive_gate]
+    assert "is_env_or_key_like_path" not in generated_classifier
+    assert "is_certificate_resource_path" not in generated_classifier
 
 
 def test_autodeploy_runbook_records_the_incident_retry_contract() -> None:
@@ -790,6 +882,11 @@ def test_autodeploy_runbook_documents_recovery_and_no_blind_cleanup() -> None:
         "web/node_modules/**",
         "web/dist/**",
         "src/**/__pycache__/*.cpython-314.pyc",
+        "Trust model",
+        "discardable",
+        "filename/suffix heuristic",
+        "sensitive-looking names",
+        "Вне approved generated roots",
         "compileall -q -f --invalidation-mode checked-hash",
         "Оператор обычно **не",
         "должен SSH-подключаться и удалять candidate вручную",
