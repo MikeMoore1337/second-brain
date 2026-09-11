@@ -48,7 +48,8 @@ jobs:
             > "$verify_root/etc/passwd"
           printf 'second-brain:x:1000:\n' > "$verify_root/etc/group"
           : > "$verify_root/usr/lib/systemd/system/network-online.target"
-          install -m 0755 "$(command -v true)" \
+          runtime_executable="$(type -P env)"
+          install -m 0755 "$runtime_executable" \
             "$verify_root/srv/second-brain/current/.venv/bin/second-brain"
           install -m 0600 /dev/null "$verify_root/srv/second-brain/runtime/web.env"
           systemd-analyze verify --root="$verify_root" \
