@@ -314,6 +314,8 @@ fi
 (
   cd "$CANDIDATE_RELEASE"
   uv sync --locked --python 3.14
+  uv run --python 3.14 --no-sync python -m compileall \
+    -q -f --invalidation-mode checked-hash src
   uv run --python 3.14 --no-sync second-brain --env-file "$RUNTIME_ENV" doctor
   uv run --python 3.14 --no-sync second-brain --env-file "$RUNTIME_ENV" vault validate
 )

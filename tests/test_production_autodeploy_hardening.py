@@ -233,8 +233,26 @@ def _candidate_fixture(tmp_path: Path) -> dict[str, Path | str]:
     _run_git(seed, "init", "-b", "main")
     _run_git(seed, "config", "user.name", "Candidate Test")
     _run_git(seed, "config", "user.email", "candidate@example.invalid")
+    (seed / ".gitignore").write_text(
+        "\n".join(
+            (
+                ".venv/",
+                "node_modules/",
+                "dist/",
+                "__pycache__/",
+                ".env",
+                ".env.*",
+                "*.env",
+                "*.key",
+                "*.pem",
+                ".impeccable/config.local.json",
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
     (seed / "tracked.txt").write_text("base\n", encoding="utf-8")
-    _run_git(seed, "add", "--", "tracked.txt")
+    _run_git(seed, "add", "--", ".gitignore", "tracked.txt")
     _run_git(seed, "commit", "-m", "base")
     base_sha = _run_git(seed, "rev-parse", "HEAD")
 
@@ -271,6 +289,14 @@ def _candidate_fixture(tmp_path: Path) -> dict[str, Path | str]:
         "wrong_sha": wrong_sha,
         "target_sha": target_sha,
     }
+
+
+def _write_candidate_state(
+    candidate: Path, relative_path: str, content: str = "generated\n"
+) -> None:
+    path = candidate / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
 
 
 def _run_candidate_check(
@@ -321,7 +347,10 @@ def test_valid_interrupted_candidate_is_recoverable_and_read_only(tmp_path: Path
 @pytest.mark.skipif(
     os.name == "nt", reason="POSIX linked worktree and symlink semantics are required"
 )
-@pytest.mark.parametrize("kind", ("wrong-head", "branch", "dirty", "symlink", "wrong-repository"))
+@pytest.mark.parametrize(
+    "kind",
+    ("wrong-head", "branch", "dirty", "untracked", "symlink", "wrong-repository"),
+)
 def test_candidate_recovery_rejects_unprovable_state(tmp_path: Path, kind: str) -> None:
     fixture = _candidate_fixture(tmp_path)
     candidate = Path(str(fixture["releases"])) / str(fixture["target_sha"])
@@ -335,6 +364,9 @@ def test_candidate_recovery_rejects_unprovable_state(tmp_path: Path, kind: str) 
     elif kind == "dirty":
         _run_git(control, "worktree", "add", "--detach", str(candidate), str(fixture["target_sha"]))
         (candidate / "tracked.txt").write_text("dirty\n", encoding="utf-8")
+    elif kind == "untracked":
+        _run_git(control, "worktree", "add", "--detach", str(candidate), str(fixture["target_sha"]))
+        (candidate / "untracked.txt").write_text("untracked\n", encoding="utf-8")
     elif kind == "symlink":
         alternate = Path(str(fixture["releases"])) / "candidate-storage"
         _run_git(control, "worktree", "add", "--detach", str(alternate), str(fixture["target_sha"]))
@@ -348,6 +380,89 @@ def test_candidate_recovery_rejects_unprovable_state(tmp_path: Path, kind: str) 
     assert "STOP / HUMAN_REQUIRED" in result.stderr
     assert candidate.exists() or candidate.is_symlink()
     assert Path(str(fixture["current"])).readlink() == Path("releases") / str(fixture["base_sha"])
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="POSIX linked worktree and symlink semantics are required"
+)
+@pytest.mark.parametrize(
+    ("relative_path", "secret_value"),
+    (
+        ("web/.env.production", "SECOND_BRAIN_SESSION_SECRET=TOP-SECRET\n"),
+        (".env", "TOP-SECRET\n"),
+        (".impeccable/config.local.json", '{"api_token":"TOP-SECRET"}\n'),
+        ("web/private.key", "TOP-SECRET\n"),
+    ),
+)
+def test_candidate_recovery_rejects_sensitive_ignored_state_without_disclosure(
+    tmp_path: Path,
+    relative_path: str,
+    secret_value: str,
+) -> None:
+    fixture = _candidate_fixture(tmp_path)
+    candidate = Path(str(fixture["releases"])) / str(fixture["target_sha"])
+    control = Path(str(fixture["control"]))
+    _run_git(control, "worktree", "add", "--detach", str(candidate), str(fixture["target_sha"]))
+    _write_candidate_state(candidate, relative_path, secret_value)
+
+    result = _run_candidate_check(fixture)
+
+    assert result.returncode != 0
+    assert "STOP / HUMAN_REQUIRED" in result.stderr
+    assert "TOP-SECRET" not in result.stdout + result.stderr
+    assert Path(str(fixture["current"])).readlink() == Path("releases") / str(fixture["base_sha"])
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="POSIX linked worktree and symlink semantics are required"
+)
+@pytest.mark.parametrize(
+    "relative_path",
+    (
+        ".venv/Lib/python3.14/site-packages/generated_marker.py",
+        "web/node_modules/.package-lock.json",
+        "web/dist/index.html",
+        "src/second_brain/__pycache__/generated_marker.cpython-314.pyc",
+    ),
+)
+def test_candidate_recovery_allows_only_explicit_generated_state(
+    tmp_path: Path,
+    relative_path: str,
+) -> None:
+    fixture = _candidate_fixture(tmp_path)
+    candidate = Path(str(fixture["releases"])) / str(fixture["target_sha"])
+    control = Path(str(fixture["control"]))
+    _run_git(control, "worktree", "add", "--detach", str(candidate), str(fixture["target_sha"]))
+    _write_candidate_state(candidate, relative_path)
+
+    result = _run_candidate_check(fixture)
+
+    assert result.returncode == 0, result.stderr
+    assert "generated" not in result.stdout + result.stderr
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="POSIX linked worktree and symlink semantics are required"
+)
+def test_incident_style_candidate_is_rerunnable_without_manual_cleanup(tmp_path: Path) -> None:
+    fixture = _candidate_fixture(tmp_path)
+    candidate = Path(str(fixture["releases"])) / str(fixture["target_sha"])
+    control = Path(str(fixture["control"]))
+    _run_git(control, "worktree", "add", "--detach", str(candidate), str(fixture["target_sha"]))
+    for relative_path in (
+        ".venv/Lib/python3.14/site-packages/generated_marker.py",
+        "web/node_modules/.package-lock.json",
+        "src/second_brain/__pycache__/generated_marker.cpython-314.pyc",
+    ):
+        _write_candidate_state(candidate, relative_path)
+    before_current = Path(str(fixture["current"])).readlink()
+
+    first = _run_candidate_check(fixture)
+    second = _run_candidate_check(fixture)
+
+    assert first.returncode == 0, first.stderr
+    assert second.returncode == 0, second.stderr
+    assert Path(str(fixture["current"])).readlink() == before_current
 
 
 def test_autodeploy_has_preflight_recovery_and_cancellation_gates() -> None:
@@ -373,6 +488,9 @@ def test_autodeploy_has_preflight_recovery_and_cancellation_gates() -> None:
     assert 'git -C "$APP_ROOT" worktree add --detach' in script
     assert pipeline_start > candidate_path
     assert script.index("uv sync --locked --python 3.14", pipeline_start) < activation
+    recovery_gate = script.index("existing candidate нельзя доказать recoverable")
+    assert recovery_gate < script.index("uv sync --locked --python 3.14", recovery_gate)
+    assert script.index("python -m compileall", pipeline_start) < activation
     assert frontend_pipeline > pipeline_start
     assert script.index("npm run build", frontend_pipeline) < activation
     active_noop = script[script.index('if [[ "$PREVIOUS_SHA" == "$TARGET_SHA" ]]') : candidate_path]
@@ -385,6 +503,7 @@ def test_autodeploy_has_preflight_recovery_and_cancellation_gates() -> None:
         "current и service не изменялись",
         "candidate сохранён для recovery",
         "uv sync --locked --python 3.14",
+        "python -m compileall",
         "npm ci",
         "npm run check",
         "npm run build",
@@ -411,6 +530,13 @@ def test_candidate_checker_covers_identity_state_and_worktree_registration() -> 
 
     for required in (
         "worktree list --porcelain",
+        "ls-files --others --ignored --exclude-standard",
+        "is_allowed_generated_path",
+        ".venv/*",
+        "web/node_modules/*",
+        "web/dist/*",
+        "src/*/__pycache__/*.cpython-314.pyc",
+        "outside the explicit generated-state allowlist",
         "--git-common-dir",
         "--abbrev-ref HEAD",
         "symbolic-ref --quiet HEAD",
@@ -481,6 +607,13 @@ def test_autodeploy_runbook_documents_recovery_and_no_blind_cleanup() -> None:
         "Cancelled/interrupted deploy и retry",
         "34526439632",
         "Re-run jobs",
+        "Explicit ignored-state allowlist",
+        "ls-files --others --ignored --exclude-standard",
+        ".venv/**",
+        "web/node_modules/**",
+        "web/dist/**",
+        "src/**/__pycache__/*.cpython-314.pyc",
+        "compileall -q -f --invalidation-mode checked-hash",
         "Оператор обычно **не",
         "должен SSH-подключаться и удалять candidate вручную",
         "без удаления и activation",

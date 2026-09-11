@@ -54,6 +54,49 @@ assert_no_git_operation_state() {
   done
 }
 
+is_sensitive_ignored_path() {
+  local path="$1"
+
+  case "$path" in
+    .env|.env.*|*.env|*/.env|*/.env.*|*.pem|*.key|*.p12|*.pfx|*.crt|*.cer|*.der)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+is_allowed_generated_path() {
+  local path="$1"
+
+  is_sensitive_ignored_path "$path" && return 1
+  case "$path" in
+    .venv/*|web/node_modules/*|web/dist/*)
+      return 0
+      ;;
+    src/*/__pycache__/*.cpython-314.pyc)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+assert_no_unexpected_ignored_state() {
+  local path="$1"
+  local ignored_paths ignored_path
+
+  ignored_paths="$(git -C "$path" ls-files --others --ignored --exclude-standard 2>/dev/null)" \
+    || die "candidate ignored state cannot be enumerated"
+  while IFS= read -r ignored_path || [[ -n "$ignored_path" ]]; do
+    [[ -n "$ignored_path" ]] || continue
+    is_allowed_generated_path "$ignored_path" \
+      || die "candidate contains ignored state outside the explicit generated-state allowlist"
+  done <<< "$ignored_paths"
+}
+
 CONTROL_REPOSITORY=""
 RELEASES_ROOT=""
 CURRENT_LINK=""
@@ -185,6 +228,7 @@ CANDIDATE_STATUS="$(git -C "$CANDIDATE" status --porcelain=v1 --untracked-files=
   || die "candidate clean state cannot be checked"
 [[ -z "$CANDIDATE_STATUS" ]] \
   || die "candidate tracked or non-ignored files are dirty"
+assert_no_unexpected_ignored_state "$CANDIDATE"
 assert_no_git_operation_state "$CANDIDATE"
 
 WORKTREE_LIST="$(git -C "$CONTROL_REPOSITORY" worktree list --porcelain 2>/dev/null)" \
