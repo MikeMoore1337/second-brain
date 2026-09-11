@@ -14,6 +14,8 @@ DEPLOY_ROOT = PROJECT_ROOT / "deploy"
 AUTODEPLOY_PATH = DEPLOY_ROOT / "autodeploy.sh"
 ENV_PREFLIGHT_PATH = DEPLOY_ROOT / "production-env-preflight.sh"
 CANDIDATE_CHECK_PATH = DEPLOY_ROOT / "candidate-recovery-check.sh"
+SYSTEMD_CHECK_PATH = DEPLOY_ROOT / "systemd-contract-check.sh"
+RUNTIME_CHECK_PATH = DEPLOY_ROOT / "runtime-entrypoint-check.sh"
 WORKFLOW_PATH = PROJECT_ROOT / ".github" / "workflows" / "deploy-production.yml"
 RUNBOOK_PATH = PROJECT_ROOT / "docs" / "deployment" / "autodeploy.md"
 REQUIREMENTS_PATH = DEPLOY_ROOT / "production-env-requirements.conf"
@@ -776,6 +778,41 @@ def test_autodeploy_has_preflight_recovery_and_cancellation_gates() -> None:
         "eval ",
     ):
         assert forbidden not in script.casefold()
+
+
+def test_root_managed_diff_gate_separates_systemd_from_caddy_and_root() -> None:
+    script = AUTODEPLOY_PATH.read_text(encoding="utf-8")
+
+    caddy_root_gate = script.index(
+        'git -C "$APP_ROOT" diff --quiet "$PREVIOUS_SHA" "$TARGET_SHA" -- deploy/caddy deploy/root'
+    )
+    systemd_gate = script.index(
+        'git -C "$APP_ROOT" diff --quiet "$PREVIOUS_SHA" "$TARGET_SHA" -- deploy/systemd'
+    )
+    candidate_path = script.index('CANDIDATE_RELEASE="$RELEASES_ROOT/$TARGET_SHA"')
+    assert caddy_root_gate < systemd_gate < candidate_path
+    assert "run_systemd_contract_check \\" in script[systemd_gate:candidate_path]
+    assert "SYSTEMD_CONTRACT_NOT_INTEGRATED / HUMAN_REQUIRED" in script
+    assert "deploy/caddy deploy/root" in script
+
+
+def test_runtime_entrypoint_gate_precedes_validation_and_activation() -> None:
+    script = AUTODEPLOY_PATH.read_text(encoding="utf-8")
+    assert SYSTEMD_CHECK_PATH.read_text(encoding="utf-8").startswith(
+        "#!/usr/bin/env bash\nset -Eeuo pipefail"
+    )
+    assert RUNTIME_CHECK_PATH.read_text(encoding="utf-8").startswith(
+        "#!/usr/bin/env bash\nset -Eeuo pipefail"
+    )
+
+    sync = script.index("uv sync --locked --python 3.14")
+    runtime_gate = script.index('run_runtime_entrypoint_check "$CANDIDATE_RELEASE" "$TARGET_SHA"')
+    direct_doctor = script.index('"$CANDIDATE_ENTRYPOINT" --env-file "$RUNTIME_ENV" doctor')
+    activation = script.index("ACTIVATION_STARTED=1")
+    assert sync < runtime_gate < direct_doctor < activation
+    assert "SuccessExitStatus=143" not in (
+        PROJECT_ROOT / "deploy" / "systemd" / "second-brain-web.service"
+    ).read_text(encoding="utf-8")
 
 
 def test_candidate_checker_covers_identity_state_and_worktree_registration() -> None:

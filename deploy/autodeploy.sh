@@ -68,6 +68,24 @@ run_candidate_recovery_check() {
     --phase "$phase"
 }
 
+run_systemd_contract_check() {
+  run_target_script deploy/systemd-contract-check.sh \
+    --repository "$APP_ROOT" \
+    --sha "$TARGET_SHA" \
+    --installed-unit "$SYSTEMD_UNIT_PATH" \
+    --drop-in-directory "$SYSTEMD_DROPIN_DIRECTORY"
+}
+
+run_runtime_entrypoint_check() {
+  local candidate_path="$1"
+  local release_sha="$2"
+
+  run_target_script deploy/runtime-entrypoint-check.sh \
+    --releases-root "$RELEASES_ROOT" \
+    --release-sha "$release_sha" \
+    --candidate "$candidate_path"
+}
+
 assert_clean_main() {
   local path="$1"
   local label="$2"
@@ -254,7 +272,7 @@ done
 [[ "$(id -u)" != "0" ]] || die "autodeploy нельзя запускать от root"
 [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || die "--sha должен быть exact 40-character lowercase Git SHA"
 
-for command in bash git uv npm curl readlink flock seq; do
+for command in bash git uv npm curl readlink flock seq cmp find stat; do
   require_command "$command"
 done
 [[ -x /usr/bin/sudo ]] || die "ожидается /usr/bin/sudo для narrowly-scoped release control"
@@ -269,6 +287,8 @@ RUNTIME_ROOT="$SECOND_BRAIN_ROOT/runtime"
 RUNTIME_ENV="$RUNTIME_ROOT/web.env"
 LOCK_FILE="$RUNTIME_ROOT/autodeploy.lock"
 RELEASE_CONTROL=/usr/local/sbin/second-brain-release-control
+SYSTEMD_UNIT_PATH=/etc/systemd/system/second-brain-web.service
+SYSTEMD_DROPIN_DIRECTORY=/etc/systemd/system/second-brain-web.service.d
 
 [[ -d "$APP_ROOT" ]] || die "не найден control checkout second-brain"
 [[ -d "$VAULT_ROOT" ]] || die "не найден sibling second-brain-vault"
@@ -342,10 +362,18 @@ fi
 
 git -C "$APP_ROOT" cat-file -e "$PREVIOUS_SHA^{commit}" \
   || die "previous known-good SHA отсутствует в control checkout"
-if ! git -C "$APP_ROOT" diff --quiet "$PREVIOUS_SHA" "$TARGET_SHA" -- \
-  deploy/systemd deploy/caddy deploy/root; then
-  die "root-managed deployment contract изменился; требуется owner-managed integration до autodeploy"
+if ! git -C "$APP_ROOT" diff --quiet "$PREVIOUS_SHA" "$TARGET_SHA" -- deploy/caddy deploy/root; then
+  # deploy/systemd deploy/caddy deploy/root остаются root-managed contract paths;
+  # только systemd имеет отдельный доказуемый installed-state gate.
+  die "root-managed deployment contract (deploy/caddy or deploy/root) изменился; требуется owner-managed integration до autodeploy"
 fi
+if ! git -C "$APP_ROOT" diff --quiet "$PREVIOUS_SHA" "$TARGET_SHA" -- deploy/systemd; then
+  run_systemd_contract_check \
+    || die "SYSTEMD_CONTRACT_NOT_INTEGRATED / HUMAN_REQUIRED: exact target systemd unit не установлен owner/root"
+fi
+
+run_runtime_entrypoint_check "$RELEASES_ROOT/$PREVIOUS_SHA" "$PREVIOUS_SHA" \
+  || die "active known-good release runtime entrypoint gate failed; candidate creation запрещена"
 
 /usr/bin/systemctl is-active --quiet second-brain-web.service \
   || die "текущий production service не active; auto-recovery через новый release запрещён"
@@ -369,10 +397,13 @@ fi
   cd "$CANDIDATE_RELEASE"
   reset_candidate_python_environment
   uv sync --locked --python 3.14
+  run_runtime_entrypoint_check "$CANDIDATE_RELEASE" "$TARGET_SHA" \
+    || die "candidate runtime entrypoint gate failed; activation запрещена"
   uv run --python 3.14 --no-sync python -m compileall \
     -q -f --invalidation-mode checked-hash src
-  uv run --python 3.14 --no-sync second-brain --env-file "$RUNTIME_ENV" doctor
-  uv run --python 3.14 --no-sync second-brain --env-file "$RUNTIME_ENV" vault validate
+  CANDIDATE_ENTRYPOINT="$CANDIDATE_RELEASE/.venv/bin/second-brain"
+  "$CANDIDATE_ENTRYPOINT" --env-file "$RUNTIME_ENV" doctor
+  "$CANDIDATE_ENTRYPOINT" --env-file "$RUNTIME_ENV" vault validate
 )
 
 (

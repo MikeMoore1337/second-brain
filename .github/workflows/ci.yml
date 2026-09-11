@@ -34,6 +34,40 @@ jobs:
         run: uv run --python 3.14 mypy src tests
       - name: Test
         run: uv run --python 3.14 pytest
+      - name: Verify tracked systemd unit
+        shell: bash
+        run: |
+          verify_root="$(mktemp -d)"
+          trap 'rm -rf "$verify_root"' EXIT
+          mkdir -p \
+            "$verify_root/etc" \
+            "$verify_root/etc/systemd/system" \
+            "$verify_root/srv/second-brain/current/.venv/bin" \
+            "$verify_root/srv/second-brain/runtime"
+          printf 'second-brain:x:1000:1000::/srv/second-brain:/usr/sbin/nologin\n' \
+            > "$verify_root/etc/passwd"
+          printf 'second-brain:x:1000:\n' > "$verify_root/etc/group"
+          for target in \
+            sysinit \
+            basic \
+            sockets \
+            paths \
+            timers \
+            shutdown \
+            umount \
+            final \
+            local-fs \
+            network-online; do
+            printf '[Unit]\nDescription=CI systemd dependency fixture\n' \
+              > "$verify_root/etc/systemd/system/$target.target"
+          done
+          runtime_executable="$(type -P env)"
+          install -m 0755 "$runtime_executable" \
+            "$verify_root/srv/second-brain/current/.venv/bin/second-brain"
+          install -m 0600 /dev/null "$verify_root/srv/second-brain/runtime/web.env"
+          install -m 0644 deploy/systemd/second-brain-web.service \
+            "$verify_root/etc/systemd/system/second-brain-web.service"
+          systemd-analyze verify --root="$verify_root" second-brain-web.service
 
   windows-ssl-regression:
     runs-on: windows-latest
