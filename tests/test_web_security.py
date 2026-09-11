@@ -28,12 +28,15 @@ from second_brain.entrypoints.web.app import (
     MAX_RAW_COMPARE_BODY_BYTES,
     MAX_RAW_DIAGNOSTICS_BODY_BYTES,
     MAX_RAW_DRAFT_BODY_BYTES,
+    MAX_RAW_RETROSPECTIVE_CALIBRATION_BODY_BYTES,
     MAX_RAW_SEARCH_BODY_BYTES,
     MAX_RAW_SELF_MODEL_BODY_BYTES,
     MAX_RAW_SELF_RETRIEVAL_BODY_BYTES,
     MAX_RAW_SIMULATE_ME_BODY_BYTES,
     MAX_RAW_TIMELINE_BODY_BYTES,
     MAX_RAW_TRANSCRIPTION_BODY_BYTES,
+    RETROSPECTIVE_CALIBRATION_REQUEST_HEADER_NAME,
+    RETROSPECTIVE_CALIBRATION_REQUEST_HEADER_VALUE,
     SEARCH_REQUEST_HEADER_NAME,
     SEARCH_REQUEST_HEADER_VALUE,
     SELF_MODEL_REQUEST_HEADER_NAME,
@@ -51,6 +54,9 @@ from second_brain.entrypoints.web.app import (
 )
 from second_brain.entrypoints.web.diagnostics import DiagnosticsService
 from second_brain.entrypoints.web.drafts import DraftService
+from second_brain.entrypoints.web.retrospective_calibration import (
+    RetrospectiveCalibrationWebService,
+)
 from second_brain.entrypoints.web.saves import DraftSaveService
 from second_brain.entrypoints.web.search import SearchService
 from second_brain.entrypoints.web.self_model import SelfModelService
@@ -178,6 +184,16 @@ PRIVATE_ROUTES: tuple[PrivateRoute, ...] = (
         invalid_code="COMPARE_INVALID_REQUEST",
         content_too_large_code="COMPARE_INVALID_REQUEST",
         max_body_bytes=MAX_RAW_COMPARE_BODY_BYTES,
+    ),
+    PrivateRoute(
+        path="/api/retrospective-calibration",
+        request_header_name=RETROSPECTIVE_CALIBRATION_REQUEST_HEADER_NAME,
+        request_header_value=RETROSPECTIVE_CALIBRATION_REQUEST_HEADER_VALUE,
+        content_type="application/json",
+        body=b"{}",
+        invalid_code="RETROSPECTIVE_CALIBRATION_INVALID_REQUEST",
+        content_too_large_code="RETROSPECTIVE_CALIBRATION_TOO_LARGE",
+        max_body_bytes=MAX_RAW_RETROSPECTIVE_CALIBRATION_BODY_BYTES,
     ),
     _draft_route(
         "/api/drafts/text",
@@ -383,6 +399,7 @@ def _boundary_test_app() -> tuple[FastAPI, RecordingBoundaryService]:
         self_retrieval_service=cast(SelfRetrievalService, service),
         simulate_me_service=cast(SimulateMeService, service),
         diagnostics_service=cast(DiagnosticsService, service),
+        retrospective_calibration_service=cast(RetrospectiveCalibrationWebService, service),
     )
     return application, service
 

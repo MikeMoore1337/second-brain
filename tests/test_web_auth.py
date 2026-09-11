@@ -184,6 +184,7 @@ def test_github_mode_redirects_private_surfaces_and_bounds_oauth_start(
             follow_redirects=False,
         )
         private_api = client.get("/api/search")
+        private_calibration_api = client.get("/api/retrospective-calibration")
         login = client.get("/login")
         healthz = client.get("/healthz")
         oauth, state, query = _oauth_start(client)
@@ -197,6 +198,11 @@ def test_github_mode_redirects_private_surfaces_and_bounds_oauth_start(
     assert private_api.status_code == 401
     assert private_api.json() == {"error": {"code": "AUTH_REQUIRED", "message": "Требуется вход"}}
     assert private_api.headers["cache-control"] == "no-store"
+    assert private_calibration_api.status_code == 401
+    assert private_calibration_api.json() == {
+        "error": {"code": "AUTH_REQUIRED", "message": "Требуется вход"}
+    }
+    assert private_calibration_api.headers["cache-control"] == "no-store"
     assert login.status_code == 200
     assert 'id="root"' in login.text
     assert healthz.status_code == 200

@@ -44,6 +44,32 @@ export type CompareResult = {
   };
 };
 
+export type RetrospectiveCalibrationCount = { code: string; count: number };
+export type RetrospectiveCalibrationRatio = { numerator: number; denominator: number };
+
+export type RetrospectiveCalibrationResult = {
+  derivation_version: string;
+  policy_id: string;
+  policy_fingerprint: string;
+  reconstruction_mode: string;
+  metrics: {
+    decision_notes_seen: number;
+    eligible_decisions: number;
+    predicted_decisions: number;
+    abstentions: number;
+    exact_option_match_count: number;
+    mismatch_count: number;
+    unavailable_count: number;
+    invalid_count: number;
+    coverage: RetrospectiveCalibrationRatio | null;
+    accuracy_non_abstained: RetrospectiveCalibrationRatio | null;
+  };
+  excluded_decisions: RetrospectiveCalibrationCount[];
+  replay_unavailable: RetrospectiveCalibrationCount[];
+  replay_invalid: RetrospectiveCalibrationCount[];
+  temporal_caveats: RetrospectiveCalibrationCount[];
+};
+
 type ErrorEnvelope = { error?: { code?: unknown; message?: unknown } };
 
 export class Stage7ApiError extends Error {
@@ -57,9 +83,9 @@ export class Stage7ApiError extends Error {
 }
 
 async function postStage7<T>(
-  path: "/api/assistant" | "/api/compare",
-  purpose: "assistant-v1" | "compare-v1",
-  payload: Stage7Request,
+  path: "/api/assistant" | "/api/compare" | "/api/retrospective-calibration",
+  purpose: "assistant-v1" | "compare-v1" | "retrospective-calibration-v1",
+  payload: unknown,
   signal?: AbortSignal,
 ): Promise<T> {
   const response = await fetch(path, {
@@ -89,4 +115,15 @@ export function requestAssistant(payload: Stage7Request, signal?: AbortSignal): 
 
 export function requestCompare(payload: Stage7Request, signal?: AbortSignal): Promise<CompareResult> {
   return postStage7<CompareResult>("/api/compare", "compare-v1", payload, signal);
+}
+
+export function requestRetrospectiveCalibration(
+  signal?: AbortSignal,
+): Promise<RetrospectiveCalibrationResult> {
+  return postStage7<RetrospectiveCalibrationResult>(
+    "/api/retrospective-calibration",
+    "retrospective-calibration-v1",
+    {},
+    signal,
+  );
 }
