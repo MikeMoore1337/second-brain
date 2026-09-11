@@ -43,12 +43,24 @@ jobs:
             "$verify_root/etc" \
             "$verify_root/etc/systemd/system" \
             "$verify_root/srv/second-brain/current/.venv/bin" \
-            "$verify_root/srv/second-brain/runtime" \
-            "$verify_root/usr/lib/systemd/system"
+            "$verify_root/srv/second-brain/runtime"
           printf 'second-brain:x:1000:1000::/srv/second-brain:/usr/sbin/nologin\n' \
             > "$verify_root/etc/passwd"
           printf 'second-brain:x:1000:\n' > "$verify_root/etc/group"
-          : > "$verify_root/usr/lib/systemd/system/network-online.target"
+          for target in \
+            sysinit \
+            basic \
+            sockets \
+            paths \
+            timers \
+            shutdown \
+            umount \
+            final \
+            local-fs \
+            network-online; do
+            printf '[Unit]\nDescription=CI systemd dependency fixture\n' \
+              > "$verify_root/etc/systemd/system/$target.target"
+          done
           runtime_executable="$(type -P env)"
           install -m 0755 "$runtime_executable" \
             "$verify_root/srv/second-brain/current/.venv/bin/second-brain"
