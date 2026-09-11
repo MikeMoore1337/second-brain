@@ -35,7 +35,24 @@ jobs:
       - name: Test
         run: uv run --python 3.14 pytest
       - name: Verify tracked systemd unit
-        run: systemd-analyze verify deploy/systemd/second-brain-web.service
+        shell: bash
+        run: |
+          verify_root="$(mktemp -d)"
+          trap 'rm -rf "$verify_root"' EXIT
+          mkdir -p \
+            "$verify_root/etc" \
+            "$verify_root/srv/second-brain/current/.venv/bin" \
+            "$verify_root/srv/second-brain/runtime" \
+            "$verify_root/usr/lib/systemd/system"
+          printf 'second-brain:x:1000:1000::/srv/second-brain:/usr/sbin/nologin\n' \
+            > "$verify_root/etc/passwd"
+          printf 'second-brain:x:1000:\n' > "$verify_root/etc/group"
+          : > "$verify_root/usr/lib/systemd/system/network-online.target"
+          install -m 0755 "$(command -v true)" \
+            "$verify_root/srv/second-brain/current/.venv/bin/second-brain"
+          install -m 0600 /dev/null "$verify_root/srv/second-brain/runtime/web.env"
+          systemd-analyze verify --root="$verify_root" \
+            deploy/systemd/second-brain-web.service
 
   windows-ssl-regression:
     runs-on: windows-latest
