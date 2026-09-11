@@ -407,6 +407,104 @@ def test_repository_and_branch_mismatch_stop_before_fetch(tmp_path: Path) -> Non
     assert branch_result.code == "BRANCH_MISMATCH"
 
 
+class _ConfiguredOriginRunner:
+    """Synthetic Git runner for raw origin identity regressions."""
+
+    def __init__(self, vault: Path, target: str, configured_origin: str) -> None:
+        self.vault = vault
+        self.target = target
+        self.configured_origin = configured_origin
+        self.calls: list[tuple[str, ...]] = []
+
+    def __call__(self, argv: Sequence[str], cwd: Path, timeout: float) -> CommandResult:
+        del timeout
+        command = tuple(argv)
+        self.calls.append(command)
+        if command[0] == "git":
+            assert cwd == self.vault
+            git_args = command[1:]
+            if git_args == ("rev-parse", "--show-toplevel"):
+                return CommandResult(0, f"{self.vault}\n")
+            if git_args == ("rev-parse", "--is-inside-work-tree"):
+                return CommandResult(0, "true\n")
+            if git_args == ("rev-parse", "--is-bare-repository"):
+                return CommandResult(0, "false\n")
+            if git_args == ("rev-parse", "--show-superproject-working-tree"):
+                return CommandResult(0)
+            if git_args == ("config", "--local", "--get-all", "remote.origin.url"):
+                return CommandResult(0, f"{self.configured_origin}\n")
+            if git_args == ("symbolic-ref", "--quiet", "--short", "HEAD"):
+                return CommandResult(0, "main\n")
+            if len(git_args) == 3 and git_args[:2] == ("rev-parse", "--git-path"):
+                return CommandResult(0, f"{self.vault / '.git' / git_args[2]}\n")
+            if git_args == (
+                "status",
+                "--porcelain=v1",
+                "--untracked-files=all",
+                "--ignore-submodules=none",
+            ):
+                return CommandResult(0)
+            if git_args == ("rev-parse", "--verify", "HEAD^{commit}"):
+                return CommandResult(0, f"{self.target}\n")
+            if git_args == ("fetch", "--no-tags", "origin", "main"):
+                return CommandResult(0)
+            if git_args == ("rev-parse", "--verify", "refs/remotes/origin/main^{commit}"):
+                return CommandResult(0, f"{self.target}\n")
+            raise AssertionError(f"unexpected synthetic Git command: {git_args!r}")
+        return CommandResult(0)
+
+
+def _configured_origin_sync(
+    tmp_path: Path,
+    configured_origin: str,
+) -> tuple[VaultSyncResult, _ConfiguredOriginRunner]:
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    (vault / ".git").mkdir()
+    (vault / ".git" / "config").write_text(
+        '[url "file:///synthetic-transport"]\n'
+        "    insteadOf = https://github.com/MikeMoore1337/second-brain-vault.git\n",
+        encoding="utf-8",
+    )
+    app_root = tmp_path / "app"
+    _private_directory(app_root)
+    runtime = tmp_path / "runtime"
+    _private_directory(runtime)
+    target = "0" * 40
+    runner = _ConfiguredOriginRunner(vault, target, configured_origin)
+    config = VaultSyncConfig(
+        vault_root=vault,
+        backup_root=runtime / "vault-backups",
+        lock_path=runtime / "vault-sync.lock",
+        app_root=app_root,
+        target_sha=target,
+        validation_command=("synthetic-validation",),
+    )
+    return _sync(config, runner=runner), runner
+
+
+def test_canonical_raw_origin_allows_trusted_insteadof_transport(tmp_path: Path) -> None:
+    result, runner = _configured_origin_sync(
+        tmp_path,
+        "https://github.com/MikeMoore1337/second-brain-vault.git",
+    )
+
+    assert result.status is VaultSyncStatus.NO_OP
+    assert result.code == "EQUAL_NO_OP"
+    assert ("git", "remote", "get-url", "origin") not in runner.calls
+
+
+def test_wrong_raw_origin_remains_fail_closed_under_transport_rewriting(tmp_path: Path) -> None:
+    result, runner = _configured_origin_sync(
+        tmp_path,
+        "https://github.com/another-owner/another-vault.git",
+    )
+
+    assert result.status is VaultSyncStatus.HUMAN_REQUIRED
+    assert result.code == "REMOTE_MISMATCH"
+    assert ("git", "fetch", "--no-tags", "origin", "main") not in runner.calls
+
+
 def test_git_lock_marker_stops_before_sync(tmp_path: Path) -> None:
     vault, origin, app_root, _ = _make_vault(tmp_path)
     target = _run_git(vault, "rev-parse", "HEAD")
@@ -431,7 +529,7 @@ def test_subprocess_failure_does_not_leak_stderr_or_note_content(tmp_path: Path)
     secret = "PRIVATE_NOTE_CONTENT_7f26c0"
 
     def leaking_runner(argv: Sequence[str], cwd: Path, timeout: float) -> CommandResult:
-        if tuple(argv[1:]) == ("remote", "get-url", "origin"):
+        if tuple(argv[1:]) == ("config", "--local", "--get-all", "remote.origin.url"):
             return CommandResult(1, stderr=f"{secret} /srv/private/.env")
         return run_sync_command(argv, cwd, timeout)
 

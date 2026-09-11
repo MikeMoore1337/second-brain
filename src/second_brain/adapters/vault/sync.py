@@ -629,16 +629,26 @@ class VaultSync:
                 "SUBMODULE_REPOSITORY",
                 "production vault must remain an independent repository",
             )
-        remote = self._git_output(
-            ("remote", "get-url", "origin"),
+        # ``remote get-url`` applies Git's ``url.*.insteadOf`` transport
+        # rewriting.  It is useful for fetch, but it is not the configured
+        # repository identity.  Trust only the raw local origin value and
+        # require a single URL so a mutable multi-URL remote cannot broaden
+        # the production trust boundary.
+        configured_origin = self._git_output(
+            ("config", "--local", "--get-all", "remote.origin.url"),
             "REMOTE_UNAVAILABLE",
-            "expected origin remote could not be read",
+            "expected raw origin remote could not be read",
         )
-        if _normalize_remote(remote) != _normalize_remote(self.config.expected_remote):
+        if (
+            "\n" in configured_origin
+            or "\r" in configured_origin
+            or _normalize_remote(configured_origin)
+            != _normalize_remote(self.config.expected_remote)
+        ):
             raise _SyncStop(
                 VaultSyncStatus.HUMAN_REQUIRED,
                 "REMOTE_MISMATCH",
-                "configured origin remote does not match the expected vault repository",
+                "configured raw origin remote does not match the expected vault repository",
             )
         branch = self._git_output(
             ("symbolic-ref", "--quiet", "--short", "HEAD"),
