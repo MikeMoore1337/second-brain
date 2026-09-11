@@ -259,6 +259,9 @@ def test_valid_runtime_entrypoint_passes_and_missing_or_symlink_stops(
     executable_runtime_root: Path,
 ) -> None:
     releases_root, candidate, entrypoint = _runtime_fixture(executable_runtime_root)
+    assert entrypoint.is_file()
+    assert not entrypoint.is_symlink()
+    assert entrypoint.stat().st_mode & 0o111
     passed = _run_runtime_check(releases_root, candidate)
     assert passed.returncode == 0, passed.stderr
 
