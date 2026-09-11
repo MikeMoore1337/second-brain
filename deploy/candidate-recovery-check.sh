@@ -10,7 +10,8 @@ usage() {
     --releases-root PATH \
     --current-link PATH \
     --target-sha APPLICATION_SHA \
-    --expected-main-sha APPLICATION_SHA
+    --expected-main-sha APPLICATION_SHA \
+    --phase recovery-pre-build|final-post-build
 
 Классифицирует только уже существующий exact-SHA candidate. Скрипт read-only:
 он не удаляет, не чистит и не меняет Git worktree.
@@ -54,11 +55,48 @@ assert_no_git_operation_state() {
   done
 }
 
-is_sensitive_ignored_path() {
+is_env_or_key_like_path() {
   local path="$1"
+  local base="${path##*/}"
+  local base_lower="${base,,}"
 
   case "$path" in
-    .env|.env.*|*.env|*/.env|*/.env.*|*.pem|*.key|*.p12|*.pfx|*.crt|*.cer|*.der)
+    .env|.env.*|*.env|*/.env|*/.env.*)
+      return 0
+      ;;
+  esac
+
+  case "$base_lower" in
+    *.py|*.pyc|*.pyo|*.js|*.jsx|*.ts|*.tsx|*.mjs|*.cjs|*.d.ts|*.map)
+      return 1
+      ;;
+  esac
+
+  case "$base_lower" in
+    *.key|*.p8|*.p12|*.pfx|*.ppk|*.jks|*.keystore|*.pkcs12|*.kdb|\
+    key|key.*|key_*|key-*|*_key|*_key.*|*-key|*-key.*|keypair|keypair.*|\
+    id_rsa|id_rsa.*|id_ed25519|id_ed25519.*|id_ecdsa|id_ecdsa.*|\
+    .npmrc|*.npmrc|.pypirc|.netrc|config.local.*|settings.local.*|\
+    credential|credential.*|credentials|credentials.*|\
+    *[-_.]credential|*[-_.]credential.*|*[-_.]credentials|*[-_.]credentials.*|\
+    secret|secret.*|secrets|secrets.*|*[-_.]secret|*[-_.]secret.*|\
+    *[-_.]secrets|*[-_.]secrets.*|password|password.*|\
+    *[-_.]password|*[-_.]password.*|passwd|passwd.*|\
+    *[-_.]passwd|*[-_.]passwd.*|token|token.*|tokens|tokens.*|\
+    *[-_.]token|*[-_.]token.*|*[-_.]tokens|*[-_.]tokens.*|\
+    private|private.*|*[-_.]private|*[-_.]private.*)
+      return 0
+      ;;
+  esac
+
+  return 1
+}
+
+is_certificate_resource_path() {
+  local path="$1"
+
+  case "${path,,}" in
+    *.pem|*.crt|*.cer|*.der)
       return 0
       ;;
     *)
@@ -67,12 +105,17 @@ is_sensitive_ignored_path() {
   esac
 }
 
-is_allowed_generated_path() {
+is_sensitive_ignored_path() {
   local path="$1"
 
-  is_sensitive_ignored_path "$path" && return 1
+  is_env_or_key_like_path "$path" || is_certificate_resource_path "$path"
+}
+
+is_generated_state_path() {
+  local path="$1"
+
   case "$path" in
-    .venv/*|web/node_modules/*|web/dist/*)
+    .venv|.venv/*|web/node_modules|web/node_modules/*|web/dist|web/dist/*)
       return 0
       ;;
     src/*/__pycache__/*.cpython-314.pyc)
@@ -84,16 +127,61 @@ is_allowed_generated_path() {
   esac
 }
 
+is_allowed_generated_path() {
+  local path="$1"
+  local phase="$2"
+
+  case "$phase" in
+    recovery-pre-build|final-post-build)
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+
+  is_generated_state_path "$path" || return 1
+  is_env_or_key_like_path "$path" && return 1
+  return 0
+}
+
+assert_generated_root_layout() {
+  local path="$1"
+  local generated_root
+
+  for generated_root in .venv web/node_modules web/dist; do
+    if [[ -L "$path/$generated_root" ]]; then
+      die "candidate generated root layout is a symlink"
+    fi
+    if [[ -e "$path/$generated_root" && ! -d "$path/$generated_root" ]]; then
+      die "candidate generated root layout is not a directory"
+    fi
+  done
+}
+
 assert_no_unexpected_ignored_state() {
   local path="$1"
+  local phase="$2"
   local ignored_paths ignored_path
+
+  case "$phase" in
+    recovery-pre-build|final-post-build)
+      ;;
+    *)
+      die "candidate recovery phase is unsupported"
+      ;;
+  esac
 
   ignored_paths="$(git -C "$path" ls-files --others --ignored --exclude-standard 2>/dev/null)" \
     || die "candidate ignored state cannot be enumerated"
   while IFS= read -r ignored_path || [[ -n "$ignored_path" ]]; do
     [[ -n "$ignored_path" ]] || continue
-    is_allowed_generated_path "$ignored_path" \
-      || die "candidate contains ignored state outside the explicit generated-state allowlist"
+    if is_allowed_generated_path "$ignored_path" "$phase"; then
+      continue
+    fi
+    if is_sensitive_ignored_path "$ignored_path"; then
+      die "candidate contains external sensitive ignored state"
+    fi
+    die "candidate contains ignored state outside the explicit generated-state allowlist"
   done <<< "$ignored_paths"
 }
 
@@ -102,6 +190,7 @@ RELEASES_ROOT=""
 CURRENT_LINK=""
 TARGET_SHA=""
 EXPECTED_MAIN_SHA=""
+CHECK_PHASE=""
 
 while (( $# > 0 )); do
   case "$1" in
@@ -130,6 +219,11 @@ while (( $# > 0 )); do
       EXPECTED_MAIN_SHA="$2"
       shift 2
       ;;
+    --phase)
+      (( $# >= 2 )) || die "для --phase нужна recovery phase"
+      CHECK_PHASE="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -149,6 +243,13 @@ done
   || die "target and expected main SHA must be exact lowercase Git SHAs"
 [[ "$TARGET_SHA" == "$EXPECTED_MAIN_SHA" ]] \
   || die "target SHA is not the expected tested/current-main SHA"
+case "$CHECK_PHASE" in
+  recovery-pre-build|final-post-build)
+    ;;
+  *)
+    die "--phase must be recovery-pre-build or final-post-build"
+    ;;
+esac
 
 [[ -d "$CONTROL_REPOSITORY" && ! -L "$CONTROL_REPOSITORY" ]] \
   || die "control repository is unavailable or is a symlink"
@@ -228,7 +329,8 @@ CANDIDATE_STATUS="$(git -C "$CANDIDATE" status --porcelain=v1 --untracked-files=
   || die "candidate clean state cannot be checked"
 [[ -z "$CANDIDATE_STATUS" ]] \
   || die "candidate tracked or non-ignored files are dirty"
-assert_no_unexpected_ignored_state "$CANDIDATE"
+assert_generated_root_layout "$CANDIDATE"
+assert_no_unexpected_ignored_state "$CANDIDATE" "$CHECK_PHASE"
 assert_no_git_operation_state "$CANDIDATE"
 
 WORKTREE_LIST="$(git -C "$CONTROL_REPOSITORY" worktree list --porcelain 2>/dev/null)" \
