@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { App } from "./App";
+import { registerPwa } from "./pwa";
 import "./styles.css";
 import "./cinematic.css";
 import "./page-atmosphere.css";
@@ -19,3 +20,5 @@ createRoot(rootElement).render(
     <App />
   </StrictMode>,
 );
+
+registerPwa();

@@ -52,6 +52,91 @@ body {
   margin: 0;
 }
 
+.pwa-update-notice {
+  position: fixed;
+  z-index: 70;
+  top: max(16px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  left: max(16px, env(safe-area-inset-left));
+  display: flex;
+  width: min(100% - 32px, 680px);
+  margin-inline: auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px 12px 18px;
+  border: 1px solid var(--sb-color-accent);
+  border-radius: 14px;
+  background: #171020f5;
+  box-shadow: 0 16px 48px #0008;
+}
+
+.pwa-update-notice div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.pwa-update-notice strong {
+  color: var(--sb-color-text-primary);
+  font-size: 13px;
+}
+
+.pwa-update-notice span {
+  color: var(--sb-color-text-secondary);
+  font-size: 12px;
+}
+
+.pwa-update-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.pwa-update-actions button {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--sb-color-accent);
+  border-radius: var(--sb-radius-button);
+  background: var(--sb-color-accent);
+  color: var(--sb-color-on-accent);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pwa-update-actions .pwa-update-later {
+  border-color: var(--sb-color-line-strong);
+  background: transparent;
+  color: var(--sb-color-text-primary);
+}
+
+.pwa-update-actions button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+@media (max-width: 600px) {
+  .pwa-update-notice {
+    top: max(12px, env(safe-area-inset-top));
+    right: 12px;
+    left: 12px;
+    width: auto;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .pwa-update-actions button {
+    flex: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pwa-update-notice {
+    box-shadow: 0 8px 24px #0008;
+  }
+}
+
 button,
 input {
   font: inherit;

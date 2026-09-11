@@ -4,6 +4,9 @@
 портирует фактически merged Web GUI, а FastAPI остаётся владельцем application,
 security и vault semantics.
 
+PWA Lite contract для Issue #207 описан в
+[`docs/web-pwa.md`](../docs/web-pwa.md).
+
 ## Граница
 
 React отвечает только за frontend presentation/build layer. FastAPI остаётся
@@ -23,6 +26,7 @@ entrypoint больше не монтируется FastAPI; старые исх
 npm ci
 npm run check
 npm run build
+npm run qa:pwa
 ```
 
 `package-lock.json` — обязательный lockfile. `dist/` — локально генерируемый

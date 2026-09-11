@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.trustedhost import TrustedHostMiddleware
-from starlette.responses import PlainTextResponse
+from starlette.responses import FileResponse, PlainTextResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from second_brain.application.decision_journal import (
@@ -139,6 +139,11 @@ from .transcriptions import TranscriptionService, build_production_transcription
 REACT_DIST_DIR: Final[Path] = Path(__file__).resolve().parents[4] / "web" / "dist"
 REACT_INDEX_FILE: Final[Path] = REACT_DIST_DIR / "index.html"
 REACT_ASSETS_DIR: Final[Path] = REACT_DIST_DIR / "assets"
+REACT_PWA_MANIFEST_FILE: Final[Path] = REACT_DIST_DIR / "manifest.webmanifest"
+REACT_PWA_SERVICE_WORKER_FILE: Final[Path] = REACT_DIST_DIR / "sw.js"
+REACT_PWA_OFFLINE_FILE: Final[Path] = REACT_DIST_DIR / "offline.html"
+REACT_PWA_OFFLINE_STYLES_FILE: Final[Path] = REACT_DIST_DIR / "offline.css"
+REACT_PWA_ICONS_DIR: Final[Path] = REACT_DIST_DIR / "icons"
 DRAFT_REQUEST_HEADER_NAME: Final[str] = "X-Second-Brain-Request"
 DRAFT_REQUEST_HEADER_VALUE: Final[str] = "draft-v1"
 TRANSCRIPTION_REQUEST_HEADER_NAME: Final[str] = DRAFT_REQUEST_HEADER_NAME
@@ -1523,6 +1528,22 @@ def _content_too_large_code(path: str) -> str:
     return "LLM_CONTENT_TOO_LARGE"
 
 
+def _pwa_file_response(file_path: Path, *, media_type: str) -> Response:
+    """Отдать только заранее собранный публичный PWA-файл без private fallback."""
+
+    if not file_path.is_file():
+        return PlainTextResponse(
+            "PWA-ресурс доступен после сборки React-интерфейса.",
+            status_code=404,
+            headers={"Cache-Control": "no-store"},
+        )
+    return FileResponse(
+        file_path,
+        media_type=media_type,
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
 def create_app(
     *,
     draft_service: DraftService | None = None,
@@ -1669,6 +1690,8 @@ def create_app(
             )
         ):
             response.headers["Cache-Control"] = "no-store"
+        elif request.url.path.startswith("/icons/"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
         return response
 
@@ -2139,6 +2162,36 @@ def create_app(
             auth_mode = WEB_AUTH_DISABLED
         return web_index_response(REACT_INDEX_FILE, auth_mode=auth_mode)
 
+    @app.get("/manifest.webmanifest", include_in_schema=False)
+    def pwa_manifest() -> Response:
+        """Serve the public install manifest without exposing application data."""
+
+        return _pwa_file_response(
+            REACT_PWA_MANIFEST_FILE,
+            media_type="application/manifest+json",
+        )
+
+    @app.get("/sw.js", include_in_schema=False)
+    def pwa_service_worker() -> Response:
+        """Serve the static service worker entrypoint with revalidation."""
+
+        return _pwa_file_response(
+            REACT_PWA_SERVICE_WORKER_FILE,
+            media_type="application/javascript",
+        )
+
+    @app.get("/offline.html", include_in_schema=False)
+    def pwa_offline_page() -> Response:
+        """Serve the non-private offline fallback page."""
+
+        return _pwa_file_response(REACT_PWA_OFFLINE_FILE, media_type="text/html")
+
+    @app.get("/offline.css", include_in_schema=False)
+    def pwa_offline_styles() -> Response:
+        """Serve the static styles for the offline fallback page."""
+
+        return _pwa_file_response(REACT_PWA_OFFLINE_STYLES_FILE, media_type="text/css")
+
     @app.get("/healthz", include_in_schema=False)
     def healthz() -> JSONResponse:
         return JSONResponse(content={"status": "ok"})
@@ -2153,6 +2206,12 @@ def create_app(
             "/react/assets",
             StaticFiles(directory=REACT_ASSETS_DIR, html=False, check_dir=True),
             name="react-assets-compat",
+        )
+    if REACT_PWA_ICONS_DIR.is_dir():
+        app.mount(
+            "/icons",
+            StaticFiles(directory=REACT_PWA_ICONS_DIR, html=False, check_dir=True),
+            name="pwa-icons",
         )
     return app
 
@@ -2603,6 +2662,11 @@ __all__ = [
     "MAX_RAW_SIMULATE_ME_BODY_BYTES",
     "MAX_RAW_TIMELINE_BODY_BYTES",
     "MAX_RAW_TRANSCRIPTION_BODY_BYTES",
+    "REACT_PWA_ICONS_DIR",
+    "REACT_PWA_MANIFEST_FILE",
+    "REACT_PWA_OFFLINE_FILE",
+    "REACT_PWA_OFFLINE_STYLES_FILE",
+    "REACT_PWA_SERVICE_WORKER_FILE",
     "SEARCH_REQUEST_HEADER_NAME",
     "SEARCH_REQUEST_HEADER_VALUE",
     "SELF_MODEL_REQUEST_HEADER_NAME",

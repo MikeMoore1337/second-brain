@@ -62,7 +62,7 @@ history остаётся отдельной capability boundary и не явля
 Safe Write; текущая production-синхронизация vault не включена автоматически.
 
 Перед packaged GUI из checkout один раз соберите frontend из каталога `web`
-(`npm ci`, `npm run check`, `npm run build`); `web/dist` остаётся локальным
+(`npm ci`, `npm run check`, `npm run build`, `npm run qa:pwa`); `web/dist` остаётся локальным
 игнорируемым артефактом. Открывайте vault в Obsidian через `Open folder as vault`.
 Проверки `doctor` и
 `vault validate` read-only; normal Web GUI capture/review и явный Safe Write
@@ -129,7 +129,8 @@ binary запрос на transcription и возвращает только plai
 явного Save. Browser не
 выбирает path, identity, timestamp, apply или Git metadata и не сохраняет
 review state в persistent browser storage. Публичное включение GitHub OAuth,
-public bind, deploy и PWA в этот этап локального GUI не входят. Для source-free
+public bind и deploy в этот этап локального GUI не входят. Installable PWA Lite
+shell без private offline data описан в [Web PWA contract](docs/web-pwa.md). Для source-free
 Text draft (включая уже
 проверенный Voice transcript) доступен отдельный явный режим `Сохранить как
 Personal Memory`, выключенный по умолчанию. Пользователь вручную выбирает

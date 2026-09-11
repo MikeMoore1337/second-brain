@@ -1,5 +1,5 @@
 import { MotionConfig } from "motion/react";
-import { useEffect, type ReactElement } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 import { CinematicHero } from "./cinematic-hero";
 import { LoginScreen, type LoginError } from "./login-screen";
 import { PageMotion } from "./page-motion";
@@ -22,6 +22,7 @@ import {
 } from "./parity";
 import { DiagnosticsSurface } from "./diagnostics-surface";
 import { Icon } from "./icons";
+import { applyPwaUpdate, hasPwaUpdate, subscribeToPwaUpdate } from "./pwa";
 
 const navigation = [
   ["#decision-journal", "Журнал решений", "decision"],
@@ -48,6 +49,42 @@ export function AccountControl(): ReactElement {
         <a href="/auth/logout">Выйти</a>
       </div>
     </details>
+  );
+}
+
+export function PwaUpdateNotice(): ReactElement | null {
+  const [available, setAvailable] = useState(hasPwaUpdate);
+  const [updating, setUpdating] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => subscribeToPwaUpdate(() => setAvailable(true)), []);
+
+  if (!available || dismissed) return null;
+
+  const update = async () => {
+    setUpdating(true);
+    try {
+      await applyPwaUpdate();
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  return (
+    <aside className="pwa-update-notice" role="status" aria-live="polite">
+      <div>
+        <strong>Доступна новая версия Second Brain.</strong>
+        <span>Обнови её после завершения текущей работы.</span>
+      </div>
+      <div className="pwa-update-actions">
+        <button type="button" onClick={() => void update()} disabled={updating}>
+          {updating ? "Обновляем…" : "Обновить"}
+        </button>
+        <button type="button" className="pwa-update-later" onClick={() => setDismissed(true)}>
+          Позже
+        </button>
+      </div>
+    </aside>
   );
 }
 
@@ -92,6 +129,7 @@ export function App(): ReactElement {
   }
   return (
     <MotionConfig reducedMotion="user"><PageMotion>
+      <PwaUpdateNotice />
       <a className="skip-link" href="#main-content" onClick={(event) => {
         event.preventDefault();
         const target = document.getElementById("main-content");

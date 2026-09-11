@@ -43,6 +43,11 @@ _ERRORS = _legacy_app._ERRORS
 _GENERIC_ERROR = _legacy_app._GENERIC_ERROR
 REACT_INDEX_FILE = _legacy_app.REACT_INDEX_FILE
 REACT_ASSETS_DIR = _legacy_app.REACT_ASSETS_DIR
+REACT_PWA_MANIFEST_FILE = _legacy_app.REACT_PWA_MANIFEST_FILE
+REACT_PWA_SERVICE_WORKER_FILE = _legacy_app.REACT_PWA_SERVICE_WORKER_FILE
+REACT_PWA_OFFLINE_FILE = _legacy_app.REACT_PWA_OFFLINE_FILE
+REACT_PWA_OFFLINE_STYLES_FILE = _legacy_app.REACT_PWA_OFFLINE_STYLES_FILE
+REACT_PWA_ICONS_DIR = _legacy_app.REACT_PWA_ICONS_DIR
 run_in_threadpool = _legacy_app.run_in_threadpool  # type: ignore[attr-defined]
 
 for _legacy_name in _legacy_all:
@@ -56,6 +61,11 @@ _LEGACY_PATCHABLE_NAMES = frozenset(
         "_GENERIC_ERROR",
         "REACT_INDEX_FILE",
         "REACT_ASSETS_DIR",
+        "REACT_PWA_MANIFEST_FILE",
+        "REACT_PWA_SERVICE_WORKER_FILE",
+        "REACT_PWA_OFFLINE_FILE",
+        "REACT_PWA_OFFLINE_STYLES_FILE",
+        "REACT_PWA_ICONS_DIR",
         "run_in_threadpool",
     }
 ) - {"create_app"}
@@ -121,6 +131,11 @@ __all__ = [
     "_GENERIC_ERROR",
     "REACT_INDEX_FILE",
     "REACT_ASSETS_DIR",
+    "REACT_PWA_MANIFEST_FILE",
+    "REACT_PWA_SERVICE_WORKER_FILE",
+    "REACT_PWA_OFFLINE_FILE",
+    "REACT_PWA_OFFLINE_STYLES_FILE",
+    "REACT_PWA_ICONS_DIR",
     "run_in_threadpool",
     "DIAGNOSTICS_REQUEST_HEADER_NAME",
     "DIAGNOSTICS_REQUEST_HEADER_VALUE",
