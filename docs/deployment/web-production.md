@@ -95,32 +95,56 @@ Systemd template использует:
 - `User=second-brain` и `Group=second-brain`;
 - `WorkingDirectory=/srv/second-brain/current`;
 - protected `EnvironmentFile=/srv/second-brain/runtime/web.env`;
-- `ExecStart` через абсолютный путь к `uv`, `--python 3.14`, `--no-sync`,
-  текущий CLI и явный `--port 8123`.
+- `ExecStart=/srv/second-brain/current/.venv/bin/second-brain` с теми же
+  `--env-file` и `--port 8123` аргументами.
 
-Путь `/usr/local/bin/uv` в template — безопасный placeholder для абсолютного
-пути. До установки unit его нужно заменить на фактический результат
-`command -v uv` на выбранном VPS. В unit нет secrets, OAuth values или
+Следующие invariants остаются обязательными и не меняются hardening task:
+`Restart=on-failure`, `KillSignal=SIGTERM`, `KillMode=control-group`,
+`UMask=0077`, `ProtectHome=read-only`, `NoNewPrivileges=true`, `PrivateTmp=true`,
+`PrivateDevices=true`, `ProtectSystem=full`, kernel/control-group/SUID/personality
+restrictions и `RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6`.
+
+Application runtime больше не запускается через `uv`: release pipeline сначала
+создаёт и проверяет exact `.venv`, после чего systemd запускает только
+immutable entrypoint из active release. В unit нет secrets, OAuth values или
 Cloudflare credentials. `current` должен быть symlink на готовый release; unit
-не запускает fetch, sync, npm или build.
+не запускает fetch, sync, npm или build и не зависит от `uv` cache/home.
 
-`--no-sync` намеренно запрещает изменять или обновлять environment при старте
-service. Locked dependency installation выполняется отдельным release step в
-candidate worktree: `uv sync --locked --python 3.14`.
+`uv sync --locked --python 3.14` остаётся только build/install step до
+activation. `UV_NO_CACHE=1` не переносится в `web.env`: после owner-managed
+integration старый `/etc/systemd/system/second-brain-web.service.d/10-uv-runtime.conf`
+является obsolete workaround и не должен оставаться частью runtime contract.
 
 Hardening ограничен совместимыми настройками: `ProtectSystem=full` делает
 системные области read-only, но не блокирует Safe Write в sibling vault под
 `/srv`; `ProtectSystem=strict` в этот template не добавляется без отдельного
-полного аудита writable paths. `ProtectHome=read-only` позволяет выполнить
-user-level `uv` из `/home`, но не разрешает приложению писать туда. `PrivateTmp`,
-`PrivateDevices`,
+полного аудита writable paths. `ProtectHome=read-only` сохраняется как
+read-only boundary для home; direct runtime не использует cache/home.
+`PrivateTmp`, `PrivateDevices`,
 `NoNewPrivileges`, kernel/control-group protection, `RestrictSUIDSGID` и
 ограничение address families не требуют root и не меняют application write
 boundary.
 
 Graceful shutdown сохраняется через `Type=simple`, `KillSignal=SIGTERM`,
 `KillMode=control-group` и `TimeoutStopSec=30s`. Автоматический update,
-daemonization, root runtime и публичный bind в service не используются.
+daemonization, root runtime и публичный bind в service не используются. Не
+добавляйте `SuccessExitStatus=143`: штатный restart должен завершать direct
+application process нормально, а настоящий unexpected non-zero exit должен
+оставаться failure для `Restart=on-failure`.
+
+### Direct runtime и rollback compatibility
+
+До activation autodeploy проверяет, что candidate `.venv` — обычный directory,
+его canonical path находится строго внутри `releases/<SHA>`, а
+`.venv/bin/second-brain` — regular executable с interpreter header из того же
+exact `.venv/bin`. Затем `doctor` и `vault validate` запускаются этим direct
+entrypoint, а не через `uv run`.
+
+Тот же gate проверяет текущий known-good release до candidate mutation. Поэтому
+после integration direct systemd runtime rollback на сохранённый предыдущий
+release не переключится на release без совместимого entrypoint. Если такой
+release нельзя доказать, autodeploy останавливается с
+`RUNTIME_ENTRYPOINT_NOT_READY / HUMAN_REQUIRED`.
 
 ## Runtime EnvironmentFile
 
@@ -309,6 +333,9 @@ checkpoint, а `ufw inactive` не является основанием для 
 
 ### Runtime tools и vault access
 
+`uv` и Python 3.14 нужны autodeploy для locked build/install и read-only
+validation candidate; они не являются process runtime systemd после activation.
+
 ```bash
 python3.14 --version
 uv --version
@@ -492,39 +519,113 @@ systemd unit не нужен.
 ### 4. Read-only application validation из candidate
 
 Используйте тот же protected env file, что и systemd, но запускайте проверки
-из candidate и без implicit dependency sync:
+из candidate direct entrypoint после locked dependency sync:
 
 ```bash
 cd "$CANDIDATE_RELEASE"
-uv run --python 3.14 --no-sync second-brain --env-file "$RUNTIME_ENV" doctor
-uv run --python 3.14 --no-sync second-brain --env-file "$RUNTIME_ENV" vault validate
+test -f .venv/bin/second-brain
+test ! -L .venv/bin/second-brain
+test -x .venv/bin/second-brain
+.venv/bin/second-brain --env-file "$RUNTIME_ENV" doctor
+.venv/bin/second-brain --env-file "$RUNTIME_ENV" vault validate
 ```
 
 Обе команды должны завершиться с code `0`. Они не создают canonical test note
 и не выполняют Safe Write. Не передавайте в application secrets через argv.
 
-### 5. Systemd verification
+### 5. Owner/root integration systemd contract
 
-Сначала проверьте фактический путь к `uv`, service user и права на
-`EnvironmentFile`. Устанавливайте unit только из уже проверенного candidate
-artifact. Если `command -v uv` не равен `/usr/local/bin/uv`, внесите только
-это path adjustment во внешний rendered unit, не добавляя credentials.
-Проверка не выполняет restart и не меняет `current`.
+Первый release с изменённым `deploy/systemd` ожидаемо останавливается до
+candidate mutation с deterministic
+`SYSTEMD_CONTRACT_NOT_INTEGRATED / HUMAN_REQUIRED`. Это не production smoke и
+не разрешение менять unit автоматически: owner/root должен один раз установить
+exact merged contract. `deploy/caddy` и `deploy/root` по-прежнему требуют
+отдельного owner checkpoint без исключений.
+
+Owner выполняет процедуру только для exact merged SHA, который остановил
+autodeploy. Сначала проверьте control checkout, active symlink и совместимость
+текущего known-good release с direct runtime:
 
 ```bash
-command -v uv
-sudo install --owner=root --group=root --mode=0644 \
-  "$CANDIDATE_RELEASE/deploy/systemd/second-brain-web.service" \
-  /etc/systemd/system/second-brain-web.service
-sudo systemd-analyze verify /etc/systemd/system/second-brain-web.service
+APP_ROOT=/srv/second-brain/second-brain
+SECOND_BRAIN_ROOT=/srv/second-brain
+MERGED_SHA=<exact merged main SHA>
+CURRENT_LINK="$SECOND_BRAIN_ROOT/current"
+SYSTEMD_UNIT=/etc/systemd/system/second-brain-web.service
+DROPIN_DIR=/etc/systemd/system/second-brain-web.service.d
+OBSOLETE_DROPIN="$DROPIN_DIR/10-uv-runtime.conf"
+
+test "$(git -C "$APP_ROOT" rev-parse HEAD)" = "$MERGED_SHA"
+test "$(git -C "$APP_ROOT" rev-parse "$MERGED_SHA^{commit}")" = "$MERGED_SHA"
+test -L "$CURRENT_LINK"
+test -f "$CURRENT_LINK/.venv/bin/second-brain"
+test ! -L "$CURRENT_LINK/.venv/bin/second-brain"
+test -x "$CURRENT_LINK/.venv/bin/second-brain"
 ```
 
-Проверка должна подтвердить `User=second-brain`, non-root `Group`, указанное
-`WorkingDirectory=/srv/second-brain/current`, существующий protected
-`EnvironmentFile`,
-`Restart=on-failure`, loopback port `8123`, `KillSignal=SIGTERM` и отсутствие
-secret assignments в unit/argv. Не используйте `systemctl show` с выводом
-полного environment.
+Установите unit только из этого exact, clean control checkout. Не редактируйте
+его вручную и не переносите path к `uv`:
+
+```bash
+test -f "$APP_ROOT/deploy/systemd/second-brain-web.service"
+test ! -L "$APP_ROOT/deploy/systemd/second-brain-web.service"
+sudo install --owner=root --group=root --mode=0644 \
+  "$APP_ROOT/deploy/systemd/second-brain-web.service" \
+  "$SYSTEMD_UNIT"
+cmp "$APP_ROOT/deploy/systemd/second-brain-web.service" "$SYSTEMD_UNIT"
+test "$(sudo stat -c '%u' "$SYSTEMD_UNIT")" = 0
+test "$(sudo stat -c '%a' "$SYSTEMD_UNIT")" = 644
+```
+
+Старый VPS-only drop-in удаляется только bounded owner procedure. Если directory
+является symlink, содержит неизвестный entry, либо exact file отличается от
+известного obsolete workaround, остановитесь. Directory не удаляйте:
+
+```bash
+if sudo test -L "$DROPIN_DIR"; then
+  echo 'STOP / HUMAN_REQUIRED: service drop-in directory is a symlink' >&2
+  exit 1
+fi
+if sudo test -e "$DROPIN_DIR"; then
+  sudo test -d "$DROPIN_DIR"
+  DROPIN_ENTRY="$(sudo find "$DROPIN_DIR" -mindepth 1 -maxdepth 1 -print -quit)"
+  if test -n "$DROPIN_ENTRY"; then
+    test "$DROPIN_ENTRY" = "$OBSOLETE_DROPIN"
+    sudo test -f "$OBSOLETE_DROPIN"
+    sudo test ! -L "$OBSOLETE_DROPIN"
+    printf '%s\n' '[Service]' 'Environment=UV_NO_CACHE=1' \
+      | sudo cmp - "$OBSOLETE_DROPIN"
+    sudo unlink -- "$OBSOLETE_DROPIN"
+  fi
+  test -z "$(sudo find "$DROPIN_DIR" -mindepth 1 -maxdepth 1 -print -quit)"
+fi
+```
+
+После exact install и bounded drop-in check выполните verification и controlled
+restart. Это единственная production mutation текущего integration checkpoint;
+не меняйте `web.env`, Caddy, Xray, x-ui, MTProxy, SSH, firewall, ports или
+`second-brain-vault`:
+
+```bash
+sudo systemd-analyze verify "$SYSTEMD_UNIT"
+sudo systemctl daemon-reload
+sudo systemctl restart second-brain-web.service
+sudo systemctl is-active --quiet second-brain-web.service
+curl --fail --silent --show-error http://127.0.0.1:8123/healthz
+curl --fail --silent --show-error https://brain.mikemoore.top/healthz
+sudo systemctl show second-brain-web.service \
+  --property=ActiveState,Result,ExecMainStatus
+sudo journalctl --unit=second-brain-web.service --since '-5 minutes' --no-pager
+```
+
+Ожидается `ActiveState=active`, успешный `Result`, нормальный
+`ExecMainStatus` и отсутствие misleading `status=143 / Failed` для intentional
+restart. `SuccessExitStatus=143` не является заменой доказательства graceful
+semantics. Сохраните bounded journal evidence без environment dump, затем
+повторите тот же failed exact-SHA deploy или `Re-run jobs`. После этого
+installed unit bytes и drop-in state проходят autodeploy автоматически; для
+последующих app-only release новый root action не нужен, пока systemd contract
+не изменился снова.
 
 ### 6. Caddy topology, preserve-existing integration и validation
 
@@ -827,8 +928,8 @@ production `main`, не удаляет releases и не выполняет repo-
 
 Rollback для уже активированного release — это только возврат stable `current`
 к сохранённому previous known-good release и controlled restart. Он не требует
-нового build, не заменяет systemd `WorkingDirectory` drop-in и не использует
-reset/rebase/force operation:
+нового build, использует тот же direct `.venv/bin/second-brain` contract и не
+использует reset/rebase/force operation:
 
 ```bash
 test -n "$PREVIOUS_KNOWN_GOOD_SHA"

@@ -35,12 +35,12 @@ deploy/autodeploy.sh --sha <CI_SHA>
        +-> strict candidate classification/recovery или создание worktree
        +-> immutable releases/<SHA> worktree
        +-> recovery-pre-build gate + bounded Python environment reset
-       +-> uv sync --locked + exact Python 3.14 bytecode refresh
+       +-> uv sync --locked + exact direct runtime entrypoint gate
        +-> npm ci/check/build/PWA QA
        +-> doctor + vault validate
        +-> final candidate/env/baseline integrity gates
        +-> sudo root-owned release-control helper
-       +-> current symlink switch + systemd restart
+       +-> current symlink switch + direct application process restart
        +-> local/public health
        +-> bounded rollback при post-activation failure
 ```
@@ -80,6 +80,31 @@ fixed-value mismatch останавливают deploy. Ни `source`, ни `eva
 Failure этого gate не создаёт candidate, не переключает `current` и не
 перезапускает service. Production values не добавляются в Git; исправление
 выполняется owner-ом отдельно в protected `web.env`.
+
+## Direct immutable runtime contract
+
+Production systemd больше не запускает `uv`. После `uv sync --locked --python
+3.14` candidate должен содержать exact regular executable
+`<candidate>/.venv/bin/second-brain`. Read-only helper проверяет, что:
+
+- candidate и `.venv` — directories без symlink;
+- canonical candidate path равен `releases/<TARGET_SHA>`;
+- entrypoint — regular executable без symlink и canonical path находится внутри
+  exact candidate `.venv`;
+- interpreter header entrypoint указывает в exact candidate `.venv/bin`, без
+  `..`/`.` path escape;
+- текущий known-good release также проходит тот же gate до candidate mutation.
+
+Затем `doctor` и `vault validate` запускаются напрямую этим entrypoint. `uv`
+остаётся инструментом build/install и не является production process
+supervisor/runtime launcher. Поэтому `ProtectHome=read-only` сохраняется, а
+`UV_NO_CACHE=1` не добавляется в `web.env` и не нужен direct runtime.
+
+Если candidate entrypoint отсутствует, не executable, является symlink, либо
+его canonical/interpreter path не относится к exact environment, результат —
+`RUNTIME_ENTRYPOINT_NOT_READY / HUMAN_REQUIRED` до activation. Такой gate
+делает rollback совместимым с тем же runtime contract: active known-good release
+без entrypoint не допускается к следующему release operation.
 
 ## Interrupted candidate recovery
 
@@ -202,10 +227,21 @@ SHA. Если candidate проходит strict classifier, ручной VPS cle
   [Vault Git Sync & Backup v1](vault-sync.md) exact-SHA workflow. Autodeploy
   остаётся application release operation: он только проверяет vault и не
   выполняет его fetch/fast-forward или backup.
-- Изменение tracked `deploy/systemd`, `deploy/caddy` или `deploy/root` между
-  active и candidate release блокирует autodeploy. Root-managed integration
-  выполняется owner-ом отдельно, после чего новый release можно выпустить
-  штатным способом.
+- Изменение tracked `deploy/caddy` или `deploy/root` между active и candidate
+  release по-прежнему безусловно блокирует autodeploy до owner-managed
+  integration.
+- Изменение tracked `deploy/systemd` блокирует autodeploy только до тех пор,
+  пока exact target unit не доказан как установленный root-owned regular file
+  `/etc/systemd/system/second-brain-web.service` с безопасными permissions и
+  exact bytes. Проверка выполняется напрямую по installed state; writable
+  marker от deploy user не принимается.
+- Systemd gate также требует, чтобы service drop-in directory отсутствовал или
+  был пустым безопасным directory. Любой obsolete `10-uv-runtime.conf` или
+  неизвестный drop-in даёт `SYSTEMD_CONTRACT_NOT_INTEGRATED / HUMAN_REQUIRED`;
+  autodeploy ничего не удаляет.
+- После one-time integration future app-only target больше не содержит diff в
+  `deploy/systemd` относительно active integrated release и проходит unattended.
+  Следующий owner checkpoint нужен только при новом systemd contract diff.
 - Candidate создаётся только как detached worktree `releases/<SHA>` и до
   activation проходит locked Python sync, frontend check/build/PWA artifact QA,
   `doctor`, `vault validate` и strict final integrity verification. Existing
@@ -297,6 +333,74 @@ Wildcard разрешает передать helper только аргумен�
 Изменение repository-версии `deploy/root/second-brain-release-control`
 автоматически блокирует следующий deploy, пока owner не установит новую
 проверенную версию helper вручную.
+
+## One-time owner-managed systemd integration
+
+Этот checkpoint выполняется после merge exact release и после ожидаемого
+`SYSTEMD_CONTRACT_NOT_INTEGRATED / HUMAN_REQUIRED`; implementation task сама
+production не меняет. Он не является частью каждого обычного app deploy.
+
+Owner/root должен работать только с exact merged SHA в clean control checkout:
+
+```bash
+APP_ROOT=/srv/second-brain/second-brain
+SECOND_BRAIN_ROOT=/srv/second-brain
+MERGED_SHA=<exact merged main SHA>
+CURRENT_LINK="$SECOND_BRAIN_ROOT/current"
+SYSTEMD_UNIT=/etc/systemd/system/second-brain-web.service
+DROPIN_DIR=/etc/systemd/system/second-brain-web.service.d
+OBSOLETE_DROPIN="$DROPIN_DIR/10-uv-runtime.conf"
+
+test "$(git -C "$APP_ROOT" rev-parse HEAD)" = "$MERGED_SHA"
+test "$(git -C "$APP_ROOT" rev-parse "$MERGED_SHA^{commit}")" = "$MERGED_SHA"
+test -L "$CURRENT_LINK"
+test -f "$CURRENT_LINK/.venv/bin/second-brain"
+test ! -L "$CURRENT_LINK/.venv/bin/second-brain"
+test -x "$CURRENT_LINK/.venv/bin/second-brain"
+
+sudo install --owner=root --group=root --mode=0644 \
+  "$APP_ROOT/deploy/systemd/second-brain-web.service" \
+  "$SYSTEMD_UNIT"
+cmp "$APP_ROOT/deploy/systemd/second-brain-web.service" "$SYSTEMD_UNIT"
+test "$(sudo stat -c '%u' "$SYSTEMD_UNIT")" = 0
+test "$(sudo stat -c '%a' "$SYSTEMD_UNIT")" = 644
+```
+
+До `unlink` проверьте exact obsolete drop-in. При unknown entry, symlink,
+неизвестном содержимом или дополнительном drop-in — STOP/HUMAN_REQUIRED.
+Удаляется только exact regular file; directory и другие workloads не трогайте:
+
+```bash
+if sudo test -L "$DROPIN_DIR"; then
+  echo 'STOP / HUMAN_REQUIRED: drop-in directory is a symlink' >&2
+  exit 1
+fi
+if sudo test -e "$DROPIN_DIR"; then
+  sudo test -d "$DROPIN_DIR"
+  DROPIN_ENTRY="$(sudo find "$DROPIN_DIR" -mindepth 1 -maxdepth 1 -print -quit)"
+  if test -n "$DROPIN_ENTRY"; then
+    test "$DROPIN_ENTRY" = "$OBSOLETE_DROPIN"
+    sudo test -f "$OBSOLETE_DROPIN"
+    sudo test ! -L "$OBSOLETE_DROPIN"
+    printf '%s\n' '[Service]' 'Environment=UV_NO_CACHE=1' \
+      | sudo cmp - "$OBSOLETE_DROPIN"
+    sudo unlink -- "$OBSOLETE_DROPIN"
+  fi
+  test -z "$(sudo find "$DROPIN_DIR" -mindepth 1 -maxdepth 1 -print -quit)"
+fi
+```
+
+После этого owner выполняет `systemd-analyze verify`, `systemctl daemon-reload`,
+controlled `systemctl restart`, local/public `/healthz`, и сохраняет только
+bounded `systemctl show` (`ActiveState`, `Result`, `ExecMainStatus`) и journal
+evidence без environment dump. Intentional restart не должен показывать
+misleading `status=143 / Failed`; `SuccessExitStatus=143` не добавляется как
+маскировка unexpected failure. Затем rerun-ится тот же exact failed deploy.
+
+После успешной integration installed unit bytes == tracked target, drop-in state
+пуст, и обычные app-only releases снова unattended. Root rollout не меняет
+`web.env`, Caddy, Xray, x-ui, MTProxy, SSH, firewall, ports, vault или
+`second-brain-vault`.
 
 ## Dedicated SSH key для GitHub Actions
 

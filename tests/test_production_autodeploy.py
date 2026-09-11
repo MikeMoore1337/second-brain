@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -9,7 +10,21 @@ import pytest
 REPOSITORY_ROOT = Path(__file__).parents[1]
 AUTODEPLOY_SCRIPT = REPOSITORY_ROOT / "deploy" / "autodeploy.sh"
 RELEASE_CONTROL = REPOSITORY_ROOT / "deploy" / "root" / "second-brain-release-control"
+SYSTEMD_CONTRACT_CHECK = REPOSITORY_ROOT / "deploy" / "systemd-contract-check.sh"
+RUNTIME_ENTRYPOINT_CHECK = REPOSITORY_ROOT / "deploy" / "runtime-entrypoint-check.sh"
 AUTODEPLOY_WORKFLOW = REPOSITORY_ROOT / ".github" / "workflows" / "deploy-production.yml"
+
+
+def _bash_path() -> str | None:
+    if os.name != "nt":
+        return shutil.which("bash")
+    for candidate in (
+        Path("C:/Program Files/Git/bin/bash.exe"),
+        Path("C:/Program Files/Git/usr/bin/bash.exe"),
+    ):
+        if candidate.is_file():
+            return str(candidate)
+    return None
 
 
 def test_autodeploy_script_has_strict_exact_sha_release_contract() -> None:
@@ -25,7 +40,9 @@ def test_autodeploy_script_has_strict_exact_sha_release_contract() -> None:
         'git -C "$APP_ROOT" merge --ff-only origin/main',
         'git -C "$APP_ROOT" worktree add --detach',
         "uv sync --locked --python 3.14",
-        "uv run --python 3.14 --no-sync second-brain",
+        "deploy/systemd-contract-check.sh",
+        "deploy/runtime-entrypoint-check.sh",
+        '"$CANDIDATE_ENTRYPOINT" --env-file "$RUNTIME_ENV" doctor',
         "npm ci",
         "npm run check",
         "npm run build",
@@ -44,6 +61,8 @@ def test_autodeploy_script_keeps_root_config_and_vault_fail_closed() -> None:
     script = AUTODEPLOY_SCRIPT.read_text(encoding="utf-8")
 
     assert "deploy/systemd deploy/caddy deploy/root" in script
+    assert "SYSTEMD_CONTRACT_NOT_INTEGRATED / HUMAN_REQUIRED" in script
+    assert "deploy/caddy deploy/root" in script
     assert "autodeploy его не обновляет" in script
     assert "первый production deploy выполняется owner-managed" in script
     assert '[[ -w "$SECOND_BRAIN_ROOT" ]]' not in script
@@ -96,11 +115,18 @@ def test_release_control_is_narrow_root_owned_contract() -> None:
         assert forbidden not in lowered
 
 
-@pytest.mark.skipif(shutil.which("bash") is None, reason="bash is required")
+@pytest.mark.skipif(_bash_path() is None, reason="bash is required")
 def test_deployment_shell_scripts_have_valid_bash_syntax() -> None:
-    for script in (AUTODEPLOY_SCRIPT, RELEASE_CONTROL):
+    bash = _bash_path()
+    assert bash is not None
+    for script in (
+        AUTODEPLOY_SCRIPT,
+        RELEASE_CONTROL,
+        SYSTEMD_CONTRACT_CHECK,
+        RUNTIME_ENTRYPOINT_CHECK,
+    ):
         completed = subprocess.run(
-            ["bash", "-n", str(script)],
+            [bash, "-n", str(script)],
             capture_output=True,
             text=True,
             check=False,

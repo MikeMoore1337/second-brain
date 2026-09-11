@@ -30,9 +30,11 @@ def test_systemd_template_is_loopback_non_root_and_secret_free() -> None:
     assert "WorkingDirectory=/srv/second-brain/second-brain" not in unit
     assert "EnvironmentFile=/srv/second-brain/runtime/web.env" in unit
     assert (
-        "ExecStart=/usr/local/bin/uv run --python 3.14 --no-sync second-brain "
+        "ExecStart=/srv/second-brain/current/.venv/bin/second-brain "
         "--env-file /srv/second-brain/runtime/web.env web serve --port 8123"
     ) in unit
+    assert "/usr/local/bin/uv" not in unit
+    assert "UV_NO_CACHE" not in unit
     assert "127.0.0.1:8123" in unit
     assert "0.0.0.0" not in unit
     assert "--host" not in unit
@@ -42,6 +44,20 @@ def test_systemd_template_is_loopback_non_root_and_secret_free() -> None:
     assert "NoNewPrivileges=true" in unit
     assert "ProtectSystem=full" in unit
     assert "ProtectHome=read-only" in unit
+    assert "KillMode=control-group" in unit
+    assert "UMask=0077" in unit
+    assert "SuccessExitStatus=143" not in unit
+    for preserved in (
+        "PrivateTmp=true",
+        "PrivateDevices=true",
+        "ProtectKernelTunables=true",
+        "ProtectKernelModules=true",
+        "ProtectControlGroups=true",
+        "RestrictSUIDSGID=true",
+        "LockPersonality=true",
+        "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6",
+    ):
+        assert preserved in unit
     assert "SECOND_BRAIN_GITHUB_CLIENT_SECRET=" not in unit
     assert "SECOND_BRAIN_SESSION_SECRET=" not in unit
     assert "CLOUDFLARE_API_TOKEN=" not in unit
