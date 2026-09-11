@@ -39,7 +39,7 @@ button,input,textarea,select { font-family:var(--sb-font-sans); }
 .status-pill { position:static; margin-top:24px; }
 
 /* Scene layers are independent of working content, never a knowledge graph. */
-.cinematic-hero { position:relative; isolation:isolate; min-height:780px; overflow:clip; margin-bottom:48px; background:var(--sb-color-void); }
+.cinematic-hero { position:relative; isolation:isolate; min-height:780px; overflow:clip; margin-bottom:48px; background:transparent; }
 .universe-parallax { position:absolute; inset:0; z-index:-1; pointer-events:none; }
 .memory-depth { position:absolute;inset:0;background:radial-gradient(ellipse at 76% 65%,#43226426,transparent 45%); }
 .universe-light { position:absolute; inset:0; background:linear-gradient(90deg,var(--sb-color-void) 0%,transparent 58%),linear-gradient(0deg,var(--sb-color-void),transparent 20%); }
