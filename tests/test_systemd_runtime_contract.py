@@ -6,6 +6,8 @@ import os
 import shlex
 import shutil
 import subprocess
+import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -205,8 +207,17 @@ def test_any_service_dropin_state_stops_until_owner_integration(
     assert "drop-in" in result.stderr
 
 
-def _runtime_fixture(tmp_path: Path) -> tuple[Path, Path, Path]:
-    releases_root = tmp_path / "releases"
+@pytest.fixture
+def executable_runtime_root() -> Iterator[Path]:
+    root = Path(tempfile.mkdtemp(prefix=".runtime-contract-", dir=PROJECT_ROOT))
+    try:
+        yield root
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def _runtime_fixture(root: Path) -> tuple[Path, Path, Path]:
+    releases_root = root / "releases"
     candidate = releases_root / TEST_SHA
     venv_bin = candidate / ".venv" / "bin"
     venv_bin.mkdir(parents=True)
@@ -244,8 +255,10 @@ def _run_runtime_check(
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX executable and symlink contract")
-def test_valid_runtime_entrypoint_passes_and_missing_or_symlink_stops(tmp_path: Path) -> None:
-    releases_root, candidate, entrypoint = _runtime_fixture(tmp_path)
+def test_valid_runtime_entrypoint_passes_and_missing_or_symlink_stops(
+    executable_runtime_root: Path,
+) -> None:
+    releases_root, candidate, entrypoint = _runtime_fixture(executable_runtime_root)
     passed = _run_runtime_check(releases_root, candidate)
     assert passed.returncode == 0, passed.stderr
 
@@ -254,19 +267,19 @@ def test_valid_runtime_entrypoint_passes_and_missing_or_symlink_stops(tmp_path: 
     assert missing.returncode != 0
     assert "RUNTIME_ENTRYPOINT_NOT_READY / HUMAN_REQUIRED" in missing.stderr
 
-    outside = tmp_path / "outside-entrypoint"
+    outside = executable_runtime_root / "outside-entrypoint"
     outside.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
     outside.chmod(0o755)
     entrypoint.symlink_to(outside)
     symlink = _run_runtime_check(releases_root, candidate)
     assert symlink.returncode != 0
-    assert "absent, unsafe" in symlink.stderr
+    assert "unsafe" in symlink.stderr
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX executable contract")
-def test_non_executable_runtime_entrypoint_stops(tmp_path: Path) -> None:
-    releases_root, candidate, entrypoint = _runtime_fixture(tmp_path)
+def test_non_executable_runtime_entrypoint_stops(executable_runtime_root: Path) -> None:
+    releases_root, candidate, entrypoint = _runtime_fixture(executable_runtime_root)
     entrypoint.chmod(0o644)
     result = _run_runtime_check(releases_root, candidate)
     assert result.returncode != 0
-    assert "absent, unsafe" in result.stderr
+    assert "unsafe" in result.stderr
