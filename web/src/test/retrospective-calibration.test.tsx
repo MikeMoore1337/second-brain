@@ -167,4 +167,32 @@ describe("Retrospective Calibration Stage 7 surface", () => {
     expect(host.textContent).not.toContain("localStorage");
     expect(host.textContent).not.toContain("sessionStorage");
   });
+
+  it("aborts an obsolete request before starting a newer calibration request", async () => {
+    let firstReject: ((reason?: unknown) => void) | undefined;
+    let firstAborted = false;
+    const first = new Promise<Response>((_resolve, reject) => { firstReject = reject; });
+    const fetchSpy = vi.spyOn(window, "fetch")
+      .mockImplementationOnce((_input, init) => {
+        init?.signal?.addEventListener("abort", () => {
+          firstAborted = true;
+          firstReject?.(new DOMException("Aborted", "AbortError"));
+        });
+        return first;
+      })
+      .mockResolvedValueOnce(jsonResponse(result));
+    const host = await renderSurface();
+    const refresh = Array.from(host.querySelectorAll<HTMLButtonElement>("button"))
+      .find((item) => item.textContent?.includes("Проверить ретроспективно"));
+
+    await act(async () => {
+      refresh?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      refresh?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(firstAborted).toBe(true);
+    expect(host.textContent).toContain("1 / 2");
+    expect(host.querySelector("[data-calibration-state='success']")).not.toBeNull();
+  });
 });
