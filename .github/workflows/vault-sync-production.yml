@@ -1,0 +1,127 @@
+name: Vault production sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      vault_sha:
+        description: Exact lowercase 40-character SHA from second-brain-vault/main
+        required: true
+        type: string
+      apply:
+        description: Explicitly authorize the production vault sync operation
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+# Application deploy and vault sync share one production critical section. The
+# VPS VaultOperationLock remains necessary for Safe Write and other writers.
+concurrency:
+  group: second-brain-production
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Validate owner operation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      VAULT_SHA: ${{ inputs.vault_sha }}
+      APPLY: ${{ inputs.apply }}
+      PRODUCTION_VAULT_SYNC_ENABLED: ${{ vars.PRODUCTION_VAULT_SYNC_ENABLED }}
+      PRODUCTION_SSH_HOST: ${{ vars.PRODUCTION_SSH_HOST }}
+      PRODUCTION_SSH_PORT: ${{ vars.PRODUCTION_SSH_PORT }}
+      PRODUCTION_SSH_USER: ${{ vars.PRODUCTION_SSH_USER }}
+    steps:
+      - name: Reject untrusted or unsafe invocation before SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          test "$GITHUB_REPOSITORY" = "MikeMoore1337/second-brain"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_WORKFLOW_REF" = "MikeMoore1337/second-brain/.github/workflows/vault-sync-production.yml@refs/heads/main"
+          [[ "$VAULT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$APPLY" = "true"
+          test "$PRODUCTION_VAULT_SYNC_ENABLED" = "true"
+
+          [[ ${#PRODUCTION_SSH_HOST} -ge 1 && ${#PRODUCTION_SSH_HOST} -le 253 ]]
+          [[ "$PRODUCTION_SSH_HOST" =~ ^[A-Za-z0-9._:-]+$ ]]
+          [[ ${#PRODUCTION_SSH_USER} -ge 1 && ${#PRODUCTION_SSH_USER} -le 64 ]]
+          [[ "$PRODUCTION_SSH_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]
+          [[ "$PRODUCTION_SSH_PORT" =~ ^[0-9]{1,5}$ ]]
+          port_value=$((10#$PRODUCTION_SSH_PORT))
+          (( port_value >= 1 && port_value <= 65535 ))
+
+          printf 'Preflight passed for exact vault SHA %s.\n' "$VAULT_SHA"
+
+  sync:
+    name: Sync exact vault SHA
+    needs: preflight
+    if: ${{ needs.preflight.result == 'success' }}
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VAULT_SHA: ${{ inputs.vault_sha }}
+      PRODUCTION_SSH_HOST: ${{ vars.PRODUCTION_SSH_HOST }}
+      PRODUCTION_SSH_PORT: ${{ vars.PRODUCTION_SSH_PORT }}
+      PRODUCTION_SSH_USER: ${{ vars.PRODUCTION_SSH_USER }}
+    steps:
+      - name: Checkout trusted workflow SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Verify checked out trusted main SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "MikeMoore1337/second-brain"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse --verify HEAD)" = "$GITHUB_SHA"
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+      - name: Configure pinned SSH identity
+        shell: bash
+        env:
+          PRODUCTION_SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+          PRODUCTION_SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$PRODUCTION_SSH_PRIVATE_KEY"
+          test -n "$PRODUCTION_SSH_KNOWN_HOSTS"
+          SSH_DIR="$RUNNER_TEMP/vault-sync-production-ssh"
+          install -m 700 -d "$SSH_DIR"
+          printf '%s\n' "$PRODUCTION_SSH_PRIVATE_KEY" > "$SSH_DIR/production_sync_key"
+          printf '%s\n' "$PRODUCTION_SSH_KNOWN_HOSTS" > "$SSH_DIR/known_hosts"
+          chmod 600 "$SSH_DIR/production_sync_key" "$SSH_DIR/known_hosts"
+
+      - name: Invoke exact-SHA vault sync over pinned SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh \
+            -i "$RUNNER_TEMP/vault-sync-production-ssh/production_sync_key" \
+            -p "$PRODUCTION_SSH_PORT" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/vault-sync-production-ssh/known_hosts" \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=3 \
+            "$PRODUCTION_SSH_USER@$PRODUCTION_SSH_HOST" \
+            bash -s -- --target-sha "$VAULT_SHA" < deploy/vault-sync-production.sh
+
+      - name: Remove runner SSH material
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          SSH_DIR="$RUNNER_TEMP/vault-sync-production-ssh"
+          rm -f -- "$SSH_DIR/production_sync_key" "$SSH_DIR/known_hosts"
+          rmdir -- "$SSH_DIR" 2>/dev/null || true
