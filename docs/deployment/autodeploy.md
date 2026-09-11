@@ -27,18 +27,113 @@ second-brain user на VPS
        v
 deploy/autodeploy.sh --sha <CI_SHA>
        |
-       +-> fetch control repositories
+       +-> fetch control repository и определить exact current main
        +-> stale SHA guard
+       +-> exact-SHA production env preflight
        +-> vault sync guard
+       +-> fast-forward control checkout
+       +-> strict candidate classification/recovery или создание worktree
        +-> immutable releases/<SHA> worktree
        +-> uv sync --locked
        +-> npm ci/check/build/PWA QA
        +-> doctor + vault validate
+       +-> final candidate/env/baseline integrity gates
        +-> sudo root-owned release-control helper
        +-> current symlink switch + systemd restart
        +-> local/public health
        +-> bounded rollback при post-activation failure
 ```
+
+## Versioned production env preflight
+
+Каждый deploy читает `deploy/production-env-requirements.conf` из exact target
+SHA как data-only Git blob. Контракт имеет `format_version=1` и поддерживает
+только строки `required=NAME`, `fixed=NAME=NON_SECRET_VALUE` и
+`optional=NAME`. Он не выполняется как shell-код и не может подмениться
+содержимым другого release.
+
+Текущий contract требует существующие Web settings и non-secret фиксированные
+значения из [Web production runbook](web-production.md), включая:
+
+- `SECOND_BRAIN_VAULT_OPERATION_LOCK_PATH` со значением
+  `/srv/second-brain/runtime/vault-sync.lock`;
+- `SECOND_BRAIN_WEB_AUTH=github`;
+- `SECOND_BRAIN_PUBLIC_BASE_URL=https://brain.mikemoore.top`;
+- `SECOND_BRAIN_GITHUB_ALLOWED_USER_ID=42142321`;
+- bounded session/OAuth TTL.
+
+Secret variables проверяются только на наличие непустого значения и никогда не
+попадают в output. `CLOUDFLARE_ACCOUNT_ID` и `CLOUDFLARE_API_TOKEN` разрешены
+как optional settings для явно включённого adapter path, но не требуются
+обычному Web deploy.
+
+Перед созданием или reuse candidate preflight проверяет exact external
+`/srv/second-brain/runtime/web.env`: это обычный protected file вне обоих
+repositories, его owner — service/operator user, mode — `600`, а `runtime/`
+доступен только оператору. Parser fail-closed: missing, duplicate,
+undeclared, malformed или empty required entry, unsupported quoting, CRLF и
+fixed-value mismatch останавливают deploy. Ни `source`, ни `eval`, ни другой
+способ выполнения `web.env` не используется. Preflight повторяется сразу
+перед candidate filesystem mutation и ещё раз перед activation.
+
+Failure этого gate не создаёт candidate, не переключает `current` и не
+перезапускает service. Production values не добавляются в Git; исправление
+выполняется owner-ом отдельно в protected `web.env`.
+
+## Interrupted candidate recovery
+
+Candidate создаётся как detached Git worktree
+`/srv/second-brain/releases/<TARGET_SHA>`. Если directory отсутствует,
+используется обычный `git worktree add --detach`. Если directory уже существует,
+он не удаляется и не считается автоматически готовым: exact target helper
+классифицирует его read-only.
+
+Reuse разрешён только когда одновременно доказаны ожидаемый путь без symlink,
+регистрация в worktree control repository, общая repository identity и
+`origin`, detached HEAD, `HEAD == TARGET_SHA == current origin/main`, clean
+tracked/non-ignored tree, отсутствие Git operation state, отсутствие
+`locked`, `prunable` или неизвестного состояния в worktree registration и
+отсутствие кандидата под active `current`. После успешной классификации весь
+pipeline запускается заново: `uv sync --locked`, `doctor`, `vault validate`,
+`npm ci`, `npm run check`, `npm run build`, `npm run qa:pwa` и final integrity
+checks. Наличие
+старого `dist` или частично созданного `.venv` не пропускает ни один gate.
+
+Если хотя бы одну проверку нельзя доказать, результат — `STOP / HUMAN_REQUIRED`.
+Автоматический deploy не удаляет такой candidate и не выполняет blind cleanup;
+directory сохраняется как diagnostics/recovery evidence. Оператор обычно **не
+должен SSH-подключаться и удалять candidate вручную**. Сначала сохраните
+состояние и bounded log, затем исправьте подтверждённую причину или выполните
+отдельную owner-managed Git worktree procedure.
+
+## Cancelled/interrupted deploy и retry
+
+До activation `SIGTERM`, `SIGHUP` (включая разрыв SSH), `SIGINT` и cancellation
+GitHub Actions обрабатываются bounded trap/reporting: `current` не меняется,
+production service не restart-ится, предыдущий known-good release сохраняется,
+deploy lock освобождается kernel/process semantics, а candidate остаётся для
+диагностики и следующего retry. Cleanup evidence не выполняется.
+
+Regression case — cancelled run `34526439632` с target SHA
+`9e6609f…` (`9e6609fabfee3c935213ecb0a9f6a11c9ec30166`). До hardening run успел
+fast-forward control checkout, создать `releases/<SHA>`, выполнить `uv sync`,
+`doctor`, `vault validate` и начать frontend checks, но не дошёл до build или
+activation. Новый retry использует safe-resume contract; отсутствие
+`SECOND_BRAIN_VAULT_OPERATION_LOCK_PATH` останавливает run ещё до candidate
+creation.
+
+| Состояние | Поведение |
+| --- | --- |
+| Target уже active и healthy | idempotent `SUCCESS`/no-op, без rebuild |
+| Candidate отсутствует | создать detached worktree и пройти полный pipeline |
+| Candidate после interruption доказан recoverable | reuse, полный pipeline заново, затем обычная activation |
+| Candidate state/identity не доказуем | `STOP / HUMAN_REQUIRED`, без удаления и activation |
+| Target superseded более новым `main` | existing stale-SHA protection: skip без rollback |
+
+После cancellation GitHub Actions `Re-run jobs` повторяет тот же exact tested
+SHA. Если candidate проходит strict classifier, ручной VPS cleanup не нужен.
+Если classifier возвращает `HUMAN_REQUIRED`, не пытайтесь сделать retry зелёным
+удалением directory: сохраните evidence и передайте состояние owner-у.
 
 ## Гарантии и stop conditions
 
@@ -62,7 +157,9 @@ deploy/autodeploy.sh --sha <CI_SHA>
   штатным способом.
 - Candidate создаётся только как detached worktree `releases/<SHA>` и до
   activation проходит locked Python sync, frontend check/build/PWA artifact QA,
-  `doctor` и `vault validate`.
+  `doctor`, `vault validate` и strict final integrity verification. Existing
+  candidate разрешено reuse только после safe-resume classifier и с полным
+  повтором pipeline.
 - `/srv/second-brain` остаётся root-owned. Пользователю `second-brain` не нужен
   write-доступ к production root или `current` symlink.
 - Переключение `current` и restart выполняет только заранее установленный
@@ -73,6 +170,9 @@ deploy/autodeploy.sh --sha <CI_SHA>
   production.
 - GitHub `concurrency` не отменяет выполняющийся deploy, а VPS `flock` не даёт
   двум процессам одновременно менять release state.
+- Bounded interruption trap не вызывает activation, restart или cleanup до
+  начала activation; после её начала состояние считается требующим ручной
+  проверки.
 - После activation проверяются systemd, loopback `/healthz` и public
   `https://brain.mikemoore.top/healthz`.
 - При post-activation failure выполняется только non-destructive rollback
@@ -214,12 +314,15 @@ PRODUCTION_DEPLOY_ENABLED=true
 обновлённым. До повторного запуска нужно прочитать bounded workflow log и
 устранить конкретный stop condition.
 
-Если failure произошёл до activation, старый `current` и service не меняются.
+Если failure или interruption произошли до activation, старый `current` и
+service не меняются, а candidate сохраняется. Следующий exact-SHA retry сначала
+повторяет env preflight и strict candidate classification.
 Если failure произошёл после activation, скрипт пытается вернуть предыдущий
 known-good release через тот же root-owned helper. Если rollback сам не
 проходит health, дальнейшие автоматические mutation прекращаются и требуется
 owner intervention.
 
-Существующий failed `releases/<SHA>` не переиспользуется и не удаляется
-автоматически. После диагностики owner отдельно решает, удалить ли его через
-корректный Git worktree lifecycle или оставить как deployment evidence.
+Существующий failed `releases/<SHA>` не является unconditional blocker: он
+переиспользуется только после всех проверок safe-resume contract. Непроверяемый
+candidate не переиспользуется и не удаляется автоматически; после диагностики
+owner отдельно решает дальнейшую корректную Git worktree procedure.

@@ -18,8 +18,51 @@ die() {
   exit 1
 }
 
+handle_interruption() {
+  local signal="$1"
+
+  if [[ "$ACTIVATION_STARTED" == "0" ]]; then
+    printf 'STOP / HUMAN_REQUIRED: autodeploy прерван (%s) до activation; current и service не изменялись; candidate сохранён для recovery.\n' \
+      "$signal" >&2
+    exit 143
+  fi
+
+  printf 'STOP / HUMAN_REQUIRED: autodeploy прерван (%s) после начала activation; состояние current/service нужно проверить вручную; cleanup не выполнялся.\n' \
+    "$signal" >&2
+  exit 143
+}
+
 require_command() {
   command -v "$1" >/dev/null 2>&1 || die "команда '$1' не найдена в PATH"
+}
+
+run_target_script() {
+  local script_path="$1"
+  shift
+  local -a pipeline_status
+
+  set +e
+  git -C "$APP_ROOT" show "$TARGET_SHA:$script_path" 2>/dev/null | bash -s -- "$@"
+  pipeline_status=("${PIPESTATUS[@]}")
+  set -e
+  (( pipeline_status[0] == 0 && pipeline_status[1] == 0 ))
+}
+
+run_env_preflight() {
+  run_target_script deploy/production-env-preflight.sh \
+    --repository "$APP_ROOT" \
+    --sha "$TARGET_SHA" \
+    --runtime-root "$RUNTIME_ROOT" \
+    --env-file "$RUNTIME_ENV"
+}
+
+run_candidate_recovery_check() {
+  run_target_script deploy/candidate-recovery-check.sh \
+    --control-repository "$APP_ROOT" \
+    --releases-root "$RELEASES_ROOT" \
+    --current-link "$CURRENT_LINK" \
+    --target-sha "$TARGET_SHA" \
+    --expected-main-sha "$ORIGIN_APP_SHA"
 }
 
 assert_clean_main() {
@@ -35,13 +78,23 @@ assert_clean_main() {
     || die "не удалось проверить clean state $label"
   [[ -z "$status" ]] || die "$label dirty; автоматическая очистка запрещена"
 
-  for marker in MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD REBASE_HEAD rebase-merge rebase-apply BISECT_LOG; do
+  for marker in \
+    MERGE_HEAD \
+    CHERRY_PICK_HEAD \
+    REVERT_HEAD \
+    REBASE_HEAD \
+    rebase-merge \
+    rebase-apply \
+    BISECT_LOG \
+    sequencer \
+    index.lock; do
     marker_path="$(git -C "$path" rev-parse --git-path "$marker" 2>/dev/null)" \
       || die "не удалось проверить Git operation в $label"
     if [[ "$marker_path" != /* ]]; then
       marker_path="$path/$marker_path"
     fi
-    [[ ! -e "$marker_path" ]] || die "$label имеет незавершённую Git operation: $marker"
+    [[ ! -e "$marker_path" && ! -L "$marker_path" ]] \
+      || die "$label имеет незавершённую Git operation: $marker"
   done
 }
 
@@ -54,7 +107,8 @@ read_current_sha() {
   [[ "$target" == releases/* ]] || die "current должен указывать на releases/<SHA>"
   sha="${target#releases/}"
   [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || die "current содержит некорректный release SHA"
-  [[ -d "$RELEASES_ROOT/$sha" ]] || die "current указывает на отсутствующий release"
+  [[ -d "$RELEASES_ROOT/$sha" && ! -L "$RELEASES_ROOT/$sha" ]] \
+    || die "current указывает на отсутствующий или symlink release"
   [[ "$(git -C "$RELEASES_ROOT/$sha" rev-parse --verify HEAD 2>/dev/null)" == "$sha" ]] \
     || die "current release не соответствует своему SHA"
   printf '%s' "$sha"
@@ -117,6 +171,15 @@ rollback_and_fail() {
 }
 
 TARGET_SHA=""
+ACTIVATION_STARTED=0
+PREVIOUS_SHA=""
+CURRENT_LINK=""
+CANDIDATE_RELEASE=""
+
+trap 'handle_interruption SIGTERM' TERM
+trap 'handle_interruption SIGHUP' HUP
+trap 'handle_interruption SIGINT' INT
+
 while (( $# > 0 )); do
   case "$1" in
     --sha)
@@ -138,7 +201,7 @@ done
 [[ "$(id -u)" != "0" ]] || die "autodeploy нельзя запускать от root"
 [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || die "--sha должен быть exact 40-character lowercase Git SHA"
 
-for command in git uv npm curl readlink flock seq; do
+for command in bash git uv npm curl readlink flock seq; do
   require_command "$command"
 done
 [[ -x /usr/bin/sudo ]] || die "ожидается /usr/bin/sudo для narrowly-scoped release control"
@@ -158,6 +221,8 @@ RELEASE_CONTROL=/usr/local/sbin/second-brain-release-control
 [[ -d "$VAULT_ROOT" ]] || die "не найден sibling second-brain-vault"
 [[ -d "$RELEASES_ROOT" ]] || die "не найден releases directory"
 [[ -d "$RUNTIME_ROOT" ]] || die "не найден runtime directory"
+[[ ! -L "$RELEASES_ROOT" ]] || die "releases directory не должен быть symlink"
+[[ ! -L "$RUNTIME_ROOT" ]] || die "runtime directory не должен быть symlink"
 [[ -r "$RUNTIME_ENV" && -f "$RUNTIME_ENV" ]] || die "production web.env недоступен"
 [[ -w "$RUNTIME_ROOT" ]] || die "runtime directory недоступен для deploy lock"
 [[ -w "$RELEASES_ROOT" ]] || die "releases directory недоступен для candidate"
@@ -171,7 +236,6 @@ assert_clean_main "$APP_ROOT" "second-brain"
 assert_clean_main "$VAULT_ROOT" "second-brain-vault"
 
 git -C "$APP_ROOT" fetch --no-tags origin main
-git -C "$VAULT_ROOT" fetch --no-tags origin main
 
 ORIGIN_APP_SHA="$(git -C "$APP_ROOT" rev-parse --verify 'refs/remotes/origin/main^{commit}')" \
   || die "origin/main second-brain недоступен"
@@ -188,6 +252,13 @@ LOCAL_APP_SHA="$(git -C "$APP_ROOT" rev-parse --verify 'refs/heads/main^{commit}
   || die "local main second-brain недоступен"
 git -C "$APP_ROOT" merge-base --is-ancestor "$LOCAL_APP_SHA" "$TARGET_SHA" \
   || die "local main second-brain diverged или содержит local-only commits"
+
+# Validate the exact target contract before changing the control checkout or
+# creating/reusing a candidate release.
+run_env_preflight \
+  || die "exact target production env preflight failed; candidate creation запрещена"
+
+git -C "$VAULT_ROOT" fetch --no-tags origin main
 git -C "$APP_ROOT" merge --ff-only origin/main
 [[ "$(git -C "$APP_ROOT" rev-parse --verify HEAD)" == "$TARGET_SHA" ]] \
   || die "control checkout не обновился до exact CI SHA"
@@ -200,6 +271,11 @@ ORIGIN_VAULT_SHA="$(git -C "$VAULT_ROOT" rev-parse --verify 'refs/remotes/origin
 [[ "$LOCAL_VAULT_SHA" == "$ORIGIN_VAULT_SHA" ]] \
   || die "second-brain-vault не синхронизирован с origin/main; autodeploy его не обновляет"
 assert_clean_main "$VAULT_ROOT" "second-brain-vault"
+
+# Repeat immediately before any candidate filesystem mutation so an operator
+# env change during fetch/merge also fails closed.
+run_env_preflight \
+  || die "production env preflight failed before candidate creation"
 
 PREVIOUS_SHA="$(read_current_sha)"
 if [[ "$PREVIOUS_SHA" == "$TARGET_SHA" ]]; then
@@ -224,12 +300,16 @@ wait_local_health || die "baseline local health текущего release не п
 wait_public_health || die "baseline public health текущего release не проходит"
 
 CANDIDATE_RELEASE="$RELEASES_ROOT/$TARGET_SHA"
-[[ ! -e "$CANDIDATE_RELEASE" && ! -L "$CANDIDATE_RELEASE" ]] \
-  || die "candidate release уже существует; автоматическое переиспользование/очистка запрещены"
-
-git -C "$APP_ROOT" worktree add --detach "$CANDIDATE_RELEASE" "$TARGET_SHA"
-[[ "$(git -C "$CANDIDATE_RELEASE" rev-parse --verify HEAD)" == "$TARGET_SHA" ]] \
-  || die "candidate worktree не соответствует exact CI SHA"
+if [[ -e "$CANDIDATE_RELEASE" || -L "$CANDIDATE_RELEASE" ]]; then
+  run_candidate_recovery_check \
+    || die "existing candidate нельзя доказать recoverable; automatic deletion/reuse запрещены"
+  printf 'Использую доказанно recoverable candidate %s; весь pipeline будет выполнен заново.\n' \
+    "$CANDIDATE_RELEASE"
+else
+  git -C "$APP_ROOT" worktree add --detach "$CANDIDATE_RELEASE" "$TARGET_SHA"
+  [[ "$(git -C "$CANDIDATE_RELEASE" rev-parse --verify HEAD)" == "$TARGET_SHA" ]] \
+    || die "candidate worktree не соответствует exact CI SHA"
+fi
 
 (
   cd "$CANDIDATE_RELEASE"
@@ -252,6 +332,18 @@ git -C "$APP_ROOT" worktree add --detach "$CANDIDATE_RELEASE" "$TARGET_SHA"
 [[ -z "$(git -C "$CANDIDATE_RELEASE" status --porcelain=v1 --untracked-files=no)" ]] \
   || die "tracked files candidate изменились во время build"
 
+run_candidate_recovery_check \
+  || die "final candidate integrity verification failed; activation запрещена"
+run_env_preflight \
+  || die "production env preflight failed before activation"
+[[ "$(read_current_sha)" == "$PREVIOUS_SHA" ]] \
+  || die "current изменился во время deploy; activation запрещена"
+/usr/bin/systemctl is-active --quiet second-brain-web.service \
+  || die "current service стал inactive до activation"
+wait_local_health || die "baseline local health текущего release не проходит перед activation"
+wait_public_health || die "baseline public health текущего release не проходит перед activation"
+
+ACTIVATION_STARTED=1
 if ! /usr/bin/sudo -n "$RELEASE_CONTROL" activate "$TARGET_SHA"; then
   if [[ "$(readlink "$CURRENT_LINK" 2>/dev/null || true)" == "releases/$TARGET_SHA" ]]; then
     rollback_and_fail "release-control переключил current, но activation завершился ошибкой"
