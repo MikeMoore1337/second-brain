@@ -57,12 +57,15 @@ run_env_preflight() {
 }
 
 run_candidate_recovery_check() {
+  local phase="$1"
+
   run_target_script deploy/candidate-recovery-check.sh \
     --control-repository "$APP_ROOT" \
     --releases-root "$RELEASES_ROOT" \
     --current-link "$CURRENT_LINK" \
     --target-sha "$TARGET_SHA" \
-    --expected-main-sha "$ORIGIN_APP_SHA"
+    --expected-main-sha "$ORIGIN_APP_SHA" \
+    --phase "$phase"
 }
 
 assert_clean_main() {
@@ -95,6 +98,56 @@ assert_clean_main() {
     fi
     [[ ! -e "$marker_path" && ! -L "$marker_path" ]] \
       || die "$label имеет незавершённую Git operation: $marker"
+  done
+}
+
+reset_candidate_python_environment() {
+  local venv_root="$CANDIDATE_RELEASE/.venv"
+  local candidate_real releases_real venv_real
+
+  [[ "$CANDIDATE_RELEASE" == "$RELEASES_ROOT/$TARGET_SHA" ]] \
+    || die "candidate Python environment path is not exact releases/<SHA>/.venv"
+  [[ -d "$CANDIDATE_RELEASE" && ! -L "$CANDIDATE_RELEASE" ]] \
+    || die "candidate Python environment parent is unavailable or is a symlink"
+  [[ ! -L "$venv_root" ]] \
+    || die "candidate Python environment root is a symlink"
+  [[ ! -e "$venv_root" || -d "$venv_root" ]] \
+    || die "candidate Python environment root is not a directory"
+
+  candidate_real="$(readlink -f -- "$CANDIDATE_RELEASE")" \
+    || die "candidate path cannot be resolved before Python environment reset"
+  releases_real="$(readlink -f -- "$RELEASES_ROOT")" \
+    || die "releases path cannot be resolved before Python environment reset"
+  [[ "$candidate_real" == "$releases_real/$TARGET_SHA" ]] \
+    || die "candidate path escaped the exact releases/<SHA> directory"
+  if [[ -e "$venv_root" ]]; then
+    venv_real="$(readlink -f -- "$venv_root")" \
+      || die "candidate Python environment path cannot be resolved"
+    [[ "$venv_real" == "$candidate_real/.venv" ]] \
+      || die "candidate Python environment path escaped the candidate"
+  fi
+
+  uv venv --no-project --clear --python 3.14 "$venv_root" \
+    || die "deterministic Python environment reset failed"
+  [[ -d "$venv_root" && ! -L "$venv_root" ]] \
+    || die "deterministic Python environment reset produced an unsafe root"
+  [[ "$(readlink -f -- "$venv_root")" == "$candidate_real/.venv" ]] \
+    || die "deterministic Python environment reset escaped the candidate"
+}
+
+assert_candidate_frontend_roots() {
+  local web_root="$CANDIDATE_RELEASE/web"
+  local generated_root
+
+  [[ -d "$web_root" && ! -L "$web_root" ]] \
+    || die "candidate web root is unavailable or is a symlink"
+  for generated_root in node_modules dist; do
+    if [[ -L "$web_root/$generated_root" ]]; then
+      die "candidate frontend generated root is a symlink"
+    fi
+    if [[ -e "$web_root/$generated_root" && ! -d "$web_root/$generated_root" ]]; then
+      die "candidate frontend generated root is not a directory"
+    fi
   done
 }
 
@@ -302,6 +355,7 @@ wait_public_health || die "baseline public health текущего release не 
 CANDIDATE_RELEASE="$RELEASES_ROOT/$TARGET_SHA"
 if [[ -e "$CANDIDATE_RELEASE" || -L "$CANDIDATE_RELEASE" ]]; then
   run_candidate_recovery_check \
+    recovery-pre-build \
     || die "existing candidate нельзя доказать recoverable; automatic deletion/reuse запрещены"
   printf 'Использую доказанно recoverable candidate %s; весь pipeline будет выполнен заново.\n' \
     "$CANDIDATE_RELEASE"
@@ -313,6 +367,7 @@ fi
 
 (
   cd "$CANDIDATE_RELEASE"
+  reset_candidate_python_environment
   uv sync --locked --python 3.14
   uv run --python 3.14 --no-sync python -m compileall \
     -q -f --invalidation-mode checked-hash src
@@ -321,6 +376,7 @@ fi
 )
 
 (
+  assert_candidate_frontend_roots
   cd "$CANDIDATE_RELEASE/web"
   npm ci
   npm run check
@@ -335,6 +391,7 @@ fi
   || die "tracked files candidate изменились во время build"
 
 run_candidate_recovery_check \
+  final-post-build \
   || die "final candidate integrity verification failed; activation запрещена"
 run_env_preflight \
   || die "production env preflight failed before activation"

@@ -245,6 +245,9 @@ def _candidate_fixture(tmp_path: Path) -> dict[str, Path | str]:
                 "*.env",
                 "*.key",
                 "*.pem",
+                "*.crt",
+                "*.cer",
+                "config/*.json",
                 ".impeccable/config.local.json",
                 "",
             )
@@ -303,6 +306,7 @@ def _run_candidate_check(
     fixture: dict[str, Path | str],
     *,
     expected_main_sha: str | None = None,
+    phase: str = "recovery-pre-build",
 ) -> subprocess.CompletedProcess[str]:
     target_sha = str(fixture["target_sha"])
     return _run_bash(
@@ -317,6 +321,8 @@ def _run_candidate_check(
         target_sha,
         "--expected-main-sha",
         expected_main_sha or target_sha,
+        "--phase",
+        phase,
     )
 
 
@@ -392,6 +398,13 @@ def test_candidate_recovery_rejects_unprovable_state(tmp_path: Path, kind: str) 
         (".env", "TOP-SECRET\n"),
         (".impeccable/config.local.json", '{"api_token":"TOP-SECRET"}\n'),
         ("web/private.key", "TOP-SECRET\n"),
+        ("config/local-settings.json", '{"operator_token":"TOP-SECRET"}\n'),
+        ("config/fixture.pem", "TOP-SECRET\n"),
+        (".venv/.env", "TOP-SECRET\n"),
+        (
+            ".venv/Lib/python3.14/site-packages/private.pem",
+            "TOP-SECRET\n",
+        ),
     ),
 )
 def test_candidate_recovery_rejects_sensitive_ignored_state_without_disclosure(
@@ -410,6 +423,7 @@ def test_candidate_recovery_rejects_sensitive_ignored_state_without_disclosure(
     assert result.returncode != 0
     assert "STOP / HUMAN_REQUIRED" in result.stderr
     assert "TOP-SECRET" not in result.stdout + result.stderr
+    assert relative_path not in result.stdout + result.stderr
     assert Path(str(fixture["current"])).readlink() == Path("releases") / str(fixture["base_sha"])
 
 
@@ -439,6 +453,111 @@ def test_candidate_recovery_allows_only_explicit_generated_state(
 
     assert result.returncode == 0, result.stderr
     assert "generated" not in result.stdout + result.stderr
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="POSIX linked worktree and symlink semantics are required"
+)
+@pytest.mark.parametrize(
+    "relative_path",
+    (
+        ".venv/Lib/python3.14/site-packages/trust_bundle.pem",
+        ".venv/Lib/python3.14/site-packages/fixture.crt",
+        "web/node_modules/package/fixtures/test.cer",
+    ),
+)
+def test_candidate_recovery_allows_package_owned_certificate_resources(
+    tmp_path: Path,
+    relative_path: str,
+) -> None:
+    fixture = _candidate_fixture(tmp_path)
+    candidate = Path(str(fixture["releases"])) / str(fixture["target_sha"])
+    control = Path(str(fixture["control"]))
+    _run_git(control, "worktree", "add", "--detach", str(candidate), str(fixture["target_sha"]))
+    _write_candidate_state(candidate, relative_path, "package resource\n")
+
+    result = _run_candidate_check(fixture, phase="final-post-build")
+
+    assert result.returncode == 0, result.stderr
+    assert "package resource" not in result.stdout + result.stderr
+    assert relative_path not in result.stdout + result.stderr
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="POSIX linked worktree and symlink semantics are required"
+)
+def test_candidate_recovery_rejects_generated_root_symlink(tmp_path: Path) -> None:
+    fixture = _candidate_fixture(tmp_path)
+    candidate = Path(str(fixture["releases"])) / str(fixture["target_sha"])
+    control = Path(str(fixture["control"]))
+    _run_git(control, "worktree", "add", "--detach", str(candidate), str(fixture["target_sha"]))
+    outside = tmp_path / "outside-generated"
+    outside.mkdir()
+    (outside / "marker.pem").write_text("DO-NOT-READ\n", encoding="utf-8")
+    (candidate / ".venv").symlink_to(outside, target_is_directory=True)
+    before_current = Path(str(fixture["current"])).readlink()
+
+    result = _run_candidate_check(fixture)
+
+    assert result.returncode != 0
+    assert "STOP / HUMAN_REQUIRED" in result.stderr
+    assert "DO-NOT-READ" not in result.stdout + result.stderr
+    assert "outside-generated" not in result.stdout + result.stderr
+    assert (candidate / ".venv").is_symlink()
+    assert Path(str(fixture["current"])).readlink() == before_current
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="POSIX linked worktree and symlink semantics are required"
+)
+def test_fresh_candidate_after_pipeline_generated_state_passes_final_integrity(
+    tmp_path: Path,
+) -> None:
+    fixture = _candidate_fixture(tmp_path)
+    candidate = Path(str(fixture["releases"])) / str(fixture["target_sha"])
+    control = Path(str(fixture["control"]))
+    _run_git(control, "worktree", "add", "--detach", str(candidate), str(fixture["target_sha"]))
+    for relative_path in (
+        ".venv/Lib/python3.14/site-packages/trust_bundle.pem",
+        "web/node_modules/package/fixtures/test.crt",
+        "web/dist/index.html",
+        "src/second_brain/__pycache__/generated_marker.cpython-314.pyc",
+    ):
+        _write_candidate_state(candidate, relative_path)
+    before_current = Path(str(fixture["current"])).readlink()
+
+    result = _run_candidate_check(fixture, phase="final-post-build")
+
+    assert result.returncode == 0, result.stderr
+    assert "generated" not in result.stdout + result.stderr
+    assert Path(str(fixture["current"])).readlink() == before_current
+
+
+@pytest.mark.skipif(os.name == "nt", reason="uv reset semantics are required")
+def test_uv_venv_clear_removes_arbitrary_generated_root_state(tmp_path: Path) -> None:
+    venv_root = tmp_path / ".venv"
+    first = subprocess.run(
+        ["uv", "venv", "--no-project", "--clear", "--python", "3.14", str(venv_root)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert first.returncode == 0, first.stderr
+    marker = venv_root / "untracked-generated-resource.pem"
+    marker.write_text("generated\n", encoding="utf-8")
+
+    second = subprocess.run(
+        ["uv", "venv", "--no-project", "--clear", "--python", "3.14", str(venv_root)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert second.returncode == 0, second.stderr
+    assert not marker.exists()
+    assert (venv_root / "pyvenv.cfg").is_file()
 
 
 @pytest.mark.skipif(
@@ -487,12 +606,31 @@ def test_autodeploy_has_preflight_recovery_and_cancellation_gates() -> None:
     assert "run_candidate_recovery_check" in script[script.index("if [[ -e") : candidate_path + 800]
     assert 'git -C "$APP_ROOT" worktree add --detach' in script
     assert pipeline_start > candidate_path
+    reset_environment = script.index("  reset_candidate_python_environment\n", pipeline_start)
+    reset_function = script.index("reset_candidate_python_environment()")
+    reset_command = script.index("uv venv --no-project --clear --python 3.14", reset_function)
+    assert pipeline_start < reset_environment
+    assert reset_function < reset_command
     assert script.index("uv sync --locked --python 3.14", pipeline_start) < activation
+    uv_sync = script.index("uv sync --locked --python 3.14", pipeline_start)
+    compileall = script.index("python -m compileall", pipeline_start)
+    npm_ci = script.index("npm ci", frontend_pipeline)
+    npm_check = script.index("npm run check", frontend_pipeline)
+    npm_build = script.index("npm run build", frontend_pipeline)
+    pwa_qa = script.index("npm run qa:pwa", frontend_pipeline)
+    final_check = script.index("run_candidate_recovery_check \\\n  final-post-build")
+    assert uv_sync < compileall < npm_ci < npm_check < npm_build < pwa_qa < final_check
     recovery_gate = script.index("existing candidate нельзя доказать recoverable")
     assert recovery_gate < script.index("uv sync --locked --python 3.14", recovery_gate)
     assert script.index("python -m compileall", pipeline_start) < activation
     assert frontend_pipeline > pipeline_start
+    assert (
+        "assert_candidate_frontend_roots"
+        in script[frontend_pipeline - 100 : frontend_pipeline + 200]
+    )
     assert script.index("npm run build", frontend_pipeline) < activation
+    assert "recovery-pre-build" in script
+    assert "final-post-build" in script
     active_noop = script[script.index('if [[ "$PREVIOUS_SHA" == "$TARGET_SHA" ]]') : candidate_path]
     assert "run_candidate_recovery_check" not in active_noop
     for required in (
@@ -503,6 +641,7 @@ def test_autodeploy_has_preflight_recovery_and_cancellation_gates() -> None:
         "current и service не изменялись",
         "candidate сохранён для recovery",
         "uv sync --locked --python 3.14",
+        "uv venv --no-project --clear --python 3.14",
         "python -m compileall",
         "npm ci",
         "npm run check",
@@ -531,7 +670,13 @@ def test_candidate_checker_covers_identity_state_and_worktree_registration() -> 
     for required in (
         "worktree list --porcelain",
         "ls-files --others --ignored --exclude-standard",
+        "--phase",
+        "recovery-pre-build",
+        "final-post-build",
+        "is_generated_state_path",
+        "is_certificate_resource_path",
         "is_allowed_generated_path",
+        "assert_generated_root_layout",
         ".venv/*",
         "web/node_modules/*",
         "web/dist/*",
