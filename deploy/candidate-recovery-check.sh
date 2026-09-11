@@ -67,12 +67,6 @@ is_env_or_key_like_path() {
   esac
 
   case "$base_lower" in
-    *.py|*.pyc|*.pyo|*.js|*.jsx|*.ts|*.tsx|*.mjs|*.cjs|*.d.ts|*.map)
-      return 1
-      ;;
-  esac
-
-  case "$base_lower" in
     *.key|*.p8|*.p12|*.pfx|*.ppk|*.jks|*.keystore|*.pkcs12|*.kdb|\
     key|key.*|key_*|key-*|*_key|*_key.*|*-key|*-key.*|keypair|keypair.*|\
     id_rsa|id_rsa.*|id_ed25519|id_ed25519.*|id_ecdsa|id_ecdsa.*|\
@@ -132,28 +126,46 @@ is_allowed_generated_path() {
   local phase="$2"
 
   case "$phase" in
-    recovery-pre-build|final-post-build)
+    recovery-pre-build)
+      # Existing contents are discardable only because autodeploy resets or
+      # recreates this root before using it.
+      ;;
+    final-post-build)
+      # Existing contents are trusted only as output of the completed
+      # deterministic validation/build pipeline.
       ;;
     *)
       return 1
       ;;
   esac
 
-  is_generated_state_path "$path" || return 1
-  is_env_or_key_like_path "$path" && return 1
-  return 0
+  # This is deliberately a structural trust decision.  Package-owned files
+  # inside a root that the caller proves will be discarded/recreated may have
+  # any filename or suffix, including names that look like secrets.  The
+  # filename classifier below is only for ignored paths outside these roots.
+  is_generated_state_path "$path"
 }
 
 assert_generated_root_layout() {
   local path="$1"
-  local generated_root
+  local candidate_real generated_root generated_path generated_real
+
+  candidate_real="$(canonical_path "$path")" \
+    || die "candidate path cannot be resolved before generated-root layout check"
 
   for generated_root in .venv web/node_modules web/dist; do
-    if [[ -L "$path/$generated_root" ]]; then
+    generated_path="$path/$generated_root"
+    if [[ -L "$generated_path" ]]; then
       die "candidate generated root layout is a symlink"
     fi
-    if [[ -e "$path/$generated_root" && ! -d "$path/$generated_root" ]]; then
+    if [[ -e "$generated_path" && ! -d "$generated_path" ]]; then
       die "candidate generated root layout is not a directory"
+    fi
+    if [[ -d "$generated_path" ]]; then
+      generated_real="$(canonical_path "$generated_path")" \
+        || die "candidate generated root path cannot be resolved"
+      [[ "$generated_real" == "$candidate_real/$generated_root" ]] \
+        || die "candidate generated root path escaped the exact candidate"
     fi
   done
 }
@@ -178,6 +190,10 @@ assert_no_unexpected_ignored_state() {
     if is_allowed_generated_path "$ignored_path" "$phase"; then
       continue
     fi
+    # From this point on the path is outside every approved deterministic
+    # generated root.  Only this external-state path may use filename/suffix
+    # sensitivity classification; generated dependency filenames never reach
+    # this matcher.
     if is_sensitive_ignored_path "$ignored_path"; then
       die "candidate contains external sensitive ignored state"
     fi
@@ -325,11 +341,11 @@ if git -C "$CANDIDATE" symbolic-ref --quiet HEAD >/dev/null 2>&1; then
   die "candidate has a symbolic branch HEAD"
 fi
 
+assert_generated_root_layout "$CANDIDATE"
 CANDIDATE_STATUS="$(git -C "$CANDIDATE" status --porcelain=v1 --untracked-files=all 2>/dev/null)" \
   || die "candidate clean state cannot be checked"
 [[ -z "$CANDIDATE_STATUS" ]] \
   || die "candidate tracked or non-ignored files are dirty"
-assert_generated_root_layout "$CANDIDATE"
 assert_no_unexpected_ignored_state "$CANDIDATE" "$CHECK_PHASE"
 assert_no_git_operation_state "$CANDIDATE"
 
