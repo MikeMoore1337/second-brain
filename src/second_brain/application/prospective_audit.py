@@ -26,6 +26,8 @@ from pathlib import Path
 from typing import Any, Final, NoReturn, Protocol, cast
 from uuid import UUID
 
+from second_brain.application.ports import VaultReader
+from second_brain.application.reports import ScanReport, VaultSnapshot
 from second_brain.application.simulate_me import (
     DERIVATION_VERSION as SIMULATE_ME_DERIVATION_VERSION,
 )
@@ -49,6 +51,13 @@ from second_brain.application.simulate_me import (
 )
 from second_brain.application.simulate_me import (
     POLICY_ID as SIMULATE_ME_POLICY_ID,
+)
+from second_brain.application.validation import build_report
+from second_brain.domain.models import (
+    EvidenceAtPrecision,
+    EvidenceKind,
+    NoteRecord,
+    SelfKind,
 )
 
 type AuditHashV1 = str
@@ -79,11 +88,17 @@ MAX_OPTIONS: Final[int] = 8
 MAX_OPERATION_ID_BYTES: Final[int] = 256
 MAX_EVENT_BYTES: Final[int] = 262_144
 MAX_UINT64: Final[int] = (1 << 64) - 1
+MAX_JOURNAL_OPTIONS: Final[int] = 20
+MAX_JOURNAL_OPTION_BYTES: Final[int] = 16 * 1024
+MAX_LINK_BYTES: Final[int] = MAX_EVENT_BYTES
 
 EVENTS_FILE_NAME: Final[str] = "events.jsonl"
 LINKS_FILE_NAME: Final[str] = "links.jsonl"
 MANIFEST_FILE_NAME: Final[str] = "manifest.json"
 LOCK_FILE_NAME: Final[str] = ".store.lock"
+LINK_RECORD_TYPE: Final[str] = "link"
+LINK_TOMBSTONE_RECORD_TYPE: Final[str] = "tombstone"
+LINK_MAPPING_BASIS: Final[str] = "owner-explicit-v1"
 
 _HASH_PATTERN: Final[re.Pattern[str]] = re.compile(r"sha256:[0-9a-f]{64}\Z", re.ASCII)
 _ID_PATTERN: Final[re.Pattern[str]] = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,63}\Z", re.ASCII)
@@ -116,7 +131,39 @@ class ProspectiveAuditErrorCode(StrEnum):
     IDEMPOTENCY_CONFLICT = "PROSPECTIVE_AUDIT_IDEMPOTENCY_CONFLICT"
     STORE_UNAVAILABLE = "PROSPECTIVE_AUDIT_STORE_UNAVAILABLE"
     STORE_CORRUPT = "PROSPECTIVE_AUDIT_STORE_CORRUPT"
+    LINK_INVALID = "PROSPECTIVE_AUDIT_LINK_INVALID"
+    LINK_UNAVAILABLE = "PROSPECTIVE_AUDIT_LINK_UNAVAILABLE"
     CANCELLED = "PROSPECTIVE_AUDIT_CANCELLED"
+
+
+class ProspectiveAuditLinkReasonCode(StrEnum):
+    """Fixed per-link validation reasons used by the internal Stage 9B core."""
+
+    DECISION_TARGET_INVALID = "decision_target_invalid"
+    DECISION_IDENTITY_CONFLICT = "decision_identity_conflict"
+    DECISION_TIME_INVALID = "decision_time_invalid"
+    DECISION_PRECEDES_PREDICTION = "decision_precedes_prediction"
+    DECISION_NOTE_CREATED_BEFORE_PREDICTION = "decision_note_created_before_prediction"
+    DECISION_RECORD_CHANGED = "decision_record_changed"
+    OPTION_MAPPING_INVALID = "option_mapping_invalid"
+    CHOSEN_OPTION_UNMAPPED = "chosen_option_unmapped"
+    LINK_FINGERPRINT_MISMATCH = "link_fingerprint_mismatch"
+    AUDIT_EVENT_MISSING_OR_DELETED = "audit_event_missing_or_deleted"
+    DECISION_TARGET_UNAVAILABLE = "decision_target_unavailable"
+    CANONICAL_SCAN_UNAVAILABLE = "canonical_scan_unavailable"
+    DECISION_TARGET_EXPIRED = "decision_target_expired"
+    LINK_OPERATION_CONFLICT = "link_operation_conflict"
+
+
+class ProspectiveDecisionLinkStateV1(StrEnum):
+    """Typed current state of one Stage 9B relation."""
+
+    ACTIVE_UNLINKED = "ACTIVE_UNLINKED"
+    LINKED_VALID = "LINKED_VALID"
+    LINK_INVALID = "LINK_INVALID"
+    LINK_UNAVAILABLE = "LINK_UNAVAILABLE"
+    EXPIRED = "EXPIRED"
+    TOMBSTONED = "TOMBSTONED"
 
 
 _ERROR_MESSAGES: Final[dict[ProspectiveAuditErrorCode, str]] = {
@@ -128,6 +175,8 @@ _ERROR_MESSAGES: Final[dict[ProspectiveAuditErrorCode, str]] = {
     ),
     ProspectiveAuditErrorCode.STORE_UNAVAILABLE: "prospective audit store is unavailable",
     ProspectiveAuditErrorCode.STORE_CORRUPT: "prospective audit store is corrupt",
+    ProspectiveAuditErrorCode.LINK_INVALID: "prospective audit link failed validation",
+    ProspectiveAuditErrorCode.LINK_UNAVAILABLE: "prospective audit link source is unavailable",
     ProspectiveAuditErrorCode.CANCELLED: "prospective audit operation cancelled",
 }
 
@@ -178,6 +227,60 @@ class ProspectiveAuditStoreUnavailableError(ProspectiveAuditError):
 class ProspectiveAuditStoreCorruptError(ProspectiveAuditError):
     def __init__(self) -> None:
         super().__init__(ProspectiveAuditErrorCode.STORE_CORRUPT)
+
+
+class ProspectiveAuditLinkError(ProspectiveAuditError):
+    """Fixed safe error for one invalid or unavailable link operation."""
+
+    def __init__(
+        self,
+        reason: ProspectiveAuditLinkReasonCode | str,
+        *,
+        unavailable: bool = False,
+    ) -> None:
+        try:
+            normalized = ProspectiveAuditLinkReasonCode(reason)
+        except TypeError, ValueError:
+            normalized = (
+                ProspectiveAuditLinkReasonCode.CANONICAL_SCAN_UNAVAILABLE
+                if unavailable
+                else ProspectiveAuditLinkReasonCode.DECISION_TARGET_INVALID
+            )
+        self.reason_code = normalized.value
+        self.reason = normalized.value
+        super().__init__(
+            ProspectiveAuditErrorCode.LINK_UNAVAILABLE
+            if unavailable
+            else ProspectiveAuditErrorCode.LINK_INVALID
+        )
+
+    def as_dict(self) -> dict[str, str]:
+        """Return only fixed safe error fields."""
+
+        result = super().as_dict()
+        result["reason"] = self.reason_code
+        return result
+
+
+class ProspectiveAuditLinkInvalidError(ProspectiveAuditLinkError):
+    """The explicit target, mapping or temporal proof is invalid."""
+
+    def __init__(self, reason: ProspectiveAuditLinkReasonCode | str) -> None:
+        super().__init__(reason, unavailable=False)
+
+
+class ProspectiveAuditLinkUnavailableError(ProspectiveAuditLinkError):
+    """The exact audit/Decision Journal source cannot currently be read."""
+
+    def __init__(self, reason: ProspectiveAuditLinkReasonCode | str) -> None:
+        super().__init__(reason, unavailable=True)
+
+
+class ProspectiveAuditLinkConflictError(ProspectiveAuditLinkInvalidError):
+    """An event already has a different active owner-reviewed relation."""
+
+    def __init__(self) -> None:
+        super().__init__(ProspectiveAuditLinkReasonCode.LINK_OPERATION_CONFLICT)
 
 
 class ProspectiveAuditCancelledError(ProspectiveAuditError):
@@ -437,6 +540,360 @@ def fingerprint_source_refs(result: SimulateMeResult) -> AuditHashV1:
             "temporal_caveats": [_caveat_payload(caveat) for caveat in result.temporal_caveats],
         }
     )
+
+
+def _normalize_decision_option(value: object) -> str:
+    """Normalize one current Journal option using Stage 2 comparison rules."""
+
+    if type(value) is not str:
+        raise ValueError("decision option must be text")
+    try:
+        normalized = unicodedata.normalize("NFC", value)
+        normalized = " ".join(normalized.split())
+        size = len(normalized.encode("utf-8"))
+    except (UnicodeError, ValueError) as exc:
+        raise ValueError("decision option is invalid") from exc
+    if not normalized or size > MAX_JOURNAL_OPTION_BYTES:
+        raise ValueError("decision option is invalid")
+    return normalized
+
+
+def fingerprint_decision_option(value: object) -> AuditHashV1:
+    """Fingerprint a normalized current Decision Journal option value."""
+
+    return _hash_bytes(_normalize_decision_option(value).encode("utf-8"))
+
+
+def fingerprint_decision_record(
+    decision_id: object,
+    evidence_at: object,
+    available_options: Sequence[object],
+    chosen_option: object,
+) -> AuditHashV1:
+    """Fingerprint the exact current Journal identity/time/choice snapshot."""
+
+    decision_id_text = _validate_uuid7_string(
+        str(decision_id) if isinstance(decision_id, UUID) else decision_id
+    )
+    if type(evidence_at) is not datetime:
+        raise ValueError("decision time is invalid")
+    evidence_text = _canonical_datetime(evidence_at)
+    if not isinstance(available_options, (tuple, list)):
+        raise ValueError("decision options are invalid")
+    normalized_options = tuple(_normalize_decision_option(item) for item in available_options)
+    if not 2 <= len(normalized_options) <= MAX_JOURNAL_OPTIONS:
+        raise ValueError("decision options are invalid")
+    if len(set(normalized_options)) != len(normalized_options):
+        raise ValueError("decision options are duplicated")
+    normalized_chosen = _normalize_decision_option(chosen_option)
+    if normalized_options.count(normalized_chosen) != 1:
+        raise ValueError("chosen decision option is invalid")
+    return fingerprint_json(
+        {
+            "decision_id": decision_id_text,
+            "evidence_at": evidence_text,
+            "available_options": list(normalized_options),
+            "chosen_option": normalized_chosen,
+        }
+    )
+
+
+# Descriptive aliases keep the exact target fingerprint boundary discoverable.
+fingerprint_decision_journal_option = fingerprint_decision_option
+fingerprint_decision_journal_record = fingerprint_decision_record
+
+
+@dataclass(frozen=True, slots=True)
+class ProspectiveOptionMappingV1:
+    """One owner-supplied edge between two distinct option namespaces."""
+
+    audit_option_id: str
+    decision_option_index: int
+    decision_option_fingerprint: AuditHashV1
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.audit_option_id) is not str
+            or _ID_PATTERN.fullmatch(self.audit_option_id) is None
+        ):
+            raise ValueError("audit option id is invalid")
+        if (
+            type(self.decision_option_index) is not int
+            or isinstance(self.decision_option_index, bool)
+            or not 0 <= self.decision_option_index < MAX_JOURNAL_OPTIONS
+        ):
+            raise ValueError("decision option index is invalid")
+        _require_hash(self.decision_option_fingerprint)
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "audit_option_id": self.audit_option_id,
+            "decision_option_index": self.decision_option_index,
+            "decision_option_fingerprint": self.decision_option_fingerprint,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ProspectiveDecisionLinkV1:
+    """Exact immutable explicit relation persisted by Stage 9B."""
+
+    version: str
+    link_id: str
+    audit_event_id: str
+    decision_id: str
+    linked_at: datetime
+    decision_record_fingerprint: AuditHashV1
+    actual_chosen_option_index: int
+    mapping: tuple[ProspectiveOptionMappingV1, ...]
+    mapping_basis: str
+
+    def __post_init__(self) -> None:
+        if type(self.version) is not str or self.version != EVENT_VERSION:
+            raise ValueError("link version is invalid")
+        _validate_uuid7_string(self.link_id)
+        _validate_uuid7_string(self.audit_event_id)
+        _validate_uuid7_string(self.decision_id)
+        _canonical_datetime(self.linked_at)
+        if self.linked_at.utcoffset() != timedelta(0):
+            raise ValueError("link timestamp must be UTC")
+        _require_hash(self.decision_record_fingerprint)
+        if (
+            type(self.actual_chosen_option_index) is not int
+            or isinstance(self.actual_chosen_option_index, bool)
+            or not 0 <= self.actual_chosen_option_index < MAX_JOURNAL_OPTIONS
+        ):
+            raise ValueError("actual option index is invalid")
+        if type(self.mapping) is not tuple or len(self.mapping) > MAX_JOURNAL_OPTIONS:
+            raise ValueError("link mapping is invalid")
+        audit_ids: set[str] = set()
+        decision_indexes: set[int] = set()
+        for item in self.mapping:
+            if type(item) is not ProspectiveOptionMappingV1:
+                raise ValueError("link mapping is invalid")
+            if item.audit_option_id in audit_ids:
+                raise ValueError("link mapping contains duplicate audit option ids")
+            if item.decision_option_index in decision_indexes:
+                raise ValueError("link mapping contains duplicate decision indexes")
+            audit_ids.add(item.audit_option_id)
+            decision_indexes.add(item.decision_option_index)
+        if type(self.mapping_basis) is not str or self.mapping_basis != LINK_MAPPING_BASIS:
+            raise ValueError("link mapping basis is invalid")
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "version": self.version,
+            "link_id": self.link_id,
+            "audit_event_id": self.audit_event_id,
+            "decision_id": self.decision_id,
+            "linked_at": _canonical_datetime(self.linked_at),
+            "decision_record_fingerprint": self.decision_record_fingerprint,
+            "actual_chosen_option_index": self.actual_chosen_option_index,
+            "mapping": [item.as_dict() for item in self.mapping],
+            "mapping_basis": self.mapping_basis,
+        }
+
+
+class ProspectiveDecisionLinkTombstoneReasonV1(StrEnum):
+    """Closed reasons for append-only correction/invalidation records."""
+
+    OWNER_INVALIDATE = "owner_invalidate"
+    OWNER_SUPERSEDE = "owner_supersede"
+    OWNER_DELETE = "owner_delete"
+
+
+@dataclass(frozen=True, slots=True)
+class ProspectiveDecisionLinkTombstoneV1:
+    """Fixed-shape operational tombstone; it never edits a prior link."""
+
+    version: str
+    tombstone_id: str
+    audit_event_id: str
+    supersedes_link_id: str
+    tombstoned_at: datetime
+    reason: ProspectiveDecisionLinkTombstoneReasonV1
+
+    def __post_init__(self) -> None:
+        if type(self.version) is not str or self.version != EVENT_VERSION:
+            raise ValueError("tombstone version is invalid")
+        _validate_uuid7_string(self.tombstone_id)
+        _validate_uuid7_string(self.audit_event_id)
+        _validate_uuid7_string(self.supersedes_link_id)
+        _canonical_datetime(self.tombstoned_at)
+        if self.tombstoned_at.utcoffset() != timedelta(0):
+            raise ValueError("tombstone timestamp must be UTC")
+        if type(self.reason) is not ProspectiveDecisionLinkTombstoneReasonV1:
+            raise ValueError("tombstone reason is invalid")
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "version": self.version,
+            "tombstone_id": self.tombstone_id,
+            "audit_event_id": self.audit_event_id,
+            "supersedes_link_id": self.supersedes_link_id,
+            "tombstoned_at": _canonical_datetime(self.tombstoned_at),
+            "reason": self.reason.value,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ProspectiveLinkLogEnvelopeV1:
+    """Integrity envelope for a link or fixed-shape tombstone record."""
+
+    generation_id: str
+    sequence: int
+    record: ProspectiveDecisionLinkV1 | ProspectiveDecisionLinkTombstoneV1
+    previous_record_digest: AuditHashV1 | None
+    record_digest: AuditHashV1
+
+    def __post_init__(self) -> None:
+        _validate_uuid7_string(self.generation_id)
+        if (
+            type(self.sequence) is not int
+            or isinstance(self.sequence, bool)
+            or not 1 <= self.sequence <= MAX_UINT64
+        ):
+            raise ValueError("link sequence is invalid")
+        if type(self.record) not in {
+            ProspectiveDecisionLinkV1,
+            ProspectiveDecisionLinkTombstoneV1,
+        }:
+            raise ValueError("link record is invalid")
+        if self.previous_record_digest is not None:
+            _require_hash(self.previous_record_digest)
+        _require_hash(self.record_digest)
+
+    @property
+    def record_type(self) -> str:
+        return (
+            LINK_RECORD_TYPE
+            if type(self.record) is ProspectiveDecisionLinkV1
+            else LINK_TOMBSTONE_RECORD_TYPE
+        )
+
+    @property
+    def link(self) -> ProspectiveDecisionLinkV1 | None:
+        return self.record if type(self.record) is ProspectiveDecisionLinkV1 else None
+
+    @property
+    def tombstone(self) -> ProspectiveDecisionLinkTombstoneV1 | None:
+        return self.record if type(self.record) is ProspectiveDecisionLinkTombstoneV1 else None
+
+    def unsigned_dict(self) -> dict[str, object]:
+        return {
+            "generation_id": self.generation_id,
+            "sequence": self.sequence,
+            "record_type": self.record_type,
+            "record": self.record.as_dict(),
+            "previous_record_digest": self.previous_record_digest,
+        }
+
+    def as_dict(self) -> dict[str, object]:
+        result = self.unsigned_dict()
+        result["record_digest"] = self.record_digest
+        return result
+
+    @property
+    def expected_record_digest(self) -> AuditHashV1:
+        return _hash_bytes(canonical_json_bytes(self.unsigned_dict()))
+
+
+# Names used by callers that describe the same envelope as an audit record.
+AuditLinkLogEnvelopeV1 = ProspectiveLinkLogEnvelopeV1
+ProspectiveDecisionLinkEnvelopeV1 = ProspectiveLinkLogEnvelopeV1
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionJournalTargetV1:
+    """Minimal in-memory projection of one current canonical Journal target."""
+
+    decision_id: str
+    evidence_at: datetime
+    evidence_at_precision: EvidenceAtPrecision
+    created: datetime
+    available_options: tuple[str, ...]
+    chosen_option: str
+    chosen_option_index: int
+    option_fingerprints: tuple[AuditHashV1, ...]
+    decision_record_fingerprint: AuditHashV1
+
+    def __post_init__(self) -> None:
+        _validate_uuid7_string(self.decision_id)
+        if type(self.evidence_at_precision) is not EvidenceAtPrecision:
+            raise ValueError("decision precision is invalid")
+        if self.evidence_at_precision is not EvidenceAtPrecision.EXACT:
+            raise ValueError("decision precision must be exact")
+        _canonical_datetime(self.evidence_at)
+        _canonical_datetime(self.created)
+        if (
+            type(self.available_options) is not tuple
+            or not 2 <= len(self.available_options) <= MAX_JOURNAL_OPTIONS
+        ):
+            raise ValueError("decision options are invalid")
+        normalized_options = tuple(
+            _normalize_decision_option(option) for option in self.available_options
+        )
+        if normalized_options != self.available_options:
+            raise ValueError("decision options must be normalized")
+        if len(set(normalized_options)) != len(normalized_options):
+            raise ValueError("decision options are duplicated")
+        normalized_chosen = _normalize_decision_option(self.chosen_option)
+        if normalized_chosen != self.chosen_option:
+            raise ValueError("chosen option must be normalized")
+        if normalized_options.count(normalized_chosen) != 1:
+            raise ValueError("chosen option is invalid")
+        if (
+            type(self.chosen_option_index) is not int
+            or isinstance(self.chosen_option_index, bool)
+            or self.chosen_option_index != normalized_options.index(normalized_chosen)
+        ):
+            raise ValueError("chosen option index is invalid")
+        if type(self.option_fingerprints) is not tuple or len(self.option_fingerprints) != len(
+            normalized_options
+        ):
+            raise ValueError("decision option fingerprints are invalid")
+        for option, fingerprint in zip(normalized_options, self.option_fingerprints, strict=True):
+            if fingerprint != fingerprint_decision_option(option):
+                raise ValueError("decision option fingerprint is invalid")
+        expected = fingerprint_decision_record(
+            self.decision_id,
+            self.evidence_at,
+            normalized_options,
+            normalized_chosen,
+        )
+        if self.decision_record_fingerprint != expected:
+            raise ValueError("decision record fingerprint is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class ProspectiveDecisionLinkVerificationV1:
+    """Typed internal state returned by current-link revalidation."""
+
+    state: ProspectiveDecisionLinkStateV1
+    link: ProspectiveDecisionLinkV1 | None = None
+    reason_code: str | None = None
+
+    def __post_init__(self) -> None:
+        if type(self.state) is not ProspectiveDecisionLinkStateV1:
+            raise ValueError("link state is invalid")
+        if self.link is not None and type(self.link) is not ProspectiveDecisionLinkV1:
+            raise ValueError("verification link is invalid")
+        if self.reason_code is not None:
+            ProspectiveAuditLinkReasonCode(self.reason_code)
+        if self.state is ProspectiveDecisionLinkStateV1.LINKED_VALID and self.link is None:
+            raise ValueError("valid state requires a link")
+        if self.state is not ProspectiveDecisionLinkStateV1.LINKED_VALID and self.link is not None:
+            raise ValueError("non-valid state cannot expose a link")
+
+    @property
+    def code(self) -> str | None:
+        return self.reason_code
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "state": self.state.value,
+            "link": None if self.link is None else self.link.as_dict(),
+            "reason_code": self.reason_code,
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -889,6 +1346,30 @@ def compute_record_digest(
     return _hash_bytes(canonical_json_bytes(unsigned))
 
 
+def compute_link_record_digest(
+    *,
+    generation_id: str,
+    sequence: int,
+    record: ProspectiveDecisionLinkV1 | ProspectiveDecisionLinkTombstoneV1,
+    previous_record_digest: AuditHashV1 | None,
+) -> AuditHashV1:
+    """Compute one link/tombstone envelope digest without trusting its digest."""
+
+    record_type = (
+        LINK_RECORD_TYPE
+        if type(record) is ProspectiveDecisionLinkV1
+        else LINK_TOMBSTONE_RECORD_TYPE
+    )
+    unsigned = {
+        "generation_id": generation_id,
+        "sequence": sequence,
+        "record_type": record_type,
+        "record": record.as_dict(),
+        "previous_record_digest": previous_record_digest,
+    }
+    return _hash_bytes(canonical_json_bytes(unsigned))
+
+
 class _StoreLock(AbstractContextManager["_StoreLock"]):
     """Blocking cross-process lock for one operational store."""
 
@@ -959,6 +1440,7 @@ class _StoreLock(AbstractContextManager["_StoreLock"]):
 class _VerifiedSnapshot:
     manifest: AuditStoreManifestV1
     envelopes: tuple[AuditLogEnvelopeV1, ...]
+    link_envelopes: tuple[ProspectiveLinkLogEnvelopeV1, ...] = ()
 
 
 class ProspectiveAuditStore:
@@ -1091,19 +1573,24 @@ class ProspectiveAuditStore:
         manifest = self._read_manifest_unlocked()
         try:
             raw = self.events_path.read_bytes()
-            links = self.links_path.read_bytes()
+            raw_links = self.links_path.read_bytes()
         except FileNotFoundError as exc:
             raise ProspectiveAuditStoreCorruptError() from exc
         except OSError as exc:
             raise ProspectiveAuditStoreUnavailableError() from exc
-        if links:
-            # Link stream semantics belong to Stage 9B; an unknown non-empty
-            # stream cannot be safely included in a Stage 9A snapshot.
+        if not raw and (manifest.last_sequence != 0 or manifest.last_record_digest is not None):
             raise ProspectiveAuditStoreCorruptError()
+        envelopes = self._read_event_stream_unlocked(raw, manifest)
+        link_envelopes = self._read_link_stream_unlocked(raw_links, manifest, envelopes)
+        return _VerifiedSnapshot(manifest, envelopes, link_envelopes)
+
+    @staticmethod
+    def _read_event_stream_unlocked(
+        raw: bytes,
+        manifest: AuditStoreManifestV1,
+    ) -> tuple[AuditLogEnvelopeV1, ...]:
         if not raw:
-            if manifest.last_sequence != 0 or manifest.last_record_digest is not None:
-                raise ProspectiveAuditStoreCorruptError()
-            return _VerifiedSnapshot(manifest, ())
+            return ()
         if raw.startswith(b"\xef\xbb\xbf") or not raw.endswith(b"\n"):
             raise ProspectiveAuditStoreCorruptError()
         envelopes: list[AuditLogEnvelopeV1] = []
@@ -1138,7 +1625,80 @@ class ProspectiveAuditStore:
             previous = envelope.record_digest
         if manifest.last_sequence != len(envelopes) or manifest.last_record_digest != previous:
             raise ProspectiveAuditStoreCorruptError()
-        return _VerifiedSnapshot(manifest, tuple(envelopes))
+        return tuple(envelopes)
+
+    @staticmethod
+    def _read_link_stream_unlocked(
+        raw: bytes,
+        manifest: AuditStoreManifestV1,
+        event_envelopes: tuple[AuditLogEnvelopeV1, ...],
+    ) -> tuple[ProspectiveLinkLogEnvelopeV1, ...]:
+        if not raw:
+            return ()
+        if raw.startswith(b"\xef\xbb\xbf") or not raw.endswith(b"\n"):
+            raise ProspectiveAuditStoreCorruptError()
+        event_sequences = {
+            envelope.event.event_id: envelope.sequence for envelope in event_envelopes
+        }
+        records: list[ProspectiveLinkLogEnvelopeV1] = []
+        previous: AuditHashV1 | None = None
+        previous_sequence = 0
+        seen_record_ids: set[str] = set()
+        links_by_id: dict[str, ProspectiveDecisionLinkV1] = {}
+        active_by_event: dict[str, ProspectiveDecisionLinkV1] = {}
+        for line in raw.splitlines(keepends=True):
+            if not line.endswith(b"\n") or line.endswith(b"\r\n"):
+                raise ProspectiveAuditStoreCorruptError()
+            payload = line[:-1]
+            if not payload or len(payload) > MAX_LINK_BYTES:
+                raise ProspectiveAuditStoreCorruptError()
+            try:
+                data = _loads_json(payload)
+                envelope = _link_envelope_from_dict(data)
+                if canonical_json_bytes(data) != payload:
+                    raise ValueError("link record is not canonical")
+                if envelope.expected_record_digest != envelope.record_digest:
+                    raise ValueError("link record digest mismatch")
+                if envelope.generation_id != manifest.generation_id:
+                    raise ValueError("link generation mismatch")
+                if envelope.sequence <= previous_sequence:
+                    raise ValueError("link sequence is not monotonic")
+                if envelope.previous_record_digest != previous:
+                    raise ValueError("link chain mismatch")
+                if envelope.record_type == LINK_RECORD_TYPE:
+                    assert envelope.link is not None
+                    record_id = envelope.link.link_id
+                    event_sequence = event_sequences.get(envelope.link.audit_event_id)
+                    if event_sequence is None or not event_sequence < envelope.sequence:
+                        raise ValueError("link event ordering is invalid")
+                    if record_id in seen_record_ids:
+                        raise ValueError("duplicate link id")
+                    if envelope.link.audit_event_id in active_by_event:
+                        raise ValueError("multiple active links for event")
+                    links_by_id[record_id] = envelope.link
+                    active_by_event[envelope.link.audit_event_id] = envelope.link
+                else:
+                    assert envelope.tombstone is not None
+                    tombstone = envelope.tombstone
+                    event_sequence = event_sequences.get(tombstone.audit_event_id)
+                    if event_sequence is None or not event_sequence < envelope.sequence:
+                        raise ValueError("tombstone event ordering is invalid")
+                    record_id = tombstone.tombstone_id
+                    if record_id in seen_record_ids:
+                        raise ValueError("duplicate tombstone id")
+                    target = links_by_id.get(tombstone.supersedes_link_id)
+                    if target is None or target.audit_event_id != tombstone.audit_event_id:
+                        raise ValueError("tombstone target is invalid")
+                    if active_by_event.get(tombstone.audit_event_id) != target:
+                        raise ValueError("tombstone target is not active")
+                    del active_by_event[tombstone.audit_event_id]
+                seen_record_ids.add(record_id)
+            except (TypeError, ValueError, UnicodeError, RecursionError) as exc:
+                raise ProspectiveAuditStoreCorruptError() from exc
+            records.append(envelope)
+            previous = envelope.record_digest
+            previous_sequence = envelope.sequence
+        return tuple(records)
 
     def _assert_owner_only_unlocked(self) -> None:
         if os.name == "nt":
@@ -1172,6 +1732,356 @@ class ProspectiveAuditStore:
             with _StoreLock(self.lock_path):
                 snapshot = self._read_verified_unlocked()
                 return snapshot.manifest
+        except ProspectiveAuditError:
+            raise
+        except (OSError, ValueError, UnicodeError, RecursionError) as exc:
+            raise ProspectiveAuditStoreUnavailableError() from exc
+
+    def read_link_envelopes(self) -> tuple[ProspectiveLinkLogEnvelopeV1, ...]:
+        """Return a stable fully verified snapshot of the link stream."""
+
+        try:
+            with _StoreLock(self.lock_path):
+                return self._read_verified_unlocked().link_envelopes
+        except ProspectiveAuditError:
+            raise
+        except (OSError, ValueError, UnicodeError, RecursionError) as exc:
+            raise ProspectiveAuditStoreUnavailableError() from exc
+
+    read_links = read_link_envelopes
+    verify_links = read_link_envelopes
+    read_link_records = read_link_envelopes
+
+    def read_event(self, event_id: str) -> AuditLogEnvelopeV1 | None:
+        """Read one verified event by its exact immutable UUID."""
+
+        try:
+            _validate_uuid7_string(event_id)
+        except ValueError as exc:
+            raise ProspectiveAuditLinkInvalidError(
+                ProspectiveAuditLinkReasonCode.DECISION_TARGET_INVALID
+            ) from exc
+        try:
+            with _StoreLock(self.lock_path):
+                snapshot = self._read_verified_unlocked()
+                return next(
+                    (
+                        envelope
+                        for envelope in snapshot.envelopes
+                        if envelope.event.event_id == event_id
+                    ),
+                    None,
+                )
+        except ProspectiveAuditError:
+            raise
+        except (OSError, ValueError, UnicodeError, RecursionError) as exc:
+            raise ProspectiveAuditStoreUnavailableError() from exc
+
+    get_event = read_event
+    read_event_by_id = read_event
+
+    def current_link_state(self, event_id: str) -> ProspectiveDecisionLinkVerificationV1:
+        """Return the verified operational state without rereading the vault."""
+
+        try:
+            _validate_uuid7_string(event_id)
+        except ValueError:
+            return ProspectiveDecisionLinkVerificationV1(
+                ProspectiveDecisionLinkStateV1.LINK_UNAVAILABLE,
+                reason_code=ProspectiveAuditLinkReasonCode.AUDIT_EVENT_MISSING_OR_DELETED.value,
+            )
+        try:
+            with _StoreLock(self.lock_path):
+                snapshot = self._read_verified_unlocked()
+                event = next(
+                    (
+                        envelope
+                        for envelope in snapshot.envelopes
+                        if envelope.event.event_id == event_id
+                    ),
+                    None,
+                )
+                if event is None:
+                    return ProspectiveDecisionLinkVerificationV1(
+                        ProspectiveDecisionLinkStateV1.LINK_UNAVAILABLE,
+                        reason_code=(
+                            ProspectiveAuditLinkReasonCode.AUDIT_EVENT_MISSING_OR_DELETED.value
+                        ),
+                    )
+                now = _as_utc(self._clock())
+                if now >= event.event.created_at + RETENTION:
+                    return ProspectiveDecisionLinkVerificationV1(
+                        ProspectiveDecisionLinkStateV1.EXPIRED,
+                        reason_code=ProspectiveAuditLinkReasonCode.DECISION_TARGET_EXPIRED.value,
+                    )
+                active, tombstoned = _current_links_for_event(snapshot.link_envelopes, event_id)
+                if active is not None:
+                    return ProspectiveDecisionLinkVerificationV1(
+                        ProspectiveDecisionLinkStateV1.LINKED_VALID,
+                        link=active,
+                    )
+                if tombstoned:
+                    return ProspectiveDecisionLinkVerificationV1(
+                        ProspectiveDecisionLinkStateV1.TOMBSTONED
+                    )
+                return ProspectiveDecisionLinkVerificationV1(
+                    ProspectiveDecisionLinkStateV1.ACTIVE_UNLINKED
+                )
+        except ProspectiveAuditError:
+            raise
+        except (OSError, ValueError, UnicodeError, RecursionError) as exc:
+            raise ProspectiveAuditStoreUnavailableError() from exc
+
+    get_current_link_state = current_link_state
+
+    def append_link(
+        self,
+        *,
+        audit_event_id: str,
+        decision_id: str,
+        decision_record_fingerprint: AuditHashV1,
+        actual_chosen_option_index: int,
+        mapping: tuple[ProspectiveOptionMappingV1, ...],
+        decision_evidence_at: datetime,
+        decision_created: datetime,
+    ) -> ProspectiveDecisionLinkV1:
+        """Append one explicit link under the common Stage 9 store lock."""
+
+        return self._append_link_operation(
+            audit_event_id=audit_event_id,
+            decision_id=decision_id,
+            decision_record_fingerprint=decision_record_fingerprint,
+            actual_chosen_option_index=actual_chosen_option_index,
+            mapping=mapping,
+            decision_evidence_at=decision_evidence_at,
+            decision_created=decision_created,
+            expected_link_id=None,
+            supersede=False,
+        )
+
+    append_decision_link = append_link
+
+    def supersede_link(
+        self,
+        *,
+        audit_event_id: str,
+        expected_link_id: str,
+        decision_id: str,
+        decision_record_fingerprint: AuditHashV1,
+        actual_chosen_option_index: int,
+        mapping: tuple[ProspectiveOptionMappingV1, ...],
+        decision_evidence_at: datetime,
+        decision_created: datetime,
+    ) -> ProspectiveDecisionLinkV1:
+        """Append a tombstone and a new link atomically as one correction."""
+
+        return self._append_link_operation(
+            audit_event_id=audit_event_id,
+            decision_id=decision_id,
+            decision_record_fingerprint=decision_record_fingerprint,
+            actual_chosen_option_index=actual_chosen_option_index,
+            mapping=mapping,
+            decision_evidence_at=decision_evidence_at,
+            decision_created=decision_created,
+            expected_link_id=expected_link_id,
+            supersede=True,
+        )
+
+    correct_link = supersede_link
+
+    def tombstone_link(
+        self,
+        *,
+        audit_event_id: str,
+        expected_link_id: str,
+        reason: ProspectiveDecisionLinkTombstoneReasonV1 = (
+            ProspectiveDecisionLinkTombstoneReasonV1.OWNER_INVALIDATE
+        ),
+    ) -> ProspectiveDecisionLinkTombstoneV1:
+        """Append an explicit owner invalidation without editing history."""
+
+        try:
+            _validate_uuid7_string(audit_event_id)
+            _validate_uuid7_string(expected_link_id)
+            if type(reason) is not ProspectiveDecisionLinkTombstoneReasonV1:
+                raise ValueError("tombstone reason is invalid")
+        except ValueError as exc:
+            raise ProspectiveAuditLinkInvalidError(
+                ProspectiveAuditLinkReasonCode.LINK_OPERATION_CONFLICT
+            ) from exc
+        try:
+            with _StoreLock(self.lock_path):
+                snapshot = self._read_verified_unlocked()
+                event = _event_from_snapshot(snapshot, audit_event_id)
+                if event is None:
+                    raise ProspectiveAuditLinkUnavailableError(
+                        ProspectiveAuditLinkReasonCode.AUDIT_EVENT_MISSING_OR_DELETED
+                    )
+                active, _ = _current_links_for_event(snapshot.link_envelopes, audit_event_id)
+                if active is None or active.link_id != expected_link_id:
+                    raise ProspectiveAuditLinkConflictError()
+                tombstoned_at = _as_utc(self._clock())
+                sequence = _next_link_sequence(snapshot)
+                if event.sequence >= sequence:
+                    raise ProspectiveAuditLinkInvalidError(
+                        ProspectiveAuditLinkReasonCode.LINK_FINGERPRINT_MISMATCH
+                    )
+                tombstone = ProspectiveDecisionLinkTombstoneV1(
+                    version=EVENT_VERSION,
+                    tombstone_id=str(uuid.uuid7()),
+                    audit_event_id=audit_event_id,
+                    supersedes_link_id=expected_link_id,
+                    tombstoned_at=tombstoned_at,
+                    reason=reason,
+                )
+                envelope = _build_link_envelope(
+                    generation_id=snapshot.manifest.generation_id,
+                    sequence=sequence,
+                    record=tombstone,
+                    previous_record_digest=_last_link_digest(snapshot.link_envelopes),
+                )
+                self._append_link_envelopes_durable((envelope,))
+                verified = self._read_verified_unlocked()
+                if not verified.link_envelopes or verified.link_envelopes[-1] != envelope:
+                    raise ProspectiveAuditStoreUnavailableError()
+                return tombstone
+        except ProspectiveAuditError:
+            raise
+        except (OSError, ValueError, UnicodeError, RecursionError) as exc:
+            raise ProspectiveAuditStoreUnavailableError() from exc
+
+    invalidate_link = tombstone_link
+
+    def _append_link_operation(
+        self,
+        *,
+        audit_event_id: str,
+        decision_id: str,
+        decision_record_fingerprint: AuditHashV1,
+        actual_chosen_option_index: int,
+        mapping: tuple[ProspectiveOptionMappingV1, ...],
+        decision_evidence_at: datetime,
+        decision_created: datetime,
+        expected_link_id: str | None,
+        supersede: bool,
+        linked_at_override: datetime | None = None,
+    ) -> ProspectiveDecisionLinkV1:
+        """Validate and durably append one link operation under one lock."""
+
+        try:
+            _validate_uuid7_string(audit_event_id)
+            _validate_uuid7_string(decision_id)
+            _require_hash(decision_record_fingerprint)
+            _validate_link_mapping_shape(mapping)
+            if (
+                type(actual_chosen_option_index) is not int
+                or isinstance(actual_chosen_option_index, bool)
+                or not 0 <= actual_chosen_option_index < MAX_JOURNAL_OPTIONS
+            ):
+                raise ValueError("actual option index is invalid")
+            _canonical_datetime(decision_evidence_at)
+            _canonical_datetime(decision_created)
+            if expected_link_id is not None:
+                _validate_uuid7_string(expected_link_id)
+        except ProspectiveAuditLinkError:
+            raise
+        except (TypeError, ValueError) as exc:
+            raise ProspectiveAuditLinkInvalidError(
+                ProspectiveAuditLinkReasonCode.OPTION_MAPPING_INVALID
+            ) from exc
+
+        try:
+            with _StoreLock(self.lock_path):
+                snapshot = self._read_verified_unlocked()
+                event = _event_from_snapshot(snapshot, audit_event_id)
+                if event is None:
+                    raise ProspectiveAuditLinkUnavailableError(
+                        ProspectiveAuditLinkReasonCode.AUDIT_EVENT_MISSING_OR_DELETED
+                    )
+                linked_at = _as_utc(linked_at_override or self._clock())
+                if linked_at >= event.event.created_at + RETENTION:
+                    raise ProspectiveAuditLinkUnavailableError(
+                        ProspectiveAuditLinkReasonCode.DECISION_TARGET_EXPIRED
+                    )
+                active, _ = _current_links_for_event(snapshot.link_envelopes, audit_event_id)
+                if not supersede and active is not None:
+                    if _same_link_intent(
+                        active,
+                        audit_event_id=audit_event_id,
+                        decision_id=decision_id,
+                        decision_record_fingerprint=decision_record_fingerprint,
+                        actual_chosen_option_index=actual_chosen_option_index,
+                        mapping=mapping,
+                    ):
+                        return active
+                    raise ProspectiveAuditLinkConflictError()
+                if supersede:
+                    if active is None or expected_link_id != active.link_id:
+                        raise ProspectiveAuditLinkConflictError()
+                    if _same_link_intent(
+                        active,
+                        audit_event_id=audit_event_id,
+                        decision_id=decision_id,
+                        decision_record_fingerprint=decision_record_fingerprint,
+                        actual_chosen_option_index=actual_chosen_option_index,
+                        mapping=mapping,
+                    ):
+                        raise ProspectiveAuditLinkConflictError()
+                sequence = _next_link_sequence(snapshot)
+                link_sequence = sequence + 1 if supersede else sequence
+                if link_sequence > MAX_UINT64 or event.sequence >= link_sequence:
+                    raise ProspectiveAuditLinkInvalidError(
+                        ProspectiveAuditLinkReasonCode.LINK_FINGERPRINT_MISMATCH
+                    )
+                _validate_link_temporal_order(
+                    event.event.created_at,
+                    decision_evidence_at,
+                    decision_created,
+                    linked_at,
+                )
+                link = ProspectiveDecisionLinkV1(
+                    version=EVENT_VERSION,
+                    link_id=str(uuid.uuid7()),
+                    audit_event_id=audit_event_id,
+                    decision_id=decision_id,
+                    linked_at=linked_at,
+                    decision_record_fingerprint=decision_record_fingerprint,
+                    actual_chosen_option_index=actual_chosen_option_index,
+                    mapping=mapping,
+                    mapping_basis=LINK_MAPPING_BASIS,
+                )
+                records: list[ProspectiveLinkLogEnvelopeV1] = []
+                previous_digest = _last_link_digest(snapshot.link_envelopes)
+                if supersede:
+                    assert active is not None
+                    tombstone = ProspectiveDecisionLinkTombstoneV1(
+                        version=EVENT_VERSION,
+                        tombstone_id=str(uuid.uuid7()),
+                        audit_event_id=audit_event_id,
+                        supersedes_link_id=active.link_id,
+                        tombstoned_at=linked_at,
+                        reason=ProspectiveDecisionLinkTombstoneReasonV1.OWNER_SUPERSEDE,
+                    )
+                    tombstone_envelope = _build_link_envelope(
+                        generation_id=snapshot.manifest.generation_id,
+                        sequence=sequence,
+                        record=tombstone,
+                        previous_record_digest=previous_digest,
+                    )
+                    records.append(tombstone_envelope)
+                    previous_digest = tombstone_envelope.record_digest
+                link_envelope = _build_link_envelope(
+                    generation_id=snapshot.manifest.generation_id,
+                    sequence=link_sequence,
+                    record=link,
+                    previous_record_digest=previous_digest,
+                )
+                records.append(link_envelope)
+                self._append_link_envelopes_durable(tuple(records))
+                verified = self._read_verified_unlocked()
+                if not verified.link_envelopes or verified.link_envelopes[-1] != link_envelope:
+                    raise ProspectiveAuditStoreUnavailableError()
+                return link
         except ProspectiveAuditError:
             raise
         except (OSError, ValueError, UnicodeError, RecursionError) as exc:
@@ -1269,7 +2179,17 @@ class ProspectiveAuditStore:
                 removed = len(snapshot.envelopes) - len(kept)
                 if removed == 0:
                     return 0
-                self._rotate_generation_unlocked(kept)
+                kept_ids = {event.event_id for event in kept}
+                kept_links = tuple(
+                    envelope
+                    for envelope in snapshot.link_envelopes
+                    if (envelope.link is not None and envelope.link.audit_event_id in kept_ids)
+                    or (
+                        envelope.tombstone is not None
+                        and envelope.tombstone.audit_event_id in kept_ids
+                    )
+                )
+                self._rotate_generation_unlocked(kept, kept_links)
                 self._read_verified_unlocked()
                 return removed
         except ProspectiveAuditError:
@@ -1297,7 +2217,11 @@ class ProspectiveAuditStore:
         except (OSError, ValueError, UnicodeError, RecursionError) as exc:
             raise ProspectiveAuditStoreUnavailableError() from exc
 
-    def _rotate_generation_unlocked(self, events: Sequence[ProspectiveAuditEventV1]) -> None:
+    def _rotate_generation_unlocked(
+        self,
+        events: Sequence[ProspectiveAuditEventV1],
+        links: Sequence[ProspectiveLinkLogEnvelopeV1] = (),
+    ) -> None:
         generation_id = str(uuid.uuid7())
         lines: list[bytes] = []
         previous: AuditHashV1 | None = None
@@ -1317,6 +2241,20 @@ class ProspectiveAuditStore:
             lines.append(canonical_json_bytes(envelope.as_dict()) + b"\n")
             previous = envelope.record_digest
         self._write_bytes_atomic(self.events_path, b"".join(lines))
+        link_lines: list[bytes] = []
+        link_previous: AuditHashV1 | None = None
+        event_count = len(events)
+        for offset, old_envelope in enumerate(links, start=1):
+            link_sequence = event_count + offset
+            rebuilt = _build_link_envelope(
+                generation_id=generation_id,
+                sequence=link_sequence,
+                record=old_envelope.record,
+                previous_record_digest=link_previous,
+            )
+            link_lines.append(canonical_json_bytes(rebuilt.as_dict()) + b"\n")
+            link_previous = rebuilt.record_digest
+        self._write_bytes_atomic(self.links_path, b"".join(link_lines))
         self._write_manifest_atomic(
             AuditStoreManifestV1(STORE_FORMAT_VERSION, generation_id, len(events), previous)
         )
@@ -1341,6 +2279,18 @@ class ProspectiveAuditStore:
             os.fsync(descriptor)
         finally:
             os.close(descriptor)
+
+    def _append_link_envelopes_durable(
+        self,
+        envelopes: tuple[ProspectiveLinkLogEnvelopeV1, ...],
+    ) -> None:
+        payloads: list[bytes] = []
+        for envelope in envelopes:
+            line = canonical_json_bytes(envelope.as_dict()) + b"\n"
+            if len(line) > MAX_LINK_BYTES:
+                raise ProspectiveAuditStoreUnavailableError()
+            payloads.append(line)
+        self._append_bytes_durable(self.links_path, b"".join(payloads))
 
     def _write_manifest_atomic(self, manifest: AuditStoreManifestV1) -> None:
         self._write_bytes_atomic(self.manifest_path, canonical_json_bytes(manifest.as_dict()))
@@ -1384,6 +2334,345 @@ class ProspectiveAuditStore:
             os.fsync(descriptor)
         finally:
             os.close(descriptor)
+
+
+def resolve_current_decision_journal(
+    reader: VaultReader | Callable[[], VaultSnapshot | ScanReport],
+    decision_id: str,
+) -> DecisionJournalTargetV1:
+    """Reread the canonical vault and return one exact Journal projection."""
+
+    try:
+        _validate_uuid7_string(decision_id)
+    except ValueError as exc:
+        raise ProspectiveAuditLinkInvalidError(
+            ProspectiveAuditLinkReasonCode.DECISION_TARGET_INVALID
+        ) from exc
+    try:
+        scanned = reader() if callable(reader) and not hasattr(reader, "scan") else reader.scan()
+        if type(scanned) is ScanReport:
+            report = scanned
+        elif type(scanned) is VaultSnapshot:
+            report = build_report(scanned)
+        else:
+            raise ValueError("canonical scan result is invalid")
+    except ProspectiveAuditLinkError:
+        raise
+    except Exception as exc:
+        raise ProspectiveAuditLinkUnavailableError(
+            ProspectiveAuditLinkReasonCode.CANONICAL_SCAN_UNAVAILABLE
+        ) from exc
+    if report.manifest is None or not report.content_scan_complete:
+        raise ProspectiveAuditLinkUnavailableError(
+            ProspectiveAuditLinkReasonCode.CANONICAL_SCAN_UNAVAILABLE
+        )
+
+    matches = [
+        note
+        for note in report.notes
+        if note.note_id is not None and str(note.note_id) == decision_id
+    ]
+    raw_identity_matches = [
+        note
+        for note in report.notes
+        if isinstance(note.front_matter.get("id"), str)
+        and note.front_matter.get("id") == decision_id
+    ]
+    if len(matches) > 1 or len(raw_identity_matches) > 1:
+        raise ProspectiveAuditLinkInvalidError(
+            ProspectiveAuditLinkReasonCode.DECISION_IDENTITY_CONFLICT
+        )
+    if not matches:
+        if raw_identity_matches:
+            raise ProspectiveAuditLinkInvalidError(
+                ProspectiveAuditLinkReasonCode.DECISION_TARGET_INVALID
+            )
+        raise ProspectiveAuditLinkUnavailableError(
+            ProspectiveAuditLinkReasonCode.DECISION_TARGET_UNAVAILABLE
+        )
+    note = matches[0]
+    if _raw_decision_journal_time_is_invalid(note):
+        raise ProspectiveAuditLinkInvalidError(ProspectiveAuditLinkReasonCode.DECISION_TIME_INVALID)
+    if not _is_valid_decision_journal_note(note):
+        raise ProspectiveAuditLinkInvalidError(
+            ProspectiveAuditLinkReasonCode.DECISION_TARGET_INVALID
+        )
+    assert note.personal_memory is not None
+    assert note.decision_journal is not None
+    metadata = note.personal_memory
+    if (
+        metadata.evidence_at_precision is not EvidenceAtPrecision.EXACT
+        or type(metadata.evidence_at) is not datetime
+    ):
+        raise ProspectiveAuditLinkInvalidError(ProspectiveAuditLinkReasonCode.DECISION_TIME_INVALID)
+    if (
+        type(note.created) is not datetime
+        or note.created.tzinfo is None
+        or note.created.utcoffset() is None
+        or metadata.evidence_at.tzinfo is None
+        or metadata.evidence_at.utcoffset() is None
+    ):
+        raise ProspectiveAuditLinkInvalidError(ProspectiveAuditLinkReasonCode.DECISION_TIME_INVALID)
+    try:
+        evidence_at = metadata.evidence_at.astimezone(UTC)
+        created = note.created.astimezone(UTC)
+        options = tuple(
+            _normalize_decision_option(item) for item in note.decision_journal.available_options
+        )
+        chosen = _normalize_decision_option(note.decision_journal.chosen_option)
+        chosen_index = options.index(chosen)
+        option_fingerprints = tuple(fingerprint_decision_option(item) for item in options)
+        record_fingerprint = fingerprint_decision_record(
+            decision_id,
+            evidence_at,
+            options,
+            chosen,
+        )
+        return DecisionJournalTargetV1(
+            decision_id=decision_id,
+            evidence_at=evidence_at,
+            evidence_at_precision=metadata.evidence_at_precision,
+            created=created,
+            available_options=options,
+            chosen_option=chosen,
+            chosen_option_index=chosen_index,
+            option_fingerprints=option_fingerprints,
+            decision_record_fingerprint=record_fingerprint,
+        )
+    except (AttributeError, IndexError, TypeError, ValueError, UnicodeError) as exc:
+        raise ProspectiveAuditLinkInvalidError(
+            ProspectiveAuditLinkReasonCode.DECISION_TARGET_INVALID
+        ) from exc
+
+
+def _raw_decision_journal_time_is_invalid(note: NoteRecord) -> bool:
+    """Classify a discovered Stage 2 target with unusable temporal metadata."""
+
+    metadata = note.front_matter
+    if (
+        metadata.get("evidence_kind") != EvidenceKind.OBSERVED_DECISION.value
+        or metadata.get("self_kind") != SelfKind.DECISION.value
+    ):
+        return False
+    if metadata.get("evidence_at_precision") != EvidenceAtPrecision.EXACT.value:
+        return True
+    evidence_at = metadata.get("evidence_at")
+    return not (
+        type(evidence_at) is datetime
+        and evidence_at.tzinfo is not None
+        and evidence_at.utcoffset() is not None
+    )
+
+
+def _is_valid_decision_journal_note(note: NoteRecord) -> bool:
+    metadata = note.personal_memory
+    return bool(
+        note.managed
+        and note.note_id is not None
+        and metadata is not None
+        and metadata.evidence_kind is EvidenceKind.OBSERVED_DECISION
+        and metadata.self_kind is SelfKind.DECISION
+        and note.decision_journal is not None
+    )
+
+
+def _validate_explicit_mapping(
+    event: ProspectiveAuditEventV1,
+    target: DecisionJournalTargetV1,
+    mapping: object,
+) -> tuple[ProspectiveOptionMappingV1, ...]:
+    try:
+        _validate_link_mapping_shape(mapping)
+    except (TypeError, ValueError) as exc:
+        raise ProspectiveAuditLinkInvalidError(
+            ProspectiveAuditLinkReasonCode.OPTION_MAPPING_INVALID
+        ) from exc
+    assert isinstance(mapping, tuple)
+    event_option_ids = {option.id for option in event.request.options}
+    mapped_ids = {item.audit_option_id for item in mapping}
+    mapped_indexes = {item.decision_option_index for item in mapping}
+    if any(item.audit_option_id not in event_option_ids for item in mapping):
+        raise ProspectiveAuditLinkInvalidError(
+            ProspectiveAuditLinkReasonCode.OPTION_MAPPING_INVALID
+        )
+    if any(item.decision_option_index >= len(target.available_options) for item in mapping):
+        raise ProspectiveAuditLinkInvalidError(
+            ProspectiveAuditLinkReasonCode.OPTION_MAPPING_INVALID
+        )
+    for item in mapping:
+        if (
+            target.option_fingerprints[item.decision_option_index]
+            != item.decision_option_fingerprint
+        ):
+            raise ProspectiveAuditLinkInvalidError(
+                ProspectiveAuditLinkReasonCode.LINK_FINGERPRINT_MISMATCH
+            )
+    if event.result.kind is ProspectiveAuditResultKind.ABSTENTION:
+        if mapping:
+            raise ProspectiveAuditLinkInvalidError(
+                ProspectiveAuditLinkReasonCode.OPTION_MAPPING_INVALID
+            )
+        return mapping
+    predicted_option_id = event.result.predicted_option_id
+    if predicted_option_id is None or predicted_option_id not in mapped_ids:
+        raise ProspectiveAuditLinkInvalidError(
+            ProspectiveAuditLinkReasonCode.OPTION_MAPPING_INVALID
+        )
+    if target.chosen_option_index not in mapped_indexes:
+        raise ProspectiveAuditLinkInvalidError(
+            ProspectiveAuditLinkReasonCode.CHOSEN_OPTION_UNMAPPED
+        )
+    return mapping
+
+
+class BuildProspectiveDecisionLink:
+    """Create and revalidate explicit Stage 9B links."""
+
+    def __init__(
+        self,
+        store: ProspectiveAuditStore,
+        reader: VaultReader | Callable[[], VaultSnapshot | ScanReport],
+        *,
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
+        self._store = store
+        self._reader = reader
+        self._clock = clock
+
+    def execute(
+        self,
+        audit_event_id: str,
+        decision_id: str,
+        mapping: tuple[ProspectiveOptionMappingV1, ...],
+    ) -> ProspectiveDecisionLinkV1:
+        """Reread the current Journal, validate the mapping, then append."""
+
+        event_envelope = self._store.read_event(audit_event_id)
+        if event_envelope is None:
+            raise ProspectiveAuditLinkUnavailableError(
+                ProspectiveAuditLinkReasonCode.AUDIT_EVENT_MISSING_OR_DELETED
+            )
+        target = resolve_current_decision_journal(self._reader, decision_id)
+        validated_mapping = _validate_explicit_mapping(event_envelope.event, target, mapping)
+        return self._store._append_link_operation(
+            audit_event_id=audit_event_id,
+            decision_id=decision_id,
+            decision_record_fingerprint=target.decision_record_fingerprint,
+            actual_chosen_option_index=target.chosen_option_index,
+            mapping=validated_mapping,
+            decision_evidence_at=target.evidence_at,
+            decision_created=target.created,
+            expected_link_id=None,
+            supersede=False,
+            linked_at_override=None if self._clock is None else self._clock(),
+        )
+
+    link = execute
+    create = execute
+
+    def correct(
+        self,
+        audit_event_id: str,
+        decision_id: str,
+        mapping: tuple[ProspectiveOptionMappingV1, ...],
+    ) -> ProspectiveDecisionLinkV1:
+        """Supersede the current active link with a fresh owner-reviewed link."""
+
+        state = self._store.current_link_state(audit_event_id)
+        if state.link is None:
+            raise ProspectiveAuditLinkConflictError()
+        event_envelope = self._store.read_event(audit_event_id)
+        if event_envelope is None:
+            raise ProspectiveAuditLinkUnavailableError(
+                ProspectiveAuditLinkReasonCode.AUDIT_EVENT_MISSING_OR_DELETED
+            )
+        target = resolve_current_decision_journal(self._reader, decision_id)
+        validated_mapping = _validate_explicit_mapping(event_envelope.event, target, mapping)
+        return self._store._append_link_operation(
+            audit_event_id=audit_event_id,
+            decision_id=decision_id,
+            decision_record_fingerprint=target.decision_record_fingerprint,
+            actual_chosen_option_index=target.chosen_option_index,
+            mapping=validated_mapping,
+            decision_evidence_at=target.evidence_at,
+            decision_created=target.created,
+            expected_link_id=state.link.link_id,
+            supersede=True,
+            linked_at_override=None if self._clock is None else self._clock(),
+        )
+
+    correct_link = correct
+
+    def verify(self, audit_event_id: str) -> ProspectiveDecisionLinkVerificationV1:
+        """Revalidate an accepted link against the current canonical Journal."""
+
+        state = self._store.current_link_state(audit_event_id)
+        if state.state is not ProspectiveDecisionLinkStateV1.LINKED_VALID:
+            return state
+        assert state.link is not None
+        event_envelope = self._store.read_event(audit_event_id)
+        if event_envelope is None:
+            return ProspectiveDecisionLinkVerificationV1(
+                ProspectiveDecisionLinkStateV1.LINK_UNAVAILABLE,
+                reason_code=ProspectiveAuditLinkReasonCode.AUDIT_EVENT_MISSING_OR_DELETED.value,
+            )
+        try:
+            target = resolve_current_decision_journal(self._reader, state.link.decision_id)
+        except ProspectiveAuditLinkUnavailableError as exc:
+            return ProspectiveDecisionLinkVerificationV1(
+                ProspectiveDecisionLinkStateV1.LINK_UNAVAILABLE,
+                reason_code=exc.reason_code,
+            )
+        except ProspectiveAuditLinkInvalidError as exc:
+            return ProspectiveDecisionLinkVerificationV1(
+                ProspectiveDecisionLinkStateV1.LINK_INVALID,
+                reason_code=exc.reason_code,
+            )
+        if target.decision_record_fingerprint != state.link.decision_record_fingerprint:
+            return ProspectiveDecisionLinkVerificationV1(
+                ProspectiveDecisionLinkStateV1.LINK_INVALID,
+                reason_code=ProspectiveAuditLinkReasonCode.DECISION_RECORD_CHANGED.value,
+            )
+        if target.chosen_option_index != state.link.actual_chosen_option_index:
+            return ProspectiveDecisionLinkVerificationV1(
+                ProspectiveDecisionLinkStateV1.LINK_INVALID,
+                reason_code=ProspectiveAuditLinkReasonCode.DECISION_RECORD_CHANGED.value,
+            )
+        try:
+            _validate_explicit_mapping(event_envelope.event, target, state.link.mapping)
+            _validate_link_temporal_order(
+                event_envelope.event.created_at,
+                target.evidence_at,
+                target.created,
+                state.link.linked_at,
+            )
+        except ProspectiveAuditLinkUnavailableError as exc:
+            return ProspectiveDecisionLinkVerificationV1(
+                ProspectiveDecisionLinkStateV1.LINK_UNAVAILABLE,
+                reason_code=exc.reason_code,
+            )
+        except ProspectiveAuditLinkInvalidError as exc:
+            return ProspectiveDecisionLinkVerificationV1(
+                ProspectiveDecisionLinkStateV1.LINK_INVALID,
+                reason_code=exc.reason_code,
+            )
+        return state
+
+    verify_current = verify
+    validate_current_link = verify
+
+    def invalidate(self, audit_event_id: str) -> ProspectiveDecisionLinkTombstoneV1:
+        state = self._store.current_link_state(audit_event_id)
+        if state.link is None:
+            raise ProspectiveAuditLinkConflictError()
+        return self._store.tombstone_link(
+            audit_event_id=audit_event_id,
+            expected_link_id=state.link.link_id,
+        )
+
+
+BuildProspectiveDecisionLinkV1 = BuildProspectiveDecisionLink
+ProspectiveDecisionLinker = BuildProspectiveDecisionLink
 
 
 class SimulateMeExecutor(Protocol):
@@ -1471,9 +2760,141 @@ ProspectiveAuditSource = ProspectiveAuditSourceV1
 ProspectiveAuditEvent = ProspectiveAuditEventV1
 ProspectiveAuditStoreV1 = ProspectiveAuditStore
 BuildProspectiveAuditV1 = BuildProspectiveAudit
+ProspectiveOptionMapping = ProspectiveOptionMappingV1
+ProspectiveDecisionLink = ProspectiveDecisionLinkV1
+ProspectiveDecisionLinkState = ProspectiveDecisionLinkStateV1
+ProspectiveDecisionLinkVerification = ProspectiveDecisionLinkVerificationV1
 ProspectiveAuditErrorCodeV1 = ProspectiveAuditErrorCode
 ProspectiveAuditResultKindV1 = ProspectiveAuditResultKind
 ProspectiveAuditAbstentionCodeV1 = ProspectiveAuditAbstentionCode
+
+
+def _validate_link_mapping_shape(mapping: object) -> None:
+    if type(mapping) is not tuple or len(mapping) > MAX_JOURNAL_OPTIONS:
+        raise ValueError("link mapping is invalid")
+    audit_ids: set[str] = set()
+    decision_indexes: set[int] = set()
+    for item in mapping:
+        if type(item) is not ProspectiveOptionMappingV1:
+            raise ValueError("link mapping is invalid")
+        if item.audit_option_id in audit_ids or item.decision_option_index in decision_indexes:
+            raise ValueError("link mapping is not injective")
+        audit_ids.add(item.audit_option_id)
+        decision_indexes.add(item.decision_option_index)
+
+
+def _build_link_envelope(
+    *,
+    generation_id: str,
+    sequence: int,
+    record: ProspectiveDecisionLinkV1 | ProspectiveDecisionLinkTombstoneV1,
+    previous_record_digest: AuditHashV1 | None,
+) -> ProspectiveLinkLogEnvelopeV1:
+    return ProspectiveLinkLogEnvelopeV1(
+        generation_id=generation_id,
+        sequence=sequence,
+        record=record,
+        previous_record_digest=previous_record_digest,
+        record_digest=compute_link_record_digest(
+            generation_id=generation_id,
+            sequence=sequence,
+            record=record,
+            previous_record_digest=previous_record_digest,
+        ),
+    )
+
+
+def _last_link_digest(
+    envelopes: tuple[ProspectiveLinkLogEnvelopeV1, ...],
+) -> AuditHashV1 | None:
+    return None if not envelopes else envelopes[-1].record_digest
+
+
+def _next_link_sequence(snapshot: _VerifiedSnapshot) -> int:
+    previous = snapshot.link_envelopes[-1].sequence if snapshot.link_envelopes else 0
+    sequence = max(snapshot.manifest.last_sequence, previous) + 1
+    if sequence > MAX_UINT64:
+        raise ProspectiveAuditStoreUnavailableError()
+    return sequence
+
+
+def _event_from_snapshot(
+    snapshot: _VerifiedSnapshot,
+    event_id: str,
+) -> AuditLogEnvelopeV1 | None:
+    return next(
+        (envelope for envelope in snapshot.envelopes if envelope.event.event_id == event_id),
+        None,
+    )
+
+
+def _current_links_for_event(
+    envelopes: tuple[ProspectiveLinkLogEnvelopeV1, ...],
+    event_id: str,
+) -> tuple[ProspectiveDecisionLinkV1 | None, bool]:
+    active: ProspectiveDecisionLinkV1 | None = None
+    tombstoned = False
+    for envelope in envelopes:
+        if envelope.link is not None and envelope.link.audit_event_id == event_id:
+            active = envelope.link
+            tombstoned = False
+        elif envelope.tombstone is not None and envelope.tombstone.audit_event_id == event_id:
+            active = None
+            tombstoned = True
+    return active, tombstoned
+
+
+def _same_link_intent(
+    link: ProspectiveDecisionLinkV1,
+    *,
+    audit_event_id: str,
+    decision_id: str,
+    decision_record_fingerprint: AuditHashV1,
+    actual_chosen_option_index: int,
+    mapping: tuple[ProspectiveOptionMappingV1, ...],
+) -> bool:
+    return (
+        link.audit_event_id == audit_event_id
+        and link.decision_id == decision_id
+        and link.decision_record_fingerprint == decision_record_fingerprint
+        and link.actual_chosen_option_index == actual_chosen_option_index
+        and link.mapping == mapping
+        and link.mapping_basis == LINK_MAPPING_BASIS
+    )
+
+
+def _validate_link_temporal_order(
+    audit_created_at: datetime,
+    decision_evidence_at: datetime,
+    decision_created: datetime,
+    linked_at: datetime,
+) -> None:
+    try:
+        audit_time = _as_utc_for_link(audit_created_at)
+        evidence_time = _as_utc_for_link(decision_evidence_at)
+        created_time = _as_utc_for_link(decision_created)
+        linked_time = _as_utc_for_link(linked_at)
+    except ValueError as exc:
+        raise ProspectiveAuditLinkInvalidError(
+            ProspectiveAuditLinkReasonCode.DECISION_TIME_INVALID
+        ) from exc
+    if not audit_time < evidence_time:
+        raise ProspectiveAuditLinkInvalidError(
+            ProspectiveAuditLinkReasonCode.DECISION_PRECEDES_PREDICTION
+        )
+    if not audit_time < created_time:
+        raise ProspectiveAuditLinkInvalidError(
+            ProspectiveAuditLinkReasonCode.DECISION_NOTE_CREATED_BEFORE_PREDICTION
+        )
+    if evidence_time > linked_time or created_time > linked_time:
+        raise ProspectiveAuditLinkInvalidError(ProspectiveAuditLinkReasonCode.DECISION_TIME_INVALID)
+
+
+def _as_utc_for_link(value: object) -> datetime:
+    if type(value) is not datetime or value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("link timestamp must be aware")
+    _canonical_datetime(value)
+    return value.astimezone(UTC)
 
 
 def _same_operation_content(left: ProspectiveAuditEventV1, right: ProspectiveAuditEventV1) -> bool:
@@ -1527,6 +2948,85 @@ def _envelope_from_dict(data: object) -> AuditLogEnvelopeV1:
         generation_id=data["generation_id"],
         sequence=data["sequence"],
         event=event,
+        previous_record_digest=data["previous_record_digest"],
+        record_digest=data["record_digest"],
+    )
+
+
+def _link_envelope_from_dict(data: object) -> ProspectiveLinkLogEnvelopeV1:
+    if type(data) is not dict or set(data) != {
+        "generation_id",
+        "sequence",
+        "record_type",
+        "record",
+        "previous_record_digest",
+        "record_digest",
+    }:
+        raise ValueError("link envelope shape")
+    record_type = data["record_type"]
+    record_data = data["record"]
+    if record_type == LINK_RECORD_TYPE:
+        if type(record_data) is not dict or set(record_data) != {
+            "version",
+            "link_id",
+            "audit_event_id",
+            "decision_id",
+            "linked_at",
+            "decision_record_fingerprint",
+            "actual_chosen_option_index",
+            "mapping",
+            "mapping_basis",
+        }:
+            raise ValueError("link shape")
+        mapping_data = record_data["mapping"]
+        if type(mapping_data) is not list:
+            raise ValueError("link mapping shape")
+        mapping: list[ProspectiveOptionMappingV1] = []
+        for item in mapping_data:
+            if type(item) is not dict or set(item) != {
+                "audit_option_id",
+                "decision_option_index",
+                "decision_option_fingerprint",
+            }:
+                raise ValueError("link mapping item shape")
+            mapping.append(ProspectiveOptionMappingV1(**item))
+        record: ProspectiveDecisionLinkV1 | ProspectiveDecisionLinkTombstoneV1 = (
+            ProspectiveDecisionLinkV1(
+                version=record_data["version"],
+                link_id=record_data["link_id"],
+                audit_event_id=record_data["audit_event_id"],
+                decision_id=record_data["decision_id"],
+                linked_at=_parse_canonical_datetime(record_data["linked_at"]),
+                decision_record_fingerprint=record_data["decision_record_fingerprint"],
+                actual_chosen_option_index=record_data["actual_chosen_option_index"],
+                mapping=tuple(mapping),
+                mapping_basis=record_data["mapping_basis"],
+            )
+        )
+    elif record_type == LINK_TOMBSTONE_RECORD_TYPE:
+        if type(record_data) is not dict or set(record_data) != {
+            "version",
+            "tombstone_id",
+            "audit_event_id",
+            "supersedes_link_id",
+            "tombstoned_at",
+            "reason",
+        }:
+            raise ValueError("tombstone shape")
+        record = ProspectiveDecisionLinkTombstoneV1(
+            version=record_data["version"],
+            tombstone_id=record_data["tombstone_id"],
+            audit_event_id=record_data["audit_event_id"],
+            supersedes_link_id=record_data["supersedes_link_id"],
+            tombstoned_at=_parse_canonical_datetime(record_data["tombstoned_at"]),
+            reason=ProspectiveDecisionLinkTombstoneReasonV1(record_data["reason"]),
+        )
+    else:
+        raise ValueError("unknown link record type")
+    return ProspectiveLinkLogEnvelopeV1(
+        generation_id=data["generation_id"],
+        sequence=data["sequence"],
+        record=record,
         previous_record_digest=data["previous_record_digest"],
         record_digest=data["record_digest"],
     )
@@ -1626,8 +3126,14 @@ __all__ = [
     "EVENT_TYPE",
     "EVENT_VERSION",
     "LINKS_FILE_NAME",
+    "LINK_MAPPING_BASIS",
+    "LINK_RECORD_TYPE",
+    "LINK_TOMBSTONE_RECORD_TYPE",
     "MANIFEST_FILE_NAME",
+    "MAX_JOURNAL_OPTIONS",
+    "MAX_JOURNAL_OPTION_BYTES",
     "MAX_LABEL_BYTES",
+    "MAX_LINK_BYTES",
     "MAX_OPERATION_ID_BYTES",
     "MAX_OPTIONS",
     "MAX_QUERY_BYTES",
@@ -1647,11 +3153,15 @@ __all__ = [
     "STORE_FORMAT_VERSION",
     "AuditGenerationV1",
     "AuditHashV1",
+    "AuditLinkLogEnvelopeV1",
     "AuditLogEnvelopeV1",
     "AuditStore",
     "AuditStoreManifestV1",
     "BuildProspectiveAudit",
     "BuildProspectiveAuditV1",
+    "BuildProspectiveDecisionLink",
+    "BuildProspectiveDecisionLinkV1",
+    "DecisionJournalTargetV1",
     "ProspectiveAuditAbstentionCode",
     "ProspectiveAuditAbstentionCodeV1",
     "ProspectiveAuditCancelledError",
@@ -1663,6 +3173,11 @@ __all__ = [
     "ProspectiveAuditEventV1",
     "ProspectiveAuditIdempotencyConflictError",
     "ProspectiveAuditInvalidRequestError",
+    "ProspectiveAuditLinkConflictError",
+    "ProspectiveAuditLinkError",
+    "ProspectiveAuditLinkInvalidError",
+    "ProspectiveAuditLinkReasonCode",
+    "ProspectiveAuditLinkUnavailableError",
     "ProspectiveAuditOption",
     "ProspectiveAuditOptionV1",
     "ProspectiveAuditRequest",
@@ -1679,12 +3194,30 @@ __all__ = [
     "ProspectiveAuditStoreCorruptError",
     "ProspectiveAuditStoreUnavailableError",
     "ProspectiveAuditStoreV1",
+    "ProspectiveDecisionLink",
+    "ProspectiveDecisionLinkEnvelopeV1",
+    "ProspectiveDecisionLinkState",
+    "ProspectiveDecisionLinkStateV1",
+    "ProspectiveDecisionLinkTombstoneReasonV1",
+    "ProspectiveDecisionLinkTombstoneV1",
+    "ProspectiveDecisionLinkV1",
+    "ProspectiveDecisionLinkVerification",
+    "ProspectiveDecisionLinkVerificationV1",
+    "ProspectiveDecisionLinker",
+    "ProspectiveLinkLogEnvelopeV1",
+    "ProspectiveOptionMapping",
+    "ProspectiveOptionMappingV1",
     "build_audit_event",
     "build_prospective_audit_event",
     "canonical_audit_json_bytes",
     "canonical_json",
     "canonical_json_bytes",
+    "compute_link_record_digest",
     "compute_record_digest",
+    "fingerprint_decision_journal_option",
+    "fingerprint_decision_journal_record",
+    "fingerprint_decision_option",
+    "fingerprint_decision_record",
     "fingerprint_json",
     "fingerprint_operation_id",
     "fingerprint_option_label",
@@ -1693,6 +3226,7 @@ __all__ = [
     "fingerprint_source_refs",
     "fingerprint_text",
     "normalize_operation_id",
+    "resolve_current_decision_journal",
     "serialize_audit_envelope",
     "serialize_prospective_audit_event",
     "validate_audit_hash",
