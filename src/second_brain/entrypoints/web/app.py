@@ -8,6 +8,18 @@ from typing import Any
 from fastapi import FastAPI
 
 from second_brain.entrypoints.web import legacy_app as _legacy_app
+from second_brain.entrypoints.web.active_personal_learning import (
+    ACTIVE_LEARNING_QUESTIONS_PATH,
+    ACTIVE_LEARNING_REQUEST_HEADER_NAME,
+    ACTIVE_LEARNING_REQUEST_HEADER_VALUE,
+    MAX_RAW_ACTIVE_LEARNING_BODY_BYTES,
+    ActiveLearningOptionPayload,
+    ActiveLearningQuestionsRequestPayload,
+    ActiveLearningRequestBoundaryMiddleware,
+    ActiveLearningWebService,
+    LazyVaultActiveLearningService,
+    install_active_learning_routes,
+)
 from second_brain.entrypoints.web.assistant_compare import (
     ASSISTANT_REQUEST_HEADER_NAME,
     ASSISTANT_REQUEST_HEADER_VALUE,
@@ -100,8 +112,9 @@ def _sync_legacy_patchable_seams() -> None:
 
 
 def create_app(**kwargs: Any) -> FastAPI:
-    """Build the current app and add the explicit-input Stage 7 routes."""
+    """Build the current app and add the explicit-input Stage 7/8 routes."""
 
+    active_learning_service = kwargs.pop("active_learning_service", None)
     assistant_service = kwargs.pop("assistant_web_service", None)
     compare_service = kwargs.pop("compare_web_service", None)
     retrospective_calibration_service = kwargs.pop("retrospective_calibration_service", None)
@@ -129,6 +142,12 @@ def create_app(**kwargs: Any) -> FastAPI:
         env_file=env_file,
         vault_path_override=vault_path_override,
     )
+    install_active_learning_routes(
+        app,
+        service=active_learning_service,
+        env_file=env_file,
+        vault_path_override=vault_path_override,
+    )
     install_web_auth(
         app,
         config=auth_config,
@@ -151,6 +170,15 @@ __all__ = [
     "REACT_PWA_OFFLINE_STYLES_FILE",
     "REACT_PWA_ICONS_DIR",
     "run_in_threadpool",
+    "ACTIVE_LEARNING_QUESTIONS_PATH",
+    "ACTIVE_LEARNING_REQUEST_HEADER_NAME",
+    "ACTIVE_LEARNING_REQUEST_HEADER_VALUE",
+    "MAX_RAW_ACTIVE_LEARNING_BODY_BYTES",
+    "ActiveLearningOptionPayload",
+    "ActiveLearningQuestionsRequestPayload",
+    "ActiveLearningRequestBoundaryMiddleware",
+    "ActiveLearningWebService",
+    "LazyVaultActiveLearningService",
     "DIAGNOSTICS_REQUEST_HEADER_NAME",
     "DIAGNOSTICS_REQUEST_HEADER_VALUE",
     "MAX_RAW_DIAGNOSTICS_BODY_BYTES",

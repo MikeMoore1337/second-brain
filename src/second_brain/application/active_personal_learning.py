@@ -538,6 +538,22 @@ def serialize_question_candidate(candidate: object) -> bytes:
     return _serialize_candidate(validate_question_candidate(candidate))
 
 
+def serialize_active_learning_result(result: object) -> bytes:
+    """Return the exact bounded candidate/no-candidate JSON envelope."""
+
+    validated = validate_active_learning_result(result)
+    payload = {
+        "candidate": (
+            None if validated.candidate is None else _candidate_payload(validated.candidate)
+        ),
+        "no_candidate_code": (
+            None if validated.no_candidate_code is None else validated.no_candidate_code.value
+        ),
+        "status": validated.status.value,
+    }
+    return _canonical_json(payload)
+
+
 def validate_active_learning_result(result: object) -> ActiveLearningResultV1:
     """Validate the exact candidate/no-candidate envelope."""
 
@@ -1039,8 +1055,12 @@ def _canonical_json(payload: object) -> bytes:
 
 
 def _serialize_candidate(candidate: QuestionCandidateV1) -> bytes:
+    return _canonical_json(_candidate_payload(candidate))
+
+
+def _candidate_payload(candidate: QuestionCandidateV1) -> dict[str, object]:
     _validate_candidate_fields(candidate)
-    payload = {
+    payload: dict[str, object] = {
         "basis_fingerprint": candidate.basis_fingerprint,
         "candidate_id": candidate.candidate_id,
         "contract_version": candidate.contract_version,
@@ -1057,7 +1077,7 @@ def _serialize_candidate(candidate: QuestionCandidateV1) -> bytes:
         "source_policy_id": candidate.source_policy_id,
         "task": candidate.task,
     }
-    return _canonical_json(payload)
+    return payload
 
 
 def _validate_candidate_fields(candidate: object) -> None:

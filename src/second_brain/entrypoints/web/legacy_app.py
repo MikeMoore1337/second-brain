@@ -175,6 +175,7 @@ _TIMELINE_PATHS: Final[frozenset[str]] = frozenset({"/api/timeline"})
 _SELF_MODEL_PATHS: Final[frozenset[str]] = frozenset({"/api/self-model"})
 _SELF_RETRIEVAL_PATHS: Final[frozenset[str]] = frozenset({"/api/self-retrieval"})
 _SIMULATE_ME_PATHS: Final[frozenset[str]] = frozenset({"/api/simulate-me"})
+_ACTIVE_LEARNING_PATHS: Final[frozenset[str]] = frozenset({"/api/active-learning/questions"})
 _DIAGNOSTICS_PATHS: Final[frozenset[str]] = frozenset({"/api/diagnostics"})
 _DECISION_JOURNAL_PATHS: Final[frozenset[str]] = frozenset(
     {
@@ -669,6 +670,8 @@ _ERRORS: Final[dict[str, tuple[int, str]]] = {
     "SIMULATE_ME_CONTENT_TOO_LARGE": (413, "Запрос прогноза слишком велик"),
     "SIMULATE_ME_VAULT_UNAVAILABLE": (503, "Хранилище прогноза недоступно"),
     "SIMULATE_ME_RESULT_INVALID": (500, "Результат прогноза не прошёл проверку"),
+    "ACTIVE_LEARNING_INVALID_REQUEST": (400, "Запрос уточнения модели не прошёл проверку"),
+    "ACTIVE_LEARNING_CONTENT_TOO_LARGE": (413, "Запрос уточнения модели слишком велик"),
     "DIAGNOSTICS_INVALID_REQUEST": (400, "Запрос диагностики не прошёл проверку"),
     "DIAGNOSTICS_CONTENT_TOO_LARGE": (413, "Запрос диагностики слишком велик"),
     "DIAGNOSTICS_UNAVAILABLE": (503, "Диагностика рабочего пространства недоступна"),
@@ -1310,7 +1313,12 @@ async def _send_boundary_error(
 ) -> None:
     """Отправить safe JSON boundary error без чтения request body."""
 
-    await _error_response(code)(scope, receive, send)
+    response = _error_response(code)
+    response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    await response(scope, receive, send)
 
 
 def _single_header(scope: Scope, name: str) -> tuple[bool, str | None]:
@@ -1479,6 +1487,8 @@ def _invalid_request_code(path: str) -> str:
 
     if path in _SIMULATE_ME_PATHS:
         return "SIMULATE_ME_INVALID_REQUEST"
+    if path in _ACTIVE_LEARNING_PATHS:
+        return "ACTIVE_LEARNING_INVALID_REQUEST"
     if path in _DIAGNOSTICS_PATHS:
         return "DIAGNOSTICS_INVALID_REQUEST"
     if path in _SELF_RETRIEVAL_PATHS:
@@ -1509,6 +1519,8 @@ def _content_too_large_code(path: str) -> str:
 
     if path in _SIMULATE_ME_PATHS:
         return "SIMULATE_ME_CONTENT_TOO_LARGE"
+    if path in _ACTIVE_LEARNING_PATHS:
+        return "ACTIVE_LEARNING_CONTENT_TOO_LARGE"
     if path in _DIAGNOSTICS_PATHS:
         return "DIAGNOSTICS_CONTENT_TOO_LARGE"
     if path in _SELF_RETRIEVAL_PATHS:
@@ -1686,6 +1698,7 @@ def create_app(
                 "/api/self-model",
                 "/api/self-retrieval",
                 "/api/simulate-me",
+                "/api/active-learning/",
                 "/api/diagnostics",
             )
         ):
