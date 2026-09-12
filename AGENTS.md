@@ -163,7 +163,8 @@ criteria, тестов безопасности или проверки непо
 - `review-agent` - провести daily/weekly/monthly review.
 
 Используйте workflow только когда задача совпадает с его назначением. Для
-обычной разработки отдельный агент не нужен.
+обычной разработки отдельный агент не нужен. Этот `review-agent` относится к
+review пользовательского знания, а не к PR/Code Review delivery gate.
 
 ### Приоритет инструкций
 
@@ -183,12 +184,27 @@ Bounded repository protocol для явно активированного overn
 [`docs/automation/night-shift-v1.md`](docs/automation/night-shift-v1.md), а его
 машиночитаемая policy находится в `config/night-shift-v1.yaml`.
 
-Постоянное owner-level решение: Codex Code Review отключён и не используется
-как release gate, поскольку расходует Codex usage. Готовность определяется
-детерминированными тестами, static analysis, exact-head CI, обязательным
-aggregate GitHub status `checks`, отсутствием известных unresolved BLOCKER/HIGH,
-mergeability PR и явно требуемыми human/external gates. Отдельный Codex
-reviewer или LLM verdict для merge не создаётся.
+Codex Code Review разрешён только как bounded финальный semantic gate после
+GREEN exact-head CI. На один PR приходится round 1 и максимум один re-review
+round 2 после подтверждённых blocking `P0/P1`, исправленных одним batch на
+новом head. CLEAN round 1 не запускает повторный review; blocking round 2 даёт
+`HUMAN_REQUIRED`. Pending/completed review текущего SHA переиспользуется.
+MEDIUM/LOW/NIT не запускают re-review. До commit implementer выполняет один
+bounded self-review. Отдельный reviewer subagent, adversarial audit или второй
+LLM verdict не создаётся.
+
+Implementation независимых tasks выполняется параллельно в отдельных
+worktree. Repository-wide `exclusive-write` для обычной implementation
+запрещён; допускаются только task/worktree/finalization/production-scoped
+locks. Единственная repository-scoped serialization — finalization: refresh
+base, conflict resolution, affected verification, final push, exact-head CI,
+Codex Review, merge и release closeout.
+
+Текущие required ruleset checks: `quality`, `windows-ssl-regression`,
+`frontend (ubuntu-latest)` и `frontend (windows-latest)`. Aggregate `checks` не
+является required context текущего ruleset. Готовность определяется этими
+exact-head checks, bounded review gate, отсутствием известных unresolved
+BLOCKER/HIGH, mergeability PR и явно требуемыми human/external gates.
 
 - `enabled_by_default: false`: обычная задача не получает autonomous commit,
   push, PR или merge права из-за наличия policy;
@@ -198,6 +214,7 @@ reviewer или LLM verdict для merge не создаётся.
 - Night Shift не ослабляет Safe Write, privacy, Python 3.14 и границу
   `second-brain-vault`;
 - этот protocol не добавляет agent runtime, daemon, queue, DB или provider.
+- read-only diagnostics не требуют implementation write lease;
 - после verified GREEN merge применяется bounded Git-only post-task cleanup из
   [`scripts/worktree_cleanup.py`](scripts/worktree_cleanup.py); его receipt,
   safety rules и `cleanup_deferred` описаны в

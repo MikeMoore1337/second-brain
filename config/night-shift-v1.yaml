@@ -1,5 +1,5 @@
 policy_version: night-shift-v1
-schema_version: 2
+schema_version: 3
 enabled_by_default: false
 morning_cutoff_local: "08:00"
 timezone: Europe/Moscow
@@ -70,12 +70,48 @@ task_selection:
   allow_roadmap_next_task: false
   allow_create_next_issue: false
 
+implementation:
+  parallel_independent_tasks: true
+  worktree_ownership: task_scoped
+  repository_wide_exclusive_write: false
+  diagnostics_require_write_lease: false
+  scoped_locks:
+    - worktree
+    - task_state
+    - finalization
+    - production_deployment
+
+finalization:
+  serialized: true
+  scope: repository
+  phases:
+    - refresh_base
+    - resolve_conflicts
+    - affected_verification
+    - final_push
+    - exact_head_ci
+    - codex_review
+    - merge
+    - release_closeout
+
+codex_review:
+  enabled: true
+  automatic_lifecycle: false
+  max_requests_per_pr: 2
+  max_self_reviews: 1
+  first_round_requires_exact_head_ci_green: true
+  second_round_requires_blocking_p0_p1: true
+  second_round_requires_changed_head: true
+  duplicate_same_sha: reuse_existing
+  blocking_after_round_2: human_required
+
 merge_gate:
   required_checks:
     - quality
     - windows-ssl-regression
-  required_statuses:
-    - checks
+    - frontend (ubuntu-latest)
+    - frontend (windows-latest)
+  required_statuses: []
   method: squash
 
 post_task_cleanup:
