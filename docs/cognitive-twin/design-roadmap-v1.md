@@ -23,6 +23,13 @@ Retrospective Calibration v1 остаётся отдельным current-vault �
 pre-choice-only contract; provider-free bounded core реализован в issue #175,
 а user-facing Web/API/CLI и persistence остаются future gates.
 
+По текущему status после merged Stage 8 QA Cognitive Twin v1 / Stages 1–8
+завершены и находятся в production. Stage 9 — это следующий уровень
+**Cognitive Twin v2**; его prospective audit/calibration contract фиксируется
+отдельно в [prospective-audit-calibration-v1-contract.md](prospective-audit-calibration-v1-contract.md).
+В текущем `main` Stage 9 остаётся **DESIGN CONTRACT**, а runtime Stage 9,
+audit persistence, linkage и prospective calibration **NOT IMPLEMENTED**.
+
 Точный status snapshot перед #175 implementation — canonical `main`:
 `a461b0b08d4e396561a869d7348700d5d86934bc`.
 
@@ -925,7 +932,7 @@ context и derived explanation divergence.
 | Derived Self Model storage | На старте rebuild-on-demand | Cache только disposable и versioned | Persistent state может стать скрытым source of truth | Durable model DB |
 | Embeddings | Возможны только после измеренной lexical gap | Сначала текущий Search/Retrieval | Privacy, deletion и stale vectors | Provider/vector DB/RAG |
 
-## 20. Revised 8-stage roadmap
+## 20. Revised roadmap: Cognitive Twin v1 Stages 1–8 + Stage 9 v2
 
 Последовательность сохраняется: каждая стадия зависит от canonical semantics
 предыдущей. Перестановка не нужна.
@@ -1137,7 +1144,7 @@ context и derived explanation divergence.
 
 ### Stage 8 — Active Personal Learning v1
 
-- **Статус:** DESIGN / CONTRACT ONLY; нормативный [Active Personal Learning v1 contract](active-personal-learning-v1-contract.md) зафиксирован в #223. Runtime Stage 8 не реализован.
+- **Статус:** **COMPLETE**; нормативный [Active Personal Learning v1 contract](active-personal-learning-v1-contract.md) зафиксирован в #223, provider-free core, Web/API surface и Stage 8 integration QA merged в current `main` и находятся в production.
 - **Цель:** optional questions only where evidence is weak, conflicting or
   missing.
 - **Входные зависимости:** Stage 4 confidence/conflict, Stage 5 retrieval,
@@ -1155,6 +1162,27 @@ context и derived explanation divergence.
   diagnosis, silent consent and automatic answer-to-fact conversion.
 - **Acceptance boundary:** user can ignore/reject a question; only reviewed
   answer can become canonical evidence.
+
+### Stage 9 — Cognitive Twin v2: Prospective Operation Audit & Calibration v1
+
+- **Статус:** **DESIGN CONTRACT**; normative boundary зафиксирована в
+  [prospective-audit-calibration-v1-contract.md](prospective-audit-calibration-v1-contract.md)
+  для Issue #236. Runtime Stage 9 — **NOT IMPLEMENTED**.
+- **Цель:** зафиксировать validated Simulate Me prediction/abstention до
+  решения, durable policy-governed operational audit state, позже explicit
+  reviewed Decision Journal linkage и deterministic prospective calibration.
+- **Canonical boundary:** audit record является canonical operational/audit
+  state вне `second-brain-vault`; он не является Personal Memory, Decision
+  Journal, Outcome Observation, Self Model evidence или user fact.
+- **Scope v1:** только explicit foreground Simulate Me terminal operations;
+  Assistant, Search, Retrieval, Active Learning, generic telemetry и provider
+  calls не аудируются.
+- **Implementation sequence:** future Stage 9A audit store/core, 9B explicit
+  reviewed linkage, 9C prospective aggregate и 9D Web/API + integration QA.
+  Эти implementation tasks не начинаются и новые Issues в #236 не создаются.
+- **Explicit out-of-scope:** runtime writer/storage, API/Web, Journal schema
+  change, automatic linkage, confidence/probability, ML/tuning, providers,
+  dependencies, production changes и `second-brain-vault` changes.
 
 # COMPLETED IMPLEMENTATION SCOPE (HISTORICAL):
 
@@ -1344,7 +1372,7 @@ write-back, schema bump, new dependencies, new note type, domain registry,
 psychological profiling, live smoke, production deployment, issue creation и
 любые изменения `second-brain-vault`.
 
-## Current implementation status after Stage 6
+## Current implementation status after Stage 6 (historical snapshot)
 
 Stage 1–3 core, Stage 4 Self Model core/Web projection и Stage 5
 Self Retrieval core/Web/CLI (#89/#90/#91) находятся в current `main`.
@@ -1363,3 +1391,11 @@ prospective calibration не входят в этот slice. `HUMAN_REQUIRED: no
 относится только к capability-boundary; новые provider/privacy/schema решения
 отложены на отдельные future gates. Этот status sync не объявляет Stage 8
 runtime scope, не создаёт Stage 8 item и не меняет product semantics.
+
+## Current status before Stage 9
+
+Cognitive Twin v1 / Stages 1–8 are **COMPLETE** in current `main` and
+production. Stage 9 is **Cognitive Twin v2 / DESIGN CONTRACT** from Issue
+#236. Stage 9 runtime, operational audit persistence, explicit
+prediction-to-decision linkage, prospective calibration aggregate and future
+Web/API remain **NOT IMPLEMENTED** until their separate implementation gates.
