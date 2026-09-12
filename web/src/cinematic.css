@@ -41,12 +41,8 @@ button,input,textarea,select { font-family:var(--sb-font-sans); }
 /* Scene layers are independent of working content, never a knowledge graph. */
 .cinematic-hero { position:relative; isolation:isolate; min-height:780px; overflow:clip; margin-bottom:48px; background:transparent; }
 .universe-parallax { position:absolute; inset:0; z-index:-1; pointer-events:none; }
-.memory-depth { position:absolute;inset:0;background:radial-gradient(ellipse at 76% 65%,#43226426,transparent 45%); }
-.universe-light { position:absolute; inset:0; background:linear-gradient(90deg,var(--sb-color-void) 0%,transparent 58%),linear-gradient(0deg,var(--sb-color-void),transparent 20%); }
 .memory-stage { position:absolute; width:700px; height:700px; right:1%; top:0; perspective:900px; }
 .memory-stage [data-depth] { position:absolute; inset:0; transition:transform 350ms var(--sb-ease-out); }
-.stage-haze { z-index:0; }
-.haze-breath { position:absolute; inset:4%; border-radius:50%; background:radial-gradient(ellipse,#6d28d93b,transparent 67%); animation:haze-breathe 13s ease-in-out infinite alternate; }
 .stage-brain { z-index:2; }
 .brain-assembly { position:absolute; width:76%; left:12%; top:13%; aspect-ratio:1; animation:brain-arrive 800ms var(--sb-ease-out) both; }
 .memory-brain { display:block; width:100%; height:100%; object-fit:contain; }
@@ -70,10 +66,6 @@ button,input,textarea,select { font-family:var(--sb-font-sans); }
 .fragment-label { font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:#c49aff; }
 .fragment-thought { font-size:18px; font-weight:450; line-height:1.35; letter-spacing:-.03em; }
 .fragment-rule { display:block; width:80%; height:1px; background:linear-gradient(90deg,#c49aff80,transparent); }
-.stage-particles { z-index:1; }
-.light-particle { position:absolute; display:block; width:3px; height:3px; border-radius:50%; background:#e9d5ff; box-shadow:0 0 10px #8b5cf6; animation:particle-drift 9s ease-in-out infinite alternate; }
-.particle-0 { left:8%;top:48%; }.particle-1 { left:32%;top:4%;animation-delay:-3s; }.particle-2 { left:86%;top:17%;animation-delay:-5s; }.particle-3 { left:90%;top:65%;animation-delay:-1s; }.particle-4 { left:70%;top:90%;animation-delay:-7s; }.particle-5 { left:40%;top:84%;animation-delay:-2s; }.particle-6 { left:5%;top:73%;animation-delay:-4s; }.particle-7 { left:57%;top:8%;animation-delay:-6s; }.particle-8 { left:21%;top:60%;animation-delay:-8s; }.particle-9 { left:93%;top:45%;animation-delay:-2s; }.particle-10 { left:72%;top:72%;animation-delay:-4s; }.particle-11 { left:47%;top:40%;animation-delay:-1s; }
-.pointer-light { z-index:5; background:radial-gradient(ellipse at 65% 35%,#c49aff14,transparent 38%); }
 .cinematic-hero .universe-parallax * { animation-play-state:paused; }
 .cinematic-hero[data-moving="true"] .universe-parallax * { animation-play-state:running; }
 .universe-copy { position:relative; z-index:6; padding:110px 0 140px 60px; width:52%; }
@@ -96,12 +88,10 @@ button,input,textarea,select { font-family:var(--sb-font-sans); }
 :is(a,button,input,textarea,select,summary):focus-visible { outline:2px solid var(--sb-color-violet-signal); outline-offset:4px; }
 .universe-primary:active,.scene-toggle:active { transform:scale(.97); }
 @keyframes universe-enter { from { opacity:.85; transform:translateY(12px); } to { opacity:1; transform:none; } }
-@keyframes haze-breathe { from { opacity:.55; transform:scale(.9) rotate(-10deg); } to { opacity:.9; transform:scale(1.08) rotate(10deg); } }
 @keyframes brain-arrive { from { opacity:.5; transform:translateY(8px); } to { opacity:1; transform:none; } }
 @keyframes thought-awaken { from { opacity:.12; } to { opacity:.6; } }
 @keyframes thought-travel { 0% { stroke-dashoffset:110;opacity:0; } 15%,75% { opacity:.75; } 100% { stroke-dashoffset:-110;opacity:0; } }
 @keyframes thought-float { from { translate:0 -5px; } to { translate:0 8px; } }
-@keyframes particle-drift { from { opacity:.25; transform:translateY(0); } to { opacity:.8; transform:translateY(-20px); } }
 
 /* Quiet reading planes; light responds to input, never runs under paragraphs. */
 main > section:not(.cinematic-hero) { position:relative; isolation:isolate; max-width:1120px; margin:48px auto; padding:40px; border:1px solid var(--sb-color-line); border-radius:20px; background:linear-gradient(145deg,#26153866,transparent 48%),var(--sb-color-ink); box-shadow:0 18px 60px #0003; scroll-margin-top:32px; }
@@ -160,7 +150,6 @@ main > section.context-enter::after { display:block; content:""; position:absolu
   .universe-copy { width:100%; padding-top:56px; padding-bottom:620px; }
   .universe-copy h1 { font-size:96px; }
   .memory-stage { width:580px; height:580px; left:50%; right:auto; top:510px; margin-left:-290px; }
-  .universe-light { background:linear-gradient(180deg,var(--sb-color-void) 22%,transparent 65%,var(--sb-color-void) 100%); }
   .universe-promise { display:none; }
 }
 @media(max-width:600px) {
@@ -190,8 +179,8 @@ main > section.context-enter::after { display:block; content:""; position:absolu
   .fragment-label { font-size:9px; }
   .fragment-one { left:18%;top:16%; }
   .fragment-two { right:15%;top:57%;width:140px; font-size:12px; }
-  .fragment-three,.fragment-four,.thought-link-2,.thought-link-3,.particle-6,.particle-7,.particle-8,.particle-9,.particle-10,.particle-11,.pointer-light { display:none; }
-  .haze-breath,.brain-region-back { animation:none; }
+  .fragment-three,.fragment-four,.thought-link-2,.thought-link-3 { display:none; }
+  .brain-region-back { animation:none; }
   .universe-caption { left:24px; right:24px; bottom:12px; flex-wrap:wrap; gap:8px; }
   .universe-caption > span { font-size:12px; }
   .scene-toggle { font-size:11px; }
