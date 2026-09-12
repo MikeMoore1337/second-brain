@@ -55,6 +55,13 @@ from second_brain.entrypoints.web.legacy_app import (
 from second_brain.entrypoints.web.legacy_app import (
     create_app as _legacy_create_app,
 )
+from second_brain.entrypoints.web.prospective_audit import (
+    MAX_RAW_PROSPECTIVE_AUDIT_BODY_BYTES,
+    PROSPECTIVE_AUDIT_REQUEST_HEADER_NAME,
+    PROSPECTIVE_AUDIT_REQUEST_HEADER_VALUE,
+    ProspectiveAuditWebService,
+    install_prospective_audit_routes,
+)
 from second_brain.entrypoints.web.retrospective_calibration import (
     MAX_RAW_RETROSPECTIVE_CALIBRATION_BODY_BYTES,
     RETROSPECTIVE_CALIBRATION_REQUEST_HEADER_NAME,
@@ -120,12 +127,13 @@ def _sync_legacy_patchable_seams() -> None:
 
 
 def create_app(**kwargs: Any) -> FastAPI:
-    """Build the current app and add the explicit-input Stage 7/8 routes."""
+    """Build the current app and add the explicit-input Stage 7/8/9 routes."""
 
     active_learning_service = kwargs.pop("active_learning_service", None)
     assistant_service = kwargs.pop("assistant_web_service", None)
     compare_service = kwargs.pop("compare_web_service", None)
     retrospective_calibration_service = kwargs.pop("retrospective_calibration_service", None)
+    prospective_audit_service = kwargs.pop("prospective_audit_service", None)
     auth_config = kwargs.pop("web_auth_config", None)
     auth_gateway = kwargs.pop("web_auth_gateway", None)
     auth_clock = kwargs.pop("web_auth_clock", None)
@@ -147,6 +155,12 @@ def create_app(**kwargs: Any) -> FastAPI:
     install_retrospective_calibration_routes(
         app,
         service=retrospective_calibration_service,
+        env_file=env_file,
+        vault_path_override=vault_path_override,
+    )
+    install_prospective_audit_routes(
+        app,
+        service=prospective_audit_service,
         env_file=env_file,
         vault_path_override=vault_path_override,
     )
@@ -210,6 +224,10 @@ __all__ = [
     "RETROSPECTIVE_CALIBRATION_REQUEST_HEADER_NAME",
     "RETROSPECTIVE_CALIBRATION_REQUEST_HEADER_VALUE",
     "RetrospectiveCalibrationWebService",
+    "MAX_RAW_PROSPECTIVE_AUDIT_BODY_BYTES",
+    "PROSPECTIVE_AUDIT_REQUEST_HEADER_NAME",
+    "PROSPECTIVE_AUDIT_REQUEST_HEADER_VALUE",
+    "ProspectiveAuditWebService",
     "WebAuthConfig",
     "create_app",
 ]

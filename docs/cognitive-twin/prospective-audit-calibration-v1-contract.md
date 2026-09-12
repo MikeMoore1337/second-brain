@@ -1,9 +1,10 @@
 # Prospective Operation Audit & Calibration v1 — Stage 9 Cognitive Twin v2
 
 Статус документа: **DESIGN / NORMATIVE CONTRACT ONLY**. Это deliverable
-Issue [#236](https://github.com/MikeMoore1337/second-brain/issues/236).
-Runtime Stage 9, audit persistence, API/Web, linking UI и prospective
-calibration этим документом не реализуются.
+Issue [#236](https://github.com/MikeMoore1337/second-brain/issues/236), а не
+runtime-модуль. Stage 9A/9B/9C и Stage 9D реализованы поверх этого контракта
+в staged implementation issues; этот документ фиксирует границы и не заменяет
+их код, focused tests, integration QA или production closeout.
 
 Контракт читается поверх current `main` и следующих merged boundaries:
 
@@ -903,9 +904,10 @@ question candidate -> ignore/reject/answer
 diagnostics для Stage 8 question policy, требует отдельного versioned design
 decision. Current Stage 8 runtime/API/UI semantics этим contract не меняются.
 
-## 19. Future Web/API boundary
+## 19. Web/API boundary implemented in Stage 9D
 
-Только boundary проектируется; implementation откладывается:
+Stage 9D реализует ограниченный owner-only boundary поверх существующих core
+слоёв. Доступны только следующие поверхности:
 
 1. **Read-only prospective calibration aggregate.** Owner-only API возвращает
    versioned counts/ratios, retention/generation/policy identity и safe error.
@@ -923,9 +925,11 @@ decision. Current Stage 8 runtime/API/UI semantics этим contract не мен
    (one event, link history или full generation), retention/delete receipt и
    no-store response. Reset не трогает vault.
 
-Никакие текущие `/api/simulate-me`, Stage 6 DTO, browser state или production
-route не меняются в Issue #236. API/Web implementation — Stage 9D после core
-gates.
+Никакие текущие `/api/simulate-me`, Stage 6 DTO или browser storage не
+подменены Stage 9D. Production deployment использует уже существующий
+явный `web.env`; новые env keys и systemd changes не вводятся. Audit history
+view и reset/delete control остаются отдельными future decisions и не входят
+в этот UI slice.
 
 ## 20. ACCEPT / CHANGE / RISK / DEFER
 
@@ -946,20 +950,21 @@ gates.
 | Calibration | **ACCEPT** | Exact counts, linkage/prediction coverage and non-abstained accuracy; visible integer denominators; no probabilistic score. |
 | Retrospective separation | **ACCEPT** | No shared universal accuracy; distinct policies, provenance and reports. |
 | Stage 8 separation | **ACCEPT** | Questions, ignores, rejects and answers are not hidden actuals or calibration outcomes. |
-| Roadmap status | **CHANGE** | Cognitive Twin v1 / Stages 1–8 are COMPLETE; Stage 9 is Cognitive Twin v2 and this issue is DESIGN CONTRACT only. Historical Stage 1–8 semantics are unchanged. |
+| Roadmap status | **CHANGE** | Cognitive Twin v1 / Stages 1–8 and Cognitive Twin v2 / Stage 9A–9D are COMPLETE; Issue #236 remains the normative design source and historical Stage 1–8 semantics are unchanged. |
 | Local clock / external action | **RISK** | Local timestamps and reviewed Journal can prove only the bounded system ordering; external real-world knowledge before capture is not observable. |
 | Corrupt filesystem / multi-host store | **RISK** | Fail closed; recovery and shared multi-host storage need explicit operational gate. |
-| Link UI/API, persistence runtime, metrics core | **DEFER** | Stage 9A–9D separate implementation/release gates; no runtime in #236. |
+| Link UI/API, persistence runtime, metrics core | **ACCEPT** | Stage 9A–9D are separate implementation/release gates and are complete; #236 remains contract-only. |
 | Additive Decision Journal field | **DEFER** | Not needed for v1 external link; any future schema field requires separate design/migration gate. |
 | Provider, ML, confidence, tuning, telemetry, export | **DEFER / FORBIDDEN HERE** | New owner-approved contracts only. |
 
 `HUMAN_REQUIRED: none` для зафиксированной contract-only границы. Риски не
 являются разрешением ослабить fail-closed behavior.
 
-## 21. Exact scope следующего implementation Issue: Stage 9A
+## 21. Historical implementation decomposition and completed status
 
-После отдельного merge этого design contract следующий issue должен быть
-ограничен **Stage 9A — prospective audit store/core**:
+Исторически после отдельного merge этого design contract следующий issue был
+ограничен **Stage 9A — prospective audit store/core**. Этот список сохраняет
+исходную decomposition и не открывает новую работу:
 
 - provider-free immutable `ProspectiveAuditEventV1`, strict validators и
   canonical fingerprint/serialization;
@@ -995,5 +1000,8 @@ Stage 9C  prospective calibration aggregate core
 Stage 9D  Web/API + integration QA/closeout
 ```
 
-Эти Issues в #236 не создаются. До отдельного implementation gate Stage 9
-runtime остаётся **NOT IMPLEMENTED**.
+Эта decomposition выполнена последовательно: Stage 9A store/core, Stage 9B
+explicit linkage, Stage 9C calibration и Stage 9D Web/API + integration QA.
+После closeout Issue #244 Stage 9 runtime считается **COMPLETE** в production;
+Stage 10+ и новые provider/ML/privacy/schema решения этим документом не
+запускаются.

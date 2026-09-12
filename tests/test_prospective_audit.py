@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -316,3 +317,41 @@ def test_operation_fingerprint_is_deterministic_and_raw_token_absent() -> None:
     assert b"operation-1" not in canonical_json_bytes(
         {"fingerprint": fingerprint_operation_id("operation-1")}
     )
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX mode and owner checks")
+def test_store_rejects_unsafe_existing_permissions_without_repair(tmp_path: Path) -> None:
+    root = tmp_path / "audit"
+    root.mkdir(mode=0o755)
+
+    with pytest.raises(ProspectiveAuditStoreUnavailableError):
+        ProspectiveAuditStore(root)
+
+    assert root.stat().st_mode & 0o777 == 0o755
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX mode and owner checks")
+def test_store_rejects_unsafe_existing_payload_without_repair(tmp_path: Path) -> None:
+    store = ProspectiveAuditStore(tmp_path / "audit")
+    store.events_path.chmod(0o640)
+
+    with pytest.raises(ProspectiveAuditStoreUnavailableError):
+        ProspectiveAuditStore(store.root)
+
+    assert store.events_path.stat().st_mode & 0o777 == 0o640
+
+
+def test_store_requires_existing_parent_and_exact_expected_owner_names(tmp_path: Path) -> None:
+    with pytest.raises(ProspectiveAuditStoreUnavailableError):
+        ProspectiveAuditStore(tmp_path / "missing" / "audit")
+
+    if os.name == "nt":
+        return
+    with pytest.raises(ProspectiveAuditStoreUnavailableError):
+        ProspectiveAuditStore(
+            tmp_path / "audit-with-owner-check",
+            expected_owner_group=(
+                "__second_brain_owner_missing__",
+                "__second_brain_group_missing__",
+            ),
+        )

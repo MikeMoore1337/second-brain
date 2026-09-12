@@ -6,6 +6,7 @@
   "scripts": {
     "qa:design": "node qa/redesign.mjs && node qa/surfaces.mjs && node qa/motion-input.mjs && node qa/login.mjs",
     "qa:login": "node qa/login.mjs",
+    "qa:prospective-audit": "node qa/prospective-audit.mjs",
     "qa:performance": "node qa/performance.mjs",
     "qa:pwa": "node qa/pwa.mjs",
     "qa:pwa:browser": "node qa/pwa-browser.mjs",

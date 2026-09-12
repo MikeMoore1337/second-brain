@@ -1387,7 +1387,6 @@ class _StoreLock(AbstractContextManager["_StoreLock"]):
         descriptor = os.open(self.path, flags, 0o600)
         self._file = os.fdopen(descriptor, "r+b", buffering=0)
         try:
-            os.chmod(self.path, 0o600)
             if os.name == "nt":
                 import msvcrt
 
@@ -1452,20 +1451,45 @@ class ProspectiveAuditStore:
         *,
         vault_root: Path | os.PathLike[str] | None = None,
         clock: Callable[[], datetime] | None = None,
+        expected_owner_group: tuple[str, str] | None = None,
     ) -> None:
         if not isinstance(root, os.PathLike):
             raise ProspectiveAuditStoreUnavailableError()
+        if expected_owner_group is not None and (
+            type(expected_owner_group) is not tuple
+            or len(expected_owner_group) != 2
+            or any(type(item) is not str or not item for item in expected_owner_group)
+        ):
+            raise ProspectiveAuditStoreUnavailableError()
         self.root = Path(root)
         self._clock = clock or (lambda: datetime.now(UTC))
+        self._expected_owner_group = expected_owner_group
         self._validate_root(vault_root)
         try:
-            self.root.mkdir(parents=True, exist_ok=True)
-            os.chmod(self.root, 0o700)
-        except OSError as exc:
+            if self.root.exists():
+                if self.root.is_symlink() or not self.root.is_dir():
+                    raise ValueError("store root is not an ordinary directory")
+            else:
+                parent = self.root.parent
+                if not parent.exists() or parent.is_symlink() or not parent.is_dir():
+                    raise ValueError("store parent is unavailable")
+                self.root.mkdir(mode=0o700)
+                if self.root.is_symlink() or not self.root.is_dir():
+                    raise ValueError("store root creation escaped")
+            # Existing unsafe payloads must stop the operation before the lock
+            # can create anything beside them.  No chmod/chown repair is
+            # allowed from application runtime.
+            self._assert_owner_only_unlocked(require_payload=False)
+        except (KeyError, OSError) as exc:
+            raise ProspectiveAuditStoreUnavailableError() from exc
+        except ValueError as exc:
             raise ProspectiveAuditStoreUnavailableError() from exc
         try:
             with _StoreLock(self.root / LOCK_FILE_NAME):
+                self._assert_owner_only_unlocked(require_payload=False)
                 self._initialize_unlocked()
+                self._assert_owner_only_unlocked(require_payload=True)
+                self._read_verified_unlocked()
         except ProspectiveAuditError:
             raise
         except (OSError, ValueError, UnicodeError, RecursionError) as exc:
@@ -1700,14 +1724,50 @@ class ProspectiveAuditStore:
             previous_sequence = envelope.sequence
         return tuple(records)
 
-    def _assert_owner_only_unlocked(self) -> None:
+    def _assert_owner_only_unlocked(self, *, require_payload: bool = True) -> None:
         if os.name == "nt":
             return
         try:
-            paths = (self.root, self.events_path, self.links_path, self.manifest_path)
-            if any(stat.S_IMODE(path.stat().st_mode) & 0o077 for path in paths):
-                raise ValueError("store permissions are too broad")
-        except OSError as exc:
+            payload_paths = (self.events_path, self.links_path, self.manifest_path)
+            paths = (
+                (self.root, 0o700, True),
+                (self.lock_path, 0o600, False),
+                *((path, 0o600, True) for path in payload_paths),
+            )
+            expected_ids: tuple[int, int] | None = None
+            if self._expected_owner_group is not None:
+                import grp
+                import pwd
+
+                owner_name, group_name = self._expected_owner_group
+                pwd_api = cast(Any, pwd)
+                grp_api = cast(Any, grp)
+                expected_ids = (
+                    pwd_api.getpwnam(owner_name).pw_uid,
+                    grp_api.getgrnam(group_name).gr_gid,
+                )
+            for path, expected_mode, required in paths:
+                if not os.path.lexists(path):
+                    if required:
+                        if path in payload_paths and not require_payload:
+                            continue
+                        raise FileNotFoundError(path)
+                    continue
+                if path.is_symlink():
+                    raise ValueError("store path is a symlink")
+                item_stat = path.stat()
+                if path == self.root:
+                    if not stat.S_ISDIR(item_stat.st_mode):
+                        raise ValueError("store root is not a directory")
+                elif not stat.S_ISREG(item_stat.st_mode):
+                    raise ValueError("store payload is not a regular file")
+                if stat.S_IMODE(item_stat.st_mode) != expected_mode:
+                    raise ValueError("store permissions are unsafe")
+                if expected_ids is not None and (
+                    item_stat.st_uid != expected_ids[0] or item_stat.st_gid != expected_ids[1]
+                ):
+                    raise ValueError("store owner or group is unsafe")
+        except (KeyError, OSError) as exc:
             raise ProspectiveAuditStoreUnavailableError() from exc
 
     def read_events(self) -> tuple[AuditLogEnvelopeV1, ...]:
@@ -2285,7 +2345,6 @@ class ProspectiveAuditStore:
             0o600,
         )
         try:
-            os.chmod(path, 0o600)
             view = memoryview(payload)
             while view:
                 written = os.write(descriptor, view)
