@@ -15,6 +15,7 @@ from second_brain.application.personal_memory import PersonalMemoryDraft
 from second_brain.application.research import SourceProvenance
 from second_brain.application.writes import CreateManagedNoteResult
 from second_brain.domain.models import EvidenceAtPrecision, EvidenceKind, SelfKind
+from second_brain.entrypoints.web.app import ACTIVE_LEARNING_ANSWER_REVIEW_PATH
 from second_brain.entrypoints.web.review import (
     ReviewTokenCodec,
     ReviewTokenError,
@@ -253,6 +254,42 @@ def test_personal_memory_save_uses_existing_safe_write_and_exact_diff(tmp_path: 
     assert "absolute" not in response.text.lower()
     assert "receipt" not in response.text.lower()
     assert str(vault) not in response.text
+
+
+def test_active_learning_answer_review_reuses_source_free_draft_token_without_write() -> None:
+    """An edited answer gets only the existing text review context until PM prepare/apply."""
+
+    answer = {
+        "title": "Мой выбор",
+        "note_type": "resource",
+        "content": "Я выбрал сфокусироваться на качестве.",
+        "tags": ["choice"],
+        "links": [],
+    }
+    save_service = RecordingPersonalMemorySaveService()
+    with TestClient(
+        make_app(save_service=save_service),
+        base_url=LOOPBACK_BASE_URL,
+    ) as client:
+        reviewed_response = client.post(
+            ACTIVE_LEARNING_ANSWER_REVIEW_PATH,
+            json={"draft": answer},
+            headers={**DRAFT_REQUEST_HEADERS, "Origin": LOOPBACK_BASE_URL},
+        )
+        empty_response = client.post(
+            ACTIVE_LEARNING_ANSWER_REVIEW_PATH,
+            json={"draft": {**answer, "content": ""}},
+            headers=DRAFT_REQUEST_HEADERS,
+        )
+
+    assert reviewed_response.status_code == 200, reviewed_response.text
+    assert reviewed_response.json()["draft"] == answer
+    assert reviewed_response.json()["sources"] == []
+    assert reviewed_response.json()["review_token"]
+    assert empty_response.status_code == 400
+    assert empty_response.json()["error"]["code"] == "DRAFT_SCHEMA_INVALID"
+    assert save_service.prepare_personal_memory_calls == []
+    assert save_service.apply_personal_memory_calls == []
 
 
 def test_research_review_token_is_rejected_before_pm_save_service() -> None:

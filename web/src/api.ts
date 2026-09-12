@@ -336,12 +336,15 @@ async function requestJson<T>(
   body: unknown,
   fetcher: FetchLike,
   fallback: string,
+  signal?: AbortSignal,
 ): Promise<T> {
-  const response = await fetcher(path, {
+  const init: RequestInit = {
     method: "POST",
     headers: headersFor(purpose),
     body: JSON.stringify(body),
-  });
+  };
+  if (signal) init.signal = signal;
+  const response = await fetcher(path, init);
   const payload = await readJson(response);
   if (!response.ok) {
     throw new ApiRequestError(errorMessage(payload, fallback), response.status);
@@ -351,6 +354,21 @@ async function requestJson<T>(
 
 export async function createTextDraft(text: string, fetcher: FetchLike = fetchDefault): Promise<DraftResponse> {
   return requestJson("/api/drafts/text", "draft-v1", { text }, fetcher, "Не удалось создать черновик.");
+}
+
+export async function reviewActiveLearningAnswer(
+  draft: NoteDraft,
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<DraftResponse> {
+  return requestJson(
+    "/api/drafts/active-learning/answer/review",
+    "draft-v1",
+    { draft },
+    fetcher,
+    "Не удалось проверить ответ.",
+    signal,
+  );
 }
 
 export async function createUrlDraft(url: string, fetcher: FetchLike = fetchDefault): Promise<DraftResponse> {

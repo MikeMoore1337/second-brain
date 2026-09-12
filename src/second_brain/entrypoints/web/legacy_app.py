@@ -146,6 +146,7 @@ REACT_PWA_OFFLINE_STYLES_FILE: Final[Path] = REACT_DIST_DIR / "offline.css"
 REACT_PWA_ICONS_DIR: Final[Path] = REACT_DIST_DIR / "icons"
 DRAFT_REQUEST_HEADER_NAME: Final[str] = "X-Second-Brain-Request"
 DRAFT_REQUEST_HEADER_VALUE: Final[str] = "draft-v1"
+ACTIVE_LEARNING_ANSWER_REVIEW_PATH: Final[str] = "/api/drafts/active-learning/answer/review"
 TRANSCRIPTION_REQUEST_HEADER_NAME: Final[str] = DRAFT_REQUEST_HEADER_NAME
 TRANSCRIPTION_REQUEST_HEADER_VALUE: Final[str] = "voice-v1"
 SEARCH_REQUEST_HEADER_NAME: Final[str] = DRAFT_REQUEST_HEADER_NAME
@@ -175,7 +176,12 @@ _TIMELINE_PATHS: Final[frozenset[str]] = frozenset({"/api/timeline"})
 _SELF_MODEL_PATHS: Final[frozenset[str]] = frozenset({"/api/self-model"})
 _SELF_RETRIEVAL_PATHS: Final[frozenset[str]] = frozenset({"/api/self-retrieval"})
 _SIMULATE_ME_PATHS: Final[frozenset[str]] = frozenset({"/api/simulate-me"})
-_ACTIVE_LEARNING_PATHS: Final[frozenset[str]] = frozenset({"/api/active-learning/questions"})
+_ACTIVE_LEARNING_PATHS: Final[frozenset[str]] = frozenset(
+    {
+        "/api/active-learning/questions",
+        "/api/active-learning/questions/resolve",
+    }
+)
 _DIAGNOSTICS_PATHS: Final[frozenset[str]] = frozenset({"/api/diagnostics"})
 _DECISION_JOURNAL_PATHS: Final[frozenset[str]] = frozenset(
     {
@@ -195,6 +201,7 @@ _DRAFT_PATHS: Final[frozenset[str]] = frozenset(
         "/api/drafts/text",
         "/api/drafts/url",
         "/api/drafts/preview",
+        ACTIVE_LEARNING_ANSWER_REVIEW_PATH,
         "/api/drafts/save/prepare",
         "/api/drafts/save/apply",
         "/api/drafts/personal-memory/save/prepare",
@@ -205,6 +212,7 @@ _DRAFT_PATHS: Final[frozenset[str]] = frozenset(
 _REVIEW_PATHS: Final[frozenset[str]] = frozenset(
     {
         "/api/drafts/preview",
+        ACTIVE_LEARNING_ANSWER_REVIEW_PATH,
         "/api/drafts/save/prepare",
         "/api/drafts/save/apply",
         "/api/drafts/personal-memory/save/prepare",
@@ -340,6 +348,14 @@ class DraftResponse(BaseModel):
     draft: DraftPayload
     sources: list[SourceProvenancePayload]
     review_token: StrictStr
+
+
+class ActiveLearningAnswerReviewRequest(BaseModel):
+    """Strict source-free review request for a user-authored answer draft."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    draft: DraftPayload
 
 
 class PreviewDraftRequest(BaseModel):
@@ -1732,6 +1748,21 @@ def create_app(
         except Exception as error:
             return _error_response_for_exception(error)
 
+    @app.post(ACTIVE_LEARNING_ANSWER_REVIEW_PATH, include_in_schema=False)
+    def review_active_learning_answer(payload: ActiveLearningAnswerReviewRequest) -> Response:
+        """Issue the existing source-free text review token for an edited answer."""
+
+        try:
+            draft = _note_draft_from_payload(payload.draft)
+        except LlmError, ValueError:
+            return _error_response("DRAFT_SCHEMA_INVALID")
+        if not draft.content.strip():
+            return _error_response("DRAFT_SCHEMA_INVALID")
+        try:
+            return _draft_response(draft=draft, source=None, review_tokens=review_tokens)
+        except Exception as error:
+            return _error_response_for_exception(error)
+
     @app.post("/api/drafts/url", include_in_schema=False)
     def url_draft(payload: UrlDraftRequest) -> Response:
         """Создать один public WEB research draft с bounded provenance."""
@@ -2664,6 +2695,7 @@ def _error_response_for_exception(error: Exception) -> JSONResponse:
 
 
 __all__ = [
+    "ACTIVE_LEARNING_ANSWER_REVIEW_PATH",
     "CONTENT_SECURITY_POLICY",
     "DRAFT_REQUEST_HEADER_NAME",
     "DRAFT_REQUEST_HEADER_VALUE",
@@ -2692,6 +2724,7 @@ __all__ = [
     "TIMELINE_REQUEST_HEADER_VALUE",
     "TRANSCRIPTION_REQUEST_HEADER_NAME",
     "TRANSCRIPTION_REQUEST_HEADER_VALUE",
+    "ActiveLearningAnswerReviewRequest",
     "ApplyDecisionJournalRequest",
     "ApplyDraftRequest",
     "ApplyOutcomeObservationRequest",
