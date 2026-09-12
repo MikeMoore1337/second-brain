@@ -1137,6 +1137,7 @@ context и derived explanation divergence.
 
 ### Stage 8 — Active Personal Learning v1
 
+- **Статус:** DESIGN / CONTRACT ONLY; нормативный [Active Personal Learning v1 contract](active-personal-learning-v1-contract.md) зафиксирован в #223. Runtime Stage 8 не реализован.
 - **Цель:** optional questions only where evidence is weak, conflicting or
   missing.
 - **Входные зависимости:** Stage 4 confidence/conflict, Stage 5 retrieval,
