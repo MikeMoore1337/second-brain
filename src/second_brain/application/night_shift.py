@@ -70,10 +70,53 @@ class CheckConclusion(StrEnum):
     FAILURE = "failure"
 
 
+class WorktreeOperation(StrEnum):
+    """Operation class used by the scoped worktree/finalization guard."""
+
+    IMPLEMENTATION = "implementation"
+    FINALIZATION = "finalization"
+    READ_ONLY = "read_only"
+
+
+class CodexReviewConclusion(StrEnum):
+    """Semantic result of one managed Codex Code Review request."""
+
+    CLEAN = "clean"
+    BLOCKING = "blocking"
+
+
+class ReviewGateAction(StrEnum):
+    """Action selected by the bounded review gate."""
+
+    REQUEST = "request"
+    REUSE = "reuse"
+    MERGE = "merge"
+
+
 SUPPORTED_POLICY_VERSION: Final[str] = "night-shift-v1"
-SUPPORTED_SCHEMA_VERSION: Final[int] = 2
-REQUIRED_MERGE_CHECKS: Final[frozenset[str]] = frozenset({"quality", "windows-ssl-regression"})
-REQUIRED_MERGE_STATUS_CONTEXTS: Final[frozenset[str]] = frozenset({"checks"})
+SUPPORTED_SCHEMA_VERSION: Final[int] = 3
+REQUIRED_MERGE_CHECKS: Final[frozenset[str]] = frozenset(
+    {
+        "quality",
+        "windows-ssl-regression",
+        "frontend (ubuntu-latest)",
+        "frontend (windows-latest)",
+    }
+)
+REQUIRED_MERGE_STATUS_CONTEXTS: Final[frozenset[str]] = frozenset()
+SUPPORTED_SCOPED_LOCKS: Final[frozenset[str]] = frozenset(
+    {"worktree", "task_state", "finalization", "production_deployment"}
+)
+EXPECTED_FINALIZATION_PHASES: Final[tuple[str, ...]] = (
+    "refresh_base",
+    "resolve_conflicts",
+    "affected_verification",
+    "final_push",
+    "exact_head_ci",
+    "codex_review",
+    "merge",
+    "release_closeout",
+)
 SUPPORTED_RED_GATES: Final[frozenset[str]] = frozenset(
     {
         "canonical_schema_or_version",
@@ -145,6 +188,41 @@ class PostTaskCleanupPolicy:
 
 
 @dataclass(frozen=True, slots=True)
+class ImplementationPolicy:
+    """Ownership rules for independent task implementation worktrees."""
+
+    parallel_independent_tasks: bool
+    worktree_ownership: str
+    repository_wide_exclusive_write: bool
+    diagnostics_require_write_lease: bool
+    scoped_locks: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class FinalizationPolicy:
+    """The only repository-scoped serialized part of delivery."""
+
+    serialized: bool
+    scope: str
+    phases: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class CodexReviewPolicy:
+    """Bounded semantic review contract; it is not an automatic lifecycle."""
+
+    enabled: bool
+    automatic_lifecycle: bool
+    max_requests_per_pr: int
+    max_self_reviews: int
+    first_round_requires_exact_head_ci_green: bool
+    second_round_requires_blocking_p0_p1: bool
+    second_round_requires_changed_head: bool
+    duplicate_same_sha: str
+    blocking_after_round_2: str
+
+
+@dataclass(frozen=True, slots=True)
 class NightShiftPolicy:
     """Validated immutable policy, not mutable runtime state."""
 
@@ -165,6 +243,9 @@ class NightShiftPolicy:
     required_checks: tuple[str, ...]
     required_statuses: tuple[str, ...]
     merge_method: str
+    implementation: ImplementationPolicy
+    finalization: FinalizationPolicy
+    codex_review: CodexReviewPolicy
     post_task_cleanup: PostTaskCleanupPolicy
 
 
@@ -174,6 +255,28 @@ class GateResult:
 
     status: GateStatus
     reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewGateResult:
+    """Bounded review action plus its deterministic gate status."""
+
+    status: GateStatus
+    action: ReviewGateAction | None
+    reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class WorktreeAccessEvidence:
+    """Already-resolved ownership state supplied by a lifecycle orchestrator."""
+
+    operation: WorktreeOperation
+    task_id: str
+    worktree_id: str
+    worktree_owner_task_id: str | None = None
+    finalization_owner_task_id: str | None = None
+    repository_has_other_implementation: bool = False
+    stale_owner_confirmed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,6 +309,56 @@ def evaluate_post_task_cleanup(evidence: PostTaskCleanupEvidence) -> GateResult:
     if evidence.lifecycle is CleanupLifecycle.HISTORICAL_ORPHAN_PASS:
         return _ready("verified_historical_cleanup_candidate")
     return _blocked("unknown_cleanup_lifecycle")
+
+
+def evaluate_worktree_access(
+    policy: NightShiftPolicy, evidence: WorktreeAccessEvidence
+) -> GateResult:
+    """Allow parallel implementation and serialize only scoped finalization.
+
+    The repository has no local lease registry or controller.  An orchestrator
+    that has one supplies the already-resolved owner identities here.  This
+    guard keeps the contract executable without introducing a daemon or a
+    repository-wide lock.
+    """
+
+    if not evidence.task_id.strip():
+        return _blocked("task_identity_missing")
+    if not evidence.worktree_id.strip():
+        return _blocked("worktree_identity_missing")
+    if evidence.operation is WorktreeOperation.READ_ONLY:
+        return _ready("read_only_does_not_require_implementation_lease")
+
+    implementation = policy.implementation
+    if (
+        evidence.operation is WorktreeOperation.IMPLEMENTATION
+        and implementation.repository_wide_exclusive_write
+        and evidence.repository_has_other_implementation
+    ):
+        return _blocked("repository_wide_implementation_lock_conflict")
+
+    if evidence.operation is WorktreeOperation.IMPLEMENTATION:
+        owner = evidence.worktree_owner_task_id
+        if owner is not None and owner != evidence.task_id:
+            if evidence.stale_owner_confirmed:
+                return _ready("stale_task_worktree_lease_reclaimable")
+            return _blocked("worktree_owned_by_another_task")
+        return _ready("parallel_implementation_allowed")
+
+    if evidence.operation is WorktreeOperation.FINALIZATION:
+        finalization_owner = evidence.finalization_owner_task_id
+        if finalization_owner is not None and finalization_owner != evidence.task_id:
+            if evidence.stale_owner_confirmed:
+                return _ready("stale_finalization_lease_reclaimable")
+            return _blocked("finalization_owned_by_another_task")
+        owner = evidence.worktree_owner_task_id
+        if owner is not None and owner != evidence.task_id:
+            if evidence.stale_owner_confirmed:
+                return _ready("stale_task_worktree_lease_reclaimable")
+            return _blocked("worktree_owned_by_another_task")
+        return _ready("finalization_lane_available")
+
+    return _blocked("unknown_worktree_operation")
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,6 +399,32 @@ class CheckRunEvidence:
 
 
 @dataclass(frozen=True, slots=True)
+class CodexReviewRequestEvidence:
+    """PR, exact-head CI, and prior-review facts for one request decision."""
+
+    pr_exists: bool
+    pr_is_draft: bool
+    current_head_sha: str
+    current_base_sha: str
+    check_evidence: Mapping[str, CheckRunEvidence]
+    managed_review_count: int = 0
+    existing_review_head_sha: str | None = None
+    existing_review_pending_or_completed: bool = False
+    prior_review_blocking_p0_p1: bool = False
+    prior_review_head_sha: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CodexReviewOutcomeEvidence:
+    """One completed managed review result bound to an exact PR head."""
+
+    review_round: int
+    head_sha: str
+    conclusion: CodexReviewConclusion | str
+    managed_review_count: int
+
+
+@dataclass(frozen=True, slots=True)
 class MergeGateEvidence:
     """Evidence required before a GREEN squash merge can be considered."""
 
@@ -260,6 +439,7 @@ class MergeGateEvidence:
     dependency_satisfied: bool
     human_gate: bool
     scope_unchanged: bool
+    codex_review: CodexReviewOutcomeEvidence | None = None
 
 
 def load_night_shift_policy(path: Path) -> NightShiftPolicy:
@@ -383,6 +563,103 @@ def evaluate_failure_budget(
     return _ready("failure_budget_within_bounds")
 
 
+def evaluate_codex_review_request(
+    policy: NightShiftPolicy, evidence: CodexReviewRequestEvidence
+) -> ReviewGateResult:
+    """Decide whether to request or reuse one bounded review for the PR head."""
+
+    review_policy = policy.codex_review
+    if not review_policy.enabled:
+        return _review_human("codex_review_disabled_by_policy")
+    if not evidence.pr_exists:
+        return _review_blocked("pull_request_missing_before_review")
+    if evidence.pr_is_draft:
+        return _review_blocked("pull_request_is_draft")
+    if not _is_full_commit_sha(evidence.current_head_sha):
+        return _review_blocked("current_head_sha_is_not_full_commit_sha")
+    if not _is_full_commit_sha(evidence.current_base_sha):
+        return _review_blocked("current_base_sha_is_not_full_commit_sha")
+    if evidence.managed_review_count < 0:
+        return _review_human("negative_codex_review_counter")
+
+    if evidence.existing_review_head_sha == evidence.current_head_sha:
+        if evidence.existing_review_pending_or_completed:
+            return ReviewGateResult(
+                GateStatus.READY,
+                ReviewGateAction.REUSE,
+                ("reuse_existing_codex_review_for_current_head",),
+            )
+        return _review_blocked("existing_current_head_review_state_not_reusable")
+
+    check_failure = _required_check_failure(
+        policy,
+        current_head_sha=evidence.current_head_sha,
+        current_base_sha=evidence.current_base_sha,
+        check_evidence=evidence.check_evidence,
+    )
+    if check_failure is not None:
+        return _review_blocked(check_failure)
+
+    if evidence.managed_review_count >= review_policy.max_requests_per_pr:
+        return _review_human("codex_review_budget_exhausted")
+    if evidence.managed_review_count == 0:
+        return ReviewGateResult(
+            GateStatus.READY,
+            ReviewGateAction.REQUEST,
+            ("request_codex_review_round_1",),
+        )
+    if evidence.managed_review_count != 1:
+        return _review_human("codex_review_counter_has_unknown_round")
+    if not evidence.prior_review_blocking_p0_p1:
+        return _review_human("clean_review_requires_merge_without_rereview")
+    if not review_policy.second_round_requires_blocking_p0_p1:
+        return _review_human("round_2_disabled_without_blocking_findings")
+    if evidence.prior_review_head_sha in {None, evidence.current_head_sha}:
+        return _review_blocked("round_2_requires_changed_head")
+    if not review_policy.second_round_requires_changed_head:
+        return _review_human("round_2_changed_head_requirement_disabled")
+    return ReviewGateResult(
+        GateStatus.READY,
+        ReviewGateAction.REQUEST,
+        ("request_codex_review_round_2",),
+    )
+
+
+def evaluate_codex_review_outcome(
+    policy: NightShiftPolicy, evidence: CodexReviewOutcomeEvidence
+) -> ReviewGateResult:
+    """Route a completed review without permitting an unbounded review loop."""
+
+    review_policy = policy.codex_review
+    if not review_policy.enabled:
+        return _review_human("codex_review_disabled_by_policy")
+    if evidence.review_round < 1:
+        return _review_blocked("codex_review_round_is_invalid")
+    if evidence.review_round > review_policy.max_requests_per_pr:
+        return _review_human("codex_review_budget_exhausted")
+    if evidence.managed_review_count != evidence.review_round:
+        return _review_blocked("codex_review_count_does_not_match_round")
+    if not _is_full_commit_sha(evidence.head_sha):
+        return _review_blocked("codex_review_head_sha_is_not_full_commit_sha")
+    try:
+        conclusion = CodexReviewConclusion(evidence.conclusion)
+    except ValueError:
+        return _review_blocked("codex_review_conclusion_is_unknown")
+    if conclusion is CodexReviewConclusion.CLEAN:
+        return ReviewGateResult(
+            GateStatus.MERGE_READY,
+            ReviewGateAction.MERGE,
+            ("codex_review_clean_no_rereview",),
+        )
+    if evidence.review_round < review_policy.max_requests_per_pr:
+        return ReviewGateResult(
+            GateStatus.READY,
+            ReviewGateAction.REQUEST,
+            ("blocking_review_requires_one_bounded_re_review",),
+        )
+    return _review_human("blocking_review_after_round_2_requires_human")
+
+
 def evaluate_merge_gate(policy: NightShiftPolicy, evidence: MergeGateEvidence) -> GateResult:
     """Return merge-ready only when every configured GREEN gate is true."""
 
@@ -406,24 +683,34 @@ def evaluate_merge_gate(policy: NightShiftPolicy, evidence: MergeGateEvidence) -
         return _blocked("unresolved_review_threads_present")
     if evidence.unresolved_blockers:
         return _human("unresolved_blockers_present")
-    for gate_name in (*policy.required_checks, *policy.required_statuses):
-        check_evidence = evidence.check_evidence.get(gate_name)
-        if check_evidence is None or not _check_is_success(check_evidence.conclusion):
-            return _blocked(f"required_check_not_green:{gate_name}")
-        if (
-            not _is_full_commit_sha(check_evidence.head_sha)
-            or check_evidence.head_sha != evidence.current_head_sha
-        ):
-            return _blocked(f"required_check_not_bound_to_current_head:{gate_name}")
-        if (
-            not _is_full_commit_sha(check_evidence.base_sha or "")
-            or check_evidence.base_sha != evidence.current_base_sha
-        ):
-            return _blocked(f"required_check_not_bound_to_current_base:{gate_name}")
-        if check_evidence.run_id <= 0:
-            return _blocked(f"required_check_run_id_missing:{gate_name}")
-        if check_evidence.run_is_latest is not True:
-            return _blocked(f"required_check_run_not_latest:{gate_name}")
+    if evidence.codex_review is None:
+        return _blocked("codex_review_not_completed")
+    if not _is_full_commit_sha(evidence.codex_review.head_sha):
+        return _blocked("codex_review_head_sha_is_not_full_commit_sha")
+    if evidence.codex_review.head_sha != evidence.current_head_sha:
+        return _blocked("codex_review_not_bound_to_current_head")
+    if evidence.codex_review.review_round < 1:
+        return _blocked("codex_review_round_is_invalid")
+    if evidence.codex_review.review_round > policy.codex_review.max_requests_per_pr:
+        return _human("codex_review_budget_exhausted")
+    if evidence.codex_review.managed_review_count != evidence.codex_review.review_round:
+        return _blocked("codex_review_count_does_not_match_round")
+    try:
+        review_conclusion = CodexReviewConclusion(evidence.codex_review.conclusion)
+    except ValueError:
+        return _blocked("codex_review_conclusion_is_unknown")
+    if review_conclusion is CodexReviewConclusion.BLOCKING:
+        if evidence.codex_review.review_round >= policy.codex_review.max_requests_per_pr:
+            return _human("blocking_review_after_round_2_requires_human")
+        return _blocked("codex_review_has_blocking_findings")
+    check_failure = _required_check_failure(
+        policy,
+        current_head_sha=evidence.current_head_sha,
+        current_base_sha=evidence.current_base_sha,
+        check_evidence=evidence.check_evidence,
+    )
+    if check_failure is not None:
+        return _blocked(check_failure)
     return GateResult(GateStatus.MERGE_READY, ("all_green_merge_gates_passed",))
 
 
@@ -444,6 +731,9 @@ def _parse_policy(raw: object) -> NightShiftPolicy:
             "dependency_policy",
             "task_selection",
             "merge_gate",
+            "implementation",
+            "finalization",
+            "codex_review",
             "post_task_cleanup",
         },
         "policy",
@@ -532,6 +822,10 @@ def _parse_policy(raw: object) -> NightShiftPolicy:
             "task_selection.order must contain every selection source exactly once"
         )
 
+    implementation = _parse_implementation_policy(data["implementation"])
+    finalization = _parse_finalization_policy(data["finalization"])
+    codex_review = _parse_codex_review_policy(data["codex_review"])
+
     merge_data = _mapping(data["merge_gate"], "merge_gate")
     _require_exact_keys(
         merge_data, {"required_checks", "required_statuses", "method"}, "merge_gate"
@@ -539,13 +833,13 @@ def _parse_policy(raw: object) -> NightShiftPolicy:
     required_checks = _unique_strings(merge_data["required_checks"], "merge_gate.required_checks")
     if not REQUIRED_MERGE_CHECKS.issubset(required_checks):
         raise NightShiftConfigError(
-            "merge_gate.required_checks must include quality and windows-ssl-regression"
+            "merge_gate.required_checks must include every active ruleset check"
         )
     required_statuses = _unique_strings(
         merge_data["required_statuses"], "merge_gate.required_statuses"
     )
     if not REQUIRED_MERGE_STATUS_CONTEXTS.issubset(required_statuses):
-        raise NightShiftConfigError("merge_gate.required_statuses must include checks")
+        raise NightShiftConfigError("merge_gate.required_statuses is not compatible with ruleset")
     merge_method = _string(merge_data["method"], "merge_gate.method")
     if merge_method != "squash":
         raise NightShiftConfigError("merge_gate.method must be squash")
@@ -619,8 +913,143 @@ def _parse_policy(raw: object) -> NightShiftPolicy:
         required_checks=required_checks,
         required_statuses=required_statuses,
         merge_method=merge_method,
+        implementation=implementation,
+        finalization=finalization,
+        codex_review=codex_review,
         post_task_cleanup=cleanup_policy,
     )
+
+
+def _parse_implementation_policy(value: object) -> ImplementationPolicy:
+    data = _mapping(value, "implementation")
+    _require_exact_keys(
+        data,
+        {
+            "parallel_independent_tasks",
+            "worktree_ownership",
+            "repository_wide_exclusive_write",
+            "diagnostics_require_write_lease",
+            "scoped_locks",
+        },
+        "implementation",
+    )
+    policy = ImplementationPolicy(
+        parallel_independent_tasks=_boolean(
+            data["parallel_independent_tasks"], "implementation.parallel_independent_tasks"
+        ),
+        worktree_ownership=_string(data["worktree_ownership"], "implementation.worktree_ownership"),
+        repository_wide_exclusive_write=_boolean(
+            data["repository_wide_exclusive_write"],
+            "implementation.repository_wide_exclusive_write",
+        ),
+        diagnostics_require_write_lease=_boolean(
+            data["diagnostics_require_write_lease"],
+            "implementation.diagnostics_require_write_lease",
+        ),
+        scoped_locks=_unique_strings(data["scoped_locks"], "implementation.scoped_locks"),
+    )
+    if not policy.parallel_independent_tasks:
+        raise NightShiftConfigError("implementation.parallel_independent_tasks must be true")
+    if policy.worktree_ownership != "task_scoped":
+        raise NightShiftConfigError("implementation.worktree_ownership must be task_scoped")
+    if policy.repository_wide_exclusive_write:
+        raise NightShiftConfigError("repository-wide implementation exclusive-write is forbidden")
+    if policy.diagnostics_require_write_lease:
+        raise NightShiftConfigError("diagnostics_require_write_lease must be false")
+    if not set(policy.scoped_locks).issubset(SUPPORTED_SCOPED_LOCKS):
+        raise NightShiftConfigError("implementation.scoped_locks contains an unsupported scope")
+    if "repository" in policy.scoped_locks:
+        raise NightShiftConfigError("implementation.scoped_locks cannot contain repository")
+    return policy
+
+
+def _parse_finalization_policy(value: object) -> FinalizationPolicy:
+    data = _mapping(value, "finalization")
+    _require_exact_keys(data, {"serialized", "scope", "phases"}, "finalization")
+    policy = FinalizationPolicy(
+        serialized=_boolean(data["serialized"], "finalization.serialized"),
+        scope=_string(data["scope"], "finalization.scope"),
+        phases=_unique_strings(data["phases"], "finalization.phases"),
+    )
+    if not policy.serialized:
+        raise NightShiftConfigError("finalization.serialized must be true")
+    if policy.scope != "repository":
+        raise NightShiftConfigError("finalization.scope must be repository")
+    if policy.phases != EXPECTED_FINALIZATION_PHASES:
+        raise NightShiftConfigError(
+            "finalization.phases must match the bounded delivery sequence exactly"
+        )
+    return policy
+
+
+def _parse_codex_review_policy(value: object) -> CodexReviewPolicy:
+    data = _mapping(value, "codex_review")
+    _require_exact_keys(
+        data,
+        {
+            "enabled",
+            "automatic_lifecycle",
+            "max_requests_per_pr",
+            "max_self_reviews",
+            "first_round_requires_exact_head_ci_green",
+            "second_round_requires_blocking_p0_p1",
+            "second_round_requires_changed_head",
+            "duplicate_same_sha",
+            "blocking_after_round_2",
+        },
+        "codex_review",
+    )
+    policy = CodexReviewPolicy(
+        enabled=_boolean(data["enabled"], "codex_review.enabled"),
+        automatic_lifecycle=_boolean(
+            data["automatic_lifecycle"], "codex_review.automatic_lifecycle"
+        ),
+        max_requests_per_pr=_integer(
+            data["max_requests_per_pr"], "codex_review.max_requests_per_pr", minimum=1
+        ),
+        max_self_reviews=_integer(
+            data["max_self_reviews"], "codex_review.max_self_reviews", minimum=0
+        ),
+        first_round_requires_exact_head_ci_green=_boolean(
+            data["first_round_requires_exact_head_ci_green"],
+            "codex_review.first_round_requires_exact_head_ci_green",
+        ),
+        second_round_requires_blocking_p0_p1=_boolean(
+            data["second_round_requires_blocking_p0_p1"],
+            "codex_review.second_round_requires_blocking_p0_p1",
+        ),
+        second_round_requires_changed_head=_boolean(
+            data["second_round_requires_changed_head"],
+            "codex_review.second_round_requires_changed_head",
+        ),
+        duplicate_same_sha=_string(data["duplicate_same_sha"], "codex_review.duplicate_same_sha"),
+        blocking_after_round_2=_string(
+            data["blocking_after_round_2"], "codex_review.blocking_after_round_2"
+        ),
+    )
+    if not policy.enabled:
+        raise NightShiftConfigError("codex_review.enabled must be true")
+    if policy.automatic_lifecycle:
+        raise NightShiftConfigError("codex_review.automatic_lifecycle must be false")
+    if policy.max_requests_per_pr != 2:
+        raise NightShiftConfigError("codex_review.max_requests_per_pr must be 2")
+    if policy.max_self_reviews != 1:
+        raise NightShiftConfigError("codex_review.max_self_reviews must be 1")
+    if not policy.first_round_requires_exact_head_ci_green:
+        raise NightShiftConfigError(
+            "codex_review.first_round_requires_exact_head_ci_green must be true"
+        )
+    if not policy.second_round_requires_blocking_p0_p1:
+        raise NightShiftConfigError(
+            "codex_review.second_round_requires_blocking_p0_p1 must be true"
+        )
+    if not policy.second_round_requires_changed_head:
+        raise NightShiftConfigError("codex_review.second_round_requires_changed_head must be true")
+    if policy.duplicate_same_sha != "reuse_existing":
+        raise NightShiftConfigError("codex_review.duplicate_same_sha must be reuse_existing")
+    if policy.blocking_after_round_2 != "human_required":
+        raise NightShiftConfigError("codex_review.blocking_after_round_2 must be human_required")
+    return policy
 
 
 def _parse_risk_lanes(value: object) -> tuple[RiskPolicy, ...]:
@@ -751,6 +1180,28 @@ def _check_is_success(value: CheckConclusion | str | None) -> bool:
     return value is CheckConclusion.SUCCESS or value == CheckConclusion.SUCCESS.value
 
 
+def _required_check_failure(
+    policy: NightShiftPolicy,
+    *,
+    current_head_sha: str,
+    current_base_sha: str,
+    check_evidence: Mapping[str, CheckRunEvidence],
+) -> str | None:
+    for gate_name in (*policy.required_checks, *policy.required_statuses):
+        check = check_evidence.get(gate_name)
+        if check is None or not _check_is_success(check.conclusion):
+            return f"required_check_not_green:{gate_name}"
+        if not _is_full_commit_sha(check.head_sha) or check.head_sha != current_head_sha:
+            return f"required_check_not_bound_to_current_head:{gate_name}"
+        if not _is_full_commit_sha(check.base_sha or "") or check.base_sha != current_base_sha:
+            return f"required_check_not_bound_to_current_base:{gate_name}"
+        if check.run_id <= 0:
+            return f"required_check_run_id_missing:{gate_name}"
+        if check.run_is_latest is not True:
+            return f"required_check_run_not_latest:{gate_name}"
+    return None
+
+
 def _is_full_commit_sha(value: str) -> bool:
     return re.fullmatch(r"[0-9a-f]{40}", value) is not None
 
@@ -767,33 +1218,56 @@ def _human(reason: str) -> GateResult:
     return GateResult(GateStatus.HUMAN_REQUIRED, (reason,))
 
 
+def _review_blocked(reason: str) -> ReviewGateResult:
+    return ReviewGateResult(GateStatus.BLOCKED, None, (reason,))
+
+
+def _review_human(reason: str) -> ReviewGateResult:
+    return ReviewGateResult(GateStatus.HUMAN_REQUIRED, None, (reason,))
+
+
 __all__ = [
+    "EXPECTED_FINALIZATION_PHASES",
     "REQUIRED_MERGE_CHECKS",
     "REQUIRED_MERGE_STATUS_CONTEXTS",
     "SUPPORTED_POLICY_VERSION",
     "SUPPORTED_RED_GATES",
     "SUPPORTED_SCHEMA_VERSION",
+    "SUPPORTED_SCOPED_LOCKS",
     "CheckConclusion",
     "CheckRunEvidence",
     "CleanupLifecycle",
+    "CodexReviewConclusion",
+    "CodexReviewOutcomeEvidence",
+    "CodexReviewPolicy",
+    "CodexReviewRequestEvidence",
     "FailureBudget",
     "FailureBudgetUsage",
+    "FinalizationPolicy",
     "GateResult",
     "GateStatus",
+    "ImplementationPolicy",
     "MergeGateEvidence",
     "NightShiftConfigError",
     "NightShiftPolicy",
     "PostTaskCleanupEvidence",
     "PostTaskCleanupPolicy",
+    "ReviewGateAction",
+    "ReviewGateResult",
     "RiskLane",
     "RiskPolicy",
     "TaskCandidate",
     "TaskSelectionSource",
     "TaskState",
+    "WorktreeAccessEvidence",
+    "WorktreeOperation",
+    "evaluate_codex_review_outcome",
+    "evaluate_codex_review_request",
     "evaluate_failure_budget",
     "evaluate_merge_gate",
     "evaluate_post_task_cleanup",
     "evaluate_task_start",
+    "evaluate_worktree_access",
     "load_night_shift_policy",
     "select_next_task",
 ]

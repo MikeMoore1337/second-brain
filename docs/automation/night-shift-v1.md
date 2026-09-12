@@ -6,22 +6,23 @@
 
 ## Постоянная политика качества
 
-По owner-level решению Codex Code Review отключён и не используется как gate
-релиза: он расходует Codex usage. Каноническая формулировка:
+Codex Code Review — не lifecycle-механизм и не автоматический review на каждый
+commit. Это bounded финальный semantic gate после GREEN exact-head CI. На один
+PR разрешены максимум два managed requests: round 1 и не более одного
+re-review round 2 только после подтверждённых blocking `P0/P1`, исправленных
+одним batch на новом head. После clean round 1 повторный review не запускается;
+после blocking round 2 результатом является `HUMAN_REQUIRED`.
 
-```text
-Codex Code Review is disabled and must not be used as a release gate because it consumes Codex usage. Quality gates are deterministic CI/testing/static-analysis checks plus task-specific human/external gates where explicitly required.
-```
+Перед запросом проверяются PR, draft-state, current head, required CI именно
+для этого head/base, существующие comments/reviews/statuses и наличие уже
+запущенного review для того же SHA. Pending/completed review текущего SHA
+переиспользуется. MEDIUM/LOW/NIT не открывают новый round. Implementer делает
+ровно один bounded self-review до commit; отдельный review-agent, reviewer
+subagent, adversarial audit или второй LLM verdict для этой цели не создаются.
 
-Внутри текущей рабочей сессии implementer выполняет ограниченный self-review
-перед commit. Это не отдельная review-задача и не отдельный агент. Для PR
-проверяются только уже существующие GitHub review threads: если такие threads
-есть, их findings должны быть фактически исправлены или resolved; новый LLM
-review для этого не запускается.
-
-Внешняя настройка Codex Cloud/GitHub, если она автоматически запускает
-reviews, не хранится в этом репозитории. Это единственное действие вне repo:
-owner должен отключить её вручную, если она включена.
+Внешняя настройка Codex Cloud/GitHub не хранится в репозитории. Если там
+включён automatic Codex review, владелец должен вручную отключить его:
+`MANUAL_EXTERNAL_SETTING`.
 
 ## Явная активация
 
@@ -78,6 +79,32 @@ max_scope_expansion: 0
 
 Превышение любого лимита переводит задачу в `HUMAN_REQUIRED`. Повтор flaky CI не считается циклом исправления с изменением кода только при явном evidence и отсутствии изменения кода; повторение без evidence само становится human gate.
 
+## Parallel implementation и serialized finalization
+
+В репозитории нет controller, lease registry или daemon, поэтому для
+implementation не добавляется новая инфраструктура. Policy и gate helper
+фиксируют минимальный enforceable контракт:
+
+- каждый task владеет только своим worktree/branch/task state;
+- независимые implementation tasks могут работать параллельно в разных
+  worktree;
+- общий repository-wide `exclusive-write` lease запрещён;
+- read-only/diagnostic операции не требуют implementation write lease;
+- conflict возможен только для конкретного worktree/task state, production
+  deployment или finalization lane;
+- finalization сериализуется на repository scope: refresh от текущего `main`,
+  conflict resolution, affected verification, final push, exact-head CI,
+  bounded Codex review, merge и release closeout;
+- stale ownership можно освободить только при явно подтверждённом stale
+  evidence. Cleanup не удаляет active чужой worktree или неизвестную
+  регистрацию.
+
+Пока одна task находится в finalization, другие tasks могут продолжать
+implementation/tests в своих worktree. После merge готовая task сначала
+обновляется от нового base и повторяет только затронутые base-dependent
+проверки. Готовая implementation не уничтожается из-за более раннего merge
+другой task.
+
 ## Проверка, слияние и release gate
 
 Каждый PR должен содержать ссылку на issue, exact base/head SHA, краткое
@@ -86,26 +113,38 @@ max_scope_expansion: 0
 ```text
 implementation
   -> targeted verification
+  -> final deterministic verification
   -> self-review
   -> commit/push
-  -> exact-head CI
   -> PR
-  -> required GitHub checks
+  -> required exact-head CI GREEN
+  -> Codex Code Review round 1
+  -> batch fix only if blocking P0/P1
+  -> affected verification
+  -> push and exact-head CI GREEN
+  -> Codex Code Review round 2 (at most once)
   -> merge
   -> deploy
   -> production smoke/closeout
 ```
 
+PR создаётся до ожидания PR-triggered CI. Review не запускается до завершения
+implementation, пока CI pending/failing, после промежуточного commit, для
+того же head SHA повторно или только ради подтверждения зелёных deterministic
+checks. После любого code-changing push прежний review stale для merge decision.
+
 Шаги после commit выполняются только при отсутствии явного
-owner/human/external/destructive gate. Между CI и merge нет отдельного LLM
-review stage или verdict dependency.
+owner/human/external/destructive gate. Codex Review не заменяет security,
+legal, credentials, production, billing, manual-device или visual gates.
 
 GREEN merge возможен только одновременно при выполнении всех условий:
 
 - current PR head и base — полные SHA, а все evidence привязаны к current head и
   current base `main`;
-- `quality` и `windows-ssl-regression` завершились успешно;
-- обязательный aggregate GitHub status `checks` завершился успешно;
+- все required ruleset checks завершились успешно именно для current head/base:
+  `quality`, `windows-ssl-regression`, `frontend (ubuntu-latest)` и
+  `frontend (windows-latest)`;
+- Codex Review завершён с clean result на current head в round 1 или round 2;
 - нет нерешённых существующих GitHub review threads и известных unresolved
   BLOCKER/HIGH из реализации или QA;
 - PR имеет состояние `CLEAN`/mergeable;
@@ -114,8 +153,9 @@ GREEN merge возможен только одновременно при вып
 - risk lane равен `GREEN`.
 
 `quality` включает relevant targeted tests, lint/format/typecheck и применимые
-integration/e2e checks. Отдельный review verdict не нужен. После merge для
-production-facing задачи обязательны штатные deploy, smoke и closeout.
+integration/e2e checks. Required contexts являются source of truth ruleset;
+aggregate `checks` не считается required в текущем GitHub ruleset. После merge
+для production-facing задачи обязательны штатные deploy, smoke и closeout.
 
 Метод merge — одобренный репозиторием squash. После merge нужно проверить новый SHA ветки `main` и закрытие issue.
 
@@ -172,4 +212,4 @@ cycle или поводом для retry.
 
 ## Осознанно не поддерживается
 
-В протоколе нет LangGraph, CrewAI, LangChain, Redis, Kafka, Celery, DB, vector/graph DB, message queue, daemon, OpenAI API key, paid orchestration, generic multi-agent runtime или автоматической записи в `second-brain-vault`. Night Shift не меняет `schema_version`, canonical notes, privacy boundaries или product semantics.
+В протоколе нет LangGraph, CrewAI, LangChain, Redis, Kafka, Celery, DB, vector/graph DB, message queue, daemon, OpenAI API key, paid orchestration, generic multi-agent runtime или автоматической записи в `second-brain-vault`. Night Shift не меняет product `schema_version`, canonical notes, privacy boundaries или product semantics.
