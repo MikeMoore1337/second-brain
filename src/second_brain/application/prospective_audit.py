@@ -1752,6 +1752,22 @@ class ProspectiveAuditStore:
     verify_links = read_link_envelopes
     read_link_records = read_link_envelopes
 
+    def read_verified_snapshot(self) -> _VerifiedSnapshot:
+        """Return one verified events+links snapshot under the store lock."""
+
+        try:
+            with _StoreLock(self.lock_path):
+                return self._read_verified_unlocked()
+        except ProspectiveAuditError:
+            raise
+        except (OSError, ValueError, UnicodeError, RecursionError) as exc:
+            raise ProspectiveAuditStoreUnavailableError() from exc
+
+    # Stage 9C must not compose two independently locked reads: both streams
+    # have to come from the same verified generation snapshot.
+    read_stable_snapshot = read_verified_snapshot
+    verified_snapshot = read_verified_snapshot
+
     def read_event(self, event_id: str) -> AuditLogEnvelopeV1 | None:
         """Read one verified event by its exact immutable UUID."""
 
@@ -3232,3 +3248,985 @@ __all__ = [
     "validate_audit_hash",
     "validate_prospective_audit_event",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Stage 9C: prospective calibration aggregate
+# ---------------------------------------------------------------------------
+
+PROSPECTIVE_CALIBRATION_DERIVATION_VERSION: Final[str] = "prospective-calibration-v1"
+PROSPECTIVE_CALIBRATION_POLICY_ID: Final[str] = "prospective-simulate-me-explicit-link-v1"
+PROSPECTIVE_CALIBRATION_RETENTION_POLICY: Final[str] = RETENTION_POLICY
+PROSPECTIVE_CALIBRATION_MAX_RESULT_BYTES_V1: Final[int] = 65_536
+MAX_RESULT_BYTES_V1: Final[int] = PROSPECTIVE_CALIBRATION_MAX_RESULT_BYTES_V1
+
+# This is the normative ASCII policy serialization from §14.4 of the merged
+# Stage 9 contract.  It is deliberately kept separate from the Stage 6 policy
+# identity above: prospective calibration is a different capability.
+PROSPECTIVE_CALIBRATION_POLICY_CANONICAL_JSON: Final[str] = (
+    '{"actual_target":"stage2-decision-journal-explicit-link-v1",'
+    '"coverage":"prediction-over-audited-operations-v1",'
+    '"linkage":"latest-explicit-state-exclusive-v1",'
+    '"metrics":"counts-and-integer-ratios-no-confidence-v1",'
+    '"option_mapping":"owner-explicit-injective-index-v1",'
+    '"retention":"prospective-audit-retention-180d-v1",'
+    '"temporal":"audit-created-before-decision-evidence-and-note-created-v1",'
+    '"version":"1"}'
+)
+PROSPECTIVE_CALIBRATION_POLICY_FINGERPRINT: Final[str] = (
+    "sha256:f6a3229ecdc547bb16f9426d1b78d6e5d06e2355954ca30a37be90bdaec1bbc1"
+)
+
+# Short aliases mirror the naming style of the existing Stage 7 aggregate and
+# make the policy boundary easy to discover without changing the exact DTO.
+CALIBRATION_DERIVATION_VERSION: Final[str] = PROSPECTIVE_CALIBRATION_DERIVATION_VERSION
+CALIBRATION_POLICY_ID: Final[str] = PROSPECTIVE_CALIBRATION_POLICY_ID
+CALIBRATION_POLICY_FINGERPRINT: Final[str] = PROSPECTIVE_CALIBRATION_POLICY_FINGERPRINT
+CALIBRATION_POLICY_CANONICAL_JSON: Final[str] = PROSPECTIVE_CALIBRATION_POLICY_CANONICAL_JSON
+
+
+class ProspectiveCalibrationInvalidLinkageCodeV1(StrEnum):
+    """Fixed invalid-linkage code vocabulary and serialization order."""
+
+    DECISION_TARGET_INVALID = "decision_target_invalid"
+    DECISION_IDENTITY_CONFLICT = "decision_identity_conflict"
+    DECISION_TIME_INVALID = "decision_time_invalid"
+    DECISION_PRECEDES_PREDICTION = "decision_precedes_prediction"
+    DECISION_NOTE_CREATED_BEFORE_PREDICTION = "decision_note_created_before_prediction"
+    DECISION_RECORD_CHANGED = "decision_record_changed"
+    OPTION_MAPPING_INVALID = "option_mapping_invalid"
+    CHOSEN_OPTION_UNMAPPED = "chosen_option_unmapped"
+    LINK_FINGERPRINT_MISMATCH = "link_fingerprint_mismatch"
+
+
+class ProspectiveCalibrationUnavailableLinkageCodeV1(StrEnum):
+    """Fixed unavailable-linkage code vocabulary and serialization order."""
+
+    AUDIT_EVENT_MISSING_OR_DELETED = "audit_event_missing_or_deleted"
+    DECISION_TARGET_UNAVAILABLE = "decision_target_unavailable"
+    CANONICAL_SCAN_UNAVAILABLE = "canonical_scan_unavailable"
+    DECISION_TARGET_EXPIRED = "decision_target_expired"
+
+
+class ProspectiveCalibrationErrorCodeV1(StrEnum):
+    """Top-level safe errors for the derived Stage 9C read model."""
+
+    UNAVAILABLE = "PROSPECTIVE_CALIBRATION_UNAVAILABLE"
+    RESULT_TOO_LARGE = "PROSPECTIVE_CALIBRATION_RESULT_TOO_LARGE"
+
+
+PROSPECTIVE_CALIBRATION_INVALID_LINKAGE_CODES_V1: Final[tuple[str, ...]] = tuple(
+    code.value for code in ProspectiveCalibrationInvalidLinkageCodeV1
+)
+PROSPECTIVE_CALIBRATION_UNAVAILABLE_LINKAGE_CODES_V1: Final[tuple[str, ...]] = tuple(
+    code.value for code in ProspectiveCalibrationUnavailableLinkageCodeV1
+)
+
+
+_PROSPECTIVE_CALIBRATION_ERROR_MESSAGES: Final[dict[ProspectiveCalibrationErrorCodeV1, str]] = {
+    ProspectiveCalibrationErrorCodeV1.UNAVAILABLE: "prospective calibration source is unavailable",
+    ProspectiveCalibrationErrorCodeV1.RESULT_TOO_LARGE: (
+        "prospective calibration result exceeds its byte limit"
+    ),
+}
+
+
+class ProspectiveCalibrationError(RuntimeError):
+    """Public Stage 9C error with only a fixed code and fixed message."""
+
+    def __init__(self, code: ProspectiveCalibrationErrorCodeV1 | str) -> None:
+        try:
+            normalized = ProspectiveCalibrationErrorCodeV1(code)
+        except TypeError, ValueError:
+            normalized = ProspectiveCalibrationErrorCodeV1.UNAVAILABLE
+        self.code = normalized.value
+        self.message = _PROSPECTIVE_CALIBRATION_ERROR_MESSAGES[normalized]
+        super().__init__(self.message)
+
+    def as_dict(self) -> dict[str, str]:
+        return {"code": self.code, "message": self.message}
+
+
+class ProspectiveCalibrationUnavailableError(ProspectiveCalibrationError):
+    """No verified stable event/link snapshot can support an aggregate."""
+
+    def __init__(self) -> None:
+        super().__init__(ProspectiveCalibrationErrorCodeV1.UNAVAILABLE)
+
+
+class ProspectiveCalibrationResultTooLargeError(ProspectiveCalibrationError):
+    """The complete canonical result crossed its fixed byte bound."""
+
+    def __init__(self) -> None:
+        super().__init__(ProspectiveCalibrationErrorCodeV1.RESULT_TOO_LARGE)
+
+
+# Descriptive aliases for callers that use the Stage 7 ``SourceUnavailable``
+# naming convention or omit the ``Linkage`` word from the fixed code enum.
+ProspectiveCalibrationSourceUnavailableError = ProspectiveCalibrationUnavailableError
+ProspectiveCalibrationInvalidCodeV1 = ProspectiveCalibrationInvalidLinkageCodeV1
+ProspectiveCalibrationUnavailableCodeV1 = ProspectiveCalibrationUnavailableLinkageCodeV1
+ProspectiveCalibrationErrorCode = ProspectiveCalibrationErrorCodeV1
+
+
+def _calibration_non_negative_int(value: object) -> bool:
+    return type(value) is int and not isinstance(value, bool) and value >= 0
+
+
+@dataclass(frozen=True, slots=True)
+class ProspectiveCalibrationRequestV1:
+    """Empty request: Stage 9C v1 has no caller-configurable policy knobs."""
+
+
+@dataclass(frozen=True, slots=True)
+class ProspectiveCalibrationRatioV1:
+    """Exact integer numerator/denominator ratio; never a float or percentage."""
+
+    numerator: int
+    denominator: int
+
+    def __post_init__(self) -> None:
+        if not _calibration_non_negative_int(self.numerator):
+            raise ValueError("ratio numerator is invalid")
+        if (
+            type(self.denominator) is not int
+            or isinstance(self.denominator, bool)
+            or self.denominator <= 0
+        ):
+            raise ValueError("ratio denominator is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class ProspectiveCalibrationMetricsV1:
+    """Exact bounded metric fields prescribed by the prospective contract."""
+
+    audited_operations: int
+    predictions: int
+    abstentions: int
+    linked_actual_decisions: int
+    pending_unlinked_events: int
+    invalid_linkage_events: int
+    unavailable_linkage_events: int
+    exact_option_matches: int
+    mismatches: int
+    coverage: ProspectiveCalibrationRatioV1 | None
+    actual_linkage_coverage: ProspectiveCalibrationRatioV1 | None
+    evaluated_prediction_coverage: ProspectiveCalibrationRatioV1 | None
+    accuracy_non_abstained: ProspectiveCalibrationRatioV1 | None
+
+    def __post_init__(self) -> None:
+        values = (
+            self.audited_operations,
+            self.predictions,
+            self.abstentions,
+            self.linked_actual_decisions,
+            self.pending_unlinked_events,
+            self.invalid_linkage_events,
+            self.unavailable_linkage_events,
+            self.exact_option_matches,
+            self.mismatches,
+        )
+        if any(not _calibration_non_negative_int(value) for value in values):
+            raise ValueError("calibration metric count is invalid")
+        ratios = (
+            self.coverage,
+            self.actual_linkage_coverage,
+            self.evaluated_prediction_coverage,
+            self.accuracy_non_abstained,
+        )
+        if any(
+            ratio is not None and type(ratio) is not ProspectiveCalibrationRatioV1
+            for ratio in ratios
+        ):
+            raise ValueError("calibration ratio is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class ProspectiveCalibrationCountV1:
+    """One fixed-code counter in the canonical aggregate."""
+
+    code: str
+    count: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.code, str) or not _calibration_non_negative_int(self.count):
+            raise ValueError("calibration count is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class ProspectiveCalibrationResultV1:
+    """Exact privacy-safe derived DTO; no event or Journal identity is exposed."""
+
+    contract_version: str
+    derivation_version: str
+    policy_id: str
+    policy_fingerprint: AuditHashV1
+    retention_policy: str
+    metrics: ProspectiveCalibrationMetricsV1
+    invalid_linkage_by_code: tuple[ProspectiveCalibrationCountV1, ...]
+    unavailable_linkage_by_code: tuple[ProspectiveCalibrationCountV1, ...]
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.contract_version) is not str
+            or type(self.derivation_version) is not str
+            or type(self.policy_id) is not str
+            or type(self.retention_policy) is not str
+            or type(self.metrics) is not ProspectiveCalibrationMetricsV1
+            or type(self.invalid_linkage_by_code) is not tuple
+            or type(self.unavailable_linkage_by_code) is not tuple
+            or any(
+                type(item) is not ProspectiveCalibrationCountV1
+                for item in self.invalid_linkage_by_code
+            )
+            or any(
+                type(item) is not ProspectiveCalibrationCountV1
+                for item in self.unavailable_linkage_by_code
+            )
+        ):
+            raise ValueError("calibration result shape is invalid")
+
+
+def validate_prospective_calibration_policy() -> str:
+    """Recompute the exact v1 policy fingerprint and Stage 6 dependency identity."""
+
+    try:
+        if not PROSPECTIVE_CALIBRATION_POLICY_CANONICAL_JSON.isascii():
+            raise ValueError("policy serialization is not ASCII")
+        digest = hashlib.sha256(
+            PROSPECTIVE_CALIBRATION_POLICY_CANONICAL_JSON.encode("ascii")
+        ).hexdigest()
+        if f"sha256:{digest}" != PROSPECTIVE_CALIBRATION_POLICY_FINGERPRINT:
+            raise ValueError("prospective policy fingerprint mismatch")
+        if (
+            DERIVATION_VERSION != "simulate-me-v1"
+            or POLICY_ID != "simulate-me-direct-exact-v1"
+            or validate_simulate_me_policy() != POLICY_FINGERPRINT
+        ):
+            raise ValueError("Stage 6 policy identity mismatch")
+    except Exception:
+        raise ProspectiveCalibrationUnavailableError() from None
+    return PROSPECTIVE_CALIBRATION_POLICY_FINGERPRINT
+
+
+def _validate_prospective_calibration_count_array(
+    counts: object,
+    expected_codes: tuple[str, ...],
+) -> None:
+    if type(counts) is not tuple or len(counts) != len(expected_codes):
+        raise ValueError("fixed calibration count array is invalid")
+    for item, expected_code in zip(counts, expected_codes, strict=True):
+        if (
+            type(item) is not ProspectiveCalibrationCountV1
+            or item.code != expected_code
+            or not _calibration_non_negative_int(item.count)
+        ):
+            raise ValueError("fixed calibration count item is invalid")
+
+
+def _validate_prospective_calibration_ratio(
+    ratio: ProspectiveCalibrationRatioV1 | None,
+    *,
+    numerator: int,
+    denominator: int,
+) -> None:
+    if denominator == 0:
+        if ratio is not None:
+            raise ValueError("zero-denominator ratio must be null")
+        return
+    if (
+        type(ratio) is not ProspectiveCalibrationRatioV1
+        or ratio.numerator != numerator
+        or ratio.denominator != denominator
+    ):
+        raise ValueError("calibration ratio is invalid")
+
+
+def validate_prospective_calibration_result(
+    result: object,
+) -> ProspectiveCalibrationResultV1:
+    """Validate exact DTO identity, fixed arrays, arithmetic and ratio rules."""
+
+    if type(result) is not ProspectiveCalibrationResultV1:
+        raise ValueError("result is not the exact prospective calibration DTO")
+    if (
+        result.contract_version != CONTRACT_VERSION
+        or result.derivation_version != PROSPECTIVE_CALIBRATION_DERIVATION_VERSION
+        or result.policy_id != PROSPECTIVE_CALIBRATION_POLICY_ID
+        or result.policy_fingerprint != PROSPECTIVE_CALIBRATION_POLICY_FINGERPRINT
+        or result.retention_policy != PROSPECTIVE_CALIBRATION_RETENTION_POLICY
+    ):
+        raise ValueError("prospective calibration identity is invalid")
+    validate_prospective_calibration_policy()
+    metrics = result.metrics
+    values = (
+        metrics.audited_operations,
+        metrics.predictions,
+        metrics.abstentions,
+        metrics.linked_actual_decisions,
+        metrics.pending_unlinked_events,
+        metrics.invalid_linkage_events,
+        metrics.unavailable_linkage_events,
+        metrics.exact_option_matches,
+        metrics.mismatches,
+    )
+    if any(not _calibration_non_negative_int(value) for value in values):
+        raise ValueError("calibration metric count is invalid")
+    _validate_prospective_calibration_count_array(
+        result.invalid_linkage_by_code,
+        PROSPECTIVE_CALIBRATION_INVALID_LINKAGE_CODES_V1,
+    )
+    _validate_prospective_calibration_count_array(
+        result.unavailable_linkage_by_code,
+        PROSPECTIVE_CALIBRATION_UNAVAILABLE_LINKAGE_CODES_V1,
+    )
+
+    linked_predictions = metrics.exact_option_matches + metrics.mismatches
+    linked_abstentions = metrics.linked_actual_decisions - linked_predictions
+    invalid_count = sum(item.count for item in result.invalid_linkage_by_code)
+    unavailable_count = sum(item.count for item in result.unavailable_linkage_by_code)
+    if (
+        metrics.audited_operations != metrics.predictions + metrics.abstentions
+        or metrics.predictions < linked_predictions
+        or metrics.linked_actual_decisions < linked_predictions
+        or linked_abstentions < 0
+        or linked_abstentions > metrics.abstentions
+        or metrics.linked_actual_decisions
+        + metrics.pending_unlinked_events
+        + metrics.invalid_linkage_events
+        + metrics.unavailable_linkage_events
+        != metrics.audited_operations
+        or metrics.invalid_linkage_events != invalid_count
+        or metrics.unavailable_linkage_events != unavailable_count
+        or linked_predictions != metrics.exact_option_matches + metrics.mismatches
+    ):
+        raise ValueError("prospective calibration count identity is invalid")
+    _validate_prospective_calibration_ratio(
+        metrics.coverage,
+        numerator=metrics.predictions,
+        denominator=metrics.audited_operations,
+    )
+    _validate_prospective_calibration_ratio(
+        metrics.actual_linkage_coverage,
+        numerator=metrics.linked_actual_decisions,
+        denominator=metrics.audited_operations,
+    )
+    _validate_prospective_calibration_ratio(
+        metrics.evaluated_prediction_coverage,
+        numerator=linked_predictions,
+        denominator=metrics.predictions,
+    )
+    _validate_prospective_calibration_ratio(
+        metrics.accuracy_non_abstained,
+        numerator=metrics.exact_option_matches,
+        denominator=linked_predictions,
+    )
+    return result
+
+
+_CALIBRATION_MAX_SAFE_INT_BITS: Final[int] = (MAX_RESULT_BYTES_V1 + 4_096) * 1_000 // 301 + 2
+
+
+def _prospective_calibration_json_int(value: int) -> str:
+    """Convert a bounded non-negative count without Python's digit cap."""
+
+    if value.bit_length() > _CALIBRATION_MAX_SAFE_INT_BITS:
+        raise ProspectiveCalibrationResultTooLargeError()
+    if value < 1_000_000_000:
+        return str(value)
+    chunks: list[str] = []
+    remaining = value
+    while remaining >= 1_000_000_000:
+        remaining, chunk = divmod(remaining, 1_000_000_000)
+        chunks.append(f"{chunk:09d}")
+    chunks.append(str(remaining))
+    return "".join(reversed(chunks))
+
+
+def _prospective_calibration_json_string(value: str) -> str:
+    return json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+
+
+def _prospective_calibration_json_ratio(
+    ratio: ProspectiveCalibrationRatioV1 | None,
+) -> str:
+    if ratio is None:
+        return "null"
+    return (
+        '{"numerator":'
+        + _prospective_calibration_json_int(ratio.numerator)
+        + ',"denominator":'
+        + _prospective_calibration_json_int(ratio.denominator)
+        + "}"
+    )
+
+
+def _prospective_calibration_json_metrics(
+    metrics: ProspectiveCalibrationMetricsV1,
+) -> str:
+    return (
+        '{"audited_operations":'
+        + _prospective_calibration_json_int(metrics.audited_operations)
+        + ',"predictions":'
+        + _prospective_calibration_json_int(metrics.predictions)
+        + ',"abstentions":'
+        + _prospective_calibration_json_int(metrics.abstentions)
+        + ',"linked_actual_decisions":'
+        + _prospective_calibration_json_int(metrics.linked_actual_decisions)
+        + ',"pending_unlinked_events":'
+        + _prospective_calibration_json_int(metrics.pending_unlinked_events)
+        + ',"invalid_linkage_events":'
+        + _prospective_calibration_json_int(metrics.invalid_linkage_events)
+        + ',"unavailable_linkage_events":'
+        + _prospective_calibration_json_int(metrics.unavailable_linkage_events)
+        + ',"exact_option_matches":'
+        + _prospective_calibration_json_int(metrics.exact_option_matches)
+        + ',"mismatches":'
+        + _prospective_calibration_json_int(metrics.mismatches)
+        + ',"coverage":'
+        + _prospective_calibration_json_ratio(metrics.coverage)
+        + ',"actual_linkage_coverage":'
+        + _prospective_calibration_json_ratio(metrics.actual_linkage_coverage)
+        + ',"evaluated_prediction_coverage":'
+        + _prospective_calibration_json_ratio(metrics.evaluated_prediction_coverage)
+        + ',"accuracy_non_abstained":'
+        + _prospective_calibration_json_ratio(metrics.accuracy_non_abstained)
+        + "}"
+    )
+
+
+def _prospective_calibration_json_counts(
+    counts: tuple[ProspectiveCalibrationCountV1, ...],
+) -> str:
+    return (
+        "["
+        + ",".join(
+            '{"code":'
+            + _prospective_calibration_json_string(item.code)
+            + ',"count":'
+            + _prospective_calibration_json_int(item.count)
+            + "}"
+            for item in counts
+        )
+        + "]"
+    )
+
+
+def _prospective_calibration_json_result(result: ProspectiveCalibrationResultV1) -> str:
+    return (
+        '{"contract_version":'
+        + _prospective_calibration_json_string(result.contract_version)
+        + ',"derivation_version":'
+        + _prospective_calibration_json_string(result.derivation_version)
+        + ',"policy_id":'
+        + _prospective_calibration_json_string(result.policy_id)
+        + ',"policy_fingerprint":'
+        + _prospective_calibration_json_string(result.policy_fingerprint)
+        + ',"retention_policy":'
+        + _prospective_calibration_json_string(result.retention_policy)
+        + ',"metrics":'
+        + _prospective_calibration_json_metrics(result.metrics)
+        + ',"invalid_linkage_by_code":'
+        + _prospective_calibration_json_counts(result.invalid_linkage_by_code)
+        + ',"unavailable_linkage_by_code":'
+        + _prospective_calibration_json_counts(result.unavailable_linkage_by_code)
+        + "}"
+    )
+
+
+def serialize_prospective_calibration_result(
+    result: ProspectiveCalibrationResultV1,
+) -> bytes:
+    """Serialize the complete exact DTO as bounded canonical UTF-8 JSON."""
+
+    try:
+        validated = validate_prospective_calibration_result(result)
+        encoded = _prospective_calibration_json_result(validated).encode("utf-8")
+    except ProspectiveCalibrationResultTooLargeError:
+        raise
+    except ProspectiveCalibrationError:
+        raise
+    except Exception:
+        raise ProspectiveCalibrationUnavailableError() from None
+    if len(encoded) > MAX_RESULT_BYTES_V1:
+        raise ProspectiveCalibrationResultTooLargeError()
+    return encoded
+
+
+serialize_prospective_calibration_result_v1 = serialize_prospective_calibration_result
+
+
+def _validate_calibration_snapshot(snapshot: object) -> _VerifiedSnapshot:
+    """Defensively validate the same stable snapshot shape used by the store."""
+
+    if type(snapshot) is not _VerifiedSnapshot:
+        raise ValueError("snapshot shape is invalid")
+    if (
+        type(snapshot.manifest) is not AuditStoreManifestV1
+        or type(snapshot.envelopes) is not tuple
+        or type(snapshot.link_envelopes) is not tuple
+    ):
+        raise ValueError("snapshot shape is invalid")
+
+    event_sequences: dict[str, int] = {}
+    previous_event_digest: AuditHashV1 | None = None
+    for expected_sequence, envelope in enumerate(snapshot.envelopes, start=1):
+        if (
+            type(envelope) is not AuditLogEnvelopeV1
+            or envelope.generation_id != snapshot.manifest.generation_id
+            or envelope.sequence != expected_sequence
+            or envelope.previous_record_digest != previous_event_digest
+            or envelope.record_digest != envelope.expected_record_digest
+        ):
+            raise ValueError("event snapshot integrity is invalid")
+        validate_prospective_audit_event(envelope.event)
+        if envelope.event.event_id in event_sequences:
+            raise ValueError("event snapshot contains a duplicate")
+        event_sequences[envelope.event.event_id] = envelope.sequence
+        previous_event_digest = envelope.record_digest
+    if (
+        snapshot.manifest.last_sequence != len(snapshot.envelopes)
+        or snapshot.manifest.last_record_digest != previous_event_digest
+    ):
+        raise ValueError("event manifest is invalid")
+
+    previous_link_digest: AuditHashV1 | None = None
+    previous_link_sequence = 0
+    seen_record_ids: set[str] = set()
+    links_by_id: dict[str, ProspectiveDecisionLinkV1] = {}
+    active_by_event: dict[str, ProspectiveDecisionLinkV1] = {}
+    for link_envelope in snapshot.link_envelopes:
+        if (
+            type(link_envelope) is not ProspectiveLinkLogEnvelopeV1
+            or link_envelope.generation_id != snapshot.manifest.generation_id
+            or link_envelope.sequence <= previous_link_sequence
+            or link_envelope.previous_record_digest != previous_link_digest
+            or link_envelope.record_digest != link_envelope.expected_record_digest
+        ):
+            raise ValueError("link snapshot integrity is invalid")
+        record_id: str
+        if link_envelope.link is not None:
+            link = link_envelope.link
+            event_sequence = event_sequences.get(link.audit_event_id)
+            if event_sequence is None or event_sequence >= link_envelope.sequence:
+                raise ValueError("link event ordering is invalid")
+            record_id = link.link_id
+            if record_id in seen_record_ids or link.audit_event_id in active_by_event:
+                raise ValueError("link snapshot has a conflicting active state")
+            links_by_id[record_id] = link
+            active_by_event[link.audit_event_id] = link
+        else:
+            tombstone = link_envelope.tombstone
+            if tombstone is None:
+                raise ValueError("link record is invalid")
+            event_sequence = event_sequences.get(tombstone.audit_event_id)
+            if event_sequence is None or event_sequence >= link_envelope.sequence:
+                raise ValueError("tombstone event ordering is invalid")
+            record_id = tombstone.tombstone_id
+            target = links_by_id.get(tombstone.supersedes_link_id)
+            if (
+                record_id in seen_record_ids
+                or target is None
+                or target.audit_event_id != tombstone.audit_event_id
+                or active_by_event.get(tombstone.audit_event_id) != target
+            ):
+                raise ValueError("tombstone state is invalid")
+            del active_by_event[tombstone.audit_event_id]
+        seen_record_ids.add(record_id)
+        previous_link_digest = link_envelope.record_digest
+        previous_link_sequence = link_envelope.sequence
+    return snapshot
+
+
+def _calibration_now(clock: Callable[[], datetime], now: datetime | None) -> datetime:
+    try:
+        return _as_utc(clock() if now is None else now)
+    except Exception:
+        raise ProspectiveCalibrationUnavailableError() from None
+
+
+def _calibration_is_cancelled(cancellation: object | None) -> bool:
+    if cancellation is None:
+        return False
+    try:
+        checker = cancellation.is_cancelled  # type: ignore[attr-defined]
+        value = checker()
+    except Exception:
+        raise ProspectiveCalibrationUnavailableError() from None
+    if type(value) is not bool:
+        raise ProspectiveCalibrationUnavailableError()
+    return value
+
+
+def _revalidate_calibration_link(
+    event_envelope: AuditLogEnvelopeV1,
+    link: ProspectiveDecisionLinkV1,
+    reader: VaultReader | Callable[[], VaultSnapshot | ScanReport] | None,
+) -> ProspectiveDecisionLinkVerificationV1:
+    """Apply Stage 9B current-target rules to one link from a stable snapshot."""
+
+    event = event_envelope.event
+    if link.audit_event_id != event.event_id:
+        return ProspectiveDecisionLinkVerificationV1(
+            ProspectiveDecisionLinkStateV1.LINK_UNAVAILABLE,
+            reason_code=ProspectiveAuditLinkReasonCode.AUDIT_EVENT_MISSING_OR_DELETED.value,
+        )
+    try:
+        linked_at = _as_utc_for_link(link.linked_at)
+    except ValueError:
+        return ProspectiveDecisionLinkVerificationV1(
+            ProspectiveDecisionLinkStateV1.LINK_INVALID,
+            reason_code=ProspectiveAuditLinkReasonCode.DECISION_TIME_INVALID.value,
+        )
+    if linked_at >= event.created_at + RETENTION:
+        return ProspectiveDecisionLinkVerificationV1(
+            ProspectiveDecisionLinkStateV1.LINK_UNAVAILABLE,
+            reason_code=ProspectiveAuditLinkReasonCode.DECISION_TARGET_EXPIRED.value,
+        )
+    if reader is None:
+        return ProspectiveDecisionLinkVerificationV1(
+            ProspectiveDecisionLinkStateV1.LINK_UNAVAILABLE,
+            reason_code=ProspectiveAuditLinkReasonCode.CANONICAL_SCAN_UNAVAILABLE.value,
+        )
+    try:
+        target = resolve_current_decision_journal(reader, link.decision_id)
+    except ProspectiveAuditLinkUnavailableError as exc:
+        return ProspectiveDecisionLinkVerificationV1(
+            ProspectiveDecisionLinkStateV1.LINK_UNAVAILABLE,
+            reason_code=exc.reason_code,
+        )
+    except ProspectiveAuditLinkInvalidError as exc:
+        return ProspectiveDecisionLinkVerificationV1(
+            ProspectiveDecisionLinkStateV1.LINK_INVALID,
+            reason_code=exc.reason_code,
+        )
+    except Exception:
+        return ProspectiveDecisionLinkVerificationV1(
+            ProspectiveDecisionLinkStateV1.LINK_UNAVAILABLE,
+            reason_code=ProspectiveAuditLinkReasonCode.CANONICAL_SCAN_UNAVAILABLE.value,
+        )
+
+    if target.decision_record_fingerprint != link.decision_record_fingerprint:
+        return ProspectiveDecisionLinkVerificationV1(
+            ProspectiveDecisionLinkStateV1.LINK_INVALID,
+            reason_code=ProspectiveAuditLinkReasonCode.DECISION_RECORD_CHANGED.value,
+        )
+    if target.chosen_option_index != link.actual_chosen_option_index:
+        return ProspectiveDecisionLinkVerificationV1(
+            ProspectiveDecisionLinkStateV1.LINK_INVALID,
+            reason_code=ProspectiveAuditLinkReasonCode.DECISION_RECORD_CHANGED.value,
+        )
+    try:
+        _validate_explicit_mapping(event, target, link.mapping)
+        _validate_link_temporal_order(
+            event.created_at,
+            target.evidence_at,
+            target.created,
+            linked_at,
+        )
+    except ProspectiveAuditLinkUnavailableError as exc:
+        return ProspectiveDecisionLinkVerificationV1(
+            ProspectiveDecisionLinkStateV1.LINK_UNAVAILABLE,
+            reason_code=exc.reason_code,
+        )
+    except ProspectiveAuditLinkInvalidError as exc:
+        return ProspectiveDecisionLinkVerificationV1(
+            ProspectiveDecisionLinkStateV1.LINK_INVALID,
+            reason_code=exc.reason_code,
+        )
+    except Exception:
+        return ProspectiveDecisionLinkVerificationV1(
+            ProspectiveDecisionLinkStateV1.LINK_INVALID,
+            reason_code=ProspectiveAuditLinkReasonCode.OPTION_MAPPING_INVALID.value,
+        )
+    return ProspectiveDecisionLinkVerificationV1(
+        ProspectiveDecisionLinkStateV1.LINKED_VALID,
+        link=link,
+    )
+
+
+def _prospective_calibration_result(
+    *,
+    audited_operations: int,
+    predictions: int,
+    abstentions: int,
+    linked_actual_decisions: int,
+    pending_unlinked_events: int,
+    invalid_linkage_events: int,
+    unavailable_linkage_events: int,
+    exact_option_matches: int,
+    mismatches: int,
+    invalid_counts: dict[str, int],
+    unavailable_counts: dict[str, int],
+) -> ProspectiveCalibrationResultV1:
+    linked_predictions = exact_option_matches + mismatches
+    metrics = ProspectiveCalibrationMetricsV1(
+        audited_operations=audited_operations,
+        predictions=predictions,
+        abstentions=abstentions,
+        linked_actual_decisions=linked_actual_decisions,
+        pending_unlinked_events=pending_unlinked_events,
+        invalid_linkage_events=invalid_linkage_events,
+        unavailable_linkage_events=unavailable_linkage_events,
+        exact_option_matches=exact_option_matches,
+        mismatches=mismatches,
+        coverage=(
+            ProspectiveCalibrationRatioV1(predictions, audited_operations)
+            if audited_operations
+            else None
+        ),
+        actual_linkage_coverage=(
+            ProspectiveCalibrationRatioV1(linked_actual_decisions, audited_operations)
+            if audited_operations
+            else None
+        ),
+        evaluated_prediction_coverage=(
+            ProspectiveCalibrationRatioV1(linked_predictions, predictions) if predictions else None
+        ),
+        accuracy_non_abstained=(
+            ProspectiveCalibrationRatioV1(exact_option_matches, linked_predictions)
+            if linked_predictions
+            else None
+        ),
+    )
+    result = ProspectiveCalibrationResultV1(
+        contract_version=CONTRACT_VERSION,
+        derivation_version=PROSPECTIVE_CALIBRATION_DERIVATION_VERSION,
+        policy_id=PROSPECTIVE_CALIBRATION_POLICY_ID,
+        policy_fingerprint=PROSPECTIVE_CALIBRATION_POLICY_FINGERPRINT,
+        retention_policy=PROSPECTIVE_CALIBRATION_RETENTION_POLICY,
+        metrics=metrics,
+        invalid_linkage_by_code=tuple(
+            ProspectiveCalibrationCountV1(code, invalid_counts.get(code, 0))
+            for code in PROSPECTIVE_CALIBRATION_INVALID_LINKAGE_CODES_V1
+        ),
+        unavailable_linkage_by_code=tuple(
+            ProspectiveCalibrationCountV1(code, unavailable_counts.get(code, 0))
+            for code in PROSPECTIVE_CALIBRATION_UNAVAILABLE_LINKAGE_CODES_V1
+        ),
+    )
+    try:
+        return validate_prospective_calibration_result(result)
+    except ProspectiveCalibrationError:
+        raise
+    except Exception:
+        raise ProspectiveCalibrationUnavailableError() from None
+
+
+class BuildProspectiveCalibration:
+    """Rebuild one complete Stage 9C aggregate from a verified stable snapshot."""
+
+    def __init__(
+        self,
+        store: ProspectiveAuditStore,
+        reader: VaultReader | Callable[[], VaultSnapshot | ScanReport] | None = None,
+        *,
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
+        self._store = store
+        self._reader = reader
+        if clock is not None:
+            self._clock = clock
+        else:
+            store_clock = getattr(store, "_clock", None)
+            self._clock = store_clock if callable(store_clock) else lambda: datetime.now(UTC)
+
+    def execute(
+        self,
+        request: ProspectiveCalibrationRequestV1 | None = None,
+        *,
+        now: datetime | None = None,
+        cancellation: object | None = None,
+    ) -> ProspectiveCalibrationResultV1:
+        """Read only the current generation and return its exact aggregate."""
+
+        if request is not None and type(request) is not ProspectiveCalibrationRequestV1:
+            raise ProspectiveCalibrationUnavailableError()
+        if _calibration_is_cancelled(cancellation):
+            raise ProspectiveCalibrationUnavailableError()
+        validate_prospective_calibration_policy()
+        current = _calibration_now(self._clock, now)
+        try:
+            reader_method = getattr(self._store, "read_verified_snapshot", None)
+            if not callable(reader_method):
+                reader_method = getattr(self._store, "read_stable_snapshot", None)
+            if not callable(reader_method):
+                raise ValueError("verified snapshot boundary is unavailable")
+            snapshot = _validate_calibration_snapshot(reader_method())
+        except Exception:
+            raise ProspectiveCalibrationUnavailableError() from None
+
+        active_events = tuple(
+            envelope
+            for envelope in snapshot.envelopes
+            if current < envelope.event.created_at + RETENTION
+        )
+        invalid_counts = {code: 0 for code in PROSPECTIVE_CALIBRATION_INVALID_LINKAGE_CODES_V1}
+        unavailable_counts = {
+            code: 0 for code in PROSPECTIVE_CALIBRATION_UNAVAILABLE_LINKAGE_CODES_V1
+        }
+        predictions = 0
+        abstentions = 0
+        linked_actual_decisions = 0
+        pending_unlinked_events = 0
+        invalid_linkage_events = 0
+        unavailable_linkage_events = 0
+        exact_option_matches = 0
+        mismatches = 0
+
+        ordered_events = tuple(
+            sorted(
+                active_events,
+                key=lambda item: (
+                    item.event.created_at,
+                    item.event.event_id,
+                    item.sequence,
+                ),
+            )
+        )
+        for event_envelope in ordered_events:
+            if _calibration_is_cancelled(cancellation):
+                raise ProspectiveCalibrationUnavailableError()
+            event = event_envelope.event
+            if event.result.kind is ProspectiveAuditResultKind.PREDICTION:
+                predictions += 1
+            elif event.result.kind is ProspectiveAuditResultKind.ABSTENTION:
+                abstentions += 1
+            else:
+                raise ProspectiveCalibrationUnavailableError()
+
+            link, _tombstoned = _current_links_for_event(
+                snapshot.link_envelopes,
+                event.event_id,
+            )
+            if link is None:
+                pending_unlinked_events += 1
+                continue
+
+            verification = _revalidate_calibration_link(event_envelope, link, self._reader)
+            if verification.state is ProspectiveDecisionLinkStateV1.LINKED_VALID:
+                if verification.link is None:
+                    raise ProspectiveCalibrationUnavailableError()
+                linked_actual_decisions += 1
+                if event.result.kind is ProspectiveAuditResultKind.PREDICTION:
+                    predicted_option_id = event.result.predicted_option_id
+                    if predicted_option_id is None:
+                        raise ProspectiveCalibrationUnavailableError()
+                    mapped_indexes = tuple(
+                        item.decision_option_index
+                        for item in verification.link.mapping
+                        if item.audit_option_id == predicted_option_id
+                    )
+                    if len(mapped_indexes) != 1:
+                        raise ProspectiveCalibrationUnavailableError()
+                    if mapped_indexes[0] == verification.link.actual_chosen_option_index:
+                        exact_option_matches += 1
+                    else:
+                        mismatches += 1
+                continue
+
+            reason_code = verification.reason_code
+            if reason_code is None:
+                raise ProspectiveCalibrationUnavailableError()
+            if verification.state is ProspectiveDecisionLinkStateV1.LINK_INVALID:
+                if reason_code not in invalid_counts:
+                    raise ProspectiveCalibrationUnavailableError()
+                invalid_counts[reason_code] += 1
+                invalid_linkage_events += 1
+            elif verification.state is ProspectiveDecisionLinkStateV1.LINK_UNAVAILABLE:
+                if reason_code not in unavailable_counts:
+                    raise ProspectiveCalibrationUnavailableError()
+                unavailable_counts[reason_code] += 1
+                unavailable_linkage_events += 1
+            else:
+                raise ProspectiveCalibrationUnavailableError()
+
+        if _calibration_is_cancelled(cancellation):
+            raise ProspectiveCalibrationUnavailableError()
+        result = _prospective_calibration_result(
+            audited_operations=len(ordered_events),
+            predictions=predictions,
+            abstentions=abstentions,
+            linked_actual_decisions=linked_actual_decisions,
+            pending_unlinked_events=pending_unlinked_events,
+            invalid_linkage_events=invalid_linkage_events,
+            unavailable_linkage_events=unavailable_linkage_events,
+            exact_option_matches=exact_option_matches,
+            mismatches=mismatches,
+            invalid_counts=invalid_counts,
+            unavailable_counts=unavailable_counts,
+        )
+        serialize_prospective_calibration_result(result)
+        return result
+
+
+BuildProspectiveCalibrationV1 = BuildProspectiveCalibration
+BuildProspectiveCalibrationAggregate = BuildProspectiveCalibration
+BuildProspectiveCalibrationAggregateV1 = BuildProspectiveCalibration
+ProspectiveCalibrationBuilder = BuildProspectiveCalibration
+
+
+def build_prospective_calibration(
+    store: ProspectiveAuditStore,
+    reader: VaultReader | Callable[[], VaultSnapshot | ScanReport] | None = None,
+    *,
+    clock: Callable[[], datetime] | None = None,
+    now: datetime | None = None,
+    cancellation: object | None = None,
+) -> ProspectiveCalibrationResultV1:
+    """Functional facade for the provider-free Stage 9C aggregate core."""
+
+    return BuildProspectiveCalibration(store, reader, clock=clock).execute(
+        now=now,
+        cancellation=cancellation,
+    )
+
+
+build_prospective_calibration_result = build_prospective_calibration
+serialize_prospective_calibration = serialize_prospective_calibration_result
+
+
+__all__.extend(
+    [
+        "CALIBRATION_DERIVATION_VERSION",
+        "CALIBRATION_POLICY_CANONICAL_JSON",
+        "CALIBRATION_POLICY_FINGERPRINT",
+        "CALIBRATION_POLICY_ID",
+        "MAX_RESULT_BYTES_V1",
+        "PROSPECTIVE_CALIBRATION_DERIVATION_VERSION",
+        "PROSPECTIVE_CALIBRATION_INVALID_LINKAGE_CODES_V1",
+        "PROSPECTIVE_CALIBRATION_MAX_RESULT_BYTES_V1",
+        "PROSPECTIVE_CALIBRATION_POLICY_CANONICAL_JSON",
+        "PROSPECTIVE_CALIBRATION_POLICY_FINGERPRINT",
+        "PROSPECTIVE_CALIBRATION_POLICY_ID",
+        "PROSPECTIVE_CALIBRATION_RETENTION_POLICY",
+        "PROSPECTIVE_CALIBRATION_UNAVAILABLE_LINKAGE_CODES_V1",
+        "BuildProspectiveCalibration",
+        "BuildProspectiveCalibrationAggregate",
+        "BuildProspectiveCalibrationAggregateV1",
+        "BuildProspectiveCalibrationV1",
+        "ProspectiveCalibrationBuilder",
+        "ProspectiveCalibrationCountV1",
+        "ProspectiveCalibrationError",
+        "ProspectiveCalibrationErrorCode",
+        "ProspectiveCalibrationErrorCodeV1",
+        "ProspectiveCalibrationInvalidCodeV1",
+        "ProspectiveCalibrationInvalidLinkageCodeV1",
+        "ProspectiveCalibrationMetricsV1",
+        "ProspectiveCalibrationRatioV1",
+        "ProspectiveCalibrationRequestV1",
+        "ProspectiveCalibrationResultTooLargeError",
+        "ProspectiveCalibrationResultV1",
+        "ProspectiveCalibrationSourceUnavailableError",
+        "ProspectiveCalibrationUnavailableCodeV1",
+        "ProspectiveCalibrationUnavailableError",
+        "ProspectiveCalibrationUnavailableLinkageCodeV1",
+        "build_prospective_calibration",
+        "build_prospective_calibration_result",
+        "serialize_prospective_calibration",
+        "serialize_prospective_calibration_result",
+        "serialize_prospective_calibration_result_v1",
+        "validate_prospective_calibration_policy",
+        "validate_prospective_calibration_result",
+    ]
+)
