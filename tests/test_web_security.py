@@ -15,7 +15,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from second_brain.entrypoints.web.active_personal_learning import ActiveLearningWebService
 from second_brain.entrypoints.web.app import (
+    ACTIVE_LEARNING_REQUEST_HEADER_NAME,
+    ACTIVE_LEARNING_REQUEST_HEADER_VALUE,
     ASSISTANT_REQUEST_HEADER_NAME,
     ASSISTANT_REQUEST_HEADER_VALUE,
     COMPARE_REQUEST_HEADER_NAME,
@@ -24,6 +27,7 @@ from second_brain.entrypoints.web.app import (
     DIAGNOSTICS_REQUEST_HEADER_VALUE,
     DRAFT_REQUEST_HEADER_NAME,
     DRAFT_REQUEST_HEADER_VALUE,
+    MAX_RAW_ACTIVE_LEARNING_BODY_BYTES,
     MAX_RAW_ASSISTANT_BODY_BYTES,
     MAX_RAW_COMPARE_BODY_BYTES,
     MAX_RAW_DIAGNOSTICS_BODY_BYTES,
@@ -194,6 +198,21 @@ PRIVATE_ROUTES: tuple[PrivateRoute, ...] = (
         invalid_code="RETROSPECTIVE_CALIBRATION_INVALID_REQUEST",
         content_too_large_code="RETROSPECTIVE_CALIBRATION_TOO_LARGE",
         max_body_bytes=MAX_RAW_RETROSPECTIVE_CALIBRATION_BODY_BYTES,
+    ),
+    PrivateRoute(
+        path="/api/active-learning/questions",
+        request_header_name=ACTIVE_LEARNING_REQUEST_HEADER_NAME,
+        request_header_value=ACTIVE_LEARNING_REQUEST_HEADER_VALUE,
+        content_type="application/json",
+        body=_json_body(
+            {
+                "query": "Boundary fixture",
+                "options": [{"id": "a", "label": "A"}],
+            }
+        ),
+        invalid_code="ACTIVE_LEARNING_INVALID_REQUEST",
+        content_too_large_code="ACTIVE_LEARNING_CONTENT_TOO_LARGE",
+        max_body_bytes=MAX_RAW_ACTIVE_LEARNING_BODY_BYTES,
     ),
     _draft_route(
         "/api/drafts/text",
@@ -400,6 +419,7 @@ def _boundary_test_app() -> tuple[FastAPI, RecordingBoundaryService]:
         simulate_me_service=cast(SimulateMeService, service),
         diagnostics_service=cast(DiagnosticsService, service),
         retrospective_calibration_service=cast(RetrospectiveCalibrationWebService, service),
+        active_learning_service=cast(ActiveLearningWebService, service),
     )
     return application, service
 
