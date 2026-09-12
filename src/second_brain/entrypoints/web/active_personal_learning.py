@@ -7,6 +7,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import Lock
 from typing import Final, Protocol
 
 from fastapi import FastAPI, Request
@@ -234,6 +235,12 @@ class LazyVaultActiveLearningService:
         repr=False,
         compare=False,
     )
+    _state_lock: Lock = field(
+        default_factory=Lock,
+        init=False,
+        repr=False,
+        compare=False,
+    )
 
     def _current_source(self, request: SimulateMeRequest) -> ActiveLearningSourceV1:
         """Compose one current server-owned snapshot without writes or providers."""
@@ -261,13 +268,14 @@ class LazyVaultActiveLearningService:
     def execute(self, request: SimulateMeRequest) -> ActiveLearningResultV1:
         """Build one current candidate/no-candidate result without a write seam."""
 
-        source = self._current_source(request)
-        result = BuildActiveLearningQuestion(clock=self.clock).execute(
-            source,
-            questions_enabled=True,
-        )
-        object.__setattr__(self, "_last_candidate", result.candidate)
-        return result
+        with self._state_lock:
+            source = self._current_source(request)
+            result = BuildActiveLearningQuestion(clock=self.clock).execute(
+                source,
+                questions_enabled=True,
+            )
+            object.__setattr__(self, "_last_candidate", result.candidate)
+            return result
 
     def resolve(
         self,
@@ -277,21 +285,22 @@ class LazyVaultActiveLearningService:
     ) -> ActiveLearningResolutionResultV1:
         """Revalidate against the current source before handing off an answer."""
 
-        if self._last_candidate is None or self._last_candidate != candidate:
-            raise ActiveLearningCandidateStaleError()
-        source = self._current_source(request)
-        result = resolve_active_learning_question(
-            source,
-            candidate,
-            resolution,
-            now=self.clock(),
-            operation_state=ActiveLearningOperationStateV1(
-                candidate_id=candidate.candidate_id,
-                terminal=False,
-            ),
-        )
-        object.__setattr__(self, "_last_candidate", None)
-        return result
+        with self._state_lock:
+            if self._last_candidate is None or self._last_candidate != candidate:
+                raise ActiveLearningCandidateStaleError()
+            source = self._current_source(request)
+            result = resolve_active_learning_question(
+                source,
+                candidate,
+                resolution,
+                now=self.clock(),
+                operation_state=ActiveLearningOperationStateV1(
+                    candidate_id=candidate.candidate_id,
+                    terminal=False,
+                ),
+            )
+            object.__setattr__(self, "_last_candidate", None)
+            return result
 
 
 def build_production_active_learning_service(

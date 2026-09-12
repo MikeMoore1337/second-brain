@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import cast
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -363,6 +365,58 @@ def test_active_learning_resolve_revalidates_and_projects_only_answer_capture() 
     assert submitted_resolution.selected_option_id == "a"
     assert b"evidence_note_ids" not in response.content
     assert b"basis_fingerprint" not in response.content
+
+
+def test_lazy_service_serializes_resolve_state_transition() -> None:
+    """A racing second resolve cannot observe the candidate before it is cleared."""
+
+    candidate = _candidate()
+    answer = AnswerCaptureV1(task=candidate.task, option=candidate.options[0])
+    result = ActiveLearningResolutionResultV1(
+        candidate_id=candidate.candidate_id,
+        disposition=QuestionDispositionV1.ANSWER,
+        answer_capture=answer,
+        next_state=ActiveLearningOperationStateV1(
+            candidate_id=candidate.candidate_id,
+            terminal=True,
+        ),
+    )
+    service = LazyVaultActiveLearningService(clock=lambda: NOW)
+    object.__setattr__(service, "_last_candidate", candidate)
+    resolution = QuestionResolutionV1(
+        candidate_id=candidate.candidate_id,
+        disposition=QuestionDispositionV1.ANSWER,
+        selected_option_id="a",
+    )
+
+    with (
+        patch.object(
+            LazyVaultActiveLearningService,
+            "_current_source",
+            return_value=object(),
+        ),
+        patch(
+            "second_brain.entrypoints.web.active_personal_learning.resolve_active_learning_question",
+            return_value=result,
+        ),
+    ):
+        service._state_lock.acquire()
+        try:
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    service.resolve,
+                    SimulateMeRequest(query="Task", options=()),
+                    candidate,
+                    resolution,
+                )
+                assert not future.done()
+                service._state_lock.release()
+                assert future.result(timeout=1) == result
+        finally:
+            if service._state_lock.locked():
+                service._state_lock.release()
+
+    assert service._last_candidate is None
 
 
 @pytest.mark.parametrize(
