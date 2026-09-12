@@ -77,10 +77,7 @@ export function CinematicHero(): ReactElement {
 
   return <section className="cinematic-hero" ref={root} aria-labelledby="hero-title" data-moving={active}>
     <div className="universe-parallax" ref={scene} aria-hidden="true">
-      <div className="memory-depth" />
-      <div className="universe-light" />
       <div className="memory-stage">
-        <div className="stage-haze" data-depth="5"><div className="haze-breath" /></div>
         <div className="stage-connections" data-depth="9">
           <svg viewBox="0 0 600 600" fill="none" className="thought-connections">
             {thoughtConnections.map((d, index) => <g key={d} className={`thought-link thought-link-${index}`}><path className="connection-thread" d={d} /><path className="connection-pulse" d={d} pathLength="100" /></g>)}
@@ -93,8 +90,6 @@ export function CinematicHero(): ReactElement {
           <div className="thought-fragment fragment-three"><span className="fragment-label">К важному</span><span className="fragment-thought">Вернуться.<br />Осмыслить.</span></div>
           <div className="thought-fragment fragment-four"><span className="fragment-label">Память</span><span className="fragment-thought">Сохранить<br />важное.</span></div>
         </div>
-        <div className="stage-particles" data-depth="20">{Array.from({length: 12}, (_, i) => <i key={i} className={`light-particle particle-${i}`} />)}</div>
-        <div className="pointer-light" data-depth="28" />
       </div>
     </div>
     <div className="universe-copy">

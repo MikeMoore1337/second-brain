@@ -1,9 +1,5 @@
 /* Continuous atmosphere is shared, pausable, and independent of working text. */
 .motion-world { position:relative; isolation:isolate; }
-.page-atmosphere { position:fixed; inset:0; z-index:-1; overflow:hidden; pointer-events:none; }
-.page-light { position:absolute; width:48vw; height:90vh; border-radius:50%; opacity:.45; background:radial-gradient(ellipse,#6d28d93b,transparent 68%); animation:page-breathe 18s ease-in-out infinite alternate; }
-.page-light-left { left:-27vw; top:0; }
-.page-light-right { right:-27vw; bottom:0; animation-delay:-9s; }
 .topbar { position:sticky; top:0; z-index:40; background:#050407f5; }
 .brand-brain { display:block; width:44px; height:44px; object-fit:contain; transition:filter 180ms; }
 .brand:hover .brand-brain { filter:drop-shadow(0 0 8px #8b5cf680); }
@@ -19,10 +15,7 @@
 .dropdown-motion { display:flex; align-items:center; justify-content:center; gap:10px; padding:12px; min-height:48px; width:100%; border:1px solid #60476e; border-radius:12px; background:var(--sb-color-ink); color:var(--sb-color-text-secondary); cursor:pointer; font-size:13px; }
 
 /* Light stays in the header/margins. Editing and reading planes remain still. */
-.motion-world main > section:not(.cinematic-hero) { border-color:#694680; background:linear-gradient(145deg,#261538a6,transparent 55%),var(--sb-color-ink); }
-.motion-world main > section:not(.cinematic-hero)::before { display:block; content:""; position:absolute; z-index:-1; pointer-events:none; inset:0; border-radius:inherit; background:radial-gradient(ellipse 55% 260px at 100% 0%,#8b5cf62b,transparent 90%); animation:section-breathe 14s ease-in-out infinite alternate; }
-.motion-world main > section:not(.cinematic-hero)::after { display:block; content:""; position:absolute; top:0; left:8%; width:40%; height:1px; pointer-events:none; background:linear-gradient(90deg,transparent,#e9d5ffb3,transparent); transform-origin:left; }
-.motion-world main > section[data-revealed=true]:not(.cinematic-hero)::after { animation:chapter-line 800ms var(--sb-ease-out) both; }
+.motion-world main > section:not(.cinematic-hero) { border-color:#694680; background:#0805118c; }
 .motion-world main .section-art { width:96px; height:96px; }
 .motion-world .entry-point .entry-icon,.motion-world .entry-icon .icon { width:96px; height:96px; }
 .motion-world main > section[data-revealed=true] .section-art,.motion-world main > section[data-revealed=true] .entry-icon { animation:art-arrive 650ms var(--sb-ease-out) both; }
@@ -34,15 +27,12 @@
 .motion-world .rail-title { font-size:clamp(28px,3vw,42px); line-height:1.15; letter-spacing:-.05em; }
 .footer { padding:32px 0; }
 
-.page-atmosphere *,.chapter-scene *,.chapter-scene,.motion-world main > section::before,.motion-world main > section::after,.motion-world .section-art,.motion-world .entry-icon { animation-play-state:paused !important; }
-[data-page-motion=true] .page-atmosphere *,[data-page-motion=true] .chapter-interlude[data-in-view=true] .chapter-scene,[data-page-motion=true] .chapter-interlude[data-in-view=true] .chapter-scene *,[data-page-motion=true] main > section[data-in-view=true]:not(:focus-within)::before,[data-page-motion=true] main > section[data-in-view=true]::after,[data-page-motion=true] main > section[data-in-view=true] .section-art,[data-page-motion=true] main > section[data-in-view=true] .entry-icon { animation-play-state:running !important; }
-@keyframes page-breathe { from { opacity:.3; transform:translateY(-5%); } to { opacity:.7; transform:translateY(5%); } }
+.chapter-scene *,.chapter-scene,.motion-world main > section::before,.motion-world main > section::after,.motion-world .section-art,.motion-world .entry-icon { animation-play-state:paused !important; }
+[data-page-motion=true] .chapter-interlude[data-in-view=true] .chapter-scene,[data-page-motion=true] .chapter-interlude[data-in-view=true] .chapter-scene *,[data-page-motion=true] main > section[data-in-view=true]:not(:focus-within)::before,[data-page-motion=true] main > section[data-in-view=true]::after,[data-page-motion=true] main > section[data-in-view=true] .section-art,[data-page-motion=true] main > section[data-in-view=true] .entry-icon { animation-play-state:running !important; }
 @keyframes chapter-breathe { from { opacity:.6; transform:scale(.9); } to { opacity:1; transform:scale(1.04); } }
 @keyframes chapter-float { from { translate:0 -7px; } to { translate:0 7px; } }
 @keyframes chapter-appear { from { opacity:.3; transform:translateY(24px) scale(.92); } to { opacity:1; transform:none; } }
 @keyframes art-arrive { from { opacity:.4; transform:translateY(14px) rotate(-8deg); } to { opacity:1; transform:none; } }
-@keyframes chapter-line { from { scale:0 1; opacity:0; } to { scale:1 1; opacity:1; } }
-@keyframes section-breathe { from { opacity:.4; } to { opacity:1; } }
 @keyframes dropdown-arrive { from { opacity:0; transform:translateY(-8px) scale(.98); } to { opacity:1; transform:none; } }
 @media(max-width:900px) {
   .chapter-interlude { gap:8px; padding:24px; margin:48px auto 24px; }
@@ -61,9 +51,9 @@
   .chapter-scene { height:260px; }
   .chapter-symbol { top:20px; left:calc(50% - 104px); }
   .chapter-symbol img { width:208px; height:208px; }
-  .chapter-aura,.page-light,.chapter-satellite,.chapter-fragment { animation:none; }
+  .chapter-aura,.chapter-satellite,.chapter-fragment { animation:none; }
   .motion-world main .section-art,.motion-world .entry-point .entry-icon,.motion-world .entry-icon .icon { width:72px; height:72px; }
 }
 @media(prefers-reduced-motion:reduce) {
-  .page-atmosphere *,.chapter-scene,.chapter-scene *,.motion-world main > section::before,.motion-world main > section::after,.motion-world .section-art,.motion-world .entry-icon,.section-dropdown { animation:none !important; transform:none !important; }
+  .chapter-scene,.chapter-scene *,.motion-world main > section::before,.motion-world main > section::after,.motion-world .section-art,.motion-world .entry-icon,.section-dropdown { animation:none !important; transform:none !important; }
 }
