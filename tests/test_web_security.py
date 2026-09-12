@@ -17,8 +17,10 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from second_brain.entrypoints.web.active_personal_learning import ActiveLearningWebService
 from second_brain.entrypoints.web.app import (
+    ACTIVE_LEARNING_ANSWER_REVIEW_PATH,
     ACTIVE_LEARNING_REQUEST_HEADER_NAME,
     ACTIVE_LEARNING_REQUEST_HEADER_VALUE,
+    ACTIVE_LEARNING_RESOLVE_PATH,
     ASSISTANT_REQUEST_HEADER_NAME,
     ASSISTANT_REQUEST_HEADER_VALUE,
     COMPARE_REQUEST_HEADER_NAME,
@@ -214,6 +216,16 @@ PRIVATE_ROUTES: tuple[PrivateRoute, ...] = (
         content_too_large_code="ACTIVE_LEARNING_CONTENT_TOO_LARGE",
         max_body_bytes=MAX_RAW_ACTIVE_LEARNING_BODY_BYTES,
     ),
+    PrivateRoute(
+        path=ACTIVE_LEARNING_RESOLVE_PATH,
+        request_header_name=ACTIVE_LEARNING_REQUEST_HEADER_NAME,
+        request_header_value=ACTIVE_LEARNING_REQUEST_HEADER_VALUE,
+        content_type="application/json",
+        body=_json_body({}),
+        invalid_code="ACTIVE_LEARNING_INVALID_REQUEST",
+        content_too_large_code="ACTIVE_LEARNING_CONTENT_TOO_LARGE",
+        max_body_bytes=MAX_RAW_ACTIVE_LEARNING_BODY_BYTES,
+    ),
     _draft_route(
         "/api/drafts/text",
         body=_json_body({"text": "Boundary fixture text."}),
@@ -227,6 +239,11 @@ PRIVATE_ROUTES: tuple[PrivateRoute, ...] = (
         "/api/drafts/preview",
         "DRAFT_INVALID_REQUEST",
         body=_json_body({"content": "# Boundary fixture"}),
+    ),
+    _draft_route(
+        ACTIVE_LEARNING_ANSWER_REVIEW_PATH,
+        "DRAFT_INVALID_REQUEST",
+        body=_json_body({"draft": _DRAFT_PAYLOAD}),
     ),
     _draft_route(
         "/api/drafts/save/prepare",

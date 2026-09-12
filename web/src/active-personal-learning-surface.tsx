@@ -1,12 +1,28 @@
 import { useEffect, useRef, useState, type ReactElement } from "react";
 
 import {
+  applyPersonalMemory,
+  preparePersonalMemory,
+  reviewActiveLearningAnswer,
+  type NoteDraft,
+  type PersonalMemoryPayload,
+  type SavePlanResponse,
+  type SavedNoteResponse,
+} from "./api";
+import {
   ActivePersonalLearningApiError,
   requestActiveLearningQuestions,
+  resolveActiveLearningQuestion,
+  type ActiveLearningAnswerCapture,
   type ActiveLearningCandidate,
   type ActiveLearningOption,
   type ActiveLearningResult,
 } from "./active-personal-learning-api";
+import {
+  PersonalMemoryMetadataFields,
+  type PersonalMemoryFieldValues,
+  type PersonalMemoryTimeMode,
+} from "./personal-memory-metadata-fields";
 import { Icon } from "./icons";
 import "./active-personal-learning-surface.css";
 
@@ -15,14 +31,27 @@ type ActiveLearningUiState =
   | "loading"
   | "no-candidate"
   | "candidate"
+  | "resolving"
+  | "answer-edit"
+  | "reviewing"
+  | "metadata-review"
+  | "preparing"
+  | "prepared"
+  | "applying"
+  | "saved"
   | "ignored"
   | "rejected"
-  | "answer-handoff"
   | "cancelled"
   | "source-unavailable"
   | "invalid"
   | "error"
   | "stale";
+
+type ErrorUiState = "source-unavailable" | "invalid" | "error" | "stale";
+
+type AnswerContext = ActiveLearningAnswerCapture & {
+  readonly question: string;
+};
 
 type ActiveLearningSurfaceProps = {
   readonly query: string;
@@ -30,9 +59,12 @@ type ActiveLearningSurfaceProps = {
   readonly disabled?: boolean;
 };
 
-type AnswerHandoff = {
-  readonly task: string;
-  readonly option: ActiveLearningOption;
+const EMPTY_PERSONAL_MEMORY: PersonalMemoryFieldValues = {
+  evidenceKind: "",
+  selfKind: "",
+  timeMode: "unknown",
+  evidenceAt: "unknown",
+  domain: "",
 };
 
 const REASON_EXPLANATIONS: Record<ActiveLearningCandidate["reason_code"], string> = {
@@ -47,7 +79,7 @@ const NO_CANDIDATE_TEXT: Record<string, string> = {
   rate_limited: "Для этой операции уже был показан один вопрос.",
 };
 
-const ERROR_TEXT: Record<string, { state: "source-unavailable" | "invalid" | "error"; message: string }> = {
+const ERROR_TEXT: Record<string, { state: ErrorUiState; message: string }> = {
   ACTIVE_LEARNING_INVALID_REQUEST: {
     state: "invalid",
     message: "Запрос уточнения модели не прошёл проверку.",
@@ -64,6 +96,22 @@ const ERROR_TEXT: Record<string, { state: "source-unavailable" | "invalid" | "er
     state: "source-unavailable",
     message: "Текущая модель для уточнения недоступна.",
   },
+  ACTIVE_LEARNING_CANDIDATE_STALE: {
+    state: "stale",
+    message: "Вопрос уточнения устарел и больше не используется.",
+  },
+  ACTIVE_LEARNING_CANDIDATE_EXPIRED: {
+    state: "stale",
+    message: "Срок действия вопроса уточнения истёк.",
+  },
+  ACTIVE_LEARNING_CANDIDATE_ALREADY_RESOLVED: {
+    state: "invalid",
+    message: "Вопрос уточнения уже закрыт.",
+  },
+  ACTIVE_LEARNING_INVALID_ANSWER: {
+    state: "invalid",
+    message: "Ответ на вопрос уточнения не прошёл проверку.",
+  },
   ACTIVE_LEARNING_RESULT_TOO_LARGE: {
     state: "error",
     message: "Результат уточнения модели превышает допустимый предел.",
@@ -74,7 +122,7 @@ const ERROR_TEXT: Record<string, { state: "source-unavailable" | "invalid" | "er
   },
 };
 
-function errorFor(caught: unknown): { state: Exclude<ActiveLearningUiState, "idle" | "loading" | "candidate" | "no-candidate" | "ignored" | "rejected" | "answer-handoff" | "stale">; message: string } {
+function errorFor(caught: unknown): { state: ErrorUiState; message: string } {
   if (caught instanceof ActivePersonalLearningApiError) {
     return ERROR_TEXT[caught.code] ?? {
       state: "error",
@@ -82,7 +130,7 @@ function errorFor(caught: unknown): { state: Exclude<ActiveLearningUiState, "idl
     };
   }
   if (typeof caught === "object" && caught !== null && "name" in caught && caught.name === "AbortError") {
-    return { state: "cancelled", message: "Уточнение модели отменено." };
+    return { state: "stale", message: "Уточнение модели отменено." };
   }
   return { state: "error", message: "Не удалось уточнить модель выбора." };
 }
@@ -100,6 +148,10 @@ function candidateIsUsable(query: string, options: readonly ActiveLearningOption
 
 function resultStatusText(state: ActiveLearningUiState, result: ActiveLearningResult | null): string {
   if (state === "loading") return "Проверяю текущую модель выбора…";
+  if (state === "resolving") return "Проверяю, что вопрос ещё соответствует текущей модели…";
+  if (state === "reviewing") return "Проверяю финальный текст ответа…";
+  if (state === "preparing") return "Готовлю пробное сохранение без записи…";
+  if (state === "applying") return "Сохраняю личную память через Safe Write…";
   if (state === "candidate") return "Вопрос для уточнения готов.";
   if (state === "no-candidate") {
     return result?.no_candidate_code
@@ -108,10 +160,63 @@ function resultStatusText(state: ActiveLearningUiState, result: ActiveLearningRe
   }
   if (state === "ignored") return "Уточнение закрыто без сохранения ответа.";
   if (state === "rejected") return "Уточнение отклонено без сохранения ответа.";
-  if (state === "answer-handoff") return "Ответ подготовлен только для следующего шага проверки.";
+  if (state === "answer-edit") return "Ответ можно отредактировать перед проверкой.";
+  if (state === "metadata-review") return "Ответ проверен. Проверь Personal Memory metadata.";
+  if (state === "prepared") return "Проверь полный diff и подтверди сохранение.";
+  if (state === "saved") return "Личная память сохранена через Safe Write.";
   if (state === "cancelled") return "Уточнение модели отменено.";
   if (state === "stale") return "Текущая задача изменилась: прежний вопрос больше не используется.";
   return "";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isNoteDraft(value: unknown): value is NoteDraft {
+  return isRecord(value)
+    && typeof value.title === "string"
+    && typeof value.note_type === "string"
+    && typeof value.content === "string"
+    && Array.isArray(value.tags)
+    && value.tags.every((item) => typeof item === "string")
+    && Array.isArray(value.links)
+    && value.links.every((item) => typeof item === "string");
+}
+
+function isReviewResponse(value: unknown): value is { readonly draft: NoteDraft; readonly review_token: string } {
+  return isRecord(value)
+    && typeof value.review_token === "string"
+    && isNoteDraft(value.draft)
+    && Array.isArray(value.sources);
+}
+
+function AnswerSavePlan({ plan }: { plan: SavePlanResponse }): ReactElement {
+  return (
+    <section className="save-plan active-learning-save-plan" tabIndex={-1}>
+      <h4>План безопасного сохранения личной памяти (без записи)</h4>
+      <p className="save-plan-explanation">Это пробная подготовка. Ничего не записано; перед применением проверь полный diff.</p>
+      <dl className="draft-fields">
+        <div className="draft-field"><dt className="draft-field-label">Тип</dt><dd className="draft-field-value">{plan.note.type ?? "—"}</dd></div>
+        <div className="draft-field"><dt className="draft-field-label">Путь</dt><dd className="draft-field-value">{plan.note.relative_path ?? "—"}</dd></div>
+      </dl>
+      <h5>Предлагаемый Markdown-файл</h5>
+      <pre className="save-diff" tabIndex={0} aria-label="Полный diff предлагаемого файла">{plan.diff}</pre>
+    </section>
+  );
+}
+
+function AnswerSavedNote({ payload }: { payload: SavedNoteResponse }): ReactElement {
+  return (
+    <section className="saved-note active-learning-saved-note" tabIndex={-1}>
+      <h4>Личная память сохранена</h4>
+      <dl className="draft-fields">
+        <div className="draft-field"><dt className="draft-field-label">Путь</dt><dd className="draft-field-value">{payload.note.relative_path ?? "—"}</dd></div>
+        <div className="draft-field"><dt className="draft-field-label">ID</dt><dd className="draft-field-value">{payload.note.id}</dd></div>
+        <div className="draft-field"><dt className="draft-field-label">Создано</dt><dd className="draft-field-value">{payload.note.created ?? "—"}</dd></div>
+      </dl>
+    </section>
+  );
 }
 
 export function ActivePersonalLearningSurface({
@@ -122,7 +227,14 @@ export function ActivePersonalLearningSurface({
   const [state, setState] = useState<ActiveLearningUiState>("idle");
   const [result, setResult] = useState<ActiveLearningResult | null>(null);
   const [selectedOptionId, setSelectedOptionId] = useState("");
-  const [answer, setAnswer] = useState<AnswerHandoff | null>(null);
+  const [answer, setAnswer] = useState<AnswerContext | null>(null);
+  const [draft, setDraft] = useState<NoteDraft | null>(null);
+  const [reviewToken, setReviewToken] = useState<string | null>(null);
+  const [memoryFields, setMemoryFields] = useState<PersonalMemoryFieldValues>(EMPTY_PERSONAL_MEMORY);
+  const [metadataConfirmed, setMetadataConfirmed] = useState(false);
+  const [plan, setPlan] = useState<SavePlanResponse | null>(null);
+  const [confirmationToken, setConfirmationToken] = useState<string | null>(null);
+  const [saved, setSaved] = useState<SavedNoteResponse | null>(null);
   const [error, setError] = useState("");
   const controllerRef = useRef<AbortController | null>(null);
   const requestIdRef = useRef(0);
@@ -136,6 +248,13 @@ export function ActivePersonalLearningSurface({
     setResult(null);
     setSelectedOptionId("");
     setAnswer(null);
+    setDraft(null);
+    setReviewToken(null);
+    setMemoryFields(EMPTY_PERSONAL_MEMORY);
+    setMetadataConfirmed(false);
+    setPlan(null);
+    setConfirmationToken(null);
+    setSaved(null);
     setError("");
     setState(hadPreviousOperation ? "stale" : "idle");
     return () => controllerRef.current?.abort();
@@ -147,8 +266,34 @@ export function ActivePersonalLearningSurface({
     if (state !== "idle" && state !== "loading") outputRef.current?.focus();
   }, [state]);
 
+  function clearAnswerFlow(): void {
+    setResult(null);
+    setSelectedOptionId("");
+    setAnswer(null);
+    setDraft(null);
+    setReviewToken(null);
+    setMemoryFields(EMPTY_PERSONAL_MEMORY);
+    setMetadataConfirmed(false);
+    setPlan(null);
+    setConfirmationToken(null);
+    setSaved(null);
+  }
+
   async function requestQuestion(): Promise<void> {
-    if (disabled || state === "loading" || state === "candidate" || state === "answer-handoff" || state === "ignored" || state === "rejected") return;
+    const terminal = [
+      "candidate",
+      "resolving",
+      "answer-edit",
+      "reviewing",
+      "metadata-review",
+      "preparing",
+      "prepared",
+      "applying",
+      "saved",
+      "ignored",
+      "rejected",
+    ].includes(state);
+    if (disabled || busyState(state) || terminal) return;
     if (!candidateIsUsable(query, options)) {
       setResult(null);
       setError("Сначала укажи задачу и хотя бы один непустой вариант.");
@@ -163,7 +308,7 @@ export function ActivePersonalLearningSurface({
     setState("loading");
     setResult(null);
     setSelectedOptionId("");
-    setAnswer(null);
+    clearAnswerFlow();
     setError("");
     try {
       const next = await requestActiveLearningQuestions(
@@ -184,22 +329,23 @@ export function ActivePersonalLearningSurface({
   }
 
   function cancel(): void {
-    if (state !== "loading") return;
+    if (state === "idle" || state === "saved") return;
     requestIdRef.current += 1;
     controllerRef.current?.abort();
     controllerRef.current = null;
+    clearAnswerFlow();
     setError("");
     setState("cancelled");
   }
 
-  function resolve(disposition: "ignored" | "rejected"): void {
+  function resolveLocally(disposition: "ignored" | "rejected"): void {
     if (state !== "candidate") return;
     setResult(null);
     setSelectedOptionId("");
     setState(disposition);
   }
 
-  function answerQuestion(): void {
+  async function answerQuestion(): Promise<void> {
     const candidate = result?.candidate;
     if (state !== "candidate" || !candidate || !selectedOptionId) return;
     if (!Number.isFinite(Date.parse(candidate.expires_at)) || Date.parse(candidate.expires_at) <= Date.now()) {
@@ -215,14 +361,201 @@ export function ActivePersonalLearningSurface({
       setState("invalid");
       return;
     }
+    controllerRef.current?.abort();
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    setState("resolving");
     setResult(null);
-    setAnswer({ task: candidate.task, option });
     setSelectedOptionId("");
-    setState("answer-handoff");
+    setError("");
+    try {
+      const next = await resolveActiveLearningQuestion(candidate, option.id, controller.signal);
+      if (requestId !== requestIdRef.current) return;
+      if (
+        next.candidate_id !== candidate.candidate_id
+        || next.disposition !== "answer"
+        || !next.answer_capture
+        || next.answer_capture.option.id !== option.id
+      ) {
+        throw new ActivePersonalLearningApiError(
+          "ACTIVE_LEARNING_INVALID_RESPONSE",
+          "Сервис уточнения модели вернул некорректный ответ.",
+        );
+      }
+      const capture = next.answer_capture;
+      setAnswer({ ...capture, question: candidate.question });
+      setDraft({
+        title: "",
+        note_type: "resource",
+        content: capture.option.label,
+        tags: [],
+        links: [],
+      });
+      setState("answer-edit");
+    } catch (caught) {
+      if (requestId !== requestIdRef.current) return;
+      const nextError = errorFor(caught);
+      setError(nextError.message);
+      setState(nextError.state);
+    } finally {
+      if (requestId === requestIdRef.current) controllerRef.current = null;
+    }
+  }
+
+  function updateDraft<K extends keyof NoteDraft>(key: K, value: NoteDraft[K]): void {
+    setDraft((current) => current ? { ...current, [key]: value } : current);
+    if (state !== "saved") {
+      setReviewToken(null);
+      setPlan(null);
+      setConfirmationToken(null);
+      setMetadataConfirmed(false);
+      setState("answer-edit");
+      setError("");
+    }
+  }
+
+  function updateMemoryFields(update: () => void): void {
+    update();
+    if (state !== "saved") {
+      setPlan(null);
+      setConfirmationToken(null);
+      setMetadataConfirmed(false);
+      setState("metadata-review");
+      setError("");
+    }
+  }
+
+  function personalMemoryPayload(): PersonalMemoryPayload {
+    return {
+      evidence_kind: memoryFields.evidenceKind,
+      self_kind: memoryFields.selfKind,
+      evidence_at: memoryFields.timeMode === "exact" ? memoryFields.evidenceAt : "unknown",
+      evidence_at_precision: memoryFields.timeMode,
+      domain: memoryFields.domain.trim() ? memoryFields.domain : null,
+    };
+  }
+
+  async function reviewAnswer(): Promise<void> {
+    if (state !== "answer-edit" || !draft || !answer) return;
+    if (!draft.title.trim() || !draft.content.trim()) {
+      setError("Заполни название и непустое содержание ответа перед проверкой.");
+      return;
+    }
+    controllerRef.current?.abort();
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    setState("reviewing");
+    setError("");
+    try {
+      const next: unknown = await reviewActiveLearningAnswer(draft, undefined, controller.signal);
+      if (requestId !== requestIdRef.current) return;
+      if (!isReviewResponse(next)) {
+        throw new ActivePersonalLearningApiError(
+          "ACTIVE_LEARNING_INVALID_RESPONSE",
+          "Сервис проверки ответа вернул некорректный ответ.",
+        );
+      }
+      setDraft(next.draft);
+      setReviewToken(next.review_token);
+      setMemoryFields(EMPTY_PERSONAL_MEMORY);
+      setMetadataConfirmed(false);
+      setPlan(null);
+      setConfirmationToken(null);
+      setState("metadata-review");
+    } catch (caught) {
+      if (requestId !== requestIdRef.current) return;
+      if (caught instanceof ActivePersonalLearningApiError) {
+        setError(caught.message);
+      } else {
+        setError(caught instanceof Error && caught.message ? caught.message : "Не удалось проверить ответ.");
+      }
+      setState("answer-edit");
+    } finally {
+      if (requestId === requestIdRef.current) controllerRef.current = null;
+    }
+  }
+
+  async function prepareAnswer(): Promise<void> {
+    if (!draft || !reviewToken || !answer || (state !== "metadata-review" && state !== "prepared")) return;
+    const memory = personalMemoryPayload();
+    if (!metadataConfirmed) {
+      setError("Подтверди, что проверил выбранные Personal Memory metadata.");
+      return;
+    }
+    if (!memory.evidence_kind || !memory.self_kind || (memory.evidence_at_precision === "exact" && !memory.evidence_at)) {
+      setError("Заполни обязательные поля Personal Memory metadata.");
+      return;
+    }
+    const requestId = requestIdRef.current;
+    setState("preparing");
+    setError("");
+    try {
+      const nextPlan = await preparePersonalMemory(reviewToken, draft, memory);
+      if (requestId !== requestIdRef.current) return;
+      setPlan(nextPlan);
+      setConfirmationToken(nextPlan.confirmation_token);
+      setState("prepared");
+    } catch (caught) {
+      if (requestId !== requestIdRef.current) return;
+      setError(caught instanceof Error && caught.message ? caught.message : "Не удалось подготовить сохранение.");
+      setState("metadata-review");
+    }
+  }
+
+  async function confirmAnswer(): Promise<void> {
+    if (!draft || !reviewToken || !confirmationToken || !answer || state !== "prepared") return;
+    const requestId = requestIdRef.current;
+    const memory = personalMemoryPayload();
+    setState("applying");
+    setError("");
+    try {
+      const next = await applyPersonalMemory(reviewToken, confirmationToken, draft, memory);
+      if (requestId !== requestIdRef.current) return;
+      setSaved(next);
+      setConfirmationToken(null);
+      setState("saved");
+    } catch (caught) {
+      if (requestId !== requestIdRef.current) return;
+      setError(caught instanceof Error && caught.message ? caught.message : "Не удалось сохранить личную память.");
+      setState("prepared");
+    }
   }
 
   const candidate = result?.candidate;
-  const terminal = state === "candidate" || state === "answer-handoff" || state === "ignored" || state === "rejected";
+  const busy = busyState(state);
+  const terminal = [
+    "candidate",
+    "resolving",
+    "answer-edit",
+    "reviewing",
+    "metadata-review",
+    "preparing",
+    "prepared",
+    "applying",
+    "saved",
+    "ignored",
+    "rejected",
+  ].includes(state);
+  const answerEditorVisible = Boolean(answer && draft) && [
+    "answer-edit",
+    "reviewing",
+    "metadata-review",
+    "preparing",
+    "prepared",
+    "applying",
+    "saved",
+  ].includes(state);
+  const metadataVisible = answerEditorVisible && [
+    "metadata-review",
+    "preparing",
+    "prepared",
+    "applying",
+    "saved",
+  ].includes(state);
   const liveText = resultStatusText(state, result);
 
   return (
@@ -230,7 +563,7 @@ export function ActivePersonalLearningSurface({
       className="active-learning-surface"
       id="active-learning"
       aria-labelledby="active-learning-title"
-      aria-busy={state === "loading"}
+      aria-busy={busy}
       data-active-learning-state={state}
     >
       <div className="active-learning-entry">
@@ -241,7 +574,7 @@ export function ActivePersonalLearningSurface({
         <button
           className="review-button review-button-secondary"
           type="button"
-          disabled={disabled || state === "loading" || terminal}
+          disabled={disabled || busy || terminal}
           aria-busy={state === "loading"}
           aria-controls="active-learning-output"
           onClick={() => void requestQuestion()}
@@ -258,6 +591,14 @@ export function ActivePersonalLearningSurface({
           <div className="active-learning-loading" aria-label="Идёт уточнение модели">
             <span className="active-learning-loading-mark" aria-hidden="true" />
             <p>Читаю только текущий серверный снимок модели и прогноза…</p>
+            <button className="review-button review-button-quiet" type="button" onClick={cancel}>Отменить</button>
+          </div>
+        ) : null}
+
+        {state === "resolving" ? (
+          <div className="active-learning-loading" aria-label="Проверяю вопрос перед ответом">
+            <span className="active-learning-loading-mark" aria-hidden="true" />
+            <p>Проверяю актуальность вопроса перед открытием editable answer…</p>
             <button className="review-button review-button-quiet" type="button" onClick={cancel}>Отменить</button>
           </div>
         ) : null}
@@ -288,9 +629,9 @@ export function ActivePersonalLearningSurface({
               ))}
             </fieldset>
             <div className="active-learning-actions">
-              <button className="review-button review-button-primary" type="button" disabled={!selectedOptionId} onClick={answerQuestion}>Ответить</button>
-              <button className="review-button review-button-secondary" type="button" onClick={() => resolve("ignored")}>Игнорировать</button>
-              <button className="review-button review-button-quiet" type="button" onClick={() => resolve("rejected")}>Отклонить</button>
+              <button className="review-button review-button-primary" type="button" disabled={!selectedOptionId} onClick={() => void answerQuestion()}>Ответить</button>
+              <button className="review-button review-button-secondary" type="button" onClick={() => resolveLocally("ignored")}>Игнорировать</button>
+              <button className="review-button review-button-quiet" type="button" onClick={() => resolveLocally("rejected")}>Отклонить</button>
             </div>
             <p className="active-learning-privacy">Ответ останется только в памяти этой страницы и не станет каноническим свидетельством.</p>
           </section>
@@ -302,14 +643,86 @@ export function ActivePersonalLearningSurface({
           </p>
         ) : null}
 
-        {state === "answer-handoff" && answer ? (
-          <section className="active-learning-state active-learning-handoff" aria-labelledby="active-learning-handoff-title">
-            <h4 id="active-learning-handoff-title">Ответ подготовлен для следующего шага.</h4>
-            <dl>
-              <div><dt>Задача</dt><dd>{answer.task}</dd></div>
-              <div><dt>Выбранный вариант</dt><dd>{answer.option.label}</dd></div>
-            </dl>
-            <p>Полная проверка и возможное сохранение черновика относятся к следующему этапу; сейчас запись не выполнялась.</p>
+        {answerEditorVisible && answer && draft ? (
+          <section className="active-learning-answer-flow" aria-labelledby="active-learning-answer-title">
+            <section className="active-learning-answer-context" aria-labelledby="active-learning-answer-context-title">
+              <h4 id="active-learning-answer-context-title">Контекст вопроса</h4>
+              <dl>
+                <div><dt>Задача</dt><dd>{answer.task}</dd></div>
+                <div><dt>Вопрос</dt><dd>{answer.question}</dd></div>
+                <div><dt>Выбранный вариант</dt><dd>{answer.option.label}</dd></div>
+              </dl>
+              <p>Контекст помогает проверить смысл, но сам по себе не попадёт в каноническую заметку.</p>
+            </section>
+            <section className="active-learning-answer-editor" aria-busy={busy}>
+              <h4 id="active-learning-answer-title">Проверь и отредактируй ответ</h4>
+              <p className="active-learning-answer-guidance">Ответ ниже — editable suggestion. Оставь только тот текст, который действительно хочешь сохранить.</p>
+              <div className="active-learning-answer-fields">
+                <label className="review-field">
+                  <span className="draft-field-label">Название</span>
+                  <input className="review-input" id="active-learning-answer-title-input" type="text" value={draft.title} disabled={busy || state === "saved"} onChange={(event) => updateDraft("title", event.target.value)} />
+                </label>
+                <label className="review-field">
+                  <span className="draft-field-label">Тип заметки</span>
+                  <select className="review-input" value={draft.note_type} disabled={busy || state === "saved"} onChange={(event) => updateDraft("note_type", event.target.value)}>
+                    <option value="project">Проект</option>
+                    <option value="area">Область</option>
+                    <option value="resource">Ресурс</option>
+                    <option value="zettel">Zettel</option>
+                  </select>
+                </label>
+                <label className="review-field">
+                  <span className="draft-field-label">Теги (один на строку)</span>
+                  <textarea className="review-input" rows={3} value={draft.tags.join("\n")} disabled={busy || state === "saved"} onChange={(event) => updateDraft("tags", event.target.value.split(/\r?\n/).filter((item) => item.length > 0))} />
+                </label>
+                <label className="review-field">
+                  <span className="draft-field-label">Ссылки (одна на строку)</span>
+                  <textarea className="review-input" rows={3} value={draft.links.join("\n")} disabled={busy || state === "saved"} onChange={(event) => updateDraft("links", event.target.value.split(/\r?\n/).filter((item) => item.length > 0))} />
+                </label>
+                <label className="review-field review-field-wide">
+                  <span className="draft-field-label">Содержание ответа</span>
+                  <textarea className="review-input active-learning-answer-content" rows={12} value={draft.content} disabled={busy || state === "saved"} onChange={(event) => updateDraft("content", event.target.value)} />
+                </label>
+              </div>
+              {state === "answer-edit" || state === "reviewing" ? (
+                <div className="active-learning-actions">
+                  <button className="review-button review-button-primary" type="button" disabled={busy || !draft.title.trim() || !draft.content.trim()} aria-busy={state === "reviewing"} onClick={() => void reviewAnswer()}>
+                    {state === "reviewing" ? "Проверяю…" : "Проверить ответ"}
+                  </button>
+                  <button className="review-button review-button-quiet" type="button" disabled={busy} onClick={cancel}>Отменить ответ</button>
+                </div>
+              ) : null}
+              {metadataVisible ? (
+                <section className="personal-memory-panel active-learning-personal-memory" aria-labelledby="active-learning-personal-memory-title">
+                  <h5 id="active-learning-personal-memory-title">Personal Memory metadata</h5>
+                  <p className="personal-memory-description">Ничего не классифицируется автоматически. Выбери и проверь каждое значение перед подготовкой.</p>
+                  <PersonalMemoryMetadataFields
+                    idPrefix="active-learning-personal-memory"
+                    disabled={busy || state === "saved"}
+                    values={memoryFields}
+                    onEvidenceKindChange={(value) => updateMemoryFields(() => setMemoryFields((current) => ({ ...current, evidenceKind: value })))}
+                    onSelfKindChange={(value) => updateMemoryFields(() => setMemoryFields((current) => ({ ...current, selfKind: value })))}
+                    onDomainChange={(value) => updateMemoryFields(() => setMemoryFields((current) => ({ ...current, domain: value })))}
+                    onTimeModeChange={(value: PersonalMemoryTimeMode) => updateMemoryFields(() => setMemoryFields((current) => ({ ...current, timeMode: value, evidenceAt: value === "exact" ? "" : "unknown" })))}
+                    onEvidenceAtChange={(value) => updateMemoryFields(() => setMemoryFields((current) => ({ ...current, evidenceAt: value })))}
+                    onNow={() => updateMemoryFields(() => setMemoryFields((current) => ({ ...current, timeMode: "exact", evidenceAt: new Date().toISOString() })))}
+                  />
+                  <label className="active-learning-metadata-confirmation">
+                    <input type="checkbox" checked={metadataConfirmed} disabled={busy || state === "saved"} onChange={(event) => { setMetadataConfirmed(event.target.checked); setPlan(null); setConfirmationToken(null); if (!event.target.checked && state !== "saved") setState("metadata-review"); }} />
+                    <span>Я проверил Personal Memory metadata и понимаю, что это станет каноническим свидетельством после подтверждения.</span>
+                  </label>
+                  <div className="active-learning-actions">
+                    <button className="review-button review-button-primary" type="button" disabled={busy || state === "saved"} aria-busy={state === "preparing"} onClick={() => void prepareAnswer()}>
+                      {state === "preparing" ? "Подготавливаю…" : "Подготовить сохранение"}
+                    </button>
+                    {confirmationToken ? <button className="review-button review-button-primary" type="button" disabled={busy || state === "saved"} aria-busy={state === "applying"} onClick={() => void confirmAnswer()}>{state === "applying" ? "Сохраняю…" : "Подтвердить сохранение"}</button> : null}
+                    <button className="review-button review-button-quiet" type="button" disabled={busy || state === "saved"} onClick={cancel}>Отменить ответ</button>
+                  </div>
+                </section>
+              ) : null}
+              {plan ? <AnswerSavePlan plan={plan} /> : null}
+              {saved ? <AnswerSavedNote payload={saved} /> : null}
+            </section>
           </section>
         ) : null}
 
@@ -325,4 +738,8 @@ export function ActivePersonalLearningSurface({
       </div>
     </section>
   );
+}
+
+function busyState(state: ActiveLearningUiState): boolean {
+  return ["loading", "resolving", "reviewing", "preparing", "applying"].includes(state);
 }

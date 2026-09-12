@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -14,12 +16,17 @@ from second_brain.application.active_personal_learning import (
     ActiveLearningError,
     ActiveLearningErrorCodeV1,
     ActiveLearningNoCandidateCodeV1,
+    ActiveLearningOperationStateV1,
+    ActiveLearningResolutionResultV1,
     ActiveLearningResultV1,
     ActiveLearningSourceUnavailableError,
     ActiveLearningStatusV1,
+    AnswerCaptureV1,
     QuestionCandidateV1,
+    QuestionDispositionV1,
     QuestionOptionV1,
     QuestionReasonCodeV1,
+    QuestionResolutionV1,
     serialize_active_learning_result,
 )
 from second_brain.application.simulate_me import (
@@ -31,6 +38,7 @@ from second_brain.application.simulate_me import (
 )
 from second_brain.entrypoints.web.active_personal_learning import (
     ACTIVE_LEARNING_REQUEST_HEADER_VALUE,
+    ACTIVE_LEARNING_RESOLVE_PATH,
     MAX_RAW_ACTIVE_LEARNING_BODY_BYTES,
     ActiveLearningQuestionsRequestPayload,
     ActiveLearningWebService,
@@ -84,6 +92,27 @@ class RaisingActiveLearningService:
         raise self.error
 
 
+@dataclass(slots=True)
+class RecordingActiveLearningResolutionService:
+    result: ActiveLearningResolutionResultV1
+    calls: list[tuple[SimulateMeRequest, QuestionCandidateV1, QuestionResolutionV1]] = field(
+        default_factory=list
+    )
+
+    def execute(self, request: SimulateMeRequest) -> ActiveLearningResultV1:
+        del request
+        raise AssertionError("question endpoint is not part of this resolver test")
+
+    def resolve(
+        self,
+        request: SimulateMeRequest,
+        candidate: QuestionCandidateV1,
+        resolution: QuestionResolutionV1,
+    ) -> ActiveLearningResolutionResultV1:
+        self.calls.append((request, candidate, resolution))
+        return self.result
+
+
 def _headers() -> dict[str, str]:
     return {
         "Origin": BASE_URL,
@@ -95,6 +124,22 @@ def _request_body() -> dict[str, object]:
     return {
         "query": "Текущий выбор",
         "options": [{"id": "a", "label": "A"}, {"id": "b", "label": "B"}],
+    }
+
+
+def _resolve_body() -> dict[str, object]:
+    result = ActiveLearningResultV1(
+        status=ActiveLearningStatusV1.CANDIDATE,
+        candidate=_candidate(),
+        no_candidate_code=None,
+    )
+    return {
+        "candidate": json.loads(serialize_active_learning_result(result))["candidate"],
+        "resolution": {
+            "candidate_id": _candidate().candidate_id,
+            "disposition": "answer",
+            "selected_option_id": "a",
+        },
     }
 
 
@@ -272,6 +317,90 @@ def test_active_learning_api_hides_unexpected_service_details() -> None:
     assert response.json()["error"]["code"] == "ACTIVE_LEARNING_SOURCE_UNAVAILABLE"
     assert "private" not in response.text
     assert "secret.md" not in response.text
+
+
+def test_active_learning_resolve_revalidates_and_projects_only_answer_capture() -> None:
+    candidate = _candidate()
+    answer = AnswerCaptureV1(task=candidate.task, option=candidate.options[0])
+    result = ActiveLearningResolutionResultV1(
+        candidate_id=candidate.candidate_id,
+        disposition=QuestionDispositionV1.ANSWER,
+        answer_capture=answer,
+        next_state=ActiveLearningOperationStateV1(
+            candidate_id=candidate.candidate_id,
+            terminal=True,
+        ),
+    )
+    service = RecordingActiveLearningResolutionService(result)
+    app = create_app(active_learning_service=cast(ActiveLearningWebService, service))
+
+    with TestClient(app, base_url=BASE_URL) as client:
+        response = client.post(
+            ACTIVE_LEARNING_RESOLVE_PATH,
+            json=_resolve_body(),
+            headers=_headers(),
+        )
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "candidate_id": candidate.candidate_id,
+        "disposition": "answer",
+        "answer_capture": {
+            "task": candidate.task,
+            "option": {"id": "a", "label": "A"},
+        },
+    }
+    assert response.headers["cache-control"] == "no-store"
+    assert len(service.calls) == 1
+    request, submitted_candidate, submitted_resolution = service.calls[0]
+    assert request == SimulateMeRequest(
+        query=candidate.task,
+        options=(SimulateMeOption("a", "A"), SimulateMeOption("b", "B")),
+    )
+    assert submitted_candidate == candidate
+    assert submitted_resolution.candidate_id == candidate.candidate_id
+    assert submitted_resolution.disposition is QuestionDispositionV1.ANSWER
+    assert submitted_resolution.selected_option_id == "a"
+    assert b"evidence_note_ids" not in response.content
+    assert b"basis_fingerprint" not in response.content
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda body: body["resolution"].update(extra=True),
+        lambda body: body["candidate"].update(extra=True),
+    ],
+)
+def test_active_learning_resolve_rejects_strict_or_wrong_boundary_before_service(
+    mutate: object,
+) -> None:
+    candidate = _candidate()
+    service = RecordingActiveLearningResolutionService(
+        ActiveLearningResolutionResultV1(
+            candidate_id=candidate.candidate_id,
+            disposition=QuestionDispositionV1.ANSWER,
+            answer_capture=AnswerCaptureV1(task=candidate.task, option=candidate.options[0]),
+            next_state=ActiveLearningOperationStateV1(
+                candidate_id=candidate.candidate_id,
+                terminal=True,
+            ),
+        )
+    )
+    app = create_app(active_learning_service=cast(ActiveLearningWebService, service))
+    body = _resolve_body()
+    cast(Callable[[dict[str, object]], None], mutate)(body)
+
+    with TestClient(app, base_url=BASE_URL) as client:
+        response = client.post(
+            ACTIVE_LEARNING_RESOLVE_PATH,
+            json=body,
+            headers={**_headers(), "X-Second-Brain-Request": "wrong-purpose-v1"},
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == ActiveLearningErrorCodeV1.INVALID_REQUEST.value
+    assert service.calls == []
 
 
 def test_production_service_is_lazy_and_keeps_the_existing_vault_contract(tmp_path: Path) -> None:

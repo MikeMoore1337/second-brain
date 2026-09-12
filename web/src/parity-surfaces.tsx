@@ -25,6 +25,7 @@ import {
 } from "./api";
 import { ActivePersonalLearningSurface } from "./active-personal-learning-surface";
 import { Icon, type IconName } from "./icons";
+import { PersonalMemoryMetadataFields } from "./personal-memory-metadata-fields";
 import { presentValue } from "./presentation";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactElement, type ReactNode } from "react";
 
@@ -236,13 +237,18 @@ function DraftReview({ response, onReset, allowPersonalMemory }: DraftReviewProp
           <h5>Личная память</h5>
           <p className="personal-memory-description">Включи режим только после проверки черновика и явно укажи метаданные шага 1.</p>
           <label className="personal-memory-toggle"><input type="checkbox" checked={personalMemoryEnabled} disabled={busy || Boolean(saved)} aria-controls="personal-memory-fields" aria-expanded={personalMemoryEnabled} onChange={(event) => { setPersonalMemoryEnabled(event.target.checked); invalidate("Изменения требуют новой подготовки безопасного сохранения."); }} /><span>Сохранить как личную память</span></label>
-          <div className="personal-memory-fields" id="personal-memory-fields" hidden={!personalMemoryEnabled}>
-            <label className="review-field draft-field-label">Основание<select className="review-input" value={evidenceKind} disabled={busy || Boolean(saved)} onChange={(event) => { setEvidenceKind(event.target.value); invalidate(); }}><option value="" disabled>Выбери тип основания</option><option value="explicit_user_fact">Факт обо мне / моей ситуации</option><option value="user_statement">Моё утверждение, мнение, цель или самоописание</option></select></label>
-            <label className="review-field draft-field-label">Что сохраняем о себе<select className="review-input" value={selfKind} disabled={busy || Boolean(saved)} onChange={(event) => { setSelfKind(event.target.value); invalidate(); }}><option value="" disabled>Выбери тип памяти</option><option value="memory">Память</option><option value="preference">Предпочтение</option><option value="belief">Убеждение</option><option value="goal">Цель</option></select></label>
-            <label className="review-field draft-field-label">Домен (необязательно)<input className="review-input" type="text" value={domain} disabled={busy || Boolean(saved)} onChange={(event) => { setDomain(event.target.value); invalidate(); }} /></label>
-            <label className="review-field draft-field-label">Время факта<select className="review-input" value={timeMode} disabled={busy || Boolean(saved)} onChange={(event) => { const value = event.target.value as "exact" | "unknown"; setTimeMode(value); setEvidenceAt(value === "exact" ? "" : "unknown"); invalidate(); }}><option value="exact">Точное время</option><option value="unknown">Время неизвестно</option></select></label>
-            {timeMode === "exact" ? <div className="personal-memory-time-field"><label className="draft-field-label" htmlFor="personal-memory-evidence-at">RFC3339 время факта</label><input className="review-input" id="personal-memory-evidence-at" type="text" value={evidenceAt} disabled={busy || Boolean(saved)} onChange={(event) => { setEvidenceAt(event.target.value); invalidate(); }} /><button className="review-button review-button-secondary" type="button" disabled={busy || Boolean(saved)} onClick={() => { setEvidenceAt(new Date().toISOString()); invalidate(); }}>Сейчас</button></div> : null}
-          </div>
+          <PersonalMemoryMetadataFields
+            idPrefix="personal-memory"
+            hidden={!personalMemoryEnabled}
+            disabled={busy || Boolean(saved)}
+            values={{ evidenceKind, selfKind, timeMode, evidenceAt, domain }}
+            onEvidenceKindChange={(value) => { setEvidenceKind(value); invalidate(); }}
+            onSelfKindChange={(value) => { setSelfKind(value); invalidate(); }}
+            onDomainChange={(value) => { setDomain(value); invalidate(); }}
+            onTimeModeChange={(value) => { setTimeMode(value); setEvidenceAt(value === "exact" ? "" : "unknown"); invalidate(); }}
+            onEvidenceAtChange={(value) => { setEvidenceAt(value); invalidate(); }}
+            onNow={() => { setEvidenceAt(new Date().toISOString()); invalidate(); }}
+          />
         </section> : null}
         <div className="review-actions">
           <button className="review-button review-button-secondary" type="button" disabled={busy || Boolean(saved)} aria-busy={busy} onClick={() => void handlePreview()}>Предпросмотр</button>

@@ -42,6 +42,17 @@ export type ActiveLearningResult = {
   readonly no_candidate_code: ActiveLearningNoCandidateCode | null;
 };
 
+export type ActiveLearningAnswerCapture = {
+  readonly task: string;
+  readonly option: ActiveLearningOption;
+};
+
+export type ActiveLearningResolution = {
+  readonly candidate_id: string;
+  readonly disposition: "answer" | "ignore" | "reject";
+  readonly answer_capture: ActiveLearningAnswerCapture | null;
+};
+
 type ErrorEnvelope = { error?: { code?: unknown; message?: unknown } };
 
 export class ActivePersonalLearningApiError extends Error {
@@ -106,6 +117,38 @@ function parseResult(payload: unknown): ActiveLearningResult {
   };
 }
 
+function parseResolution(payload: unknown): ActiveLearningResolution {
+  if (
+    !isRecord(payload)
+    || typeof payload.candidate_id !== "string"
+    || (payload.disposition !== "answer" && payload.disposition !== "ignore" && payload.disposition !== "reject")
+  ) {
+    throw new ActivePersonalLearningApiError(
+      "ACTIVE_LEARNING_INVALID_RESPONSE",
+      "Сервис уточнения модели вернул некорректный ответ.",
+    );
+  }
+  const capture = payload.answer_capture;
+  if (capture === null) {
+    return {
+      candidate_id: payload.candidate_id,
+      disposition: payload.disposition,
+      answer_capture: null,
+    };
+  }
+  if (!isRecord(capture) || typeof capture.task !== "string" || !isOption(capture.option)) {
+    throw new ActivePersonalLearningApiError(
+      "ACTIVE_LEARNING_INVALID_RESPONSE",
+      "Сервис уточнения модели вернул некорректный ответ.",
+    );
+  }
+  return {
+    candidate_id: payload.candidate_id,
+    disposition: payload.disposition,
+    answer_capture: { task: capture.task, option: capture.option },
+  };
+}
+
 export async function requestActiveLearningQuestions(
   payload: ActiveLearningRequest,
   signal?: AbortSignal,
@@ -137,4 +180,46 @@ export async function requestActiveLearningQuestions(
     throw new ActivePersonalLearningApiError(code, message);
   }
   return parseResult(parsed);
+}
+
+export async function resolveActiveLearningQuestion(
+  candidate: ActiveLearningCandidate,
+  selectedOptionId: string,
+  signal?: AbortSignal,
+): Promise<ActiveLearningResolution> {
+  const init: RequestInit = {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "X-Second-Brain-Request": "active-learning-v1",
+    },
+    body: JSON.stringify({
+      candidate,
+      resolution: {
+        candidate_id: candidate.candidate_id,
+        disposition: "answer",
+        selected_option_id: selectedOptionId,
+      },
+    }),
+  };
+  if (signal) init.signal = signal;
+  const response = await fetch("/api/active-learning/questions/resolve", init);
+  let parsed: unknown = null;
+  try {
+    parsed = await response.json();
+  } catch {
+    parsed = null;
+  }
+  if (!response.ok) {
+    const envelope = parsed as ErrorEnvelope | null;
+    const code = typeof envelope?.error?.code === "string"
+      ? envelope.error.code
+      : "ACTIVE_LEARNING_REQUEST_FAILED";
+    const message = typeof envelope?.error?.message === "string"
+      ? envelope.error.message
+      : "Не удалось подтвердить ответ на вопрос уточнения.";
+    throw new ActivePersonalLearningApiError(code, message);
+  }
+  return parseResolution(parsed);
 }

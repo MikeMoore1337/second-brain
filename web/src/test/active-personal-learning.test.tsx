@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ActivePersonalLearningApiError,
   requestActiveLearningQuestions,
+  type ActiveLearningAnswerCapture,
   type ActiveLearningResult,
 } from "../active-personal-learning-api";
 import { ActivePersonalLearningSurface } from "../active-personal-learning-surface";
@@ -49,6 +50,37 @@ const noCandidateResult: ActiveLearningResult = {
   no_candidate_code: "no_actionable_gap",
 };
 
+const answerCapture: ActiveLearningAnswerCapture = {
+  task: "Выбрать формат работы",
+  option: { id: "b", label: "Сделать быстрее" },
+};
+
+const answerDraft = {
+  title: "Мой выбор",
+  note_type: "resource",
+  content: "Я выбрал сделать быстрее.",
+  tags: ["choice"],
+  links: [],
+};
+
+const answerReview = {
+  review_token: "answer-review",
+  draft: answerDraft,
+  sources: [],
+};
+
+const answerPlan = {
+  status: "dry-run",
+  confirmation_token: "pm-confirm",
+  note: { id: "note-id", type: "resource", relative_path: "30 Resources/My choice.md" },
+  diff: "--- /dev/null\n+++ 30 Resources/My choice.md\n@@\n+Я выбрал сделать быстрее.",
+};
+
+const answerSaved = {
+  status: "created",
+  note: { id: "note-id", type: "resource", relative_path: "30 Resources/My choice.md", created: "2026-09-12T10:00:00Z" },
+};
+
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
     status,
@@ -74,6 +106,20 @@ async function renderSurface(query = "Выбрать формат работы")
 function actionButton(host: HTMLElement, label: string): HTMLButtonElement | undefined {
   return Array.from(host.querySelectorAll<HTMLButtonElement>("button"))
     .find((button) => button.textContent?.includes(label));
+}
+
+function setControlValue(
+  control: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
+  value: string,
+): void {
+  const prototype = control instanceof HTMLSelectElement
+    ? HTMLSelectElement.prototype
+    : control instanceof HTMLTextAreaElement
+      ? HTMLTextAreaElement.prototype
+      : HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+  setter?.call(control, value);
+  control.dispatchEvent(new Event(control instanceof HTMLSelectElement ? "change" : "input", { bubbles: true }));
 }
 
 describe("Active Personal Learning v1 surface", () => {
@@ -108,8 +154,14 @@ describe("Active Personal Learning v1 surface", () => {
     expect(host.textContent).not.toContain("low confidence");
   });
 
-  it("answers only in page memory and does not issue a write or second request", async () => {
-    const fetchSpy = vi.spyOn(window, "fetch").mockResolvedValue(jsonResponse(candidateResult));
+  it("requires explicit answer resolution and opens a fully editable page-memory draft", async () => {
+    const fetchSpy = vi.spyOn(window, "fetch")
+      .mockResolvedValueOnce(jsonResponse(candidateResult))
+      .mockResolvedValueOnce(jsonResponse({
+        candidate_id: candidateResult.candidate?.candidate_id,
+        disposition: "answer",
+        answer_capture: answerCapture,
+      }));
     const host = await renderSurface();
 
     await act(async () => actionButton(host, "Уточнить модель")?.click());
@@ -117,12 +169,158 @@ describe("Active Personal Learning v1 surface", () => {
     await act(async () => secondOption?.click());
     await act(async () => actionButton(host, "Ответить")?.click());
 
-    expect(fetchSpy).toHaveBeenCalledOnce();
-    expect(host.querySelector("[data-active-learning-state='answer-handoff']")).not.toBeNull();
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(fetchSpy.mock.calls[1][0]).toBe("/api/active-learning/questions/resolve");
+    expect(JSON.parse(String(fetchSpy.mock.calls[1][1]?.body))).toMatchObject({
+      resolution: {
+        candidate_id: candidateResult.candidate?.candidate_id,
+        disposition: "answer",
+        selected_option_id: "b",
+      },
+    });
+    expect(host.querySelector("[data-active-learning-state='answer-edit']")).not.toBeNull();
+    expect(host.querySelector<HTMLTextAreaElement>(".active-learning-answer-content")?.value)
+      .toBe("Сделать быстрее");
     expect(host.textContent).toContain("Сделать быстрее");
-    expect(host.textContent).toContain("запись не выполнялась");
+    expect(host.textContent).toContain("Какой вариант лучше всего описывает ваш текущий выбор сейчас?");
+    expect(host.querySelector(".active-learning-answer-context")).not.toBeNull();
+    expect(host.querySelector(".active-learning-metadata-confirmation")).toBeNull();
     expect(host.textContent).not.toContain("localStorage");
     expect(host.textContent).not.toContain("sessionStorage");
+  });
+
+  it("requires review, explicit metadata confirmation, exact diff, and confirmation before apply", async () => {
+    const fetchSpy = vi.spyOn(window, "fetch")
+      .mockResolvedValueOnce(jsonResponse(candidateResult))
+      .mockResolvedValueOnce(jsonResponse({
+        candidate_id: candidateResult.candidate?.candidate_id,
+        disposition: "answer",
+        answer_capture: answerCapture,
+      }))
+      .mockResolvedValueOnce(jsonResponse(answerReview))
+      .mockResolvedValueOnce(jsonResponse(answerPlan))
+      .mockResolvedValueOnce(jsonResponse(answerSaved));
+    const host = await renderSurface();
+
+    await act(async () => actionButton(host, "Уточнить модель")?.click());
+    await act(async () => host.querySelector<HTMLInputElement>("input[value='b']")?.click());
+    await act(async () => actionButton(host, "Ответить")?.click());
+
+    const title = host.querySelector<HTMLInputElement>("#active-learning-answer-title-input");
+    const tags = host.querySelector<HTMLTextAreaElement>(".active-learning-answer-fields textarea:not(.active-learning-answer-content)");
+    const content = host.querySelector<HTMLTextAreaElement>(".active-learning-answer-content");
+    expect(title).not.toBeNull();
+    expect(tags).not.toBeNull();
+    expect(content).not.toBeNull();
+    if (!title || !tags || !content) return;
+    await act(async () => {
+      setControlValue(title, answerDraft.title);
+      setControlValue(tags, answerDraft.tags.join("\n"));
+      setControlValue(content, answerDraft.content);
+    });
+    await act(async () => actionButton(host, "Проверить ответ")?.click());
+
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    expect(fetchSpy.mock.calls[2][0]).toBe("/api/drafts/active-learning/answer/review");
+    expect(JSON.parse(String(fetchSpy.mock.calls[2][1]?.body))).toEqual({ draft: answerDraft });
+    expect(host.querySelector("[data-active-learning-state='metadata-review']")).not.toBeNull();
+    expect(host.querySelector(".active-learning-metadata-confirmation")).not.toBeNull();
+
+    await act(async () => actionButton(host, "Подготовить сохранение")?.click());
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    expect(host.textContent).toContain("Подтверди, что проверил выбранные Personal Memory metadata.");
+
+    const metadataFields = host.querySelectorAll<HTMLSelectElement>(".active-learning-personal-memory .personal-memory-fields select");
+    const domain = host.querySelector<HTMLInputElement>(".active-learning-personal-memory .personal-memory-fields input");
+    const confirmation = host.querySelector<HTMLInputElement>(".active-learning-metadata-confirmation input");
+    expect(metadataFields).toHaveLength(3);
+    expect(domain).not.toBeNull();
+    expect(confirmation).not.toBeNull();
+    if (metadataFields.length !== 3 || !domain || !confirmation) return;
+    await act(async () => {
+      setControlValue(metadataFields[0], "explicit_user_fact");
+      setControlValue(metadataFields[1], "preference");
+      setControlValue(domain, "work");
+      confirmation.click();
+    });
+    await act(async () => actionButton(host, "Подготовить сохранение")?.click());
+
+    expect(fetchSpy).toHaveBeenCalledTimes(4);
+    expect(fetchSpy.mock.calls[3][0]).toBe("/api/drafts/personal-memory/save/prepare");
+    expect(JSON.parse(String(fetchSpy.mock.calls[3][1]?.body))).toEqual({
+      review_token: "answer-review",
+      draft: answerDraft,
+      personal_memory: {
+        evidence_kind: "explicit_user_fact",
+        self_kind: "preference",
+        evidence_at: "unknown",
+        evidence_at_precision: "unknown",
+        domain: "work",
+      },
+    });
+    expect(host.textContent).toContain("+Я выбрал сделать быстрее.");
+    expect(host.textContent).toContain("Проверь полный diff и подтверди сохранение.");
+    expect(host.querySelector("[data-active-learning-state='prepared']")).not.toBeNull();
+
+    await act(async () => actionButton(host, "Подтвердить сохранение")?.click());
+    expect(fetchSpy).toHaveBeenCalledTimes(5);
+    expect(fetchSpy.mock.calls[4][0]).toBe("/api/drafts/personal-memory/save/apply");
+    expect(JSON.parse(String(fetchSpy.mock.calls[4][1]?.body))).toEqual({
+      review_token: "answer-review",
+      confirmation_token: "pm-confirm",
+      draft: answerDraft,
+      personal_memory: {
+        evidence_kind: "explicit_user_fact",
+        self_kind: "preference",
+        evidence_at: "unknown",
+        evidence_at_precision: "unknown",
+        domain: "work",
+      },
+    });
+    expect(host.querySelector("[data-active-learning-state='saved']")).not.toBeNull();
+    expect(host.textContent).toContain("Личная память сохранена");
+  });
+
+  it("does not review or prepare an empty answer and can cancel the editable state", async () => {
+    const fetchSpy = vi.spyOn(window, "fetch")
+      .mockResolvedValueOnce(jsonResponse(candidateResult))
+      .mockResolvedValueOnce(jsonResponse({
+        candidate_id: candidateResult.candidate?.candidate_id,
+        disposition: "answer",
+        answer_capture: answerCapture,
+      }));
+    const host = await renderSurface();
+
+    await act(async () => actionButton(host, "Уточнить модель")?.click());
+    await act(async () => host.querySelector<HTMLInputElement>("input[value='b']")?.click());
+    await act(async () => actionButton(host, "Ответить")?.click());
+    const content = host.querySelector<HTMLTextAreaElement>(".active-learning-answer-content");
+    expect(content).not.toBeNull();
+    if (!content) return;
+    await act(async () => setControlValue(content, ""));
+    expect(actionButton(host, "Проверить ответ")?.disabled).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+
+    await act(async () => actionButton(host, "Отменить ответ")?.click());
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(host.querySelector("[data-active-learning-state='cancelled']")).not.toBeNull();
+    expect(host.textContent).toContain("Уточнение модели отменено.");
+  });
+
+  it("fails closed when the server marks the candidate stale before answer handoff", async () => {
+    const fetchSpy = vi.spyOn(window, "fetch")
+      .mockResolvedValueOnce(jsonResponse(candidateResult))
+      .mockResolvedValueOnce(jsonResponse({ error: { code: "ACTIVE_LEARNING_CANDIDATE_STALE", message: "private detail" } }, 409));
+    const host = await renderSurface();
+
+    await act(async () => actionButton(host, "Уточнить модель")?.click());
+    await act(async () => host.querySelector<HTMLInputElement>("input[value='b']")?.click());
+    await act(async () => actionButton(host, "Ответить")?.click());
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(host.querySelector("[data-active-learning-state='stale']")).not.toBeNull();
+    expect(host.textContent).toContain("Вопрос уточнения устарел");
+    expect(host.querySelector(".active-learning-answer-content")).toBeNull();
   });
 
   it.each([
