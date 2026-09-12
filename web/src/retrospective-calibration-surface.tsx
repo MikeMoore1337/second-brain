@@ -195,6 +195,7 @@ export function RetrospectiveCalibrationSurface(): ReactElement {
   const requestIdRef = useRef(0);
 
   async function refresh(): Promise<void> {
+    controllerRef.current?.abort();
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
     const controller = new AbortController();
