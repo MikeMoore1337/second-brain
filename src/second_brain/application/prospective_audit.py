@@ -910,12 +910,13 @@ class _StoreLock(AbstractContextManager["_StoreLock"]):
             if os.name == "nt":
                 import msvcrt
 
+                msvcrt_module: Any = msvcrt
                 self._file.seek(0, os.SEEK_END)
                 if self._file.tell() == 0:
                     self._file.write(b"\0")
                     self._file.flush()
                 self._file.seek(0)
-                msvcrt.locking(self._file.fileno(), msvcrt.LK_LOCK, 1)
+                msvcrt_module.locking(self._file.fileno(), msvcrt_module.LK_LOCK, 1)
             else:
                 import fcntl
 
@@ -936,8 +937,9 @@ class _StoreLock(AbstractContextManager["_StoreLock"]):
             if os.name == "nt":
                 import msvcrt
 
+                msvcrt_module: Any = msvcrt
                 file.seek(0)
-                msvcrt.locking(file.fileno(), msvcrt.LK_UNLCK, 1)
+                msvcrt_module.locking(file.fileno(), msvcrt_module.LK_UNLCK, 1)
             else:
                 import fcntl
 
