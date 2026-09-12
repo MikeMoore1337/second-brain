@@ -1,3 +1,4 @@
+import { GlobalCosmosBackground } from "./global-cosmos";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 type MotionState = { paused: boolean; setPaused: (paused: boolean) => void };
 const PageMotionContext = createContext<MotionState | null>(null);
@@ -28,7 +29,7 @@ export function PageMotion({ children }: { children: ReactNode }) {
     return () => { observer?.disconnect(); media.removeEventListener("change", update); document.removeEventListener("visibilitychange", update); };
   }, []);
   return <PageMotionContext.Provider value={{ paused, setPaused }}><div className="motion-world" data-page-motion={available && !paused}>
-    <div className="page-atmosphere" aria-hidden="true"><i className="page-light page-light-left" /><i className="page-light page-light-right" /></div>
+    <GlobalCosmosBackground />
     {children}
   </div></PageMotionContext.Provider>;
 }
