@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ActivePersonalLearningApiError,
   requestActiveLearningQuestions,
+  resolveActiveLearningQuestion,
   type ActiveLearningAnswerCapture,
   type ActiveLearningResult,
 } from "../active-personal-learning-api";
@@ -24,7 +25,7 @@ const candidateResult: ActiveLearningResult = {
   no_candidate_code: null,
   candidate: {
     contract_version: "active-personal-learning-v1",
-    candidate_id: `apl1:${"0".repeat(64)}`,
+    candidate_id: `apl1:${"2".repeat(64)}`,
     kind: "choice",
     reason_code: "conflicting_evidence",
     task: "Выбрать формат работы",
@@ -39,7 +40,7 @@ const candidateResult: ActiveLearningResult = {
     source_policy_fingerprint: `sha256:${"1".repeat(64)}`,
     evidence_note_ids: [],
     basis_fingerprint: `sha256:${"2".repeat(64)}`,
-    issued_at: "2026-09-12T10:00:00.000000+00:00",
+    issued_at: "2099-01-01T00:00:00.000000+00:00",
     expires_at: "2099-01-01T00:10:00.000000+00:00",
   },
 };
@@ -427,5 +428,66 @@ describe("Active Personal Learning v1 API client", () => {
     ).rejects.toMatchObject({
       code: "ACTIVE_LEARNING_INVALID_REQUEST",
     } satisfies Partial<ActivePersonalLearningApiError>);
+  });
+
+  it("fails closed on an incomplete candidate response", async () => {
+    const malformedCandidate = { ...candidateResult.candidate } as Record<string, unknown>;
+    delete malformedCandidate.basis_fingerprint;
+    vi.spyOn(window, "fetch").mockResolvedValue(
+      jsonResponse({ ...candidateResult, candidate: malformedCandidate }),
+    );
+
+    await expect(
+      requestActiveLearningQuestions({ query: "Task", options: [{ id: "a", label: "A" }] }),
+    ).rejects.toMatchObject({
+      code: "ACTIVE_LEARNING_INVALID_RESPONSE",
+    } satisfies Partial<ActivePersonalLearningApiError>);
+  });
+
+  it("fails closed on an unknown result status", async () => {
+    vi.spyOn(window, "fetch").mockResolvedValue(
+      jsonResponse({ ...candidateResult, status: "unexpected" }),
+    );
+
+    await expect(
+      requestActiveLearningQuestions({ query: "Task", options: [{ id: "a", label: "A" }] }),
+    ).rejects.toMatchObject({
+      code: "ACTIVE_LEARNING_INVALID_RESPONSE",
+    } satisfies Partial<ActivePersonalLearningApiError>);
+  });
+
+  it("rejects a terminal resolution that carries an answer capture", async () => {
+    vi.spyOn(window, "fetch").mockResolvedValue(
+      jsonResponse({
+        candidate_id: candidateResult.candidate?.candidate_id,
+        disposition: "ignore",
+        answer_capture: answerCapture,
+      }),
+    );
+
+    await expect(
+      resolveActiveLearningQuestion(candidateResult.candidate!, "b"),
+    ).rejects.toMatchObject({
+      code: "ACTIVE_LEARNING_INVALID_RESPONSE",
+    } satisfies Partial<ActivePersonalLearningApiError>);
+  });
+
+  it("rejects an answer handoff without the exact answer capture", async () => {
+    const fetchSpy = vi.spyOn(window, "fetch")
+      .mockResolvedValueOnce(jsonResponse(candidateResult))
+      .mockResolvedValueOnce(jsonResponse({
+        candidate_id: candidateResult.candidate?.candidate_id,
+        disposition: "answer",
+        answer_capture: null,
+      }));
+    const host = await renderSurface();
+
+    await act(async () => actionButton(host, "Уточнить модель")?.click());
+    await act(async () => host.querySelector<HTMLInputElement>("input[value='b']")?.click());
+    await act(async () => actionButton(host, "Ответить")?.click());
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(host.querySelector("[data-active-learning-state='error']")).not.toBeNull();
+    expect(host.querySelector(".active-learning-answer-content")).toBeNull();
   });
 });
