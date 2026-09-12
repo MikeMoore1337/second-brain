@@ -27,8 +27,11 @@ pre-choice-only contract; provider-free bounded core реализован в iss
 завершены и находятся в production. Stage 9 — это следующий уровень
 **Cognitive Twin v2**; его prospective audit/calibration contract фиксируется
 отдельно в [prospective-audit-calibration-v1-contract.md](prospective-audit-calibration-v1-contract.md).
-В текущем `main` Stage 9 остаётся **DESIGN CONTRACT**, а runtime Stage 9,
-audit persistence, linkage и prospective calibration **NOT IMPLEMENTED**.
+Stage 9A/9B/9C и Stage 9D Web/API с integration QA реализованы в отдельных
+implementation slices; после закрытия Issue #244 весь Stage 9 находится в
+production. Операционный store выводится из явно переданного `web.env`,
+остаётся вне repository/vault/release и не требует нового env key или изменения
+systemd. Stage 10+ к этому status не относятся и не запускались.
 
 Точный status snapshot перед #175 implementation — canonical `main`:
 `a461b0b08d4e396561a869d7348700d5d86934bc`.
@@ -1165,9 +1168,10 @@ context и derived explanation divergence.
 
 ### Stage 9 — Cognitive Twin v2: Prospective Operation Audit & Calibration v1
 
-- **Статус:** **DESIGN CONTRACT**; normative boundary зафиксирована в
+- **Статус:** **COMPLETE**; normative boundary зафиксирована в
   [prospective-audit-calibration-v1-contract.md](prospective-audit-calibration-v1-contract.md)
-  для Issue #236. Runtime Stage 9 — **NOT IMPLEMENTED**.
+  для Issue #236, а Stage 9A/9B/9C и Stage 9D Web/API, integration QA и
+  production closeout завершены в staged implementation issues, включая #244.
 - **Цель:** зафиксировать validated Simulate Me prediction/abstention до
   решения, durable policy-governed operational audit state, позже explicit
   reviewed Decision Journal linkage и deterministic prospective calibration.
@@ -1177,12 +1181,13 @@ context и derived explanation divergence.
 - **Scope v1:** только explicit foreground Simulate Me terminal operations;
   Assistant, Search, Retrieval, Active Learning, generic telemetry и provider
   calls не аудируются.
-- **Implementation sequence:** future Stage 9A audit store/core, 9B explicit
-  reviewed linkage, 9C prospective aggregate и 9D Web/API + integration QA.
-  Эти implementation tasks не начинаются и новые Issues в #236 не создаются.
-- **Explicit out-of-scope:** runtime writer/storage, API/Web, Journal schema
-  change, automatic linkage, confidence/probability, ML/tuning, providers,
-  dependencies, production changes и `second-brain-vault` changes.
+- **Implementation sequence:** Stage 9A audit store/core, 9B explicit reviewed
+  linkage, 9C prospective aggregate и 9D Web/API + integration QA выполнены.
+  События и связи остаются в verified operational store; user-facing UI не
+  меняет Journal schema и не выполняет automatic linkage.
+- **Explicit out-of-scope:** new env keys, systemd changes, backup/cloud export,
+  automatic linkage, confidence/probability, ML/tuning, providers, new
+  dependencies, `second-brain-vault` changes и Stage 10+.
 
 # COMPLETED IMPLEMENTATION SCOPE (HISTORICAL):
 
@@ -1392,10 +1397,13 @@ prospective calibration не входят в этот slice. `HUMAN_REQUIRED: no
 отложены на отдельные future gates. Этот status sync не объявляет Stage 8
 runtime scope, не создаёт Stage 8 item и не меняет product semantics.
 
-## Current status before Stage 9
+## Current status after Stage 9D
 
 Cognitive Twin v1 / Stages 1–8 are **COMPLETE** in current `main` and
-production. Stage 9 is **Cognitive Twin v2 / DESIGN CONTRACT** from Issue
-#236. Stage 9 runtime, operational audit persistence, explicit
-prediction-to-decision linkage, prospective calibration aggregate and future
-Web/API remain **NOT IMPLEMENTED** until their separate implementation gates.
+production. Cognitive Twin v2 / Stage 9A–9D are **COMPLETE** after the staged
+implementation and Issue #244 closeout: durable operational audit persistence,
+explicit prediction-to-decision linkage, prospective calibration aggregate and
+bounded Web/API are in production. The production root is derived from the
+explicit `web.env` location and is kept outside repository, vault and release
+directories; no new environment variable or systemd change is part of this
+slice. Stage 10+ have not started.

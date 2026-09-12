@@ -190,7 +190,7 @@ describe("React Web parity shell", () => {
     expect(host.querySelector("main#main-content")).not.toBeNull();
     expect(host.querySelector('.fold-list')).not.toBeNull();
     expect(host.querySelector("#hero-title")?.textContent).toContain("Second");
-    for (const id of ["decision-journal", "timeline", "self-model", "simulate-me", "assistant-compare", "retrospective-calibration", "self-retrieval", "search", "memory", "growth"]) {
+    for (const id of ["decision-journal", "timeline", "self-model", "simulate-me", "prospective-audit", "assistant-compare", "retrospective-calibration", "self-retrieval", "search", "memory", "growth"]) {
       expect(host.querySelector(`#${id}`), id).not.toBeNull();
     }
     expect(host.querySelector('[data-capture-panel]')).not.toBeNull();

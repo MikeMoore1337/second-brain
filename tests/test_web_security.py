@@ -60,6 +60,16 @@ from second_brain.entrypoints.web.app import (
 )
 from second_brain.entrypoints.web.diagnostics import DiagnosticsService
 from second_brain.entrypoints.web.drafts import DraftService
+from second_brain.entrypoints.web.prospective_audit import (
+    MAX_RAW_PROSPECTIVE_AUDIT_BODY_BYTES,
+    PROSPECTIVE_AUDIT_CALIBRATION_PATH,
+    PROSPECTIVE_AUDIT_CONFIRM_PATH,
+    PROSPECTIVE_AUDIT_EXECUTE_PATH,
+    PROSPECTIVE_AUDIT_PENDING_PATH,
+    PROSPECTIVE_AUDIT_REQUEST_HEADER_NAME,
+    PROSPECTIVE_AUDIT_REQUEST_HEADER_VALUE,
+    PROSPECTIVE_AUDIT_REVIEW_PATH,
+)
 from second_brain.entrypoints.web.retrospective_calibration import (
     RetrospectiveCalibrationWebService,
 )
@@ -167,6 +177,21 @@ def _draft_route(
             else "LLM_CONTENT_TOO_LARGE"
         ),
         max_body_bytes=MAX_RAW_DRAFT_BODY_BYTES,
+    )
+
+
+def _prospective_audit_route(path: str, body: bytes) -> PrivateRoute:
+    """Build one Stage 9D route descriptor with its shared boundary contract."""
+
+    return PrivateRoute(
+        path=path,
+        request_header_name=PROSPECTIVE_AUDIT_REQUEST_HEADER_NAME,
+        request_header_value=PROSPECTIVE_AUDIT_REQUEST_HEADER_VALUE,
+        content_type="application/json",
+        body=body,
+        invalid_code="PROSPECTIVE_AUDIT_INVALID_REQUEST",
+        content_too_large_code="PROSPECTIVE_AUDIT_CONTENT_TOO_LARGE",
+        max_body_bytes=MAX_RAW_PROSPECTIVE_AUDIT_BODY_BYTES,
     )
 
 
@@ -394,6 +419,39 @@ PRIVATE_ROUTES: tuple[PrivateRoute, ...] = (
         content_too_large_code="DIAGNOSTICS_CONTENT_TOO_LARGE",
         max_body_bytes=MAX_RAW_DIAGNOSTICS_BODY_BYTES,
     ),
+    _prospective_audit_route(
+        PROSPECTIVE_AUDIT_EXECUTE_PATH,
+        _json_body(
+            {
+                "operation_id": "0198c8a0-0000-7000-8000-000000000002",
+                "query": "Boundary fixture",
+                "options": [{"id": "a", "label": "A"}],
+            }
+        ),
+    ),
+    _prospective_audit_route(PROSPECTIVE_AUDIT_PENDING_PATH, b"{}"),
+    _prospective_audit_route(
+        PROSPECTIVE_AUDIT_REVIEW_PATH,
+        _json_body(
+            {
+                "audit_event_id": "0198c8a0-0000-7000-8000-000000000003",
+                "decision_id": _DECISION_ID,
+            }
+        ),
+    ),
+    _prospective_audit_route(
+        PROSPECTIVE_AUDIT_CONFIRM_PATH,
+        _json_body(
+            {
+                "audit_event_id": "0198c8a0-0000-7000-8000-000000000003",
+                "decision_id": _DECISION_ID,
+                "operation_id": "0198c8a0-0000-7000-8000-000000000002",
+                "mapping": [],
+                "confirmed": False,
+            }
+        ),
+    ),
+    _prospective_audit_route(PROSPECTIVE_AUDIT_CALIBRATION_PATH, b"{}"),
 )
 
 
