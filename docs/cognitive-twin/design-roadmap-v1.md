@@ -36,7 +36,9 @@ mapping реализованы отдельным Stage 10A–10D slice; Stage 1
 derived/read-only для vault и не меняет canonical schema. Stage 11A и Stage
 11B реализованы как bounded current Goal identity/context и explicit
 Goal-to-choice/friction slices; Stage 11C0 получил отдельный design contract,
-а его runtime остаётся future gate.
+а Stage 11C Growth Advisor runtime реализован в PR #268. Stage 11D0 получил
+отдельный Growth Learning / Question design contract; его runtime остаётся
+future gate.
 
 Точный status snapshot перед #175 implementation — canonical `main`:
 `a461b0b08d4e396561a869d7348700d5d86934bc`.
@@ -1220,12 +1222,15 @@ context и derived explanation divergence.
 
 ### Stage 11 — Cognitive Twin v2: Growth Engine v1
 
-- **Статус:** **DESIGN CONTRACT** в
-  [growth-engine-v1-contract.md](growth-engine-v1-contract.md); Stage 11A
+- **Статус:** **DESIGN CONTRACTS** в
+  [growth-engine-v1-contract.md](growth-engine-v1-contract.md) и
+  [growth-learning-v1-contract.md](growth-learning-v1-contract.md); Stage 11A
   deterministic current Goal identity/context core реализован в Issue #260,
   Stage 11B Goal-to-choice relation/friction read model реализован в Issue
-  #262/PR #263, а Stage 11C0 privacy/payload/provenance contract зафиксирован
-  в [growth-advisor-v1-contract.md](growth-advisor-v1-contract.md).
+  #262/PR #263, Stage 11C0 privacy/payload/provenance contract зафиксирован в
+  [growth-advisor-v1-contract.md](growth-advisor-v1-contract.md), а Stage 11C
+  Growth Advisor runtime реализован в PR #268. Stage 11D0 Growth Learning /
+  Question contract зафиксирован в Issue #269.
 - **Цель:** связать current reviewed Stage 4 goal с current exact behavioral
   choice только через отдельную explicit owner-reviewed Goal-to-choice
   relation; не определять «настоящую цель», optimality, personality или
@@ -1236,12 +1241,15 @@ context и derived explanation divergence.
 - **Implementation boundary:** merged Stage 11A сохраняет current scan →
   `build_report` → existing `BuildSelfModel` → direct Goal identities и
   explicit selection; merged Stage 11B добавляет только explicit relation,
-  mapping store, current Stage 10 reference и friction read model. Stage 11C0
-  добавляет только design boundary; его runtime/provider branches, Web/API/UI и
-  Compare остаются future gates.
-- **Explicit out-of-scope:** Stage 11C runtime/store/read model beyond merged
-  Stage 11B, Web/API/UI, Advisor/provider call, semantic mapping, schema/vault/
-  Safe Write, Goal Progress, Stage 9, Stage 10 и Simulate Me changes.
+  mapping store, current Stage 10 reference и friction read model. Stage 11C
+  runtime добавляет только explicit Advisor preview/confirmation/revalidation
+  flow по отдельной policy boundary. Stage 11D0 добавляет только design
+  boundary; его Learning runtime, Web/API/UI и experiments остаются future
+  gates.
+- **Explicit out-of-scope:** Stage 11D runtime/store/read model beyond the
+  11D0 contract, Web/API/UI for Learning, Advisor/provider chaining, semantic
+  mapping, schema/vault/Safe Write mutation, Goal Progress, Stage 9, Stage 10
+  и Simulate Me changes.
   Следующий Issue автоматически не создаётся.
 
 # COMPLETED IMPLEMENTATION SCOPE (HISTORICAL):
@@ -1452,7 +1460,7 @@ prospective calibration не входят в этот slice. `HUMAN_REQUIRED: no
 отложены на отдельные future gates. Этот status sync не объявляет Stage 8
 runtime scope, не создаёт Stage 8 item и не меняет product semantics.
 
-## Current status after Stage 11B and Stage 11C0 design
+## Current status after Stage 11C runtime and Stage 11D0 design
 
 Cognitive Twin v1 / Stages 1–8 are **COMPLETE** in current `main` and
 production. Cognitive Twin v2 / Stage 9A–9D, Stage 10A–10D and Stage 11A are
@@ -1461,8 +1469,10 @@ behavioral read model, explicit mapping review/confirmation, dedicated
 operational mapping history, deterministic composition and private owner-only
 Web/API/UI, while Stage 11A adds deterministic current Goal identity/context
 and Stage 11B adds explicit Goal-to-choice/friction read model. Stage 11C0
-adds only the Growth Advisor privacy/payload/provenance design contract; its
-runtime remains unimplemented. All derived stores remain outside the
+adds the Growth Advisor privacy/payload/provenance design contract and Stage 11C
+runtime is complete in PR #268. Stage 11D0 adds the provider-free Growth
+Learning / Question contract; its runtime remains unimplemented. All derived
+stores remain outside the
 vault/repository/release directories; no new environment variable or systemd
 change is part of these slices.
 
@@ -1480,9 +1490,10 @@ Stage 10 = COMPLETE
 Stage 11A Current Goal identity/context core = COMPLETE
 Stage 11B Goal-to-choice relation + friction read model = COMPLETE
 Stage 11C0 Growth Advisor privacy/payload/provenance design = COMPLETE
-Stage 11C Advisor / Growth Compare runtime = NOT STARTED
-Stage 11D Personalized learning = NOT STARTED
+Stage 11C Growth Advisor runtime = COMPLETE
+Stage 11C GrowthCompare/Compare v2 = NOT STARTED
+Stage 11D0 Growth Learning / Question design = COMPLETE
+Stage 11D Growth Learning runtime = NOT IMPLEMENTED
 Stage 11E Web/API + integration QA/closeout = NOT STARTED
-Stage 11C runtime beyond Stage 11B = NOT IMPLEMENTED
 Stage 12+ = NOT STARTED
 ```
