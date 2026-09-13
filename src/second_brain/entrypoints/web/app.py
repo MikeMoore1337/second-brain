@@ -67,6 +67,20 @@ from second_brain.entrypoints.web.cognitive_twin import (
     build_production_stated_observed_mapping_service,
     install_cognitive_twin_routes,
 )
+from second_brain.entrypoints.web.growth_advisor import (
+    GROWTH_ADVISOR_EXECUTE_PATH,
+    GROWTH_ADVISOR_PREVIEW_PATH,
+    GROWTH_ADVISOR_REQUEST_HEADER_NAME,
+    GROWTH_ADVISOR_REQUEST_HEADER_VALUE,
+    MAX_GROWTH_ADVISOR_RESPONSE_BYTES,
+    MAX_RAW_GROWTH_ADVISOR_BODY_BYTES,
+    GrowthAdvisorExecutePayloadV1,
+    GrowthAdvisorRequestBoundaryMiddleware,
+    GrowthAdvisorWebService,
+    ProductionGrowthAdvisorWebService,
+    build_production_growth_advisor_service,
+    install_growth_advisor_routes,
+)
 from second_brain.entrypoints.web.legacy_app import (
     ACTIVE_LEARNING_ANSWER_REVIEW_PATH,
     DIAGNOSTICS_REQUEST_HEADER_NAME,
@@ -160,6 +174,7 @@ def create_app(**kwargs: Any) -> FastAPI:
     prospective_audit_service = kwargs.pop("prospective_audit_service", None)
     behavioral_self_model_service = kwargs.pop("behavioral_self_model_service", None)
     stated_observed_mapping_service = kwargs.pop("stated_observed_mapping_service", None)
+    growth_advisor_service = kwargs.pop("growth_advisor_service", None)
     auth_config = kwargs.pop("web_auth_config", None)
     auth_gateway = kwargs.pop("web_auth_gateway", None)
     auth_clock = kwargs.pop("web_auth_clock", None)
@@ -200,6 +215,12 @@ def create_app(**kwargs: Any) -> FastAPI:
         app,
         behavioral_self_model_service=behavioral_self_model_service,
         stated_observed_mapping_service=stated_observed_mapping_service,
+        env_file=env_file,
+        vault_path_override=vault_path_override,
+    )
+    install_growth_advisor_routes(
+        app,
+        service=growth_advisor_service,
         env_file=env_file,
         vault_path_override=vault_path_override,
     )
@@ -282,6 +303,18 @@ __all__ = [
     "StatedObservedMappingWebService",
     "build_production_behavioral_self_model_service",
     "build_production_stated_observed_mapping_service",
+    "GROWTH_ADVISOR_EXECUTE_PATH",
+    "GROWTH_ADVISOR_PREVIEW_PATH",
+    "GROWTH_ADVISOR_REQUEST_HEADER_NAME",
+    "GROWTH_ADVISOR_REQUEST_HEADER_VALUE",
+    "MAX_GROWTH_ADVISOR_RESPONSE_BYTES",
+    "MAX_RAW_GROWTH_ADVISOR_BODY_BYTES",
+    "GrowthAdvisorExecutePayloadV1",
+    "GrowthAdvisorRequestBoundaryMiddleware",
+    "GrowthAdvisorWebService",
+    "ProductionGrowthAdvisorWebService",
+    "build_production_growth_advisor_service",
+    "install_growth_advisor_routes",
     "WebAuthConfig",
     "create_app",
 ]
