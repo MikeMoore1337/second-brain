@@ -477,7 +477,11 @@ future values не входят в active aggregate. This is bounded inclusion p
 
 Composition не выполняет semantic text matching. Existing Stage 4 direct claims
 имеют human-readable body и dimensions `preference`/`belief`/`goal`, но не
-имеют canonical option mapping к Decision Journal.
+имеют canonical option mapping к Decision Journal. Нормативный design gate
+для будущего explicit mapping зафиксирован в
+[stated-observed-mapping-v1-contract.md](stated-observed-mapping-v1-contract.md);
+текущий Stage 10A/10B runtime по-прежнему не строит composition и не
+сохраняет mapping.
 
 | Composition state | Deterministic condition | v1 behavior |
 | --- | --- | --- |
@@ -808,7 +812,7 @@ Correction derived model не редактирует его напрямую: п
 | Derived boundary | **ACCEPT** | On-demand immutable read model; no canonical write-back, profile DB или hidden state. |
 | Comparability | **ACCEPT** | Exact non-null domain + exact normalized ordered Situation/information/options/criteria. |
 | Semantic grouping | **DEFER / FORBIDDEN AS AUTHORITY** | LLM, provider, embedding, fuzzy, alias и translation не влияют на v1 cohort. |
-| Caller lens / owner mapping | **DEFER** | Нужны отдельные bounded API, provenance и owner-review contracts. |
+| Caller lens / owner mapping | **CHANGE** | Design gate зафиксирован в [stated-observed-mapping-v1-contract.md](stated-observed-mapping-v1-contract.md); runtime mapping/review остаётся отдельным Stage 10C implementation gate. |
 | New canonical schema/taxonomy | **DEFER** | Stage 10 reuses Stage 2 fields; no migration/new note fields. |
 | Observation DTO | **ACCEPT** | One current Journal -> one exact immutable observation; raw bodies/labels excluded. |
 | Pattern set | **ACCEPT** | Closed repeated/mixed/stable/changed/insufficient/not-comparable set; recurring criteria отдельным pattern не является. |
@@ -870,12 +874,13 @@ Expected decomposition after this contract:
 ```text
 Stage 10A  deterministic behavioral observation/cohort core
 Stage 10B  closed Behavioral Self Model pattern builder/read model
-Stage 10C  stated-vs-observed composition, only if explicit mapping policy is approved
+Stage 10C0 design  stated-vs-observed explicit mapping contract (approved)
+Stage 10C  stated-vs-observed composition/runtime, after implementation approval
 Stage 10D  Web/API + integration QA/closeout
 ```
 
-These Issues are not created automatically by #246. Stage 10A is not started
-by this contract.
+These Issues are not created automatically by #246. Stage 10C0 is design-only;
+its contract does not start Stage 10C runtime or create the next Issue.
 
 ## 19. Scope/acceptance checklist
 

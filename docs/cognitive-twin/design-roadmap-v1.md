@@ -1191,6 +1191,31 @@ context и derived explanation divergence.
   automatic linkage, confidence/probability, ML/tuning, providers, new
   dependencies, `second-brain-vault` changes и Stage 10+.
 
+### Stage 10 — Cognitive Twin v2: Behavioral Self Model и explicit mapping
+
+- **Статус:** Stage 10A Behavioral Observation/Cohort и Stage 10B Behavioral
+  Self Model завершены в current `main`. Stage 10C0 Stated-vs-Observed
+  explicit mapping design contract завершён в Issue #252; его runtime,
+  operational store, composition и Web/API ещё не реализованы.
+- **Цель:** сохранить раздельные Stated и Behavioral layers и определить
+  только explicit owner-reviewed relation между current Stage 4 direct
+  `preference` assertion и exact current Stage 10 cohort/option.
+- **Canonical boundary:** vault `scan -> build_report` остаётся authority для
+  user evidence; Stage 4 и Stage 10A/10B остаются derived/read-only. Stage
+  10C0 не добавляет vault fields, note kinds, Safe Write, schema или provider.
+- **Design gate:** [stated-observed-mapping-v1-contract.md](stated-observed-mapping-v1-contract.md)
+  фиксирует preference-only exact identity, injective cardinality, explicit
+  review, fail-closed drift/correction, bounded dedicated operational
+  persistence вне vault и Stage 9, а также closed composition states.
+- **Implementation boundary:** следующий отдельно одобренный Stage 10C
+  может реализовать validators, current rebuild/review orchestration,
+  dedicated mapping store и deterministic composition. Stage 10D отдельно
+  покрывает Web/API и integration QA/closeout.
+- **Explicit out-of-scope:** fuzzy/semantic/LLM/embedding matching,
+  automatic mapping, belief/goal mapping, many-to-many/history semantics,
+  Stage 9/Simulate Me consumers, provider/network/credentials, canonical
+  schema/vault changes и создание следующего Issue.
+
 # COMPLETED IMPLEMENTATION SCOPE (HISTORICAL):
 
 ## Personal Memory Contract v1 (Stage 1, completed)
@@ -1415,7 +1440,10 @@ Current next-stage status:
 ```text
 Cognitive Twin v1 / Stage 1–8 = COMPLETE
 Cognitive Twin v2 / Stage 9 = COMPLETE
-Stage 10 Behavioral Self Model = DESIGN CONTRACT
-Stage 10 runtime = NOT IMPLEMENTED
+Stage 10A Behavioral Observation/Cohort = COMPLETE
+Stage 10B Behavioral Self Model = COMPLETE
+Stage 10C0 Stated-vs-Observed mapping design = COMPLETE (DESIGN CONTRACT)
+Stage 10C runtime = NOT IMPLEMENTED
+Stage 10D Web/API = NOT STARTED
 Stage 11+ = NOT STARTED
 ```
