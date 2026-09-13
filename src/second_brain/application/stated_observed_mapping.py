@@ -1461,6 +1461,10 @@ def _path_is_symlink(path: Path) -> bool:
         return True
 
 
+def _platform_attribute(module: object, name: str) -> Any:
+    return getattr(module, name)
+
+
 def _safe_existing_directory(path: Path, *, expected_group: tuple[str, str] | None = None) -> None:
     try:
         info = path.lstat()
@@ -1477,8 +1481,8 @@ def _safe_existing_directory(path: Path, *, expected_group: tuple[str, str] | No
         import pwd
 
         try:
-            owner = pwd.getpwuid(info.st_uid).pw_name  # type: ignore[attr-defined]
-            group = grp.getgrgid(info.st_gid).gr_name  # type: ignore[attr-defined]
+            owner = _platform_attribute(pwd, "getpwuid")(info.st_uid).pw_name
+            group = _platform_attribute(grp, "getgrgid")(info.st_gid).gr_name
         except KeyError:
             raise StatedObservedMappingStoreUnavailableError() from None
         if (owner, group) != expected_group:
@@ -1600,7 +1604,9 @@ class StatedObservedMappingStore:
                 import fcntl
 
                 try:
-                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)  # type: ignore[attr-defined]
+                    _platform_attribute(fcntl, "flock")(
+                        lock_file.fileno(), _platform_attribute(fcntl, "LOCK_EX")
+                    )
                 except OSError:
                     raise StatedObservedMappingStoreUnavailableError() from None
             else:
@@ -1611,7 +1617,11 @@ class StatedObservedMappingStore:
                         lock_file.write(b"0")
                         lock_file.flush()
                     lock_file.seek(0)
-                    msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)
+                    _platform_attribute(msvcrt, "locking")(
+                        lock_file.fileno(),
+                        _platform_attribute(msvcrt, "LK_LOCK"),
+                        1,
+                    )
                 except OSError:
                     raise StatedObservedMappingStoreUnavailableError() from None
             yield
@@ -1620,12 +1630,18 @@ class StatedObservedMappingStore:
                 if _is_posix():
                     import fcntl
 
-                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)  # type: ignore[attr-defined]
+                    _platform_attribute(fcntl, "flock")(
+                        lock_file.fileno(), _platform_attribute(fcntl, "LOCK_UN")
+                    )
                 else:
                     import msvcrt
 
                     lock_file.seek(0)
-                    msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+                    _platform_attribute(msvcrt, "locking")(
+                        lock_file.fileno(),
+                        _platform_attribute(msvcrt, "LK_UNLCK"),
+                        1,
+                    )
             except OSError:
                 pass
             lock_file.close()
