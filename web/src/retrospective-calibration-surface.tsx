@@ -223,7 +223,7 @@ export function RetrospectiveCalibrationSurface(): ReactElement {
   };
 
   const liveText = state === "loading"
-    ? "Проверяем текущий vault…"
+    ? "Проверяем текущее хранилище…"
     : state === "zero"
       ? "Подходящих решений не найдено."
       : result
@@ -251,7 +251,7 @@ export function RetrospectiveCalibrationSurface(): ReactElement {
       <aside className="calibration-boundary" aria-label="Граница ретроспективной проверки">
         <Icon name="info" size={20} aria-hidden="true" />
         <p>
-          Это агрегированная проверка текущего vault только для чтения. Она не меняет журнал
+          Это агрегированная проверка текущего хранилища только для чтения. Она не меняет журнал
           решений, не сохраняет прогнозы и не показывает отдельные случаи или их содержимое.
         </p>
       </aside>
@@ -289,10 +289,10 @@ export function RetrospectiveCalibrationSurface(): ReactElement {
       ) : null}
 
       {state === "idle" ? (
-        <p className="calibration-idle">Нажми кнопку, чтобы построить одно актуальное read-only измерение.</p>
+        <p className="calibration-idle">Нажми кнопку, чтобы построить одно актуальное измерение только для чтения.</p>
       ) : null}
       {state === "zero" ? (
-        <p className="calibration-zero">В текущем источнике нет решений, прошедших exact eligibility. Это не считается нулевой точностью.</p>
+        <p className="calibration-zero">В текущем источнике нет решений, прошедших точные критерии допуска. Это не считается нулевой точностью.</p>
       ) : null}
       {result ? <CalibrationResult result={result} /> : null}
     </section>

@@ -51,7 +51,7 @@ const LINKAGE_LABELS: Record<string, string> = {
   link_fingerprint_mismatch: "Вариант журнала изменился",
   audit_event_missing_or_deleted: "Событие не найдено",
   decision_target_unavailable: "Журнал решений недоступен",
-  canonical_scan_unavailable: "Текущий vault недоступен",
+  canonical_scan_unavailable: "Текущее хранилище недоступно",
   decision_target_expired: "Срок события истёк",
 };
 
@@ -76,7 +76,9 @@ function formatTime(value: string): string {
 }
 
 function optionLabel(event: ProspectiveAuditEvent): string {
-  return event.predicted_option_label ?? event.abstention_code ?? "Отказ от прогноза";
+  if (event.predicted_option_label) return event.predicted_option_label;
+  if (event.abstention_code) return ABSTENTION_TEXT[event.abstention_code] ?? `Код отказа: ${event.abstention_code}`;
+  return "Отказ от прогноза";
 }
 
 function ratioText(
@@ -95,7 +97,7 @@ function EventSummary({ event }: { event: ProspectiveAuditEvent }): ReactElement
     <article className="stage9-event-summary" aria-labelledby="stage9-event-title">
       <div className="stage9-result-heading">
         <div>
-          <p className="eyebrow">Durable foreground result</p>
+          <p className="eyebrow">Сохранённый результат</p>
           <h3 id="stage9-event-title">{prediction ? "ПРОГНОЗ записан" : "Отказ от прогноза записан"}</h3>
         </div>
         <Icon name={prediction ? "simulate" : "info"} size={32} aria-hidden="true" />
@@ -107,8 +109,8 @@ function EventSummary({ event }: { event: ProspectiveAuditEvent }): ReactElement
         <div><dt>Версия построения</dt><dd><code>{event.derivation_version}</code></dd></div>
       </dl>
       <p className="stage9-result-note">
-        В событии сохранены только bounded данные для будущей явной связи: запрос и приватные
-        свидетельства в operational store не попадают.
+        В событии сохранены только ограниченные данные для будущей явной связи: запрос и приватные
+        свидетельства в операционное хранилище не попадают.
       </p>
     </article>
   );
@@ -188,7 +190,7 @@ function LinkReview({
     <section className="stage9-link-review" aria-labelledby="stage9-link-review-title">
       <div className="stage9-subheading">
         <div>
-          <p className="eyebrow">Owner review</p>
+          <p className="eyebrow">Проверка владельцем</p>
           <h4 id="stage9-link-review-title">Проверить явное соответствие.</h4>
         </div>
         <Icon name="relation" size={28} aria-hidden="true" />
@@ -212,7 +214,7 @@ function LinkReview({
           <div className="stage9-mapping-list">
             {review.event.options.map((option) => (
               <label className="stage9-mapping-row" key={option.id}>
-                <span><strong>{option.label}</strong><small>{option.id}</small></span>
+                 <span><strong>{option.label}</strong><small>Идентификатор: {option.id}</small></span>
                 <select
                   className="review-input"
                   value={mapping[option.id] ?? ""}
@@ -252,12 +254,12 @@ function CalibrationResult({ result }: { result: ProspectiveAuditCalibrationResu
     <section className="stage9-calibration-result" aria-labelledby="stage9-calibration-result-title">
       <div className="stage9-result-heading">
         <div>
-          <p className="eyebrow">Rebuildable aggregate</p>
-          <h4 id="stage9-calibration-result-title">Prospective Calibration</h4>
+          <p className="eyebrow">Перестраиваемая сводка</p>
+          <h4 id="stage9-calibration-result-title">Перспективная калибровка</h4>
         </div>
         <Icon name="growth" size={28} aria-hidden="true" />
       </div>
-      <dl className="stage9-metrics" aria-label="Агрегированные метрики prospective calibration">
+      <dl className="stage9-metrics" aria-label="Агрегированные метрики перспективной калибровки">
         <Metric label="Аудированных операций" value={metrics.audited_operations} />
         <Metric label="Прогнозов" value={metrics.predictions} />
         <Metric label="Отказов" value={metrics.abstentions} />
@@ -278,13 +280,13 @@ function CalibrationResult({ result }: { result: ProspectiveAuditCalibrationResu
         <CountGroup title="Недоступные связи" counts={result.unavailable_linkage_by_code} />
       </div>
       <details className="stage9-technical-details">
-        <summary>Технические детали aggregate</summary>
+        <summary>Технические детали сводки</summary>
         <dl className="stage9-fields">
           <div><dt>Контракт</dt><dd><code>{result.contract_version}</code></dd></div>
           <div><dt>Версия построения</dt><dd><code>{result.derivation_version}</code></dd></div>
           <div><dt>Политика</dt><dd><code>{result.policy_id}</code></dd></div>
           <div><dt>Отпечаток политики</dt><dd><code>{result.policy_fingerprint}</code></dd></div>
-          <div><dt>Retention</dt><dd><code>{result.retention_policy}</code></dd></div>
+          <div><dt>Срок хранения</dt><dd><code>{result.retention_policy}</code></dd></div>
         </dl>
       </details>
     </section>
@@ -302,7 +304,7 @@ function CountGroup({
     <section className="stage9-count-group" aria-label={title}>
       <h5>{title}</h5>
       <ul>
-        {counts.map((item) => <li key={item.code}><span>{LINKAGE_LABELS[item.code] ?? item.code}</span><strong>{item.count}</strong></li>)}
+        {counts.map((item) => <li key={item.code}><span>{LINKAGE_LABELS[item.code] ?? `Код причины: ${item.code}`}</span><strong>{item.count}</strong></li>)}
       </ul>
     </section>
   );
@@ -371,7 +373,7 @@ export function ProspectiveAuditSurface(): ReactElement {
     const controller = new AbortController();
     executeController.current = controller;
     setOperation({ state: "busy", event: null, error: "" });
-    setStatus("Проверяю результат и записываю его в operational store…");
+    setStatus("Проверяю результат и записываю его в операционное хранилище…");
     try {
       const result = await executeProspectiveAudit(operationId(), query, options, fetch, controller.signal);
       if (requestId !== executeRequest.current) return;
@@ -495,7 +497,7 @@ export function ProspectiveAuditSurface(): ReactElement {
       if (requestId !== calibrationRequest.current) return;
       setCalibration(null);
       setCalibrationState("error");
-      setCalibrationError(errorText(caught, "Prospective aggregate сейчас недоступен."));
+      setCalibrationError(errorText(caught, "Перспективная сводка сейчас недоступна."));
     } finally {
       if (requestId === calibrationRequest.current) calibrationController.current = null;
     }
@@ -513,20 +515,20 @@ export function ProspectiveAuditSurface(): ReactElement {
       data-stage9-state={operation.state}
     >
       <div className="section-heading stage9-heading">
-        <p className="eyebrow">Шаг 9 · prospective audit</p>
+        <p className="eyebrow">Шаг 9 · перспективный аудит</p>
         <h2 id="prospective-audit-title">Сохранить прогноз до решения.</h2>
         <p>
-          Здесь результат текущего прогноза можно явно записать в отдельное operational store,
+          Здесь результат текущего прогноза можно явно записать в отдельное операционное хранилище,
           чтобы позже сопоставить его с текущим Журналом решений. Обычный раздел «Прогноз» выше
-          остаётся read-only и ничего сюда не записывает.
+          остаётся доступным только для чтения и ничего сюда не записывает.
         </p>
       </div>
 
-      <aside className="stage9-boundary" aria-label="Граница prospective audit">
+      <aside className="stage9-boundary" aria-label="Граница перспективного аудита">
         <Icon name="info" size={20} aria-hidden="true" />
         <p>
           Запись запускается только этой кнопкой и происходит после проверки terminal result ядром.
-          В operational store не попадают исходный запрос, приватные свидетельства или содержимое vault.
+          В операционное хранилище не попадают исходный запрос, приватные свидетельства или содержимое хранилища.
         </p>
       </aside>
 
@@ -537,7 +539,7 @@ export function ProspectiveAuditSurface(): ReactElement {
         </label>
         <fieldset className="stage9-options">
           <legend>Варианты пользователя</legend>
-          <p>Идентификаторы нужны для точной связи; названия остаются bounded данными для review.</p>
+          <p>Идентификаторы нужны для точной связи; названия остаются ограниченными данными для проверки.</p>
           <div className="stage9-option-list">
             {options.map((option, index) => (
               <div className="stage9-option-row" key={index}>
@@ -558,14 +560,14 @@ export function ProspectiveAuditSurface(): ReactElement {
 
       {operation.error ? <p ref={feedbackRef} className="stage9-error" role="alert" tabIndex={-1}>{operation.error}</p> : null}
       {operation.event ? <EventSummary event={operation.event} /> : null}
-      {operation.state === "cancelled" && !operation.error ? <p className="stage9-cancelled" role="status">Операция отменена. Если сервер успел завершить commit, обнови очередь явно.</p> : null}
+      {operation.state === "cancelled" && !operation.error ? <p className="stage9-cancelled" role="status">Операция отменена. Если сервер успел завершить запись, обнови очередь явно.</p> : null}
 
       <section className="stage9-review-panel" aria-labelledby="stage9-review-title">
         <div className="stage9-subheading">
-          <div><p className="eyebrow">Explicit linkage</p><h3 id="stage9-review-title">Связать с Журналом решений.</h3></div>
+          <div><p className="eyebrow">Явная связь</p><h3 id="stage9-review-title">Связать с Журналом решений.</h3></div>
           <Icon name="relation" size={32} aria-hidden="true" />
         </div>
-        <p className="stage9-review-copy">Открой ожидающие события, перечитай текущий Journal и только затем создай owner-reviewed связь. Автоматического сопоставления по тексту нет.</p>
+        <p className="stage9-review-copy">Открой ожидающие события, перечитай текущий журнал решений и только затем создай связь, проверенную владельцем. Автоматического сопоставления по тексту нет.</p>
         <div className="stage9-actions">
           <button className="review-button review-button-secondary" type="button" onClick={() => void refreshPending()} disabled={pendingState === "loading"}>{pendingState === "loading" ? "Обновляю очередь…" : "Показать ожидающие связи"}</button>
           {linkState === "linked" ? <p className="stage9-status" role="status">Связь записана. Событие убрано из ожидающей очереди.</p> : null}
@@ -598,13 +600,13 @@ export function ProspectiveAuditSurface(): ReactElement {
 
       <section className="stage9-calibration-panel" aria-labelledby="stage9-calibration-title">
         <div className="stage9-subheading">
-          <div><p className="eyebrow">Derived read model</p><h3 id="stage9-calibration-title">Просмотреть Prospective Calibration.</h3></div>
+          <div><p className="eyebrow">Производная модель для чтения</p><h3 id="stage9-calibration-title">Просмотреть перспективную калибровку.</h3></div>
           <Icon name="growth" size={32} aria-hidden="true" />
         </div>
-        <p className="stage9-review-copy">Агрегат перестраивается из verified active audit/link history и показывает только bounded counts и целочисленные отношения.</p>
+        <p className="stage9-review-copy">Сводка перестраивается из проверенной истории действующих аудитов и связей и показывает только ограниченные счётчики и целочисленные отношения.</p>
         <div className="stage9-actions">
-          <button className="review-button review-button-secondary" type="button" onClick={() => void refreshCalibration()} disabled={calibrationState === "loading"}>{calibrationState === "loading" ? "Перестраиваю…" : "Обновить aggregate"}</button>
-          <p className="stage9-status" role="status" aria-live="polite">{calibrationState === "ready" ? "Aggregate обновлён." : ""}</p>
+          <button className="review-button review-button-secondary" type="button" onClick={() => void refreshCalibration()} disabled={calibrationState === "loading"}>{calibrationState === "loading" ? "Перестраиваю…" : "Обновить сводку"}</button>
+          <p className="stage9-status" role="status" aria-live="polite">{calibrationState === "ready" ? "Сводка обновлена." : ""}</p>
         </div>
         {calibrationError ? <p ref={feedbackRef} className="stage9-error" role="alert" tabIndex={-1}>{calibrationError}</p> : null}
         {calibration ? <CalibrationResult result={calibration} /> : null}

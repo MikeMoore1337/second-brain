@@ -421,7 +421,7 @@ def _method_not_allowed() -> JSONResponse:
     return _error_response(
         "COGNITIVE_TWIN_METHOD_NOT_ALLOWED",
         status_code=405,
-        message="Для этого private API разрешён только POST.",
+        message="Для этого закрытого API разрешён только метод POST.",
     )
 
 

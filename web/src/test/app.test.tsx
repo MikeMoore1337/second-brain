@@ -6,9 +6,21 @@ import { App } from "../App";
 import * as api from "../api";
 import { DiagnosticsSurface } from "../diagnostics-surface";
 import { CaptureSurface } from "../parity";
-import { presentValue } from "../presentation";
+import { presentCode, presentError, presentValue } from "../presentation";
 
 let root: Root | undefined;
+
+describe("Русские подписи для кодов и ошибок", () => {
+  it("не показывает неизвестный внутренний код без русской подписи", () => {
+    expect(presentCode("active")).toBe("Действующее");
+    expect(presentCode("unknown_internal_code")).toBe("Код: unknown_internal_code");
+  });
+
+  it("оставляет безопасное русское сообщение и заменяет английское fallback-текстом", () => {
+    expect(presentError(new Error("Ошибка сервера"), "Не удалось выполнить действие.")).toBe("Ошибка сервера");
+    expect(presentError(new Error("backend failure"), "Не удалось выполнить действие.")).toBe("Не удалось выполнить действие.");
+  });
+});
 
 afterEach(() => {
   act(() => root?.unmount());

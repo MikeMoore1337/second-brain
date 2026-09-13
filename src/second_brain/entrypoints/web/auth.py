@@ -934,7 +934,7 @@ class WebAuthMiddleware:
             return
         if not request_host_is_trusted(scope, self.config.trusted_authorities):
             invalid_host_response = PlainTextResponse(
-                "Invalid host header",
+                "Некорректный заголовок запроса Host.",
                 status_code=400,
                 headers=AUTH_SECURITY_HEADERS,
             )

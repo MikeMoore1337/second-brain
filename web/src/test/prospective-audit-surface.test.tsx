@@ -68,7 +68,7 @@ describe("Prospective Audit Stage 9 surface", () => {
 
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(host.textContent).toContain("Выполнить и записать");
-    expect(host.textContent).toContain("Обычный раздел «Прогноз» выше остаётся read-only");
+    expect(host.textContent).toContain("Обычный раздел «Прогноз» выше остаётся доступным только для чтения");
   });
 
   it("executes, rereads, maps and confirms a linkage with bounded requests", async () => {
