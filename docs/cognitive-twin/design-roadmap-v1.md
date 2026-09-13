@@ -33,7 +33,8 @@ production. Операционный store выводится из явно пе
 остаётся вне repository/vault/release и не требует нового env key или изменения
 systemd. Stage 10 Behavioral Self Model v1 и explicit Stated-vs-Observed
 mapping реализованы отдельным Stage 10A–10D slice; Stage 10 остаётся
-derived/read-only для vault и не меняет canonical schema. Stage 11+ не
+derived/read-only для vault и не меняет canonical schema. Stage 11A
+реализован как bounded current Goal identity/context core; Stage 11B+ не
 начинались.
 
 Точный status snapshot перед #175 implementation — canonical `main`:
@@ -1219,8 +1220,9 @@ context и derived explanation divergence.
 ### Stage 11 — Cognitive Twin v2: Growth Engine v1
 
 - **Статус:** **DESIGN CONTRACT** в
-  [growth-engine-v1-contract.md](growth-engine-v1-contract.md); runtime не реализован и Stage 11A не
-  начинался.
+  [growth-engine-v1-contract.md](growth-engine-v1-contract.md); Stage 11A
+  deterministic current Goal identity/context core реализован в Issue #260.
+  Stage 11B+ остаются future implementation gates.
 - **Цель:** связать current reviewed Stage 4 goal с current exact behavioral
   choice только через отдельную explicit owner-reviewed Goal-to-choice
   relation; не определять «настоящую цель», optimality, personality или
@@ -1228,9 +1230,15 @@ context и derived explanation divergence.
 - **Authority boundary:** Goal, observed behavior, likely self-choice и
   independent recommendation остаются независимыми слоями. Stage 10C
   preference mapping не переиспользуется как Goal mapping.
-- **Explicit out-of-scope:** runtime/store/read model, Web/API/UI, Advisor/
-  provider, semantic mapping, schema/vault/Safe Write, Goal Progress, Stage 9,
-  Stage 10 и Simulate Me changes. Следующий Issue автоматически не создаётся.
+- **Implementation boundary:** Stage 11A ограничен current scan →
+  `build_report` → existing `BuildSelfModel` → direct Goal identities,
+  explicit selection и bounded in-memory context. Goal-to-choice mapping,
+  mapping store, behavioral relation, Web/API/UI и provider branches остаются
+  отдельными future gates.
+- **Explicit out-of-scope:** Stage 11B+ runtime/store/read model, Web/API/UI,
+  Advisor/provider, semantic mapping, schema/vault/Safe Write, Goal Progress,
+  Stage 9, Stage 10 и Simulate Me changes. Следующий Issue автоматически не
+  создаётся.
 
 # COMPLETED IMPLEMENTATION SCOPE (HISTORICAL):
 
@@ -1440,16 +1448,17 @@ prospective calibration не входят в этот slice. `HUMAN_REQUIRED: no
 отложены на отдельные future gates. Этот status sync не объявляет Stage 8
 runtime scope, не создаёт Stage 8 item и не меняет product semantics.
 
-## Current status after Stage 10D
+## Current status after Stage 11A
 
 Cognitive Twin v1 / Stages 1–8 are **COMPLETE** in current `main` and
-production. Cognitive Twin v2 / Stage 9A–9D and Stage 10A–10D are **COMPLETE**
-after their staged implementations and closeouts: Stage 10 adds the bounded
+production. Cognitive Twin v2 / Stage 9A–9D, Stage 10A–10D and Stage 11A are
+**COMPLETE** after their staged implementations and closeouts: Stage 10 adds the bounded
 behavioral read model, explicit mapping review/confirmation, dedicated
 operational mapping history, deterministic composition and private owner-only
-Web/API/UI. All derived stores remain outside the vault/repository/release
-directories; no new environment variable or systemd change is part of this
-slice.
+Web/API/UI, while Stage 11A adds only deterministic current Goal identity and
+context derivation. All derived stores remain outside the vault/repository/
+release directories; no new environment variable or systemd change is part of
+these slices.
 
 Current next-stage status:
 
@@ -1462,7 +1471,12 @@ Stage 10C0 Stated-vs-Observed mapping design = COMPLETE (DESIGN CONTRACT)
 Stage 10C runtime = COMPLETE
 Stage 10D Web/API + integration QA/closeout = COMPLETE
 Stage 10 = COMPLETE
-Stage 11 Growth Engine = DESIGN CONTRACT
-Stage 11 runtime = NOT IMPLEMENTED
+Stage 11A Current Goal identity/context core = COMPLETE
+Stage 11 Growth Engine beyond Stage 11A = DESIGN CONTRACT
+Stage 11B Goal-to-choice relation = NOT STARTED
+Stage 11C Advisor / Growth Compare = NOT STARTED
+Stage 11D Personalized learning = NOT STARTED
+Stage 11E Web/API + integration QA/closeout = NOT STARTED
+Stage 11 runtime beyond Stage 11A = NOT IMPLEMENTED
 Stage 12+ = NOT STARTED
 ```
