@@ -25,6 +25,7 @@ import { DiagnosticsSurface } from "./diagnostics-surface";
 import { Icon } from "./icons";
 import { applyPwaUpdate, hasPwaUpdate, subscribeToPwaUpdate } from "./pwa";
 import { ProspectiveAuditSurface } from "./prospective-audit-surface";
+import { CognitiveTwinSurface } from "./cognitive-twin-surface";
 
 const navigation = [
   ["#decision-journal", "Журнал решений", "decision"],
@@ -157,7 +158,7 @@ export function App(): ReactElement {
               <div className="fold-list">
                 <FoldSection id="decision-journal" title="Журнал решений" icon="decision"><DecisionJournalSurface /></FoldSection>
                 <FoldSection id="timeline" title="Хронология" icon="timeline"><TimelineSurface /></FoldSection>
-                <FoldSection id="self-model" title="Модель себя" icon="self-model"><SelfModelSurface /></FoldSection>
+                <FoldSection id="self-model" title="Модель себя" icon="self-model"><SelfModelSurface /><CognitiveTwinSurface /></FoldSection>
                 <FoldSection id="simulate-me" title="Прогноз" icon="simulate"><SimulateMeSurface /></FoldSection>
                 <FoldSection id="prospective-audit" title="Аудит прогноза" icon="relation"><ProspectiveAuditSurface /></FoldSection>
                 <FoldSection id="assistant-compare" title="Совет и сравнение" icon="relation"><AssistantCompareSurface /></FoldSection>

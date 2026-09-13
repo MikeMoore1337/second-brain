@@ -23,6 +23,9 @@ from second_brain.entrypoints.web.app import (
     ACTIVE_LEARNING_RESOLVE_PATH,
     ASSISTANT_REQUEST_HEADER_NAME,
     ASSISTANT_REQUEST_HEADER_VALUE,
+    BEHAVIORAL_SELF_MODEL_PATH,
+    COGNITIVE_TWIN_REQUEST_HEADER_NAME,
+    COGNITIVE_TWIN_REQUEST_HEADER_VALUE,
     COMPARE_REQUEST_HEADER_NAME,
     COMPARE_REQUEST_HEADER_VALUE,
     DIAGNOSTICS_REQUEST_HEADER_NAME,
@@ -31,6 +34,7 @@ from second_brain.entrypoints.web.app import (
     DRAFT_REQUEST_HEADER_VALUE,
     MAX_RAW_ACTIVE_LEARNING_BODY_BYTES,
     MAX_RAW_ASSISTANT_BODY_BYTES,
+    MAX_RAW_COGNITIVE_TWIN_BODY_BYTES,
     MAX_RAW_COMPARE_BODY_BYTES,
     MAX_RAW_DIAGNOSTICS_BODY_BYTES,
     MAX_RAW_DRAFT_BODY_BYTES,
@@ -51,12 +55,20 @@ from second_brain.entrypoints.web.app import (
     SELF_RETRIEVAL_REQUEST_HEADER_VALUE,
     SIMULATE_ME_REQUEST_HEADER_NAME,
     SIMULATE_ME_REQUEST_HEADER_VALUE,
+    STATED_OBSERVED_COMPOSITION_PATH,
+    STATED_OBSERVED_MAPPING_CONFIRM_PATH,
+    STATED_OBSERVED_MAPPING_REVIEW_PATH,
+    STATED_OBSERVED_MAPPING_STATUS_PATH,
     TIMELINE_REQUEST_HEADER_NAME,
     TIMELINE_REQUEST_HEADER_VALUE,
     TRANSCRIPTION_REQUEST_HEADER_NAME,
     TRANSCRIPTION_REQUEST_HEADER_VALUE,
     TranscriptionRequestBoundaryMiddleware,
     create_app,
+)
+from second_brain.entrypoints.web.cognitive_twin import (
+    BehavioralSelfModelService,
+    StatedObservedMappingWebService,
 )
 from second_brain.entrypoints.web.diagnostics import DiagnosticsService
 from second_brain.entrypoints.web.drafts import DraftService
@@ -192,6 +204,29 @@ def _prospective_audit_route(path: str, body: bytes) -> PrivateRoute:
         invalid_code="PROSPECTIVE_AUDIT_INVALID_REQUEST",
         content_too_large_code="PROSPECTIVE_AUDIT_CONTENT_TOO_LARGE",
         max_body_bytes=MAX_RAW_PROSPECTIVE_AUDIT_BODY_BYTES,
+    )
+
+
+_COGNITIVE_TWIN_SELECTOR = {
+    "source_note_uuid": "0198c8a0-0000-7000-8000-000000000010",
+    "behavioral_cohort_fingerprint": "sha256:" + "a" * 64,
+    "behavioral_option_index": 0,
+    "behavioral_option_fingerprint": "sha256:" + "b" * 64,
+}
+
+
+def _cognitive_twin_route(path: str, body: bytes) -> PrivateRoute:
+    """Build one Stage 10 route descriptor with the shared private boundary."""
+
+    return PrivateRoute(
+        path=path,
+        request_header_name=COGNITIVE_TWIN_REQUEST_HEADER_NAME,
+        request_header_value=COGNITIVE_TWIN_REQUEST_HEADER_VALUE,
+        content_type="application/json",
+        body=body,
+        invalid_code="COGNITIVE_TWIN_INVALID_REQUEST",
+        content_too_large_code="COGNITIVE_TWIN_CONTENT_TOO_LARGE",
+        max_body_bytes=MAX_RAW_COGNITIVE_TWIN_BODY_BYTES,
     )
 
 
@@ -389,6 +424,26 @@ PRIVATE_ROUTES: tuple[PrivateRoute, ...] = (
         content_too_large_code="SELF_MODEL_CONTENT_TOO_LARGE",
         max_body_bytes=MAX_RAW_SELF_MODEL_BODY_BYTES,
     ),
+    _cognitive_twin_route(BEHAVIORAL_SELF_MODEL_PATH, b"{}"),
+    _cognitive_twin_route(STATED_OBSERVED_MAPPING_STATUS_PATH, b"{}"),
+    _cognitive_twin_route(
+        STATED_OBSERVED_MAPPING_REVIEW_PATH,
+        _json_body(_COGNITIVE_TWIN_SELECTOR),
+    ),
+    _cognitive_twin_route(
+        STATED_OBSERVED_MAPPING_CONFIRM_PATH,
+        _json_body(
+            {
+                **_COGNITIVE_TWIN_SELECTOR,
+                "operation_id": "0198c8a0-0000-7000-8000-000000000011",
+                "confirmed": False,
+            }
+        ),
+    ),
+    _cognitive_twin_route(
+        STATED_OBSERVED_COMPOSITION_PATH,
+        _json_body({"source_note_uuid": _COGNITIVE_TWIN_SELECTOR["source_note_uuid"]}),
+    ),
     PrivateRoute(
         path="/api/self-retrieval",
         request_header_name=SELF_RETRIEVAL_REQUEST_HEADER_NAME,
@@ -495,6 +550,8 @@ def _boundary_test_app() -> tuple[FastAPI, RecordingBoundaryService]:
         diagnostics_service=cast(DiagnosticsService, service),
         retrospective_calibration_service=cast(RetrospectiveCalibrationWebService, service),
         active_learning_service=cast(ActiveLearningWebService, service),
+        behavioral_self_model_service=cast(BehavioralSelfModelService, service),
+        stated_observed_mapping_service=cast(StatedObservedMappingWebService, service),
     )
     return application, service
 

@@ -133,6 +133,176 @@ export interface SelfModelResponse {
   readonly policy_fingerprint?: string;
 }
 
+export interface BehavioralRatio {
+  readonly numerator: number;
+  readonly denominator: number;
+}
+
+export interface BehavioralOptionIdentity {
+  readonly option_index: number;
+  readonly option_fingerprint: string;
+}
+
+export interface BehavioralChoiceSupport {
+  readonly option: BehavioralOptionIdentity;
+  readonly support_count: number;
+  readonly support_ratio: BehavioralRatio | null;
+}
+
+export interface BehavioralWindowSummary {
+  readonly window: "current" | "historical";
+  readonly observation_count: number;
+  readonly choice_support: readonly BehavioralChoiceSupport[];
+}
+
+export interface BehavioralPattern {
+  readonly cohort: {
+    readonly grouping_policy: string;
+    readonly domain: string;
+    readonly situation_fingerprint: string;
+    readonly information_fingerprint: string;
+    readonly option_namespace_fingerprint: string;
+    readonly criteria_fingerprint: string;
+    readonly cohort_fingerprint: string;
+  } | null;
+  readonly pattern_type: string;
+  readonly state: string;
+  readonly selected_option: BehavioralOptionIdentity | null;
+  readonly support_count: number | null;
+  readonly total_comparable_observations: number;
+  readonly support_ratio: BehavioralRatio | null;
+  readonly choice_support: readonly BehavioralChoiceSupport[];
+  readonly temporal_span: {
+    readonly earliest_evidence_at: string | null;
+    readonly latest_evidence_at: string | null;
+  };
+  readonly windows: readonly BehavioralWindowSummary[];
+  readonly outcome_presence: Readonly<Record<string, number>>;
+  readonly provenance: {
+    readonly source_journal_uuids: readonly string[];
+    readonly source_count: number;
+    readonly provenance_fingerprint: string;
+  };
+  readonly caveats: readonly string[];
+}
+
+export interface BehavioralSelfModelResponse {
+  readonly contract_version: string;
+  readonly derivation_version: string;
+  readonly policy_id: string;
+  readonly policy_fingerprint: string;
+  readonly generated_at: string;
+  readonly patterns: readonly BehavioralPattern[];
+  readonly eligible_journal_count: number;
+  readonly comparable_observation_count: number;
+  readonly excluded_unknown_time_count: number;
+  readonly excluded_outside_horizon_count: number;
+  readonly caveats: readonly string[];
+}
+
+export interface StatedObservedMappingSelector {
+  readonly source_note_uuid: string;
+  readonly behavioral_cohort_fingerprint: string;
+  readonly behavioral_option_index: number;
+  readonly behavioral_option_fingerprint: string;
+}
+
+export interface StatedObservedMappingReviewOption {
+  readonly option_index: number;
+  readonly option_fingerprint: string;
+  readonly label: string;
+}
+
+export interface StatedObservedMappingReviewResponse {
+  readonly generated_at: string;
+  readonly stated: {
+    readonly source_note_uuid: string;
+    readonly dimension: "preference";
+    readonly source_evidence_kind: string;
+    readonly source_self_kind: "preference";
+    readonly domain: string;
+    readonly evidence_at: string;
+    readonly evidence_at_precision: string;
+    readonly source_contract_version: string;
+    readonly source_derivation_version: string;
+    readonly self_model_policy_fingerprint: string;
+    readonly source_fingerprint: string;
+    readonly claim_fingerprint: string;
+  };
+  readonly behavioral: {
+    readonly cohort: BehavioralPattern["cohort"];
+    readonly option: BehavioralOptionIdentity;
+    readonly pattern_type: string;
+    readonly pattern_state: string;
+    readonly pattern_fingerprint: string;
+    readonly source_fingerprint: string;
+    readonly provenance_fingerprint: string;
+    readonly source_count: number;
+    readonly behavioral_contract_version: string;
+    readonly behavioral_derivation_version: string;
+    readonly observation_version: string;
+    readonly policy_id: string;
+    readonly policy_fingerprint: string;
+    readonly comparison_subject: string;
+  };
+  readonly candidate_mapping_fingerprint: string;
+  readonly claim_text: string;
+  readonly cohort_domain: string;
+  readonly situation: string;
+  readonly information_known_at_decision_time: string;
+  readonly criteria: readonly string[];
+  readonly ordered_options: readonly StatedObservedMappingReviewOption[];
+  readonly pattern_type: string;
+  readonly pattern_state: string;
+  readonly caveats: readonly string[];
+}
+
+export interface StatedObservedMappingStatusItem {
+  readonly mapping_id: string;
+  readonly lifecycle_state: "active" | "superseded" | "invalidated" | "deleted";
+  readonly source_note_uuid: string;
+  readonly domain: string;
+  readonly behavioral_cohort_fingerprint: string;
+  readonly behavioral_option_index: number;
+  readonly behavioral_option_fingerprint: string;
+  readonly pattern_type: string;
+  readonly pattern_state: string;
+  readonly mapping_fingerprint: string;
+  readonly mapping_policy_fingerprint: string;
+  readonly created_at: string;
+  readonly reviewed_at: string;
+  readonly supersedes_mapping_id: string | null;
+}
+
+export interface StatedObservedMappingStatusResponse {
+  readonly mapping_policy_id: string;
+  readonly mappings: readonly StatedObservedMappingStatusItem[];
+  readonly active_mapping_count: number;
+}
+
+export type StatedObservedCompositionState =
+  | "aligned"
+  | "divergent"
+  | "stated_evidence_missing"
+  | "behavioral_evidence_insufficient"
+  | "not_comparable";
+
+export interface StatedObservedCompositionResponse {
+  readonly contract_version: string;
+  readonly derivation_version: string;
+  readonly mapping_policy_id: string;
+  readonly mapping_policy_fingerprint: string;
+  readonly generated_at: string;
+  readonly state: StatedObservedCompositionState;
+  readonly reason_code: string | null;
+  readonly mapping_id: string | null;
+  readonly mapping_fingerprint: string | null;
+  readonly observed_option: BehavioralOptionIdentity | null;
+  readonly behavioral_pattern_type: string | null;
+  readonly behavioral_pattern_state: string | null;
+  readonly caveats: readonly string[];
+}
+
 export interface SelfRetrievalClaim {
   readonly dimension?: string;
   readonly claim?: string;
@@ -412,8 +582,96 @@ export function loadTimeline(order: "asc" | "desc", fetcher: FetchLike = fetchDe
   return requestJson("/api/timeline", "timeline-v1", { order, known_limit: 100, unknown_limit: 100 }, fetcher, "Не удалось загрузить хронологию.");
 }
 
-export function loadSelfModel(fetcher: FetchLike = fetchDefault): Promise<SelfModelResponse> {
-  return requestJson("/api/self-model", "self-model-v1", { max_claims: 200, max_evidence_refs_per_claim: 200 }, fetcher, "Не удалось построить модель себя.");
+export function loadSelfModel(fetcher: FetchLike = fetchDefault, signal?: AbortSignal): Promise<SelfModelResponse> {
+  return requestJson(
+    "/api/self-model",
+    "self-model-v1",
+    { max_claims: 200, max_evidence_refs_per_claim: 200 },
+    fetcher,
+    "Не удалось построить модель себя.",
+    signal,
+  );
+}
+
+export function loadBehavioralSelfModel(
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<BehavioralSelfModelResponse> {
+  return requestJson(
+    "/api/behavioral-self-model",
+    "cognitive-twin-v1",
+    {},
+    fetcher,
+    "Не удалось построить наблюдаемый слой.",
+    signal,
+  );
+}
+
+export function loadStatedObservedMappingStatus(
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<StatedObservedMappingStatusResponse> {
+  return requestJson(
+    "/api/stated-observed-mapping/status",
+    "cognitive-twin-v1",
+    {},
+    fetcher,
+    "Не удалось загрузить состояние сопоставлений.",
+    signal,
+  );
+}
+
+export function reviewStatedObservedMapping(
+  selector: StatedObservedMappingSelector,
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<StatedObservedMappingReviewResponse> {
+  return requestJson(
+    "/api/stated-observed-mapping/review",
+    "cognitive-twin-v1",
+    selector,
+    fetcher,
+    "Не удалось подготовить review сопоставления.",
+    signal,
+  );
+}
+
+export function confirmStatedObservedMapping(
+  selector: StatedObservedMappingSelector,
+  operationId: string,
+  confirmed: boolean,
+  supersedesMappingId: string | null,
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<{ readonly status: "accepted"; readonly mapping: StatedObservedMappingStatusItem }> {
+  return requestJson(
+    "/api/stated-observed-mapping/confirm",
+    "cognitive-twin-v1",
+    {
+      ...selector,
+      operation_id: operationId,
+      confirmed,
+      supersedes_mapping_id: supersedesMappingId,
+    },
+    fetcher,
+    "Не удалось принять сопоставление.",
+    signal,
+  );
+}
+
+export function loadStatedObservedComposition(
+  sourceNoteUuid: string | null,
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<StatedObservedCompositionResponse> {
+  return requestJson(
+    "/api/stated-observed-composition",
+    "cognitive-twin-v1",
+    { source_note_uuid: sourceNoteUuid },
+    fetcher,
+    "Не удалось проверить текущее сопоставление.",
+    signal,
+  );
 }
 
 export function loadSelfRetrieval(query: string, fetcher: FetchLike = fetchDefault): Promise<SelfRetrievalResponse> {

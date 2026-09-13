@@ -31,9 +31,10 @@ Stage 9A/9B/9C и Stage 9D Web/API с integration QA реализованы в �
 implementation slices; после закрытия Issue #244 весь Stage 9 находится в
 production. Операционный store выводится из явно переданного `web.env`,
 остаётся вне repository/vault/release и не требует нового env key или изменения
-systemd. Stage 10 Behavioral Self Model v1 зафиксирован отдельным
-[design contract](behavioral-self-model-v1-contract.md); Stage 10 runtime не
-реализован. Stage 11+ не начинались.
+systemd. Stage 10 Behavioral Self Model v1 и explicit Stated-vs-Observed
+mapping реализованы отдельным Stage 10A–10D slice; Stage 10 остаётся
+derived/read-only для vault и не меняет canonical schema. Stage 11+ не
+начинались.
 
 Точный status snapshot перед #175 implementation — canonical `main`:
 `a461b0b08d4e396561a869d7348700d5d86934bc`.
@@ -1193,10 +1194,9 @@ context и derived explanation divergence.
 
 ### Stage 10 — Cognitive Twin v2: Behavioral Self Model и explicit mapping
 
-- **Статус:** Stage 10A Behavioral Observation/Cohort и Stage 10B Behavioral
-  Self Model завершены в current `main`. Stage 10C0 Stated-vs-Observed
-  explicit mapping design contract завершён в Issue #252; его runtime,
-  operational store, composition и Web/API ещё не реализованы.
+- **Статус:** Stage 10A Behavioral Observation/Cohort, Stage 10B Behavioral
+  Self Model, Stage 10C runtime и Stage 10D Web/API с integration QA/closeout
+  завершены в current `main` после Issue #256.
 - **Цель:** сохранить раздельные Stated и Behavioral layers и определить
   только explicit owner-reviewed relation между current Stage 4 direct
   `preference` assertion и exact current Stage 10 cohort/option.
@@ -1207,10 +1207,10 @@ context и derived explanation divergence.
   фиксирует preference-only exact identity, injective cardinality, explicit
   review, fail-closed drift/correction, bounded dedicated operational
   persistence вне vault и Stage 9, а также closed composition states.
-- **Implementation boundary:** следующий отдельно одобренный Stage 10C
-  может реализовать validators, current rebuild/review orchestration,
-  dedicated mapping store и deterministic composition. Stage 10D отдельно
-  покрывает Web/API и integration QA/closeout.
+- **Implementation boundary:** Stage 10C реализует validators, current
+  rebuild/review orchestration, dedicated mapping store и deterministic
+  composition; Stage 10D закрывает bounded Web/API, owner UI и integration
+  QA/closeout. Следующий Stage 11 отдельно не начинать автоматически.
 - **Explicit out-of-scope:** fuzzy/semantic/LLM/embedding matching,
   automatic mapping, belief/goal mapping, many-to-many/history semantics,
   Stage 9/Simulate Me consumers, provider/network/credentials, canonical
@@ -1424,14 +1424,14 @@ prospective calibration не входят в этот slice. `HUMAN_REQUIRED: no
 отложены на отдельные future gates. Этот status sync не объявляет Stage 8
 runtime scope, не создаёт Stage 8 item и не меняет product semantics.
 
-## Current status after Stage 9D
+## Current status after Stage 10D
 
 Cognitive Twin v1 / Stages 1–8 are **COMPLETE** in current `main` and
-production. Cognitive Twin v2 / Stage 9A–9D are **COMPLETE** after the staged
-implementation and Issue #244 closeout: durable operational audit persistence,
-explicit prediction-to-decision linkage, prospective calibration aggregate and
-bounded Web/API are in production. The production root is derived from the
-explicit `web.env` location and is kept outside repository, vault and release
+production. Cognitive Twin v2 / Stage 9A–9D and Stage 10A–10D are **COMPLETE**
+after their staged implementations and closeouts: Stage 10 adds the bounded
+behavioral read model, explicit mapping review/confirmation, dedicated
+operational mapping history, deterministic composition and private owner-only
+Web/API/UI. All derived stores remain outside the vault/repository/release
 directories; no new environment variable or systemd change is part of this
 slice.
 
@@ -1443,7 +1443,8 @@ Cognitive Twin v2 / Stage 9 = COMPLETE
 Stage 10A Behavioral Observation/Cohort = COMPLETE
 Stage 10B Behavioral Self Model = COMPLETE
 Stage 10C0 Stated-vs-Observed mapping design = COMPLETE (DESIGN CONTRACT)
-Stage 10C runtime = NOT IMPLEMENTED
-Stage 10D Web/API = NOT STARTED
+Stage 10C runtime = COMPLETE
+Stage 10D Web/API + integration QA/closeout = COMPLETE
+Stage 10 = COMPLETE
 Stage 11+ = NOT STARTED
 ```

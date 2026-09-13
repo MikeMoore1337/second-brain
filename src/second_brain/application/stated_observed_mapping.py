@@ -2625,6 +2625,12 @@ class StatedObservedMappingService:
         self.store = store
         self.clock = clock
 
+    def snapshot(self) -> tuple[MappingLifecycleViewV1, ...]:
+        """Return verified append-only lifecycle state without source content."""
+
+        validate_mapping_policy()
+        return self.store.read_verified_snapshot()
+
     def review(
         self,
         request: StatedObservedMappingReviewRequest | StatedObservedMappingSelectorV1,
@@ -2690,18 +2696,17 @@ class StatedObservedMappingService:
         validate_mapping_policy()
         if type(request) is not StatedObservedMappingAcceptanceRequest or not request.confirmed:
             raise StatedObservedMappingInvalidRequestError()
-        if request.review_projection is None:
-            raise StatedObservedMappingInvalidRequestError()
-        try:
-            if (
-                len(request.review_projection.to_json().encode("utf-8"))
-                > MAX_REVIEW_PROJECTION_BYTES
-            ):
-                raise StatedObservedMappingResultTooLargeError()
-        except StatedObservedMappingError:
-            raise
-        except UnicodeError, TypeError, ValueError:
-            raise StatedObservedMappingInvalidRequestError() from None
+        if request.review_projection is not None:
+            try:
+                if (
+                    len(request.review_projection.to_json().encode("utf-8"))
+                    > MAX_REVIEW_PROJECTION_BYTES
+                ):
+                    raise StatedObservedMappingResultTooLargeError()
+            except StatedObservedMappingError:
+                raise
+            except UnicodeError, TypeError, ValueError:
+                raise StatedObservedMappingInvalidRequestError() from None
         # This is the mandatory immediate second current build.  Client text,
         # labels, domains and fingerprints are not used as source authority.
         current = _safe_current_build(self.reader, self.clock)
@@ -2710,7 +2715,7 @@ class StatedObservedMappingService:
         )
         fresh_fingerprint = compute_mapping_fingerprint(stated, behavioral)
         projection = request.review_projection
-        if (
+        if projection is not None and (
             projection.stated != stated
             or projection.behavioral != behavioral
             or projection.candidate_mapping_fingerprint != fresh_fingerprint
