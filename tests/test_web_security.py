@@ -32,12 +32,17 @@ from second_brain.entrypoints.web.app import (
     DIAGNOSTICS_REQUEST_HEADER_VALUE,
     DRAFT_REQUEST_HEADER_NAME,
     DRAFT_REQUEST_HEADER_VALUE,
+    GROWTH_ADVISOR_EXECUTE_PATH,
+    GROWTH_ADVISOR_PREVIEW_PATH,
+    GROWTH_ADVISOR_REQUEST_HEADER_NAME,
+    GROWTH_ADVISOR_REQUEST_HEADER_VALUE,
     MAX_RAW_ACTIVE_LEARNING_BODY_BYTES,
     MAX_RAW_ASSISTANT_BODY_BYTES,
     MAX_RAW_COGNITIVE_TWIN_BODY_BYTES,
     MAX_RAW_COMPARE_BODY_BYTES,
     MAX_RAW_DIAGNOSTICS_BODY_BYTES,
     MAX_RAW_DRAFT_BODY_BYTES,
+    MAX_RAW_GROWTH_ADVISOR_BODY_BYTES,
     MAX_RAW_RETROSPECTIVE_CALIBRATION_BODY_BYTES,
     MAX_RAW_SEARCH_BODY_BYTES,
     MAX_RAW_SELF_MODEL_BODY_BYTES,
@@ -63,6 +68,7 @@ from second_brain.entrypoints.web.app import (
     TIMELINE_REQUEST_HEADER_VALUE,
     TRANSCRIPTION_REQUEST_HEADER_NAME,
     TRANSCRIPTION_REQUEST_HEADER_VALUE,
+    GrowthAdvisorWebService,
     TranscriptionRequestBoundaryMiddleware,
     create_app,
 )
@@ -227,6 +233,43 @@ def _cognitive_twin_route(path: str, body: bytes) -> PrivateRoute:
         invalid_code="COGNITIVE_TWIN_INVALID_REQUEST",
         content_too_large_code="COGNITIVE_TWIN_CONTENT_TOO_LARGE",
         max_body_bytes=MAX_RAW_COGNITIVE_TWIN_BODY_BYTES,
+    )
+
+
+_GROWTH_ADVISOR_REQUEST = {
+    "contract_version": "growth-advisor-v1",
+    "goal_source_uuid": "0198c8a0-0000-7000-8000-000000000020",
+    "goal_identity_fingerprint": "sha256:" + "c" * 64,
+    "task": "Boundary fixture",
+    "options": [],
+    "explicit_constraints": [],
+    "explicit_context": [],
+    "max_context_bytes": 65536,
+    "max_result_bytes": 65536,
+}
+_GROWTH_ADVISOR_PREVIEW = {
+    "contract_version": "growth-advisor-v1",
+    "goal_source_uuid": _GROWTH_ADVISOR_REQUEST["goal_source_uuid"],
+    "goal_identity_fingerprint": _GROWTH_ADVISOR_REQUEST["goal_identity_fingerprint"],
+    "assistant_contract_version": "assistant-v1",
+    "advisor_policy_id": "growth-advisor-owner-explicit-goal-v1",
+    "goal_text": "Boundary goal",
+    "goal_text_utf8_bytes": len(b"Boundary goal"),
+}
+
+
+def _growth_advisor_route(path: str, body: bytes) -> PrivateRoute:
+    """Build one Stage 11C private route descriptor."""
+
+    return PrivateRoute(
+        path=path,
+        request_header_name=GROWTH_ADVISOR_REQUEST_HEADER_NAME,
+        request_header_value=GROWTH_ADVISOR_REQUEST_HEADER_VALUE,
+        content_type="application/json",
+        body=body,
+        invalid_code="GROWTH_ADVISOR_INVALID_REQUEST",
+        content_too_large_code="GROWTH_ADVISOR_CONTEXT_TOO_LARGE",
+        max_body_bytes=MAX_RAW_GROWTH_ADVISOR_BODY_BYTES,
     )
 
 
@@ -444,6 +487,20 @@ PRIVATE_ROUTES: tuple[PrivateRoute, ...] = (
         STATED_OBSERVED_COMPOSITION_PATH,
         _json_body({"source_note_uuid": _COGNITIVE_TWIN_SELECTOR["source_note_uuid"]}),
     ),
+    _growth_advisor_route(
+        GROWTH_ADVISOR_PREVIEW_PATH,
+        _json_body(_GROWTH_ADVISOR_REQUEST),
+    ),
+    _growth_advisor_route(
+        GROWTH_ADVISOR_EXECUTE_PATH,
+        _json_body(
+            {
+                "request": _GROWTH_ADVISOR_REQUEST,
+                "preview": _GROWTH_ADVISOR_PREVIEW,
+                "confirmed": False,
+            }
+        ),
+    ),
     PrivateRoute(
         path="/api/self-retrieval",
         request_header_name=SELF_RETRIEVAL_REQUEST_HEADER_NAME,
@@ -552,6 +609,7 @@ def _boundary_test_app() -> tuple[FastAPI, RecordingBoundaryService]:
         active_learning_service=cast(ActiveLearningWebService, service),
         behavioral_self_model_service=cast(BehavioralSelfModelService, service),
         stated_observed_mapping_service=cast(StatedObservedMappingWebService, service),
+        growth_advisor_service=cast(GrowthAdvisorWebService, service),
     )
     return application, service
 
