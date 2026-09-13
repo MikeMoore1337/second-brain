@@ -31,7 +31,9 @@ Stage 9A/9B/9C и Stage 9D Web/API с integration QA реализованы в �
 implementation slices; после закрытия Issue #244 весь Stage 9 находится в
 production. Операционный store выводится из явно переданного `web.env`,
 остаётся вне repository/vault/release и не требует нового env key или изменения
-systemd. Stage 10+ к этому status не относятся и не запускались.
+systemd. Stage 10 Behavioral Self Model v1 зафиксирован отдельным
+[design contract](behavioral-self-model-v1-contract.md); Stage 10 runtime не
+реализован. Stage 11+ не начинались.
 
 Точный status snapshot перед #175 implementation — canonical `main`:
 `a461b0b08d4e396561a869d7348700d5d86934bc`.
@@ -1406,4 +1408,14 @@ explicit prediction-to-decision linkage, prospective calibration aggregate and
 bounded Web/API are in production. The production root is derived from the
 explicit `web.env` location and is kept outside repository, vault and release
 directories; no new environment variable or systemd change is part of this
-slice. Stage 10+ have not started.
+slice.
+
+Current next-stage status:
+
+```text
+Cognitive Twin v1 / Stage 1–8 = COMPLETE
+Cognitive Twin v2 / Stage 9 = COMPLETE
+Stage 10 Behavioral Self Model = DESIGN CONTRACT
+Stage 10 runtime = NOT IMPLEMENTED
+Stage 11+ = NOT STARTED
+```
