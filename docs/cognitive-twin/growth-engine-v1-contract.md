@@ -1,9 +1,13 @@
 # Cognitive Twin v2 / Stage 11 — Growth Engine v1
 
 Статус документа: **DESIGN / NORMATIVE CONTRACT ONLY**. Этот документ
-закрывает design gate Issue #258. Runtime Growth Engine, goal mapping store,
-read model, Web/API/UI, provider integration, schema changes и изменения
-second-brain-vault этим документом не создаются.
+закрывает design gate Issue #258 и остаётся нормативной основой для
+детерминированного Growth Engine. Stage 11A и Stage 11B runtime, mapping store
+и friction read model уже реализованы отдельными merged slices (#260 и #263);
+этим документом не создаются новые runtime, Web/API/UI, provider integration,
+schema changes или изменения second-brain-vault. Privacy/payload/provenance
+boundary будущего Advisor зафиксирована отдельно в
+[growth-advisor-v1-contract.md](growth-advisor-v1-contract.md).
 
 Контракт читается поверх:
 
@@ -653,21 +657,14 @@ Stage 4, Personal Memory, Stage 10, Stage 9, vault или Search не разре
 - recommendation не становится canonical Goal, relation или growth-optimal;
 - recommendation result/session не сохраняется в Growth mapping store.
 
-Будущий Stage 11C может разрешить только explicit owner action:
-
-1. owner выбирает exact current Goal;
-2. UI явно показывает, что будет отправлен bounded goal projection;
-3. application передаёт его как caller-owned explicit_goals в existing Assistant
-   contract, с уже действующими max 8 values / 4096 aggregate bytes;
-4. в payload не входят Behavioral bodies, Stage 10C records, Stage 9 data,
-   raw vault context, hidden history или private unrelated notes;
-5. result имеет independent_recommendation_analysis label и bounded transient
-   reference;
-6. отсутствие provider result даёт recommendation_unavailable только для этой
-   optional branch и не превращает deterministic Growth relation в failure.
-
-Точный provider/data-handling/retention gate и Advisor reference DTO остаются
-Stage 11C DEFER. До него Advisor reference в GrowthResult обязан быть null.
+Stage 11C0 отдельно разрешает только design contract для будущего explicit
+owner action. Его точный preview → confirmation → immediate revalidation flow,
+ровно один current Goal в explicit_goals, reuse existing AdvisorPort,
+provider-visible allowlist, retention/logging boundary, fixed errors и
+transient provenance описаны в
+[growth-advisor-v1-contract.md](growth-advisor-v1-contract.md). В текущем
+Stage 11B runtime Advisor не вызывается и advisor reference остаётся null;
+Stage 11C runtime не реализован.
 
 ## 16. Compare integration
 
@@ -839,7 +836,7 @@ GrowthTemporalContextV1 {
   advisor_requested_at:            RFC3339 UTC | null
 }
 
-GrowthAdvisorResultRefV1 {
+Legacy placeholder GrowthAdvisorResultRefV1 в текущем Stage 11B contract:
   request_id_fingerprint:          GrowthHashV1
   result_kind:                     "independent_recommendation_analysis"
   advisor_policy_id:               bounded versioned string
@@ -848,7 +845,10 @@ GrowthAdvisorResultRefV1 {
 }
 ~~~
 
-GrowthAdvisorResultRefV1 не входит в v1 execution и должен быть null.
+Этот nullable placeholder не входит в текущий Stage 11B execution и должен
+быть null. Exact future GrowthAdvisorResultRefV1 с Assistant/Goal policy
+binding и branch provenance определён в
+[growth-advisor-v1-contract.md](growth-advisor-v1-contract.md).
 Recommendation text, rationale и selected option не копируются в ordinary
 Growth result; owner-facing transient Advisor projection является отдельной
 policy.
@@ -1098,8 +1098,8 @@ policy, provenance and calibration baseline/reset gate.
 | Decision-rule inference | DEFER | No hidden rule from repeated behavior; future reviewed authority only |
 | Growth-optimal claim | DEFER / not emitted | V1 has no optimality authority or field |
 | Assistant private Goal injection | FORBIDDEN in v1 | Current Assistant remains explicit caller-owned only |
-| Advisor branch | DEFER | Stage 11C explicit owner request/privacy/provider gate |
-| Compare integration | DEFER | No GrowthCompareV1 in current v1 |
+| Advisor branch | DEFER | Stage 11C0 contract is complete; Stage 11C explicit owner runtime remains deferred |
+| Compare integration | DEFER | No GrowthCompareV1 in current v1; Advisor branch stays independent |
 | Compare/Stage 9/Simulate Me mutation | FORBIDDEN | No feedback path or retroactive semantics |
 | Outcome/progress | DEFER | Separate structured reviewed Goal Progress design gate |
 | Personalized learning | ACCEPT bounded | Derived question/friction only; no hidden persuasion or write |
@@ -1122,29 +1122,21 @@ policy, provenance and calibration baseline/reset gate.
 
 ## 26. Exact future decomposition и next implementation slice
 
-### Stage 11A — deterministic current Goal identity/context core
+### Stage 11A — deterministic current Goal identity/context core (COMPLETE)
 
-Это единственный exact next implementation slice, который можно начинать
-после отдельного implementation approval:
-
-1. current scan -> build_report -> existing BuildSelfModel;
-2. filter only direct dimension=goal claims;
-3. validate/build GrowthGoalIdentityV1 and exact source/claim fingerprints;
-4. implement explicit selected_goal или each_current_goal bounded request;
-5. preserve unknown evidence time and current source revalidation;
-6. return bounded read-only Goal context with fixed safe errors;
-7. add temporary-vault deterministic tests for missing, duplicate/ambiguous,
-   edited/deleted, unknown-time, wrong-dimension, policy mismatch and no-body
-   identity;
-8. run existing full Python 3.14 gate.
+Stage 11A реализован в Issue #260 и находится в current main. Реализация
+сохраняет exact current scan → build_report → existing BuildSelfModel,
+direct Goal identity, explicit selection, unknown evidence time, source
+revalidation, bounded read-only context и fixed safe errors. Его deterministic
+tests и Python 3.14 gate являются историей этого merged slice.
 
 Stage 11A не реализует Goal-to-choice mapping, mapping store, behavior relation,
 Growth result comparison, Web/API/UI, Advisor, Compare, Active Learning или
 canonical write. Existing Stage 4 code/DTO/policy is not changed.
 
-### Stage 11B — explicit Goal-to-choice relation + friction read model
+### Stage 11B — explicit Goal-to-choice relation + friction read model (COMPLETE)
 
-Future owner-approved slice:
+Stage 11B реализован в Issue #262/PR #263 и находится в current main:
 
 - separate Growth mapping validator/store namespace;
 - explicit review and immediate revalidation;
@@ -1152,11 +1144,19 @@ Future owner-approved slice:
 - current Stage 10 behavioral reference;
 - deterministic relation states and no negative inference from missing mapping.
 
-### Stage 11C — optional Advisor / Growth Compare
+### Stage 11C0 — Growth Advisor privacy/payload/provenance design (COMPLETE)
 
-Future explicit gate for bounded owner-requested Assistant context and/or
-independent recommendation/Compare composition. Provider, privacy payload,
-retention, result reference and branch provenance must be separately approved.
+Issue #264 фиксирует отдельный [Growth Advisor v1 contract](growth-advisor-v1-contract.md):
+explicit preview/confirmation, exact current Goal projection, reuse existing
+Assistant/Advisor boundary, no hidden Growth context, transient full result и
+compact provenance. Runtime/provider call, Web/API/UI, persistence и Compare
+composition не реализованы.
+
+### Stage 11C — optional Advisor / Growth Compare runtime
+
+Future implementation gate after #264. It may implement only the exact
+GrowthAdvisor v1 contract and must preserve deterministic Stage 11A/11B
+semantics. GrowthCompare/Compare v2 remains a separate future contract.
 
 ### Stage 11D — personalized learning/question boundary
 
@@ -1166,7 +1166,8 @@ motivation optimization or reinforcement.
 ### Stage 11E — Web/API, integration QA и Stage 11 closeout
 
 Future owner-only transport/UI, no-store behavior, integration tests, exact
-production gates and status closeout. None of 11A–11E starts in Issue #258.
+production gates and status closeout. Issue #258 was the design gate; Stage
+11A/11B were implemented later, while Stage 11C0 is design-only in #264.
 Implementation Issues are not created automatically.
 
 ## 27. Contract acceptance flags
@@ -1177,9 +1178,13 @@ dependencies changed: NO
 schema changed: NO
 provider/network changed: NO
 env changed: NO
+env change required: NO
 second-brain-vault changed: NO
-Stage 11A started: NO
-Stage 11 runtime started: NO
+Stage 11A started: YES / COMPLETE
+Stage 11B started: YES / COMPLETE
+Stage 11C0 design: COMPLETE
+Stage 11C runtime: NOT IMPLEMENTED
+Stage 11D/E started: NO
 Stage 12+ started: NO
 next Issue created: NO
 HUMAN_REQUIRED: none
@@ -1191,7 +1196,9 @@ HUMAN_REQUIRED: none
 Cognitive Twin v1 / Stages 1-8 = COMPLETE
 Stage 9 = COMPLETE
 Stage 10 Behavioral Self Model = COMPLETE
-Stage 11 Growth Engine = DESIGN CONTRACT
-Stage 11 runtime = NOT IMPLEMENTED
+Stage 11A = COMPLETE
+Stage 11B = COMPLETE
+Stage 11C0 Growth Advisor design = COMPLETE
+Stage 11C runtime = NOT IMPLEMENTED
 Stage 12+ = NOT STARTED
 ~~~
