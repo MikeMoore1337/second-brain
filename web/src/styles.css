@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "./fonts.css";
 @import "../../src/second_brain/entrypoints/web/static/app.css";
+@import "./cognitive-twin-surface.css";
 
 .icon {
   display: inline-block;

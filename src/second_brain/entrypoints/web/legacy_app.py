@@ -1716,6 +1716,9 @@ def create_app(
                 "/api/simulate-me",
                 "/api/active-learning/",
                 "/api/diagnostics",
+                "/api/behavioral-self-model",
+                "/api/stated-observed-mapping/",
+                "/api/stated-observed-composition",
             )
         ):
             response.headers["Cache-Control"] = "no-store"
