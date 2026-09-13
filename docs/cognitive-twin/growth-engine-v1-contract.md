@@ -4,10 +4,12 @@
 закрывает design gate Issue #258 и остаётся нормативной основой для
 детерминированного Growth Engine. Stage 11A и Stage 11B runtime, mapping store
 и friction read model уже реализованы отдельными merged slices (#260 и #263);
-этим документом не создаются новые runtime, Web/API/UI, provider integration,
-schema changes или изменения second-brain-vault. Privacy/payload/provenance
-boundary будущего Advisor зафиксирована отдельно в
-[growth-advisor-v1-contract.md](growth-advisor-v1-contract.md).
+Stage 11C Growth Advisor runtime реализован в merged PR #268. Этим документом
+не создаются новые runtime, Web/API/UI, provider integration, schema changes
+или изменения second-brain-vault. Privacy/payload/provenance boundary Advisor
+зафиксирована отдельно в [growth-advisor-v1-contract.md](growth-advisor-v1-contract.md),
+а независимая Growth Learning / Question boundary 11D0 — в
+[growth-learning-v1-contract.md](growth-learning-v1-contract.md).
 
 Контракт читается поверх:
 
@@ -657,14 +659,15 @@ Stage 4, Personal Memory, Stage 10, Stage 9, vault или Search не разре
 - recommendation не становится canonical Goal, relation или growth-optimal;
 - recommendation result/session не сохраняется в Growth mapping store.
 
-Stage 11C0 отдельно разрешает только design contract для будущего explicit
-owner action. Его точный preview → confirmation → immediate revalidation flow,
-ровно один current Goal в explicit_goals, reuse existing AdvisorPort,
-provider-visible allowlist, retention/logging boundary, fixed errors и
-transient provenance описаны в
-[growth-advisor-v1-contract.md](growth-advisor-v1-contract.md). В текущем
-Stage 11B runtime Advisor не вызывается и advisor reference остаётся null;
-Stage 11C runtime не реализован.
+Stage 11C0 отдельно разрешает design contract для explicit owner action. Его
+точный preview → confirmation → immediate revalidation flow, ровно один
+current Goal в explicit_goals, reuse existing AdvisorPort, provider-visible
+allowlist, retention/logging boundary, fixed errors и transient provenance
+описаны в [growth-advisor-v1-contract.md](growth-advisor-v1-contract.md).
+В текущем Stage 11B runtime Advisor не вызывается и advisor reference остаётся
+null; отдельный Stage 11C runtime из PR #268 реализован. Growth Learning /
+Question v1 не вызывает Advisor и имеет отдельную policy/source boundary,
+зафиксированную в [growth-learning-v1-contract.md](growth-learning-v1-contract.md).
 
 ## 16. Compare integration
 
@@ -755,9 +758,11 @@ Growth signal или question — derived UX state, не fact и не canonical 
 - canonical write без existing reviewed capture/Safe Write;
 - превращение answer/ignore/reject в Goal или relation автоматически.
 
-Stage 11D, если будет одобрен, использует bounded question -> explicit owner
-answer -> existing reviewed write path only if owner chooses. Active Learning
-integration не начинается в Issue #258.
+Stage 11D0 фиксирует отдельный bounded question -> explicit owner answer ->
+existing reviewed write path only if owner chooses в
+[growth-learning-v1-contract.md](growth-learning-v1-contract.md). Stage 11D
+runtime не реализован. Active Learning остаётся независимым Stage 8 flow и не
+расширяется этим контрактом.
 
 ## 20. Privacy и sensitive-inference restrictions
 
@@ -1098,14 +1103,14 @@ policy, provenance and calibration baseline/reset gate.
 | Decision-rule inference | DEFER | No hidden rule from repeated behavior; future reviewed authority only |
 | Growth-optimal claim | DEFER / not emitted | V1 has no optimality authority or field |
 | Assistant private Goal injection | FORBIDDEN in v1 | Current Assistant remains explicit caller-owned only |
-| Advisor branch | DEFER | Stage 11C0 contract is complete; Stage 11C explicit owner runtime remains deferred |
+| Advisor branch | ACCEPT bounded | Stage 11C0 contract is complete and Stage 11C explicit owner runtime is merged; GrowthCompare remains separate |
 | Compare integration | DEFER | No GrowthCompareV1 in current v1; Advisor branch stays independent |
 | Compare/Stage 9/Simulate Me mutation | FORBIDDEN | No feedback path or retroactive semantics |
 | Outcome/progress | DEFER | Separate structured reviewed Goal Progress design gate |
-| Personalized learning | ACCEPT bounded | Derived question/friction only; no hidden persuasion or write |
+| Growth Learning / Question | ACCEPT design-only | Stage 11D0 contract is complete; Stage 11D runtime remains unimplemented |
 | Sensitive inference | ACCEPT prohibition | Protected traits, diagnosis, scores and vulnerability forbidden |
 | Runtime/schema/dependencies | CHANGE | Status documents design only; no implementation/schema/dependency changes |
-| Roadmap status | CHANGE | Add Stage 11 design-contract status, runtime not implemented |
+| Roadmap status | CHANGE | Record Stage 11C runtime complete, Stage 11D0 design complete and Stage 11D runtime not implemented |
 | HUMAN_REQUIRED | ACCEPT | None for this design-only gate |
 
 ### Known risks
@@ -1150,24 +1155,36 @@ Issue #264 фиксирует отдельный [Growth Advisor v1 contract](gr
 explicit preview/confirmation, exact current Goal projection, reuse existing
 Assistant/Advisor boundary, no hidden Growth context, transient full result и
 compact provenance. Runtime/provider call, Web/API/UI, persistence и Compare
-composition не реализованы.
+composition этого contract slice не меняются; отдельный explicit Growth Advisor
+runtime реализован в PR #268.
 
-### Stage 11C — optional Advisor / Growth Compare runtime
+### Stage 11C — Growth Advisor runtime (COMPLETE)
 
-Future implementation gate after #264. It may implement only the exact
-GrowthAdvisor v1 contract and must preserve deterministic Stage 11A/11B
-semantics. GrowthCompare/Compare v2 remains a separate future contract.
+PR #268 реализует только exact GrowthAdvisor v1 contract и сохраняет
+deterministic Stage 11A/11B semantics. GrowthCompare/Compare v2 остаётся
+отдельным future contract.
 
-### Stage 11D — personalized learning/question boundary
+### Stage 11D0 — Growth Learning / Question boundary (COMPLETE DESIGN)
 
-Future gate for bounded derived questions/experiments. No automatic write,
-motivation optimization or reinforcement.
+Issue #269 фиксирует отдельный
+[Growth Learning / Question v1 contract](growth-learning-v1-contract.md):
+provider-free deterministic 0/1 candidate, explicit owner controls,
+foreground-only boundary, exact invalidation и approved handoffs. Runtime,
+experiments, persistence, reminders, automatic write и reinforcement не
+реализованы.
+
+### Stage 11D — Growth Learning runtime
+
+Future implementation gate after the 11D0 contract. Он не может менять Stage 8
+semantics, вызывать Advisor автоматически или обходить existing review/Safe
+Write boundaries.
 
 ### Stage 11E — Web/API, integration QA и Stage 11 closeout
 
 Future owner-only transport/UI, no-store behavior, integration tests, exact
-production gates and status closeout. Issue #258 was the design gate; Stage
-11A/11B were implemented later, while Stage 11C0 is design-only in #264.
+production gates and status closeout. Issue #258 was the Growth Engine design
+gate; Stage 11A/11B and Stage 11C runtime were implemented later, while #269
+is the 11D0 design-only gate.
 Implementation Issues are not created automatically.
 
 ## 27. Contract acceptance flags
@@ -1183,8 +1200,10 @@ second-brain-vault changed: NO
 Stage 11A started: YES / COMPLETE
 Stage 11B started: YES / COMPLETE
 Stage 11C0 design: COMPLETE
-Stage 11C runtime: NOT IMPLEMENTED
-Stage 11D/E started: NO
+Stage 11C runtime: COMPLETE
+Stage 11D0 design: COMPLETE
+Stage 11D runtime: NOT IMPLEMENTED
+Stage 11E started: NO
 Stage 12+ started: NO
 next Issue created: NO
 HUMAN_REQUIRED: none
@@ -1199,6 +1218,8 @@ Stage 10 Behavioral Self Model = COMPLETE
 Stage 11A = COMPLETE
 Stage 11B = COMPLETE
 Stage 11C0 Growth Advisor design = COMPLETE
-Stage 11C runtime = NOT IMPLEMENTED
+Stage 11C Growth Advisor runtime = COMPLETE
+Stage 11D0 Growth Learning design = COMPLETE
+Stage 11D Growth Learning runtime = NOT IMPLEMENTED
 Stage 12+ = NOT STARTED
 ~~~
