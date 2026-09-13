@@ -245,9 +245,9 @@ describe("Cognitive Twin Stage 10D surface", () => {
     const host = await renderSurface();
 
     await act(async () => button(host, "Обновить текущие данные").click());
-    expect(host.textContent).toContain("Stated");
-    expect(host.textContent).toContain("Observed");
-    expect(host.textContent).toContain("Mapped comparison");
+    expect(host.textContent).toContain("Явное");
+    expect(host.textContent).toContain("Наблюдаемое");
+    expect(host.textContent).toContain("Сопоставление");
     expect(host.textContent).toContain("3 / 3");
     expect(host.textContent).not.toContain("100%");
 
