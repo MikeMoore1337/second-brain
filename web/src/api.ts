@@ -631,7 +631,7 @@ export function reviewStatedObservedMapping(
     "cognitive-twin-v1",
     selector,
     fetcher,
-    "Не удалось подготовить review сопоставления.",
+    "Не удалось подготовить проверку сопоставления.",
     signal,
   );
 }

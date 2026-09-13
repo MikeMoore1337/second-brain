@@ -229,7 +229,7 @@ describe("Active Personal Learning v1 surface", () => {
 
     await act(async () => actionButton(host, "Подготовить сохранение")?.click());
     expect(fetchSpy).toHaveBeenCalledTimes(3);
-    expect(host.textContent).toContain("Подтверди, что проверил выбранные Personal Memory metadata.");
+    expect(host.textContent).toContain("Подтверди, что проверил выбранные метаданные личной памяти.");
 
     const metadataFields = host.querySelectorAll<HTMLSelectElement>(".active-learning-personal-memory .personal-memory-fields select");
     const domain = host.querySelector<HTMLInputElement>(".active-learning-personal-memory .personal-memory-fields input");
@@ -260,7 +260,7 @@ describe("Active Personal Learning v1 surface", () => {
       },
     });
     expect(host.textContent).toContain("+Я выбрал сделать быстрее.");
-    expect(host.textContent).toContain("Проверь полный diff и подтверди сохранение.");
+    expect(host.textContent).toContain("Проверь полный список изменений и подтверди сохранение.");
     expect(host.querySelector("[data-active-learning-state='prepared']")).not.toBeNull();
 
     await act(async () => actionButton(host, "Подтвердить сохранение")?.click());

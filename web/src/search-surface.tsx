@@ -2,20 +2,21 @@ import { useEffect, useRef, useState, type FormEvent, type ReactElement } from "
 import { SectionHeading } from "./parity-surfaces";
 
 import { retrieveNote, searchNotes } from "./api";
-import { presentValue } from "./presentation";
+import { presentError, presentValue } from "./presentation";
 
 function displayValue(value: unknown, fallback = "—"): string {
   return presentValue(value, fallback);
 }
 
 function responseError(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message ? error.message : fallback;
+  return presentError(error, fallback);
 }
 
 function Field({ label, value }: { label: string; value: unknown }): ReactElement {
+  const visibleLabel = label === "ID" ? "Идентификатор" : label;
   return (
     <div className="draft-field">
-      <dt className="draft-field-label">{label}</dt>
+      <dt className="draft-field-label">{visibleLabel}</dt>
       <dd className="draft-field-value">{displayValue(value)}</dd>
     </div>
   );

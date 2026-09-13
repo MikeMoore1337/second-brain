@@ -24,6 +24,7 @@ import {
   type PersonalMemoryTimeMode,
 } from "./personal-memory-metadata-fields";
 import { Icon } from "./icons";
+import { presentCode, presentError } from "./presentation";
 import "./active-personal-learning-surface.css";
 
 type ActiveLearningUiState =
@@ -135,6 +136,13 @@ function errorFor(caught: unknown): { state: ErrorUiState; message: string } {
   return { state: "error", message: "Не удалось уточнить модель выбора." };
 }
 
+function answerError(caught: unknown, fallback: string): string {
+  if (caught instanceof ActivePersonalLearningApiError) {
+    return ERROR_TEXT[caught.code]?.message ?? fallback;
+  }
+  return presentError(caught, fallback);
+}
+
 function requestOptions(options: readonly ActiveLearningOption[]): ActiveLearningOption[] {
   return options.map((option) => ({ id: option.id, label: option.label }));
 }
@@ -151,7 +159,7 @@ function resultStatusText(state: ActiveLearningUiState, result: ActiveLearningRe
   if (state === "resolving") return "Проверяю, что вопрос ещё соответствует текущей модели…";
   if (state === "reviewing") return "Проверяю финальный текст ответа…";
   if (state === "preparing") return "Готовлю пробное сохранение без записи…";
-  if (state === "applying") return "Сохраняю личную память через Safe Write…";
+  if (state === "applying") return "Сохраняю личную память через безопасное сохранение…";
   if (state === "candidate") return "Вопрос для уточнения готов.";
   if (state === "no-candidate") {
     return result?.no_candidate_code
@@ -161,9 +169,9 @@ function resultStatusText(state: ActiveLearningUiState, result: ActiveLearningRe
   if (state === "ignored") return "Уточнение закрыто без сохранения ответа.";
   if (state === "rejected") return "Уточнение отклонено без сохранения ответа.";
   if (state === "answer-edit") return "Ответ можно отредактировать перед проверкой.";
-  if (state === "metadata-review") return "Ответ проверен. Проверь Personal Memory metadata.";
-  if (state === "prepared") return "Проверь полный diff и подтверди сохранение.";
-  if (state === "saved") return "Личная память сохранена через Safe Write.";
+  if (state === "metadata-review") return "Ответ проверен. Проверь метаданные личной памяти.";
+  if (state === "prepared") return "Проверь полный список изменений и подтверди сохранение.";
+  if (state === "saved") return "Личная память сохранена через безопасное сохранение.";
   if (state === "cancelled") return "Уточнение модели отменено.";
   if (state === "stale") return "Текущая задача изменилась: прежний вопрос больше не используется.";
   return "";
@@ -195,13 +203,13 @@ function AnswerSavePlan({ plan }: { plan: SavePlanResponse }): ReactElement {
   return (
     <section className="save-plan active-learning-save-plan" tabIndex={-1}>
       <h4>План безопасного сохранения личной памяти (без записи)</h4>
-      <p className="save-plan-explanation">Это пробная подготовка. Ничего не записано; перед применением проверь полный diff.</p>
+      <p className="save-plan-explanation">Это пробная подготовка. Ничего не записано; перед применением проверь полный список изменений.</p>
       <dl className="draft-fields">
-        <div className="draft-field"><dt className="draft-field-label">Тип</dt><dd className="draft-field-value">{plan.note.type ?? "—"}</dd></div>
+        <div className="draft-field"><dt className="draft-field-label">Тип</dt><dd className="draft-field-value">{presentCode(plan.note.type, "Тип не указан")}</dd></div>
         <div className="draft-field"><dt className="draft-field-label">Путь</dt><dd className="draft-field-value">{plan.note.relative_path ?? "—"}</dd></div>
       </dl>
       <h5>Предлагаемый Markdown-файл</h5>
-      <pre className="save-diff" tabIndex={0} aria-label="Полный diff предлагаемого файла">{plan.diff}</pre>
+      <pre className="save-diff" tabIndex={0} aria-label="Полный список изменений предлагаемого файла">{plan.diff}</pre>
     </section>
   );
 }
@@ -212,7 +220,7 @@ function AnswerSavedNote({ payload }: { payload: SavedNoteResponse }): ReactElem
       <h4>Личная память сохранена</h4>
       <dl className="draft-fields">
         <div className="draft-field"><dt className="draft-field-label">Путь</dt><dd className="draft-field-value">{payload.note.relative_path ?? "—"}</dd></div>
-        <div className="draft-field"><dt className="draft-field-label">ID</dt><dd className="draft-field-value">{payload.note.id}</dd></div>
+        <div className="draft-field"><dt className="draft-field-label">Идентификатор</dt><dd className="draft-field-value">{payload.note.id}</dd></div>
         <div className="draft-field"><dt className="draft-field-label">Создано</dt><dd className="draft-field-value">{payload.note.created ?? "—"}</dd></div>
       </dl>
     </section>
@@ -468,11 +476,7 @@ export function ActivePersonalLearningSurface({
       setState("metadata-review");
     } catch (caught) {
       if (requestId !== requestIdRef.current) return;
-      if (caught instanceof ActivePersonalLearningApiError) {
-        setError(caught.message);
-      } else {
-        setError(caught instanceof Error && caught.message ? caught.message : "Не удалось проверить ответ.");
-      }
+      setError(answerError(caught, "Не удалось проверить ответ."));
       setState("answer-edit");
     } finally {
       if (requestId === requestIdRef.current) controllerRef.current = null;
@@ -483,11 +487,11 @@ export function ActivePersonalLearningSurface({
     if (!draft || !reviewToken || !answer || (state !== "metadata-review" && state !== "prepared")) return;
     const memory = personalMemoryPayload();
     if (!metadataConfirmed) {
-      setError("Подтверди, что проверил выбранные Personal Memory metadata.");
+      setError("Подтверди, что проверил выбранные метаданные личной памяти.");
       return;
     }
     if (!memory.evidence_kind || !memory.self_kind || (memory.evidence_at_precision === "exact" && !memory.evidence_at)) {
-      setError("Заполни обязательные поля Personal Memory metadata.");
+      setError("Заполни обязательные поля метаданных личной памяти.");
       return;
     }
     const requestId = requestIdRef.current;
@@ -501,7 +505,7 @@ export function ActivePersonalLearningSurface({
       setState("prepared");
     } catch (caught) {
       if (requestId !== requestIdRef.current) return;
-      setError(caught instanceof Error && caught.message ? caught.message : "Не удалось подготовить сохранение.");
+      setError(answerError(caught, "Не удалось подготовить сохранение."));
       setState("metadata-review");
     }
   }
@@ -520,7 +524,7 @@ export function ActivePersonalLearningSurface({
       setState("saved");
     } catch (caught) {
       if (requestId !== requestIdRef.current) return;
-      setError(caught instanceof Error && caught.message ? caught.message : "Не удалось сохранить личную память.");
+      setError(answerError(caught, "Не удалось сохранить личную память."));
       setState("prepared");
     }
   }
@@ -598,7 +602,7 @@ export function ActivePersonalLearningSurface({
         {state === "resolving" ? (
           <div className="active-learning-loading" aria-label="Проверяю вопрос перед ответом">
             <span className="active-learning-loading-mark" aria-hidden="true" />
-            <p>Проверяю актуальность вопроса перед открытием editable answer…</p>
+            <p>Проверяю актуальность вопроса перед открытием ответа для редактирования…</p>
             <button className="review-button review-button-quiet" type="button" onClick={cancel}>Отменить</button>
           </div>
         ) : null}
@@ -656,7 +660,7 @@ export function ActivePersonalLearningSurface({
             </section>
             <section className="active-learning-answer-editor" aria-busy={busy}>
               <h4 id="active-learning-answer-title">Проверь и отредактируй ответ</h4>
-              <p className="active-learning-answer-guidance">Ответ ниже — editable suggestion. Оставь только тот текст, который действительно хочешь сохранить.</p>
+              <p className="active-learning-answer-guidance">Ответ ниже — предложенный текст для редактирования. Оставь только тот текст, который действительно хочешь сохранить.</p>
               <div className="active-learning-answer-fields">
                 <label className="review-field">
                   <span className="draft-field-label">Название</span>
@@ -668,7 +672,7 @@ export function ActivePersonalLearningSurface({
                     <option value="project">Проект</option>
                     <option value="area">Область</option>
                     <option value="resource">Ресурс</option>
-                    <option value="zettel">Zettel</option>
+                    <option value="zettel">Зеттель</option>
                   </select>
                 </label>
                 <label className="review-field">
@@ -694,7 +698,7 @@ export function ActivePersonalLearningSurface({
               ) : null}
               {metadataVisible ? (
                 <section className="personal-memory-panel active-learning-personal-memory" aria-labelledby="active-learning-personal-memory-title">
-                  <h5 id="active-learning-personal-memory-title">Personal Memory metadata</h5>
+                  <h5 id="active-learning-personal-memory-title">Метаданные личной памяти</h5>
                   <p className="personal-memory-description">Ничего не классифицируется автоматически. Выбери и проверь каждое значение перед подготовкой.</p>
                   <PersonalMemoryMetadataFields
                     idPrefix="active-learning-personal-memory"
@@ -709,7 +713,7 @@ export function ActivePersonalLearningSurface({
                   />
                   <label className="active-learning-metadata-confirmation">
                     <input type="checkbox" checked={metadataConfirmed} disabled={busy || state === "saved"} onChange={(event) => { setMetadataConfirmed(event.target.checked); setPlan(null); setConfirmationToken(null); if (!event.target.checked && state !== "saved") setState("metadata-review"); }} />
-                    <span>Я проверил Personal Memory metadata и понимаю, что это станет каноническим свидетельством после подтверждения.</span>
+                    <span>Я проверил метаданные личной памяти и понимаю, что это станет каноническим свидетельством после подтверждения.</span>
                   </label>
                   <div className="active-learning-actions">
                     <button className="review-button review-button-primary" type="button" disabled={busy || state === "saved"} aria-busy={state === "preparing"} onClick={() => void prepareAnswer()}>

@@ -1494,7 +1494,7 @@ class _LoopbackTrustedHostMiddleware(TrustedHostMiddleware):
             await self.app(scope, receive, send)
             return
 
-        response = PlainTextResponse("Invalid host header", status_code=400)
+        response = PlainTextResponse("Некорректный заголовок запроса Host.", status_code=400)
         await response(scope, receive, send)
 
 

@@ -194,7 +194,7 @@ def test_github_mode_redirects_private_surfaces_and_bounds_oauth_start(
     assert malformed_session.status_code == 303
     assert malformed_session.headers["location"] == "/login"
     assert invalid_host.status_code == 400
-    assert invalid_host.text == "Invalid host header"
+    assert invalid_host.text == "Некорректный заголовок запроса Host."
     assert private_api.status_code == 401
     assert private_api.json() == {"error": {"code": "AUTH_REQUIRED", "message": "Требуется вход"}}
     assert private_api.headers["cache-control"] == "no-store"

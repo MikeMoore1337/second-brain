@@ -127,10 +127,10 @@ function DiagnosticsReport({ report }: { report: DiagnosticsResponse }): ReactEl
         </div>
         <dl className="diagnostics-facts">
           <div><dt>Конфигурация</dt><dd>{availability(report.config.resolvable)}</dd></div>
-          <div><dt>Manifest</dt><dd>{availability(report.manifest.available)}</dd></div>
+          <div><dt>Манифест</dt><dd>{availability(report.manifest.available)}</dd></div>
           <div><dt>Корни контента</dt><dd>{availability(report.vault.content_roots_available)}</dd></div>
           <div><dt>Сканирование вложений</dt><dd>{report.attachments.scan_complete ? "Завершено" : "Не завершено"}</dd></div>
-          <div><dt>Версия manifest</dt><dd>{report.manifest.schema_version === null ? "Недоступно" : formatCount(report.manifest.schema_version)}</dd></div>
+          <div><dt>Версия манифеста</dt><dd>{report.manifest.schema_version === null ? "Недоступно" : formatCount(report.manifest.schema_version)}</dd></div>
         </dl>
       </section>
 

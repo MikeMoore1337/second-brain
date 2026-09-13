@@ -230,7 +230,7 @@ describe("Cognitive Twin Stage 10D surface", () => {
     const host = await renderSurface();
 
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(host.textContent).toContain("Stated / Observed / Mapped comparison");
+    expect(host.textContent).toContain("Явное / наблюдаемое / сопоставленное сравнение");
     expect(host.textContent).toContain("Нажми «Обновить текущие данные»");
   });
 
@@ -245,24 +245,24 @@ describe("Cognitive Twin Stage 10D surface", () => {
     const host = await renderSurface();
 
     await act(async () => button(host, "Обновить текущие данные").click());
-    expect(host.textContent).toContain("Stated");
-    expect(host.textContent).toContain("Observed");
-    expect(host.textContent).toContain("Mapped comparison");
+    expect(host.textContent).toContain("Явное");
+    expect(host.textContent).toContain("Наблюдаемое");
+    expect(host.textContent).toContain("Сопоставление");
     expect(host.textContent).toContain("3 / 3");
     expect(host.textContent).not.toContain("100%");
 
     await act(async () => choose(host, "#cognitive-twin-stated-select", sourceNoteUuid));
     await act(async () => choose(host, "#cognitive-twin-observed-select", `${cohortFingerprint}:0:${optionFingerprint}`));
-    await act(async () => button(host, "Показать review").click());
+    await act(async () => button(host, "Показать проверку").click());
 
     expect(reviewSpy).toHaveBeenCalledOnce();
-    expect(host.textContent).toContain("Labels shown here are only for human review.");
+    expect(host.textContent).toContain("Подписи показаны только для проверки человеком.");
     expect(host.textContent).toContain("Сохранить контекст");
 
     const confirmation = host.querySelector<HTMLInputElement>(".cognitive-twin-confirm-label input");
     if (!confirmation) throw new Error("confirmation control not found");
     await act(async () => confirmation.click());
-    await act(async () => button(host, "Подтвердить mapping").click());
+    await act(async () => button(host, "Подтвердить сопоставление").click());
 
     expect(confirmSpy).toHaveBeenCalledOnce();
     const [selector, operationId, confirmed, supersedes, projection] = confirmSpy.mock.calls[0];
@@ -276,7 +276,7 @@ describe("Cognitive Twin Stage 10D surface", () => {
     expect(confirmed).toBe(true);
     expect(supersedes).toBeNull();
     expect(projection).toBeUndefined();
-    expect(host.textContent).toContain("Accepted mapping UUID");
+    expect(host.textContent).toContain("UUID принятого сопоставления");
     expect(host.textContent).toContain("Текущее сравнение");
   });
 
@@ -294,7 +294,7 @@ describe("Cognitive Twin Stage 10D surface", () => {
     await act(async () => button(host, "Обновить текущие данные").click());
     await act(async () => choose(host, "#cognitive-twin-stated-select", sourceNoteUuid));
     await act(async () => choose(host, "#cognitive-twin-observed-select", `${cohortFingerprint}:0:${optionFingerprint}`));
-    await act(async () => button(host, "Показать review").click());
+    await act(async () => button(host, "Показать проверку").click());
     await act(async () => choose(host, "#cognitive-twin-stated-select", ""));
 
     expect(reviewSpy).toHaveBeenCalledOnce();
@@ -341,18 +341,18 @@ describe("Cognitive Twin Stage 10D surface", () => {
     await act(async () => button(host, "Обновить текущие данные").click());
     await act(async () => choose(host, "#cognitive-twin-stated-select", sourceNoteUuid));
     await act(async () => choose(host, "#cognitive-twin-observed-select", `${cohortFingerprint}:0:${optionFingerprint}`));
-    await act(async () => button(host, "Показать review").click());
+    await act(async () => button(host, "Показать проверку").click());
     const confirmation = host.querySelector<HTMLInputElement>(".cognitive-twin-confirm-label input");
     if (!confirmation) throw new Error("confirmation control not found");
     await act(async () => confirmation.click());
-    await act(async () => button(host, "Подтвердить mapping").click());
+    await act(async () => button(host, "Подтвердить сопоставление").click());
     const cancel = button(host, "Отменить");
     await act(async () => cancel.click());
 
     expect(confirmSpy).toHaveBeenCalledOnce();
-    expect(host.textContent).toContain("accepted result не показан");
+    expect(host.textContent).toContain("принятый результат не показан");
     resolveConfirmation?.({ status: "accepted", mapping: acceptedMapping });
     await act(async () => Promise.resolve());
-    expect(host.textContent).not.toContain("Accepted mapping UUID");
+    expect(host.textContent).not.toContain("UUID принятого сопоставления");
   });
 });
