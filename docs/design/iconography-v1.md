@@ -56,6 +56,42 @@ Lucide-derived SVG subset. Имена семантического API сохр�
 «Журнал решений». Большой мозг не повторяется в разделах. По уточнению владельца компактный
 мозг также служит логотипом в шапке.
 
+## Дополнение 13 сентября 2026: уникальные стеклянные иконки разделов
+
+«Аудит прогноза» использует `prospective-audit` (лист с линзой),
+«Ретроспективная проверка» — `retrospective` (часы с обратной стрелкой).
+Оба символа созданы встроенным `image_gen` по референсам
+`relation-detail-192.webp` и `diagnostics-detail-192.webp`: тёмное фиолетовое
+стекло, лавандовые грани и верхний левый свет. Они применяются одинаково
+в заголовках и меню. Служебные `success` и `refresh` остаются знаками действий.
+
+Файлы находятся в `web/src/assets/icons/`: для каждого нового имени —
+`-compact-48.webp`, `-compact-96.webp`, `-detail-192.webp`.
+В отличие от исходных атласов, здесь один простой мастер на символ:
+96 px переиспользуется для 2× меню и 1× заголовка, без дублирующего файла.
+Новая поставка добавляет 6 WebP к историческому набору из 68 файлов.
+С явного разрешения владельца нарисованная генератором шахматная подложка
+удалена программно по связной внешней области; внутренние стеклянные плоскости
+сохранены. Поля — 86%, WebP quality 84 / alphaQuality 100, настоящий alpha.
+Новых runtime-зависимостей и настроек окружения нет.
+
+Исходники: `exec-dbfc8a25-d7f9-4513-9354-5a36b7cb27ea.png`
+(SHA-256 `6c7a81dcf759ede05200d92b71179839d594f4c262bdffaaecc3524b857f6e3f`)
+и `exec-ba1c5b87-01fe-4c40-a0a3-ff1521dafaf1.png`
+(SHA-256 `abfab3943a73a794fcff3aa63de86f8ca7b35067fede2b35200f268429a80b3e`).
+
+Запрос для аудита:
+
+```text
+Style-transfer edit for Second Brain UI icon set. The two supplied images are STYLE REFERENCES only, showing the exact incumbent dark purple glass material and perspective. Replace their subjects with ONE forecast-audit symbol: an upright thick translucent violet glass document plate with two recessed lines and a small magnifying glass overlapping its lower right corner. A single coherent miniature sculpture, no checkmark. Match references closely: dark transparent amethyst glass, see-through dark broad faces, beveled lavender edges, subtle refraction, pale lilac upper-left highlights, three-quarter perspective, restrained brightness. Not opaque plastic, not rubber, no flat glyph, no metal, no white object. Output one square PNG with TRUE transparent background alpha, no checkerboard, no floor, no cast ground shadow, no glow outside silhouette. Center object within 86 percent of square, generous even transparent padding, easily readable at 48px. No text or labels. This is one icon, not a comparison sheet.
+```
+
+Запрос для ретроспективной проверки:
+
+```text
+Style-transfer edit for Second Brain UI icon set. Supplied images are STYLE REFERENCES only. Replace subjects with ONE retrospective-review icon: a translucent dark amethyst glass clock disc, two simple clock hands, surrounded on upper left by one thick counterclockwise return arrow with clear triangular arrowhead. Three-quarter view, slight tilt, bevel thickness visible. No square housing, no gauge, no checkmark, no leaves. Distinct silhouette from diagnostics reference. Match reference glass material: transparent deep dark purple broad faces, refracted inner edges, thin lavender beveled rims, restrained pale lilac highlights from upper left. NOT solid plastic or rubber. One cohesive simple sculpture legible at 48px. Output single square PNG with TRUE transparent alpha background, no checkerboard baked in, no floor or cast shadow, no glow outside silhouette. Object centered in 86 percent of square with even transparent padding. No letters or numbers or captions. Not an icon sheet.
+```
+
 ## Текущий switch «Анимация»
 
 В v7 отдельной кнопки паузы на сцене или в шапке нет. В disclosure-меню

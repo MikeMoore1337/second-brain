@@ -32,9 +32,9 @@ const navigation = [
   ["#timeline", "Хронология", "timeline"],
   ["#self-model", "Модель себя", "self-model"],
   ["#simulate-me", "Прогноз", "simulate"],
-  ["#prospective-audit", "Аудит прогноза", "relation"],
+  ["#prospective-audit", "Аудит прогноза", "prospective-audit"],
   ["#assistant-compare", "Совет и сравнение", "relation"],
-  ["#retrospective-calibration", "Ретроспективная проверка", "growth"],
+  ["#retrospective-calibration", "Ретроспективная проверка", "retrospective"],
   ["#self-retrieval", "Сбор контекста", "self-retrieval"],
   ["#search", "Поиск", "search"],
   ["#diagnostics", "Диагностика", "diagnostics"],
@@ -160,9 +160,9 @@ export function App(): ReactElement {
                 <FoldSection id="timeline" title="Хронология" icon="timeline"><TimelineSurface /></FoldSection>
                 <FoldSection id="self-model" title="Модель себя" icon="self-model"><SelfModelSurface /><CognitiveTwinSurface /></FoldSection>
                 <FoldSection id="simulate-me" title="Прогноз" icon="simulate"><SimulateMeSurface /></FoldSection>
-                <FoldSection id="prospective-audit" title="Аудит прогноза" icon="relation"><ProspectiveAuditSurface /></FoldSection>
+                <FoldSection id="prospective-audit" title="Аудит прогноза" icon="prospective-audit"><ProspectiveAuditSurface /></FoldSection>
                 <FoldSection id="assistant-compare" title="Совет и сравнение" icon="relation"><AssistantCompareSurface /></FoldSection>
-                <FoldSection id="retrospective-calibration" title="Ретроспективная проверка" icon="growth"><RetrospectiveCalibrationSurface /></FoldSection>
+                <FoldSection id="retrospective-calibration" title="Ретроспективная проверка" icon="retrospective"><RetrospectiveCalibrationSurface /></FoldSection>
                 <FoldSection id="self-retrieval" title="Сбор контекста" icon="self-retrieval"><SelfRetrievalSurface /></FoldSection>
                 <FoldSection id="diagnostics" title="Диагностика" icon="diagnostics"><DiagnosticsSurface /></FoldSection>
               </div>
