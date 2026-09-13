@@ -1216,6 +1216,22 @@ context и derived explanation divergence.
   Stage 9/Simulate Me consumers, provider/network/credentials, canonical
   schema/vault changes и создание следующего Issue.
 
+### Stage 11 — Cognitive Twin v2: Growth Engine v1
+
+- **Статус:** **DESIGN CONTRACT** в
+  [growth-engine-v1-contract.md](growth-engine-v1-contract.md); runtime не реализован и Stage 11A не
+  начинался.
+- **Цель:** связать current reviewed Stage 4 goal с current exact behavioral
+  choice только через отдельную explicit owner-reviewed Goal-to-choice
+  relation; не определять «настоящую цель», optimality, personality или
+  progress.
+- **Authority boundary:** Goal, observed behavior, likely self-choice и
+  independent recommendation остаются независимыми слоями. Stage 10C
+  preference mapping не переиспользуется как Goal mapping.
+- **Explicit out-of-scope:** runtime/store/read model, Web/API/UI, Advisor/
+  provider, semantic mapping, schema/vault/Safe Write, Goal Progress, Stage 9,
+  Stage 10 и Simulate Me changes. Следующий Issue автоматически не создаётся.
+
 # COMPLETED IMPLEMENTATION SCOPE (HISTORICAL):
 
 ## Personal Memory Contract v1 (Stage 1, completed)
@@ -1446,5 +1462,7 @@ Stage 10C0 Stated-vs-Observed mapping design = COMPLETE (DESIGN CONTRACT)
 Stage 10C runtime = COMPLETE
 Stage 10D Web/API + integration QA/closeout = COMPLETE
 Stage 10 = COMPLETE
-Stage 11+ = NOT STARTED
+Stage 11 Growth Engine = DESIGN CONTRACT
+Stage 11 runtime = NOT IMPLEMENTED
+Stage 12+ = NOT STARTED
 ```
