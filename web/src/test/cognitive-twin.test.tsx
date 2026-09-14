@@ -231,6 +231,8 @@ describe("Cognitive Twin Stage 10D surface", () => {
 
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(host.textContent).toContain("Явное / наблюдаемое / сопоставленное сравнение");
+    expect(host.textContent).toContain("Только чтение · данные не изменяются");
+    expect(host.textContent).not.toContain("Этап 10D");
     expect(host.textContent).toContain("Нажми «Обновить текущие данные»");
   });
 

@@ -776,7 +776,6 @@ export function GrowthSurface(): ReactElement {
     <section className="growth-surface" id="growth-engine" aria-labelledby="growth-title" aria-busy={busy !== null}>
       <div className="growth-heading">
         <div>
-          <p className="growth-eyebrow">Модель себя · этап 11E</p>
           <h3 id="growth-title">Развитие: цель → наблюдаемый выбор</h3>
           <p>Текущая цель, точная наблюдаемая связь и независимая рекомендация остаются отдельными слоями.</p>
         </div>
