@@ -185,6 +185,8 @@ def test_github_mode_redirects_private_surfaces_and_bounds_oauth_start(
         )
         private_api = client.get("/api/search")
         private_calibration_api = client.get("/api/retrospective-calibration")
+        private_goal_progress_api = client.get("/api/goal-progress")
+        private_growth_goal_progress_api = client.get("/api/growth-goal-progress")
         login = client.get("/login")
         healthz = client.get("/healthz")
         oauth, state, query = _oauth_start(client)
@@ -203,6 +205,16 @@ def test_github_mode_redirects_private_surfaces_and_bounds_oauth_start(
         "error": {"code": "AUTH_REQUIRED", "message": "Требуется вход"}
     }
     assert private_calibration_api.headers["cache-control"] == "no-store"
+    assert private_goal_progress_api.status_code == 401
+    assert private_goal_progress_api.json() == {
+        "error": {"code": "AUTH_REQUIRED", "message": "Требуется вход"}
+    }
+    assert private_goal_progress_api.headers["cache-control"] == "no-store"
+    assert private_growth_goal_progress_api.status_code == 401
+    assert private_growth_goal_progress_api.json() == {
+        "error": {"code": "AUTH_REQUIRED", "message": "Требуется вход"}
+    }
+    assert private_growth_goal_progress_api.headers["cache-control"] == "no-store"
     assert login.status_code == 200
     assert 'id="root"' in login.text
     assert healthz.status_code == 200

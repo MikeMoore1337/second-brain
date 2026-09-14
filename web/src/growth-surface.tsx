@@ -37,6 +37,7 @@ import {
   type PersonalMemoryFieldValues,
   type PersonalMemoryTimeMode,
 } from "./personal-memory-metadata-fields";
+import { GoalProgressSurface } from "./goal-progress-surface";
 import { presentCode, presentError } from "./presentation";
 
 const RELATION_LABELS: Record<GrowthRelation, string> = {
@@ -891,6 +892,7 @@ export function GrowthSurface(): ReactElement {
               </section>
             </section>
           ) : selectedGoal ? <p className="growth-empty">Цель выбрана. Построй результат развития отдельной кнопкой, чтобы увидеть только текущий результат, сформированный сервером.</p> : null}
+          {selectedGoal ? <GoalProgressSurface key={selectedGoalUuid} selectedGoal={selectedGoal} /> : null}
         </>
       )}
     </section>

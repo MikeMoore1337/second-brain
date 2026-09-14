@@ -1722,6 +1722,8 @@ def create_app(
                 "/api/growth-advisor/",
                 "/api/growth",
                 "/api/growth-learning/",
+                "/api/goal-progress",
+                "/api/growth-goal-progress",
             )
         ):
             response.headers["Cache-Control"] = "no-store"

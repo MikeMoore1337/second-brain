@@ -32,11 +32,20 @@ from second_brain.entrypoints.web.app import (
     DIAGNOSTICS_REQUEST_HEADER_VALUE,
     DRAFT_REQUEST_HEADER_NAME,
     DRAFT_REQUEST_HEADER_VALUE,
+    GOAL_PROGRESS_DEFINITION_APPLY_PATH,
+    GOAL_PROGRESS_DEFINITION_PREPARE_PATH,
+    GOAL_PROGRESS_OBSERVATION_APPLY_PATH,
+    GOAL_PROGRESS_OBSERVATION_PREPARE_PATH,
+    GOAL_PROGRESS_PATH,
+    GOAL_PROGRESS_REQUEST_HEADER_NAME,
+    GOAL_PROGRESS_REQUEST_HEADER_VALUE,
     GROWTH_ADVISOR_EXECUTE_PATH,
     GROWTH_ADVISOR_PREVIEW_PATH,
     GROWTH_ADVISOR_REQUEST_HEADER_NAME,
     GROWTH_ADVISOR_REQUEST_HEADER_VALUE,
     GROWTH_ENGINE_PATH,
+    GROWTH_GOAL_PROGRESS_PATH,
+    GROWTH_GOAL_PROGRESS_REQUEST_HEADER_VALUE,
     GROWTH_GOALS_PATH,
     GROWTH_LEARNING_QUESTIONS_PATH,
     GROWTH_LEARNING_REQUEST_HEADER_NAME,
@@ -55,6 +64,7 @@ from second_brain.entrypoints.web.app import (
     MAX_RAW_COMPARE_BODY_BYTES,
     MAX_RAW_DIAGNOSTICS_BODY_BYTES,
     MAX_RAW_DRAFT_BODY_BYTES,
+    MAX_RAW_GOAL_PROGRESS_BODY_BYTES,
     MAX_RAW_GROWTH_ADVISOR_BODY_BYTES,
     MAX_RAW_GROWTH_BODY_BYTES,
     MAX_RAW_GROWTH_LEARNING_BODY_BYTES,
@@ -318,6 +328,29 @@ def _growth_learning_route(path: str, body: bytes = b"{}") -> PrivateRoute:
     )
 
 
+def _goal_progress_route(
+    path: str,
+    *,
+    composition: bool = False,
+) -> PrivateRoute:
+    """Build one Stage 12E private route descriptor."""
+
+    return PrivateRoute(
+        path=path,
+        request_header_name=GOAL_PROGRESS_REQUEST_HEADER_NAME,
+        request_header_value=(
+            GROWTH_GOAL_PROGRESS_REQUEST_HEADER_VALUE
+            if composition
+            else GOAL_PROGRESS_REQUEST_HEADER_VALUE
+        ),
+        content_type="application/json",
+        body=b"{}",
+        invalid_code="GOAL_PROGRESS_REQUEST_INVALID",
+        content_too_large_code="GOAL_PROGRESS_RESULT_TOO_LARGE",
+        max_body_bytes=MAX_RAW_GOAL_PROGRESS_BODY_BYTES,
+    )
+
+
 PRIVATE_ROUTES: tuple[PrivateRoute, ...] = (
     PrivateRoute(
         path="/api/assistant",
@@ -555,6 +588,12 @@ PRIVATE_ROUTES: tuple[PrivateRoute, ...] = (
     _growth_route(GROWTH_MAPPING_DELETE_PATH),
     _growth_learning_route(GROWTH_LEARNING_QUESTIONS_PATH),
     _growth_learning_route(GROWTH_LEARNING_RESOLVE_PATH),
+    _goal_progress_route(GOAL_PROGRESS_PATH),
+    _goal_progress_route(GROWTH_GOAL_PROGRESS_PATH, composition=True),
+    _goal_progress_route(GOAL_PROGRESS_DEFINITION_PREPARE_PATH),
+    _goal_progress_route(GOAL_PROGRESS_DEFINITION_APPLY_PATH),
+    _goal_progress_route(GOAL_PROGRESS_OBSERVATION_PREPARE_PATH),
+    _goal_progress_route(GOAL_PROGRESS_OBSERVATION_APPLY_PATH),
     PrivateRoute(
         path="/api/self-retrieval",
         request_header_name=SELF_RETRIEVAL_REQUEST_HEADER_NAME,

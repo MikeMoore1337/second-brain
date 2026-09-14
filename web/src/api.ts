@@ -416,6 +416,175 @@ export interface GrowthResponse {
   readonly caveats: readonly string[];
 }
 
+export type GoalProgressStatus =
+  | "target_met"
+  | "toward_target"
+  | "away_from_target"
+  | "unchanged"
+  | "milestone_observations_available"
+  | "insufficient_observations"
+  | "definition_missing"
+  | "goal_source_changed"
+  | "not_comparable";
+
+export type GoalProgressModel = "numeric_target" | "milestone_set";
+export type GoalProgressDirection = "increase_to" | "decrease_to" | "reach_exact";
+export type GoalProgressMilestoneState = "completed" | "not_completed";
+
+export interface GoalProgressGoalProjection {
+  readonly source_note_uuid: string;
+  readonly text: string;
+  readonly domain: string | null;
+  readonly identity_fingerprint: string;
+}
+
+export interface GoalProgressMilestone {
+  readonly id: string;
+  readonly label: string;
+  readonly ordinal: number;
+}
+
+export interface GoalProgressDefinitionProjection {
+  readonly id: string;
+  readonly goal_source_uuid: string;
+  readonly goal_identity_fingerprint: string;
+  readonly goal_progress_policy_fingerprint: string;
+  readonly definition_reviewed_at: string;
+  readonly progress_model: GoalProgressModel;
+  readonly definition_fingerprint: string;
+  readonly metric_id?: string;
+  readonly unit?: string;
+  readonly baseline?: string;
+  readonly target?: string;
+  readonly direction?: GoalProgressDirection;
+  readonly lower_bound?: string;
+  readonly upper_bound?: string;
+  readonly ordering?: string;
+  readonly milestones?: readonly GoalProgressMilestone[];
+}
+
+export interface GoalProgressObservationProjection {
+  readonly id: string;
+  readonly progress_definition_id: string;
+  readonly observed_at: string;
+  readonly observed_at_precision: "exact" | "unknown";
+  readonly progress_model: GoalProgressModel;
+  readonly metric_id?: string;
+  readonly unit?: string;
+  readonly value?: string;
+  readonly milestone_id?: string;
+  readonly state?: GoalProgressMilestoneState;
+  readonly observation_reviewed_at: string;
+  readonly supersedes_observation_id?: string;
+}
+
+export interface GoalProgressResult {
+  readonly contract: "goal_progress_result_v1";
+  readonly selected_goal_source_uuid: string;
+  readonly current_goal_identity_fingerprint: string | null;
+  readonly goal_progress_policy_fingerprint: string;
+  readonly active_definition_uuid: string | null;
+  readonly definition_fingerprint: string | null;
+  readonly as_of: string;
+  readonly progress_model: GoalProgressModel | null;
+  readonly status: GoalProgressStatus;
+  readonly current_observation_uuids: readonly string[];
+  readonly excluded_observations: readonly { readonly observation_id: string | null; readonly reason: string }[];
+  readonly eligible_count: number;
+  readonly unknown_time_count: number;
+  readonly superseded_count: number;
+  readonly invalid_count: number;
+  readonly explanation: Readonly<Record<string, unknown>>;
+  readonly provenance: Readonly<Record<string, unknown>>;
+  readonly completed_milestone_ids: readonly string[];
+  readonly not_completed_milestone_ids: readonly string[];
+  readonly missing_milestone_ids: readonly string[];
+}
+
+export interface GoalProgressResponse extends GoalProgressResult {
+  readonly web_contract: "goal_progress_web_v1";
+  readonly goal: GoalProgressGoalProjection;
+  readonly definition: GoalProgressDefinitionProjection | null;
+  readonly observations: readonly GoalProgressObservationProjection[];
+}
+
+export interface GrowthGoalProgressCompositionResponse {
+  readonly web_contract: "growth_goal_progress_composition_web_v1";
+  readonly contract_version: string;
+  readonly derivation_version: string;
+  readonly policy_id: string;
+  readonly policy_fingerprint: string;
+  readonly selected_goal_source_uuid: string;
+  readonly current_goal_identity_fingerprint: string;
+  readonly progress_as_of: string;
+  readonly growth_policy_fingerprint: string;
+  readonly goal_progress_policy_fingerprint: string;
+  readonly growth_result: GrowthResponse;
+  readonly goal_progress_result: GoalProgressResult;
+  readonly caveats: readonly string[];
+  readonly provenance: Readonly<Record<string, unknown>>;
+  readonly goal: GoalProgressGoalProjection;
+  readonly definition: GoalProgressDefinitionProjection | null;
+  readonly observations: readonly GoalProgressObservationProjection[];
+}
+
+export interface GoalProgressMilestoneInput {
+  readonly id: string;
+  readonly label: string;
+  readonly ordinal: number;
+}
+
+export interface GoalProgressDefinitionPrepareRequest {
+  readonly goal_source_uuid: string;
+  readonly progress_model: GoalProgressModel;
+  readonly metric_id: string | null;
+  readonly unit: string | null;
+  readonly baseline: string | null;
+  readonly target: string | null;
+  readonly direction: GoalProgressDirection | null;
+  readonly lower_bound: string | null;
+  readonly upper_bound: string | null;
+  readonly milestones: readonly GoalProgressMilestoneInput[] | null;
+  readonly supersedes_definition_id: string | null;
+}
+
+export interface GoalProgressObservationPrepareRequest {
+  readonly goal_source_uuid: string;
+  readonly progress_definition_id: string;
+  readonly value: string | null;
+  readonly milestone_id: string | null;
+  readonly state: GoalProgressMilestoneState | null;
+  readonly observed_at: string;
+  readonly observed_at_precision: "exact" | "unknown";
+  readonly supersedes_observation_id: string | null;
+}
+
+export interface GoalProgressReviewResponse {
+  readonly web_contract: "goal_progress_review_v1";
+  readonly status: "dry-run";
+  readonly review_token: string;
+  readonly plan_sha256: string;
+  readonly record_kind: "definition" | "observation";
+  readonly record_id: string;
+  readonly goal: GoalProgressGoalProjection;
+  readonly record: Readonly<Record<string, unknown>>;
+  readonly write: {
+    readonly operation: "create";
+    readonly created: string;
+    readonly content_sha256: string;
+    readonly record_kind: "definition" | "observation";
+  };
+}
+
+export interface GoalProgressApplyResponse {
+  readonly web_contract: "goal_progress_apply_v1";
+  readonly status: "saved";
+  readonly write_status: "created";
+  readonly record_kind: "definition" | "observation";
+  readonly record_id: string;
+  readonly plan_sha256: string;
+}
+
 export interface GrowthMappingReviewOption {
   readonly option_index: number;
   readonly option_fingerprint: string;
@@ -963,6 +1132,100 @@ export function loadGrowth(
     },
     fetcher,
     "Не удалось построить текущую картину развития.",
+    signal,
+  );
+}
+
+export function loadGoalProgress(
+  goalSourceUuid: string,
+  asOf: string,
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<GoalProgressResponse> {
+  return requestJson(
+    "/api/goal-progress",
+    "goal-progress-v1",
+    { goal_source_uuid: goalSourceUuid, as_of: asOf },
+    fetcher,
+    "Не удалось проверить измеряемый прогресс.",
+    signal,
+  );
+}
+
+export function loadGrowthGoalProgress(
+  goalSourceUuid: string,
+  progressAsOf: string,
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<GrowthGoalProgressCompositionResponse> {
+  return requestJson(
+    "/api/growth-goal-progress",
+    "growth-goal-progress-composition-v1",
+    { goal_source_uuid: goalSourceUuid, progress_as_of: progressAsOf },
+    fetcher,
+    "Не удалось проверить связь поведения с целью и измеряемый прогресс.",
+    signal,
+  );
+}
+
+export function prepareGoalProgressDefinition(
+  request: GoalProgressDefinitionPrepareRequest,
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<GoalProgressReviewResponse> {
+  return requestJson(
+    "/api/goal-progress/definitions/prepare",
+    "goal-progress-v1",
+    request,
+    fetcher,
+    "Не удалось подготовить правило измерения.",
+    signal,
+  );
+}
+
+export function applyGoalProgressDefinition(
+  reviewToken: string,
+  acceptedPlanSha256: string,
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<GoalProgressApplyResponse> {
+  return requestJson(
+    "/api/goal-progress/definitions/apply",
+    "goal-progress-v1",
+    { review_token: reviewToken, accepted_plan_sha256: acceptedPlanSha256, confirmed: true },
+    fetcher,
+    "Не удалось сохранить правило измерения.",
+    signal,
+  );
+}
+
+export function prepareGoalProgressObservation(
+  request: GoalProgressObservationPrepareRequest,
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<GoalProgressReviewResponse> {
+  return requestJson(
+    "/api/goal-progress/observations/prepare",
+    "goal-progress-v1",
+    request,
+    fetcher,
+    "Не удалось подготовить запись наблюдения.",
+    signal,
+  );
+}
+
+export function applyGoalProgressObservation(
+  reviewToken: string,
+  acceptedPlanSha256: string,
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<GoalProgressApplyResponse> {
+  return requestJson(
+    "/api/goal-progress/observations/apply",
+    "goal-progress-v1",
+    { review_token: reviewToken, accepted_plan_sha256: acceptedPlanSha256, confirmed: true },
+    fetcher,
+    "Не удалось сохранить запись наблюдения.",
     signal,
   );
 }
