@@ -3,11 +3,20 @@ import { describe, expect, it, vi } from "vitest";
 import {
   applyDecision,
   applySave,
+  confirmGrowthMapping,
   createTextDraft,
+  executeGrowthAdvisor,
+  loadGrowth,
+  loadGrowthGoals,
+  loadGrowthMappingStatus,
   loadSelfRetrieval,
   loadDiagnostics,
+  previewGrowthAdvisor,
   prepareDecision,
   prepareSave,
+  requestGrowthLearningQuestion,
+  resolveGrowthLearningQuestion,
+  reviewGrowthMapping,
   searchNotes,
   retrieveNote,
   transcribeAudio,
@@ -135,5 +144,88 @@ describe("same-origin API seam", () => {
     expect(fetcher.mock.calls[0][0]).toBe("/api/drafts/decision-journal/save/prepare");
     expect(fetcher.mock.calls[1][0]).toBe("/api/drafts/decision-journal/save/apply");
     expect(fetcher.mock.calls[0][1]?.headers).toEqual({ Accept: "application/json", "Content-Type": "application/json", "X-Second-Brain-Request": "draft-v1" });
+  });
+
+  it("uses only explicit Stage 11E routes and preserves the selector/intent boundary", async () => {
+    const selector = {
+      source_note_uuid: "0198f4c5-6a00-7000-8000-000000000010",
+      behavioral_cohort_fingerprint: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      behavioral_option_index: 0,
+      behavioral_option_fingerprint: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    };
+    const advisorRequest = {
+      contract_version: "growth-advisor-v1" as const,
+      goal_source_uuid: selector.source_note_uuid,
+      goal_identity_fingerprint: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      task: "Сравнить два варианта",
+      options: [],
+      explicit_constraints: [],
+      explicit_context: [],
+      max_context_bytes: 65536,
+      max_result_bytes: 65536,
+    };
+    const preview = { ...advisorRequest, assistant_contract_version: "assistant-v1", advisor_policy_id: "growth-advisor-owner-explicit-goal-v1", goal_text: "Цель", goal_text_utf8_bytes: 8 };
+    const candidate = {
+      contract_version: "growth-learning-v1" as const,
+      derivation_version: "growth-learning-derivation-v1",
+      candidate_id: "gl1:" + "d".repeat(64),
+      kind: "relation_review" as const,
+      reason_code: "missing_goal_mapping" as const,
+      growth_contract_version: "growth-engine-v1",
+      growth_derivation_version: "growth-engine-derivation-v1",
+      growth_policy_id: "growth-engine-v1",
+      growth_policy_fingerprint: "sha256:" + "e".repeat(64),
+      goal_source_uuid: selector.source_note_uuid,
+      goal_identity_fingerprint: advisorRequest.goal_identity_fingerprint,
+      growth_state: "goal_mapping_missing" as const,
+      cohort_fingerprint: selector.behavioral_cohort_fingerprint,
+      behavioral_option_fingerprint: selector.behavioral_option_fingerprint,
+      behavioral_reference_fingerprint: "sha256:" + "f".repeat(64),
+      mapping_id: null,
+      mapping_fingerprint: null,
+      question: "Для текущего варианта ещё не задано, как он относится к выбранной цели. Хочешь проверить эту связь?",
+      basis_fingerprint: "sha256:" + "1".repeat(64),
+      issued_at: "2026-09-14T10:00:00Z",
+      expires_at: "2026-09-14T10:10:00Z",
+    };
+    const fetcher = vi.fn<FetchLike>()
+      .mockResolvedValueOnce(ok({ goals: [] }))
+      .mockResolvedValueOnce(ok({ mappings: [] }))
+      .mockResolvedValueOnce(ok({ goal_results: [] }))
+      .mockResolvedValueOnce(ok({ candidate_mapping_fingerprint: null }))
+      .mockResolvedValueOnce(ok({ status: "accepted", mapping: {} }))
+      .mockResolvedValueOnce(ok({ branch: "advisor", state: "result", assistant_result: null, error: null, provenance: {} }))
+      .mockResolvedValueOnce(ok({ status: "candidate", candidate, no_candidate_code: null }))
+      .mockResolvedValueOnce(ok({ status: "updated", event: {} }))
+      .mockResolvedValueOnce(ok({ candidate_id: candidate.candidate_id, disposition: "ignore", answer_draft: null, handoff: null }));
+
+    await loadGrowthGoals(fetcher);
+    await loadGrowthMappingStatus(fetcher);
+    await loadGrowth(selector.source_note_uuid, fetcher);
+    await reviewGrowthMapping(selector, "neutral_or_unknown", fetcher);
+    await confirmGrowthMapping(selector, "neutral_or_unknown", "0198f4c5-6a00-7000-7000-000000000011", "sha256:" + "2".repeat(64), fetcher);
+    await previewGrowthAdvisor(advisorRequest, fetcher);
+    await executeGrowthAdvisor(advisorRequest, preview, fetcher);
+    await requestGrowthLearningQuestion({ contract_version: "growth-learning-v1", goal_source_uuid: selector.source_note_uuid }, fetcher);
+    await resolveGrowthLearningQuestion({ contract_version: "growth-learning-v1", goal_source_uuid: selector.source_note_uuid }, candidate, "ignore", null, fetcher);
+
+    expect(fetcher.mock.calls.map(([path]) => path)).toEqual([
+      "/api/growth/goals",
+      "/api/growth/mappings/status",
+      "/api/growth",
+      "/api/growth/mappings/review",
+      "/api/growth/mappings/confirm",
+      "/api/growth-advisor/preview",
+      "/api/growth-advisor/execute",
+      "/api/growth-learning/questions",
+      "/api/growth-learning/questions/resolve",
+    ]);
+    expect(JSON.parse(String(fetcher.mock.calls[2][1]?.body))).toEqual({
+      contract_version: "growth-engine-v1",
+      selection: { mode: "selected_goal", source_note_uuid: selector.source_note_uuid },
+      max_results: 200,
+      max_result_bytes: 131072,
+    });
+    expect((fetcher.mock.calls[7][1]?.headers as Record<string, string>)["X-Second-Brain-Request"]).toBe("growth-learning-v1");
   });
 });

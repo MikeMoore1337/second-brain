@@ -1,14 +1,15 @@
 # Cognitive Twin v2 / Stage 11 — Growth Engine v1
 
-Статус документа: **DESIGN / NORMATIVE CONTRACT ONLY**. Этот документ
-закрывает design gate Issue #258 и остаётся нормативной основой для
-детерминированного Growth Engine. Stage 11A и Stage 11B runtime, mapping store
-и friction read model уже реализованы отдельными merged slices (#260 и #263);
-Stage 11C Growth Advisor runtime реализован в merged PR #268. Этим документом
-не создаются новые runtime, Web/API/UI, provider integration, schema changes
-или изменения second-brain-vault. Privacy/payload/provenance boundary Advisor
-зафиксирована отдельно в [growth-advisor-v1-contract.md](growth-advisor-v1-contract.md),
-а независимая Growth Learning / Question boundary 11D0 — в
+Статус документа: **NORMATIVE CONTRACT + STAGE 11E IMPLEMENTATION COMPLETE**.
+Этот документ закрывает design gate Issue #258 и остаётся нормативной основой
+для детерминированного Growth Engine. Stage 11A и Stage 11B runtime, mapping
+store и friction read model реализованы отдельными merged slices (#260 и #263);
+Stage 11C Growth Advisor runtime реализован в merged PR #268, а Stage 11D и
+Stage 11E входят в текущий implementation closeout Issue #274. Этим документом
+не меняются provider integration, schema changes или second-brain-vault.
+Privacy/payload/provenance boundary Advisor зафиксирована отдельно в
+[growth-advisor-v1-contract.md](growth-advisor-v1-contract.md), а независимая
+Growth Learning / Question boundary 11D0 — в
 [growth-learning-v1-contract.md](growth-learning-v1-contract.md).
 
 Контракт читается поверх:
@@ -1020,9 +1021,12 @@ version. Caveat не превращается в claim text.
 возвращает raw body, labels, path, UUID inventory или exception details.
 
 
-## 23. Future Web/API/UX
+## 23. Owner Web/API/UX (Stage 11E COMPLETE)
 
-Это design direction, не implementation.
+Stage 11E реализует owner-facing progressive surface поверх существующего
+Cognitive Twin Web shell. UI остаётся foreground-only, server-owned и
+без browser persistence; transport использует private strict JSON routes,
+no-store responses и точную revalidation boundary.
 
 Owner-facing progressive structure:
 
@@ -1043,11 +1047,11 @@ Independent recommendation
 Technical details (policy, fingerprints, UUIDs, provenance, caveats) идут в
 progressive disclosure. Primary UI не является technical dashboard.
 
-Future owner-only API может иметь review, accept, read current relation и
-supersede/invalidate/delete operations. Backend обязан заново строить sources
-и не принимать client body/labels/fingerprints as truth. Response no-store,
-bounded, без browser authority. Background refresh, automatic mapping,
-automatic Advisor и hidden private context запрещены.
+Owner-only API имеет review, accept, read current relation и
+invalidate/delete operations. Backend заново строит sources и не принимает
+client body/labels/fingerprints as truth. Response bounded и no-store, браузер
+не является authority. Background refresh, automatic mapping, automatic
+Advisor и hidden private context запрещены.
 
 Запрещён copy:
 
@@ -1107,11 +1111,11 @@ policy, provenance and calibration baseline/reset gate.
 | Compare integration | DEFER | No GrowthCompareV1 in current v1; Advisor branch stays independent |
 | Compare/Stage 9/Simulate Me mutation | FORBIDDEN | No feedback path or retroactive semantics |
 | Outcome/progress | DEFER | Separate structured reviewed Goal Progress design gate |
-| Growth Learning / Question | ACCEPT design-only | Stage 11D0 contract is complete; Stage 11D runtime remains unimplemented |
+| Growth Learning / Question | ACCEPT bounded | Stage 11D0 contract and Stage 11D foreground runtime are complete; Stage 11E wires the owner surface |
 | Sensitive inference | ACCEPT prohibition | Protected traits, diagnosis, scores and vulnerability forbidden |
-| Runtime/schema/dependencies | CHANGE | Status documents design only; no implementation/schema/dependency changes |
-| Roadmap status | CHANGE | Record Stage 11C runtime complete, Stage 11D0 design complete and Stage 11D runtime not implemented |
-| HUMAN_REQUIRED | ACCEPT | None for this design-only gate |
+| Runtime/schema/dependencies | CHANGE | Stage 11D/11E runtime and tests are added without schema, dependency, provider or vault changes |
+| Roadmap status | CHANGE | Record Stage 11C, Stage 11D and Stage 11E complete; Stage 12+ remains not started |
+| HUMAN_REQUIRED | ACCEPT | None under the approved owner-only runtime boundary |
 
 ### Known risks
 
@@ -1169,28 +1173,30 @@ deterministic Stage 11A/11B semantics. GrowthCompare/Compare v2 остаётся
 Issue #269 фиксирует отдельный
 [Growth Learning / Question v1 contract](growth-learning-v1-contract.md):
 provider-free deterministic 0/1 candidate, explicit owner controls,
-foreground-only boundary, exact invalidation и approved handoffs. Runtime,
-experiments, persistence, reminders, automatic write и reinforcement не
-реализованы.
+foreground-only boundary, exact invalidation и approved handoffs. Эти правила
+реализованы в bounded application/runtime slice без экспериментов,
+persistence, reminders, automatic write или reinforcement.
 
-### Stage 11D — Growth Learning runtime
+### Stage 11D — Growth Learning runtime (COMPLETE)
 
-Future implementation gate after the 11D0 contract. Он не может менять Stage 8
-semantics, вызывать Advisor автоматически или обходить existing review/Safe
-Write boundaries.
+Issue #274 реализует provider-free questions/resolve runtime, page-memory
+candidate lifecycle и explicit ignore/reject/review/answer controls. Learning
+не меняет Stage 8 semantics, не вызывает Advisor автоматически и использует
+только existing relation-review/Personal Memory/Safe Write handoffs.
 
-### Stage 11E — Web/API, integration QA и Stage 11 closeout
+### Stage 11E — Web/API, integration QA и Stage 11 closeout (COMPLETE)
 
-Future owner-only transport/UI, no-store behavior, integration tests, exact
-production gates and status closeout. Issue #258 was the Growth Engine design
-gate; Stage 11A/11B and Stage 11C runtime were implemented later, while #269
-is the 11D0 design-only gate.
+Issue #274 добавляет owner-only Growth API/UI, server-owned Goal selection,
+mapping review lifecycle, independent Advisor preview/execute, independent
+Learning question flow, integration tests и exact Python 3.14/frontend gates.
+Production deployment keeps the existing environment contract and does not
+touch the vault, schema, provider or Stage 9/10/Simulate Me semantics.
 Implementation Issues are not created automatically.
 
 ## 27. Contract acceptance flags
 
 ~~~text
-runtime changed: NO
+runtime changed: YES
 dependencies changed: NO
 schema changed: NO
 provider/network changed: NO
@@ -1202,8 +1208,8 @@ Stage 11B started: YES / COMPLETE
 Stage 11C0 design: COMPLETE
 Stage 11C runtime: COMPLETE
 Stage 11D0 design: COMPLETE
-Stage 11D runtime: NOT IMPLEMENTED
-Stage 11E started: NO
+Stage 11D runtime: COMPLETE
+Stage 11E started: YES / COMPLETE
 Stage 12+ started: NO
 next Issue created: NO
 HUMAN_REQUIRED: none
@@ -1220,6 +1226,7 @@ Stage 11B = COMPLETE
 Stage 11C0 Growth Advisor design = COMPLETE
 Stage 11C Growth Advisor runtime = COMPLETE
 Stage 11D0 Growth Learning design = COMPLETE
-Stage 11D Growth Learning runtime = NOT IMPLEMENTED
+Stage 11D Growth Learning runtime = COMPLETE
+Stage 11E Web/API + integration QA/closeout = COMPLETE
 Stage 12+ = NOT STARTED
 ~~~
