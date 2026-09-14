@@ -1777,3 +1777,49 @@ __all__ = [
     "validate_observation_chain",
     "validate_replacement_chain",
 ]
+
+# Stage 12C is kept in a separate read-model module so the Stage 12A parser
+# remains dependency-light.  Lazy aliases preserve the natural public import
+# path without introducing an import cycle during module initialization.
+_STAGE12C_EXPORTS = frozenset(
+    {
+        "BuildGoalProgress",
+        "BuildGoalProgressV1",
+        "GoalProgressBuilder",
+        "GoalProgressError",
+        "GoalProgressErrorCode",
+        "GoalProgressExcludedObservation",
+        "GoalProgressExcludedObservationV1",
+        "GoalProgressExclusionReason",
+        "GoalProgressExclusionReasonV1",
+        "GoalProgressGoalAmbiguousError",
+        "GoalProgressGoalRequiredError",
+        "GoalProgressGoalSourceChangedError",
+        "GoalProgressInvalidRequestError",
+        "GoalProgressPolicyMismatchError",
+        "GoalProgressProvenance",
+        "GoalProgressProvenanceV1",
+        "GoalProgressRequest",
+        "GoalProgressRequestV1",
+        "GoalProgressResult",
+        "GoalProgressResultTooLargeError",
+        "GoalProgressResultV1",
+        "GoalProgressSourceUnavailableError",
+        "GoalProgressStatus",
+        "GoalProgressStatusV1",
+        "build_goal_progress",
+        "validate_goal_progress_request",
+        "validate_goal_progress_result",
+    }
+)
+__all__.extend(sorted(_STAGE12C_EXPORTS))
+
+
+def __getattr__(name: str) -> object:
+    """Resolve Stage 12C aliases only after Stage 12A initialization."""
+
+    if name not in _STAGE12C_EXPORTS:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    from second_brain.application import goal_progress_read
+
+    return cast(object, getattr(goal_progress_read, name))
