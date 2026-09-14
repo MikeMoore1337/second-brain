@@ -76,7 +76,7 @@ The only authoritative inputs for a candidate are:
 2. a fresh, deterministic `GrowthEngineResultV1` / `GrowthGoalRelationResultV1` from Stage 11B;
 3. the exact current `GrowthMappingRefV1` carried by that Growth relation, only when the mapping is current and valid.
 
-The future runtime MUST obtain the current sources itself for an explicit request. A browser-provided Growth DTO, stale page snapshot, label, raw note, or client-selected relation is not authority.
+The runtime MUST obtain the current sources itself for an explicit request. A browser-provided Growth DTO, stale page snapshot, label, raw note, or client-selected relation is not authority.
 
 ### 3.2 Forbidden authority
 
@@ -391,13 +391,13 @@ There is no automatic reinforcement or adaptive question selection. The policy, 
 
 “No candidate” is a valid product result. The implementation must prefer no candidate over a generic, speculative, moralizing or psychologically loaded question.
 
-## 12. Future API, UI and browser boundary
+## 12. Implemented API, UI and browser boundary
 
-This section is a design target for a later runtime slice only; it is not implemented by Stage 11D0.
+The bounded Stage 11D/11E runtime implements this boundary.
 
 ### 12.1 API shape
 
-The future API may expose two owner-only endpoints analogous to Stage 8:
+The owner-only API exposes two endpoints analogous to Stage 8:
 
 ```text
 POST /api/growth-learning/questions
@@ -442,7 +442,7 @@ Exactly one of `candidate` and `no_candidate_code` is non-null. A no-candidate r
 
 ### 13.2 Fixed error taxonomy
 
-The future runtime exposes only stable non-private codes from this closed v1 set:
+The runtime exposes only stable non-private codes from this closed v1 set:
 
 ```text
 INVALID_REQUEST
@@ -463,9 +463,9 @@ INTERNAL_CONTRACT_VIOLATION
 
 All source, policy, stale and size failures are fail-closed. They do not fall back to a generic question, a stale candidate, an Advisor response, a raw error, or an automatic write. Error responses contain safe field-level context only; they do not reveal paths, source bodies, credentials, provider output or private note content.
 
-## 14. Future verification matrix
+## 14. Verification matrix
 
-The runtime slice following this design must have deterministic tests for:
+The runtime slice has deterministic tests for:
 
 | Area | Required checks |
 |---|---|
@@ -482,11 +482,12 @@ The runtime slice following this design must have deterministic tests for:
 | Privacy | forbidden taxonomy and raw/private fields rejected; no telemetry/persistence/RL/auto-nudge |
 | Failure | exact error codes for every source, store, policy, stale, resolution and size failure |
 
-No live provider, credential, vault, Git, scheduler or production write is needed for the design-only test contract.
+No live provider, credential, vault, Git, scheduler or production write is
+needed for the contract/runtime tests.
 
 ## 15. Exact next runtime scope
 
-Stage 11D runtime, when separately authorized, is limited to one vertical slice:
+Stage 11D runtime is limited to one vertical slice:
 
 1. provider-free application derivation from a fresh server-side Stage 11B result;
 2. one explicit foreground request for one selected Goal;
@@ -506,8 +507,8 @@ It does not include experiments, reminders, durable question history, Goal Progr
 | Stage 11C0 — Growth Advisor design | COMPLETE |
 | Stage 11C — Growth Advisor runtime | COMPLETE |
 | Stage 11D0 — Growth Learning / Question design | COMPLETE |
-| Stage 11D — Growth Learning runtime | NOT IMPLEMENTED |
-| Stage 11E | NOT STARTED |
+| Stage 11D — Growth Learning runtime | COMPLETE |
+| Stage 11E | COMPLETE |
 | Stage 12+ | NOT STARTED |
 | runtime/API/UI in this issue | NO |
 | new dependencies | NO |
@@ -516,8 +517,9 @@ It does not include experiments, reminders, durable question history, Goal Progr
 | vault/Safe Write mutation | NO |
 | environment-variable change | NO; `env change required: no` |
 
-The status above completes Stage 11D0 design. It does not authorize or imply
-implementation of Stage 11D runtime.
+The status above records the Stage 11D0 design and the bounded Stage 11D/11E
+implementation. It does not authorize experiments, durable history, provider
+integration or any Stage 12+ work.
 
 ## 17. Decision register: ACCEPT / CHANGE / RISK / DEFER
 
@@ -534,8 +536,8 @@ implementation of Stage 11D runtime.
 | Advisor separation | ACCEPT | No trigger, wording, policy, source or automatic chaining |
 | Experiments | DEFER | No schema, lifecycle, scheduler, outcome or experiment id in v1 |
 | Source race and future contract drift | RISK | Exact current-source/policy revalidation may invalidate a candidate; fail closed and never retarget |
-| Runtime/API/UI scope | CHANGE | A later Stage 11D issue must implement only the bounded vertical slice and its tests |
+| Runtime/API/UI scope | CHANGE | Issue #274 implements only the bounded vertical slice and its tests |
 | Persistence and history | DEFER | Page/request memory only; no suppression, telemetry or cross-session history |
 | Anti-annoyance | ACCEPT | Foreground-only, explicit owner action, at most one candidate, no popup/poll/push |
 | Privacy | ACCEPT | No diagnosis, protected-trait inference, persuasion optimization, RL or adaptive nudging |
-| Environment/deployment | ACCEPT | Docs-only diff; `env change required: no`; no new production setting or secret |
+| Environment/deployment | ACCEPT | Runtime deployment keeps the existing contract; `env change required: no`; no new setting or secret |

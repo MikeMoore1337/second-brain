@@ -1,11 +1,11 @@
 # Cognitive Twin v2 / Stage 11C0 — Growth Advisor privacy/payload & branch provenance design contract v1
 
-Статус документа: **DESIGN / NORMATIVE CONTRACT ONLY**. Это design gate
-Issue [#264](https://github.com/MikeMoore1337/second-brain/issues/264).
+Статус документа: **DESIGN CONTRACT COMPLETE; RUNTIME/WEB CLOSEOUT COMPLETE**.
+Это design gate Issue [#264](https://github.com/MikeMoore1337/second-brain/issues/264).
 Документ фиксирует privacy, payload, explicit-action, execution-control,
-result-reference и branch-provenance boundary для будущего Growth Advisor. Он
-не создаёт runtime, Web/API/UI, provider call, transport, persistence, schema,
-dependency или deployment change.
+result-reference и branch-provenance boundary Growth Advisor. Сам contract не
+меняет provider boundary, persistence или schema; ограниченный runtime был
+реализован в PR #268, а owner Web/API/UI и Stage 11 closeout — в Issue #274.
 
 Preflight этого design gate опирается на merged main после Stage 11B:
 
@@ -47,7 +47,7 @@ Preflight этого design gate опирается на merged main после 
 | Persistence | FORBIDDEN | Не сохранять Goal projection, request, result, history, cache или telemetry payload |
 | Provider privacy | RISK / INHERIT | Сохранить текущую Cloudflare/third-party Customer Content boundary; не обещать provider-side no-retention |
 | Compare | DEFER | Не менять Compare v1; GrowthCompare v2 остаётся отдельным будущим design gate |
-| Runtime | DEFER | Stage 11C runtime не реализуется в этом Issue |
+| Runtime | ACCEPT | Stage 11C runtime реализован в PR #268; owner Web/API/UI закрыт в Issue #274 |
 | New provider/config/dependency | FORBIDDEN | Не добавлять provider, model, secret, env key, network path или package |
 | HUMAN_REQUIRED | ACCEPT | None: текущий Assistant/Advisor provider boundary может выполнить этот explicit-only contract |
 
@@ -63,16 +63,16 @@ branch, а не canonical Cognitive Twin fact.
 | Stage 11A current Goal identity/context | COMPLETE |
 | Stage 11B Goal-to-choice relation и friction read model | COMPLETE |
 | Stage 11C0 Growth Advisor privacy/payload/provenance design | DESIGN COMPLETE |
-| Stage 11C runtime | NOT IMPLEMENTED |
-| Stage 11D personalized learning/question boundary | NOT STARTED |
-| Stage 11E Web/API/integration QA/closeout | NOT STARTED |
+| Stage 11C runtime | COMPLETE |
+| Stage 11D personalized learning/question boundary | COMPLETE в Issue #274 |
+| Stage 11E Web/API/integration QA/closeout | COMPLETE в Issue #274 |
 | Stage 12+ | NOT STARTED |
 
-В Stage 11C0 разрешены только чтение текущих contracts, фиксация этого
-документа, минимальные cross-reference/status updates, локальные docs checks и
-обычный GitHub/document delivery lifecycle. Ни один provider, worker, vault,
-web route, application service, persistence adapter или live smoke не
-запускается как часть design implementation.
+В Stage 11C0 были разрешены только чтение contracts, фиксация этого документа,
+минимальные cross-reference/status updates, локальные docs checks и обычный
+GitHub/document delivery lifecycle. Последующие implementation slices не
+меняют зафиксированные provider, worker, vault, persistence или live-smoke
+границы.
 
 Отсутствие runtime здесь означает отсутствие нового runtime diff. Это не
 отменяет уже merged Stage 11A/11B implementation.
@@ -823,9 +823,9 @@ Stage 11C0. Any future GrowthCompare must separately define input authority,
 branch provenance, privacy payload, temporal semantics and no-hidden-semantic-
 delta rules before implementation.
 
-## 18. Future Stage 11C runtime slice
+## 18. Implemented Stage 11C runtime slice
 
-The next implementation issue, if separately approved, is limited to:
+The Stage 11C runtime implemented in PR #268 is limited to:
 
 1. strict parser/DTO for GrowthAdvisorRequestV1 and transient Goal preview;
 2. current Goal scan/rebuild and raw-body-free identity fingerprint;
@@ -857,10 +857,10 @@ The slice must not include:
 An authenticated provider smoke, if ever needed, is a separate explicit
 production/provider gate and does not belong to the runtime unit tests.
 
-## 19. Future test matrix
+## 19. Test matrix
 
-The implementation slice must add deterministic tests for at least the
-following categories:
+The implementation slice has deterministic tests for at least the following
+categories:
 
 | Category | Required assertion |
 | --- | --- |
@@ -891,12 +891,12 @@ following categories:
 ## 20. Acceptance checklist for this design gate
 
 ~~~text
-Issue #264: OPEN at design start; close only after merged PR
+Issue #264: CLOSED after merged PR #268
 Stage 11A: COMPLETE
 Stage 11B: COMPLETE
 Stage 11C0: DESIGN COMPLETE
-Stage 11C runtime: NOT IMPLEMENTED
-Stage 11D/E: NOT STARTED
+Stage 11C runtime: COMPLETE (PR #268)
+Stage 11D/E: COMPLETE (Issue #274)
 Stage 12+: NOT STARTED
 
 runtime changed: NO
@@ -942,7 +942,7 @@ Ordinary production deployment therefore requires no environment operation.
 | Cancellation/deadline | ACCEPT | Existing bounded adapter; fixed 30s non-client control |
 | Growth deterministic semantics | ACCEPT | Stage 11A/11B result remains unchanged |
 | Compare v1 / GrowthCompare | DEFER | Separate future composition contract |
-| Web/API/UI runtime | DEFER | Stage 11C implementation and Stage 11E gate |
+| Web/API/UI runtime | ACCEPT | Stage 11C runtime and Stage 11E owner surface are implemented in later slices |
 | Schema/vault/Safe Write | FORBIDDEN | No canonical or private-vault mutation |
 | New dependencies/provider/env | FORBIDDEN | No new operational capability in #264 |
 | HUMAN_REQUIRED | ACCEPT | None under current approved Assistant/provider boundary |

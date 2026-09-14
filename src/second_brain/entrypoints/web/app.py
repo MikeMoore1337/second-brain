@@ -67,6 +67,32 @@ from second_brain.entrypoints.web.cognitive_twin import (
     build_production_stated_observed_mapping_service,
     install_cognitive_twin_routes,
 )
+from second_brain.entrypoints.web.growth import (
+    GROWTH_ENGINE_PATH,
+    GROWTH_GOALS_PATH,
+    GROWTH_MAPPING_CONFIRM_PATH,
+    GROWTH_MAPPING_DELETE_PATH,
+    GROWTH_MAPPING_INVALIDATE_PATH,
+    GROWTH_MAPPING_REVIEW_PATH,
+    GROWTH_MAPPING_STATUS_PATH,
+    GROWTH_PATH,
+    GROWTH_REQUEST_HEADER_NAME,
+    GROWTH_REQUEST_HEADER_VALUE,
+    MAX_RAW_GROWTH_BODY_BYTES,
+    GrowthEmptyPayload,
+    GrowthEnginePayload,
+    GrowthGoalOwnerItemV1,
+    GrowthGoalsProjectionV1,
+    GrowthMappingConfirmPayload,
+    GrowthMappingLifecyclePayload,
+    GrowthMappingReviewPayload,
+    GrowthMappingSelectorPayload,
+    GrowthRequestBoundaryMiddleware,
+    GrowthWebService,
+    ProductionGrowthWebService,
+    build_production_growth_web_service,
+    install_growth_routes,
+)
 from second_brain.entrypoints.web.growth_advisor import (
     GROWTH_ADVISOR_EXECUTE_PATH,
     GROWTH_ADVISOR_PREVIEW_PATH,
@@ -80,6 +106,23 @@ from second_brain.entrypoints.web.growth_advisor import (
     ProductionGrowthAdvisorWebService,
     build_production_growth_advisor_service,
     install_growth_advisor_routes,
+)
+from second_brain.entrypoints.web.growth_learning import (
+    GROWTH_LEARNING_QUESTIONS_PATH,
+    GROWTH_LEARNING_REQUEST_HEADER_NAME,
+    GROWTH_LEARNING_REQUEST_HEADER_VALUE,
+    GROWTH_LEARNING_RESOLVE_PATH,
+    MAX_GROWTH_LEARNING_RESPONSE_BYTES,
+    MAX_RAW_GROWTH_LEARNING_BODY_BYTES,
+    GrowthLearningCandidatePayload,
+    GrowthLearningQuestionsPayload,
+    GrowthLearningRequestBoundaryMiddleware,
+    GrowthLearningResolutionPayload,
+    GrowthLearningResolveRequestPayload,
+    GrowthLearningWebService,
+    ProductionGrowthLearningWebService,
+    build_production_growth_learning_service,
+    install_growth_learning_routes,
 )
 from second_brain.entrypoints.web.legacy_app import (
     ACTIVE_LEARNING_ANSWER_REVIEW_PATH,
@@ -175,6 +218,8 @@ def create_app(**kwargs: Any) -> FastAPI:
     behavioral_self_model_service = kwargs.pop("behavioral_self_model_service", None)
     stated_observed_mapping_service = kwargs.pop("stated_observed_mapping_service", None)
     growth_advisor_service = kwargs.pop("growth_advisor_service", None)
+    growth_service = kwargs.pop("growth_web_service", None)
+    growth_learning_service = kwargs.pop("growth_learning_web_service", None)
     auth_config = kwargs.pop("web_auth_config", None)
     auth_gateway = kwargs.pop("web_auth_gateway", None)
     auth_clock = kwargs.pop("web_auth_clock", None)
@@ -221,6 +266,18 @@ def create_app(**kwargs: Any) -> FastAPI:
     install_growth_advisor_routes(
         app,
         service=growth_advisor_service,
+        env_file=env_file,
+        vault_path_override=vault_path_override,
+    )
+    install_growth_routes(
+        app,
+        service=growth_service,
+        env_file=env_file,
+        vault_path_override=vault_path_override,
+    )
+    install_growth_learning_routes(
+        app,
+        service=growth_learning_service,
         env_file=env_file,
         vault_path_override=vault_path_override,
     )
@@ -315,6 +372,45 @@ __all__ = [
     "ProductionGrowthAdvisorWebService",
     "build_production_growth_advisor_service",
     "install_growth_advisor_routes",
+    "GROWTH_ENGINE_PATH",
+    "GROWTH_GOALS_PATH",
+    "GROWTH_MAPPING_CONFIRM_PATH",
+    "GROWTH_MAPPING_DELETE_PATH",
+    "GROWTH_MAPPING_INVALIDATE_PATH",
+    "GROWTH_MAPPING_REVIEW_PATH",
+    "GROWTH_MAPPING_STATUS_PATH",
+    "GROWTH_PATH",
+    "GROWTH_REQUEST_HEADER_NAME",
+    "GROWTH_REQUEST_HEADER_VALUE",
+    "MAX_RAW_GROWTH_BODY_BYTES",
+    "GrowthEnginePayload",
+    "GrowthEmptyPayload",
+    "GrowthGoalOwnerItemV1",
+    "GrowthGoalsProjectionV1",
+    "GrowthMappingConfirmPayload",
+    "GrowthMappingLifecyclePayload",
+    "GrowthMappingReviewPayload",
+    "GrowthMappingSelectorPayload",
+    "GrowthRequestBoundaryMiddleware",
+    "GrowthWebService",
+    "ProductionGrowthWebService",
+    "build_production_growth_web_service",
+    "install_growth_routes",
+    "GROWTH_LEARNING_QUESTIONS_PATH",
+    "GROWTH_LEARNING_REQUEST_HEADER_NAME",
+    "GROWTH_LEARNING_REQUEST_HEADER_VALUE",
+    "GROWTH_LEARNING_RESOLVE_PATH",
+    "MAX_GROWTH_LEARNING_RESPONSE_BYTES",
+    "MAX_RAW_GROWTH_LEARNING_BODY_BYTES",
+    "GrowthLearningCandidatePayload",
+    "GrowthLearningQuestionsPayload",
+    "GrowthLearningRequestBoundaryMiddleware",
+    "GrowthLearningResolutionPayload",
+    "GrowthLearningResolveRequestPayload",
+    "GrowthLearningWebService",
+    "ProductionGrowthLearningWebService",
+    "build_production_growth_learning_service",
+    "install_growth_learning_routes",
     "WebAuthConfig",
     "create_app",
 ]

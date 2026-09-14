@@ -1720,6 +1720,8 @@ def create_app(
                 "/api/stated-observed-mapping/",
                 "/api/stated-observed-composition",
                 "/api/growth-advisor/",
+                "/api/growth",
+                "/api/growth-learning/",
             )
         ):
             response.headers["Cache-Control"] = "no-store"

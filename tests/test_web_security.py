@@ -36,6 +36,19 @@ from second_brain.entrypoints.web.app import (
     GROWTH_ADVISOR_PREVIEW_PATH,
     GROWTH_ADVISOR_REQUEST_HEADER_NAME,
     GROWTH_ADVISOR_REQUEST_HEADER_VALUE,
+    GROWTH_ENGINE_PATH,
+    GROWTH_GOALS_PATH,
+    GROWTH_LEARNING_QUESTIONS_PATH,
+    GROWTH_LEARNING_REQUEST_HEADER_NAME,
+    GROWTH_LEARNING_REQUEST_HEADER_VALUE,
+    GROWTH_LEARNING_RESOLVE_PATH,
+    GROWTH_MAPPING_CONFIRM_PATH,
+    GROWTH_MAPPING_DELETE_PATH,
+    GROWTH_MAPPING_INVALIDATE_PATH,
+    GROWTH_MAPPING_REVIEW_PATH,
+    GROWTH_MAPPING_STATUS_PATH,
+    GROWTH_REQUEST_HEADER_NAME,
+    GROWTH_REQUEST_HEADER_VALUE,
     MAX_RAW_ACTIVE_LEARNING_BODY_BYTES,
     MAX_RAW_ASSISTANT_BODY_BYTES,
     MAX_RAW_COGNITIVE_TWIN_BODY_BYTES,
@@ -43,6 +56,8 @@ from second_brain.entrypoints.web.app import (
     MAX_RAW_DIAGNOSTICS_BODY_BYTES,
     MAX_RAW_DRAFT_BODY_BYTES,
     MAX_RAW_GROWTH_ADVISOR_BODY_BYTES,
+    MAX_RAW_GROWTH_BODY_BYTES,
+    MAX_RAW_GROWTH_LEARNING_BODY_BYTES,
     MAX_RAW_RETROSPECTIVE_CALIBRATION_BODY_BYTES,
     MAX_RAW_SEARCH_BODY_BYTES,
     MAX_RAW_SELF_MODEL_BODY_BYTES,
@@ -270,6 +285,36 @@ def _growth_advisor_route(path: str, body: bytes) -> PrivateRoute:
         invalid_code="GROWTH_ADVISOR_INVALID_REQUEST",
         content_too_large_code="GROWTH_ADVISOR_CONTEXT_TOO_LARGE",
         max_body_bytes=MAX_RAW_GROWTH_ADVISOR_BODY_BYTES,
+    )
+
+
+def _growth_route(path: str, body: bytes = b"{}") -> PrivateRoute:
+    """Build one Stage 11A/11B/11E Growth private route descriptor."""
+
+    return PrivateRoute(
+        path=path,
+        request_header_name=GROWTH_REQUEST_HEADER_NAME,
+        request_header_value=GROWTH_REQUEST_HEADER_VALUE,
+        content_type="application/json",
+        body=body,
+        invalid_code="GROWTH_INVALID_REQUEST",
+        content_too_large_code="GROWTH_RESULT_TOO_LARGE",
+        max_body_bytes=MAX_RAW_GROWTH_BODY_BYTES,
+    )
+
+
+def _growth_learning_route(path: str, body: bytes = b"{}") -> PrivateRoute:
+    """Build one Stage 11D/11E Growth Learning private route descriptor."""
+
+    return PrivateRoute(
+        path=path,
+        request_header_name=GROWTH_LEARNING_REQUEST_HEADER_NAME,
+        request_header_value=GROWTH_LEARNING_REQUEST_HEADER_VALUE,
+        content_type="application/json",
+        body=body,
+        invalid_code="INVALID_REQUEST",
+        content_too_large_code="RESULT_TOO_LARGE",
+        max_body_bytes=MAX_RAW_GROWTH_LEARNING_BODY_BYTES,
     )
 
 
@@ -501,6 +546,15 @@ PRIVATE_ROUTES: tuple[PrivateRoute, ...] = (
             }
         ),
     ),
+    _growth_route(GROWTH_ENGINE_PATH),
+    _growth_route(GROWTH_GOALS_PATH),
+    _growth_route(GROWTH_MAPPING_STATUS_PATH),
+    _growth_route(GROWTH_MAPPING_REVIEW_PATH),
+    _growth_route(GROWTH_MAPPING_CONFIRM_PATH),
+    _growth_route(GROWTH_MAPPING_INVALIDATE_PATH),
+    _growth_route(GROWTH_MAPPING_DELETE_PATH),
+    _growth_learning_route(GROWTH_LEARNING_QUESTIONS_PATH),
+    _growth_learning_route(GROWTH_LEARNING_RESOLVE_PATH),
     PrivateRoute(
         path="/api/self-retrieval",
         request_header_name=SELF_RETRIEVAL_REQUEST_HEADER_NAME,

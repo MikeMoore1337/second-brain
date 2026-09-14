@@ -15,6 +15,7 @@ import {
 } from "./api";
 import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { presentCode, presentError } from "./presentation";
+import { GrowthSurface } from "./growth-surface";
 
 const ELIGIBLE_PATTERN_TYPES = new Set([
   "repeated_exact_choice",
@@ -467,6 +468,7 @@ export function CognitiveTwinSurface(): ReactElement {
           <span>перестроение только для чтения + явное сопоставление</span>
         </div>
       </div>
+      <GrowthSurface />
       <div className="cognitive-twin-toolbar">
         <button className="cognitive-twin-button cognitive-twin-button-primary" type="button" disabled={busy || reviewBusy || compositionBusy || confirmBusy} aria-busy={busy} onClick={() => void refresh()}>
           {busy ? "Обновляю…" : "Обновить текущие данные"}

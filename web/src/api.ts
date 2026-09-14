@@ -303,6 +303,266 @@ export interface StatedObservedCompositionResponse {
   readonly caveats: readonly string[];
 }
 
+export interface GrowthGoalIdentity {
+  readonly source_note_uuid: string;
+  readonly dimension: "goal";
+  readonly source_evidence_kind: string;
+  readonly source_self_kind: "goal";
+  readonly domain: string | null;
+  readonly evidence_at: string;
+  readonly evidence_at_precision: string;
+  readonly source_contract_version: string;
+  readonly source_derivation_version: string;
+  readonly self_model_policy_fingerprint: string;
+  readonly source_fingerprint: string;
+  readonly claim_fingerprint: string;
+}
+
+export interface GrowthGoalOwnerItem {
+  readonly goal: GrowthGoalIdentity;
+  readonly goal_text: string;
+  readonly goal_identity_fingerprint: string;
+}
+
+export interface GrowthGoalsResponse {
+  readonly contract_version: string;
+  readonly derivation_version: string;
+  readonly policy_id: string;
+  readonly policy_fingerprint: string;
+  readonly generated_at: string;
+  readonly selection_mode: "each_current_goal";
+  readonly selected_goal_source_uuid: null;
+  readonly eligible_goal_count: number;
+  readonly goals: readonly GrowthGoalOwnerItem[];
+  readonly reason_codes: readonly string[];
+  readonly caveats: readonly string[];
+}
+
+export interface GrowthBehavioralOption {
+  readonly option_index: number;
+  readonly option_fingerprint: string;
+}
+
+export interface GrowthBehavioralPatternReference {
+  readonly contract_version: string;
+  readonly derivation_version: string;
+  readonly policy_id: string;
+  readonly policy_fingerprint: string;
+  readonly cohort_fingerprint: string;
+  readonly pattern_type: string;
+  readonly pattern_state: string;
+  readonly provenance_fingerprint: string;
+  readonly source_count: number;
+  readonly reference_fingerprint: string;
+  readonly current_option: GrowthBehavioralOption | null;
+}
+
+export interface GrowthMappingReference {
+  readonly mapping_id: string;
+  readonly mapping_policy_id: string;
+  readonly mapping_fingerprint: string;
+  readonly relation: GrowthRelation;
+}
+
+export type GrowthRelation = "supports_goal" | "conflicts_with_goal" | "neutral_or_unknown";
+
+export type GrowthState =
+  | "supports_goal"
+  | "conflicts_with_goal"
+  | "neutral_or_unknown"
+  | "goal_mapping_missing"
+  | "mixed_behavior"
+  | "changed_behavior"
+  | "behavioral_evidence_insufficient"
+  | "not_comparable"
+  | "goal_source_missing"
+  | "goal_selection_required";
+
+export interface GrowthTemporalContext {
+  readonly goal_evidence_at: string;
+  readonly goal_evidence_at_precision: string;
+  readonly behavioral_generated_at: string | null;
+  readonly behavioral_current_window_start: string | null;
+  readonly behavioral_current_window_end: string | null;
+  readonly mapping_reviewed_at: string | null;
+  readonly mapping_created_at: string | null;
+  readonly advisor_requested_at: string | null;
+}
+
+export interface GrowthRelationResult {
+  readonly goal: GrowthGoalIdentity | null;
+  readonly state: GrowthState | string;
+  readonly cohort_fingerprint: string | null;
+  readonly behavioral_pattern: GrowthBehavioralPatternReference | null;
+  readonly behavioral_option: GrowthBehavioralOption | null;
+  readonly mapping: GrowthMappingReference | null;
+  readonly reason_codes: readonly string[];
+  readonly caveats: readonly string[];
+  readonly temporal: GrowthTemporalContext;
+  readonly advisor: null;
+}
+
+export interface GrowthResponse {
+  readonly contract_version: string;
+  readonly derivation_version: string;
+  readonly policy_id: string;
+  readonly policy_fingerprint: string;
+  readonly generated_at: string;
+  readonly selection_mode: "selected_goal";
+  readonly selected_goal_source_uuid: string;
+  readonly eligible_goal_count: number;
+  readonly goal_results: readonly GrowthRelationResult[];
+  readonly reason_codes: readonly string[];
+  readonly caveats: readonly string[];
+}
+
+export interface GrowthMappingReviewOption {
+  readonly option_index: number;
+  readonly option_fingerprint: string;
+  readonly label: string;
+}
+
+export interface GrowthMappingReviewResponse {
+  readonly generated_at: string;
+  readonly goal: GrowthGoalIdentity;
+  readonly behavioral_target: Readonly<Record<string, unknown>>;
+  readonly candidate_mapping_fingerprint: string | null;
+  readonly goal_text: string;
+  readonly goal_domain: string;
+  readonly goal_evidence_at: string;
+  readonly goal_evidence_at_precision: string;
+  readonly situation: string;
+  readonly information_known_at_decision_time: string;
+  readonly criteria: readonly string[];
+  readonly ordered_options: readonly GrowthMappingReviewOption[];
+  readonly pattern_type: string;
+  readonly pattern_state: string;
+  readonly selected_option: GrowthBehavioralOption;
+  readonly proposed_relation: GrowthRelation | null;
+  readonly caveats: readonly string[];
+}
+
+export type GrowthMappingLifecycleState = "active" | "superseded" | "invalidated" | "deleted";
+
+export interface GrowthMappingStatusItem {
+  readonly mapping_id: string;
+  readonly lifecycle_state: GrowthMappingLifecycleState;
+  readonly goal: {
+    readonly source_note_uuid: string;
+    readonly domain: string;
+    readonly source_fingerprint: string;
+    readonly claim_fingerprint: string;
+  };
+  readonly behavioral_target: {
+    readonly cohort_fingerprint: string;
+    readonly option_index: number;
+    readonly option_fingerprint: string;
+  };
+  readonly relation: GrowthRelation;
+  readonly mapping_fingerprint: string;
+  readonly mapping_policy_id: string;
+  readonly mapping_policy_fingerprint: string;
+  readonly created_at: string;
+  readonly reviewed_at: string;
+  readonly supersedes_mapping_id: string | null;
+}
+
+export interface GrowthMappingStatusResponse {
+  readonly mapping_policy_id: string;
+  readonly mapping_policy_fingerprint: string;
+  readonly mappings: readonly GrowthMappingStatusItem[];
+  readonly active_mapping_count: number;
+}
+
+export interface GrowthMappingAcceptedResponse {
+  readonly status: "accepted";
+  readonly mapping: Readonly<Record<string, unknown>>;
+}
+
+export interface GrowthMappingLifecycleResponse {
+  readonly status: "updated";
+  readonly event: Readonly<Record<string, unknown>>;
+}
+
+export interface GrowthAdvisorRequest {
+  readonly contract_version: "growth-advisor-v1";
+  readonly goal_source_uuid: string;
+  readonly goal_identity_fingerprint: string;
+  readonly task: string;
+  readonly options: readonly { readonly id: string; readonly label: string }[];
+  readonly explicit_constraints: readonly string[];
+  readonly explicit_context: readonly { readonly kind: "fact" | "background"; readonly text: string }[];
+  readonly max_context_bytes: number;
+  readonly max_result_bytes: number;
+}
+
+export interface GrowthAdvisorPreviewResponse {
+  readonly contract_version: "growth-advisor-v1";
+  readonly goal_source_uuid: string;
+  readonly goal_identity_fingerprint: string;
+  readonly assistant_contract_version: string;
+  readonly advisor_policy_id: string;
+  readonly goal_text: string;
+  readonly goal_text_utf8_bytes: number;
+}
+
+export interface GrowthAdvisorBranchResponse {
+  readonly branch: "advisor";
+  readonly state: "result" | "abstention" | "error";
+  readonly assistant_result: Readonly<Record<string, unknown>> | null;
+  readonly error: { readonly code: string; readonly message: string } | null;
+  readonly provenance: Readonly<Record<string, unknown>> | null;
+}
+
+export interface GrowthLearningRequest {
+  readonly contract_version: "growth-learning-v1";
+  readonly goal_source_uuid: string | null;
+}
+
+export interface GrowthLearningCandidate {
+  readonly contract_version: "growth-learning-v1";
+  readonly derivation_version: string;
+  readonly candidate_id: string;
+  readonly kind: "relation_review" | "reflection" | "context_clarification" | "evidence_clarification";
+  readonly reason_code: "missing_goal_mapping" | "explicit_goal_conflict" | "mixed_behavior" | "changed_behavior" | "behavioral_evidence_insufficient";
+  readonly growth_contract_version: string;
+  readonly growth_derivation_version: string;
+  readonly growth_policy_id: string;
+  readonly growth_policy_fingerprint: string;
+  readonly goal_source_uuid: string;
+  readonly goal_identity_fingerprint: string;
+  readonly growth_state: GrowthState;
+  readonly cohort_fingerprint: string | null;
+  readonly behavioral_option_fingerprint: string | null;
+  readonly behavioral_reference_fingerprint: string | null;
+  readonly mapping_id: string | null;
+  readonly mapping_fingerprint: string | null;
+  readonly question: string;
+  readonly basis_fingerprint: string;
+  readonly issued_at: string;
+  readonly expires_at: string;
+}
+
+export interface GrowthLearningResult {
+  readonly contract_version: "growth-learning-v1";
+  readonly status: "candidate" | "no_candidate";
+  readonly candidate: GrowthLearningCandidate | null;
+  readonly no_candidate_code: string | null;
+}
+
+export type GrowthLearningDisposition = "ignore" | "reject" | "review" | "answer";
+
+export interface GrowthLearningResolutionResponse {
+  readonly candidate_id: string;
+  readonly disposition: GrowthLearningDisposition;
+  readonly answer_draft: { readonly candidate_id: string; readonly text: string } | null;
+  readonly handoff: {
+    readonly candidate_id: string;
+    readonly kind: "relation_review" | "personal_memory_review";
+    readonly selector: StatedObservedMappingSelector | null;
+  } | null;
+}
+
 export interface SelfRetrievalClaim {
   readonly dimension?: string;
   readonly claim?: string;
@@ -655,6 +915,167 @@ export function confirmStatedObservedMapping(
     },
     fetcher,
     "Не удалось принять сопоставление.",
+    signal,
+  );
+}
+
+export function loadGrowthGoals(
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<GrowthGoalsResponse> {
+  return requestJson(
+    "/api/growth/goals",
+    "growth-engine-v1",
+    {},
+    fetcher,
+    "Не удалось загрузить текущие цели.",
+    signal,
+  );
+}
+
+export function loadGrowthMappingStatus(
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<GrowthMappingStatusResponse> {
+  return requestJson(
+    "/api/growth/mappings/status",
+    "growth-engine-v1",
+    {},
+    fetcher,
+    "Не удалось загрузить состояние сопоставлений Growth.",
+    signal,
+  );
+}
+
+export function loadGrowth(
+  goalSourceUuid: string,
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<GrowthResponse> {
+  return requestJson(
+    "/api/growth",
+    "growth-engine-v1",
+    {
+      contract_version: "growth-engine-v1",
+      selection: { mode: "selected_goal", source_note_uuid: goalSourceUuid },
+      max_results: 200,
+      max_result_bytes: 131072,
+    },
+    fetcher,
+    "Не удалось построить текущую картину Growth.",
+    signal,
+  );
+}
+
+export function reviewGrowthMapping(
+  selector: StatedObservedMappingSelector,
+  relation: GrowthRelation,
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<GrowthMappingReviewResponse> {
+  return requestJson(
+    "/api/growth/mappings/review",
+    "growth-engine-v1",
+    { ...selector, relation },
+    fetcher,
+    "Не удалось подготовить проверку связи Growth.",
+    signal,
+  );
+}
+
+export function confirmGrowthMapping(
+  selector: StatedObservedMappingSelector,
+  relation: GrowthRelation,
+  operationId: string,
+  reviewFingerprint: string,
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<GrowthMappingAcceptedResponse> {
+  return requestJson(
+    "/api/growth/mappings/confirm",
+    "growth-engine-v1",
+    {
+      ...selector,
+      operation_id: operationId,
+      relation,
+      confirmed: true,
+      review_fingerprint: reviewFingerprint,
+      supersedes_mapping_id: null,
+    },
+    fetcher,
+    "Связь Growth не принята. Повтори review.",
+    signal,
+  );
+}
+
+export function previewGrowthAdvisor(
+  request: GrowthAdvisorRequest,
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<GrowthAdvisorPreviewResponse> {
+  return requestJson(
+    "/api/growth-advisor/preview",
+    "growth-advisor-v1",
+    request,
+    fetcher,
+    "Не удалось подготовить независимую рекомендацию.",
+    signal,
+  );
+}
+
+export function executeGrowthAdvisor(
+  request: GrowthAdvisorRequest,
+  preview: GrowthAdvisorPreviewResponse,
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<GrowthAdvisorBranchResponse> {
+  return requestJson(
+    "/api/growth-advisor/execute",
+    "growth-advisor-v1",
+    { request, preview, confirmed: true },
+    fetcher,
+    "Независимая рекомендация недоступна.",
+    signal,
+  );
+}
+
+export function requestGrowthLearningQuestion(
+  request: GrowthLearningRequest,
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<GrowthLearningResult> {
+  return requestJson(
+    "/api/growth-learning/questions",
+    "growth-learning-v1",
+    request,
+    fetcher,
+    "Не удалось подготовить вопрос Growth.",
+    signal,
+  );
+}
+
+export function resolveGrowthLearningQuestion(
+  request: GrowthLearningRequest,
+  candidate: GrowthLearningCandidate,
+  disposition: GrowthLearningDisposition,
+  answer: string | null,
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<GrowthLearningResolutionResponse> {
+  return requestJson(
+    "/api/growth-learning/questions/resolve",
+    "growth-learning-v1",
+    {
+      request,
+      candidate,
+      resolution: {
+        candidate_id: candidate.candidate_id,
+        disposition,
+        answer,
+      },
+    },
+    fetcher,
+    "Не удалось завершить вопрос Growth.",
     signal,
   );
 }
