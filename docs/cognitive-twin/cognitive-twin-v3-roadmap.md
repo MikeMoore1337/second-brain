@@ -71,8 +71,9 @@ Stage 12 не переносит progress fields в исходный Goal и н�
 
 ## Stage 13 — Decision Compass / Compare v2
 
-**Статус:** PLANNED / NOT STARTED. Depends on Stage 12 contract and bounded
-runtime.
+**Статус:** DESIGN CONTRACT COMPLETE in Issue #296 via
+[compare-v2-contract.md](compare-v2-contract.md); Stage 13 runtime is NOT
+STARTED. Runtime still depends on a separate implementation gate.
 
 Stage 13 может собрать в owner-only decision context:
 
@@ -86,8 +87,9 @@ Stage 13 может собрать в owner-only decision context:
 Это будет composition/read model, а не hidden winner, ranking oracle или
 универсальный score. Запрещены silent recommendation writes, fuzzy Goal
 retargeting, provider payload expansion и смешение progress with outcome
-judgement. Future normative design should live in a dedicated Compare v2 /
-GrowthCompare contract.
+judgement. Нормативная граница зафиксирована в отдельном
+[Compare v2 / GrowthCompare v1 contract](compare-v2-contract.md); этот
+design gate не запускает Stage 13A runtime, Web/API/UI или provider work.
 
 ## Stage 14 — Personal Experiments
 
