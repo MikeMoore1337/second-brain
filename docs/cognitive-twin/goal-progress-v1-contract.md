@@ -1,6 +1,7 @@
 # Cognitive Twin v3 / Stage 12 — Goal Progress & Structured Outcomes v1
 
-Статус: **STAGE 12C COMPLETE**.
+Статус: **STAGE 12D COMPLETE**; Stage 12C remains a provider-free private
+read-only implementation slice within the same Stage 12 boundary.
 
 Issue: [#277](https://github.com/MikeMoore1337/second-brain/issues/277).
 Implementation issue: [#284](https://github.com/MikeMoore1337/second-brain/issues/284).
@@ -8,6 +9,11 @@ Stage 12C implementation issue: [#287](https://github.com/MikeMoore1337/second-b
 Stage 12C implementation PR: [#288](https://github.com/MikeMoore1337/second-brain/pull/288).
 Stage 12D implementation issue: [#290](https://github.com/MikeMoore1337/second-brain/issues/290).
 Stage 12D composition contract: [growth-goal-progress-composition-v1-contract.md](growth-goal-progress-composition-v1-contract.md).
+Stage 12D implementation PR: [#291](https://github.com/MikeMoore1337/second-brain/pull/291), merged as
+`d78da72fef9f080bedfbd3ad1c87d40e49d227e8`.
+Stage 12D post-merge CI: [run #34877206164](https://github.com/MikeMoore1337/second-brain/actions/runs/34877206164).
+Stage 12D production deploy: [run #34877425776](https://github.com/MikeMoore1337/second-brain/actions/runs/34877425776);
+non-mutating `/healthz` returned HTTP 200 with `{"status":"ok"}`.
 Implementation base: `origin/main` SHA `eadeeb04ec76df1793c3b7909dc1f0728460aba5`.
 Stage 12A implementation PR: [#280](https://github.com/MikeMoore1337/second-brain/pull/280), merged as
 `bdde50f2e3de3953dddf1ba58b4e9b371ea050ad`.
@@ -27,10 +33,9 @@ contract, не создаёт канонические записи автома
 `second-brain-vault`.
 Stage 12A прошёл required CI, post-merge evidence, standard production deploy и
 non-mutating `/healthz`; Stage 12C завершён как provider-free private
-read-only implementation slice. Stage 12D реализуется как отдельный bounded
-read-only composition slice в Issue #290; PR, merge и production closeout
-остаются pending на момент этого implementation document. Stage 12E остаётся
-отдельным gate.
+read-only implementation slice. Stage 12D завершён как отдельный bounded
+read-only composition slice в Issue #290 / PR #291 с exact post-merge и
+production evidence. Stage 12E остаётся отдельным gate.
 
 ## Normative source map
 
@@ -77,7 +82,7 @@ Stage 12 не пытается ответить на вопросы «хорош
 - embeddings, vector DB, new database, hidden operational persistence;
 - изменение second-brain-vault, release directories, environment или
   systemd contract;
-- Stage 12D–12E runtime, Web/API surface или Stage 13+ implementation.
+- Stage 12E Web/API surface или Stage 13+ implementation.
 
 ## 2. Terms and authority
 
@@ -762,14 +767,15 @@ precedence, bounded provenance, current-vault reread, explicit Goal UUID and
 UTC `as_of`. Provider-free A/B/C temporary-vault integration tests and
 same-event conflict/request tests are included. There is no automatic capture.
 
-### Stage 12D — Growth + Goal Progress composition v1 — IMPLEMENTATION IN PROGRESS
+### Stage 12D — Growth + Goal Progress composition v1 — COMPLETE
 
-Issue #290 defines the narrow side-by-side composition surface after green
-12A–12C. It returns the existing Growth Engine and Goal Progress results for
-one explicit current Goal, with exact identity revalidation and no cross-branch
-inference. Do not make Goal Progress an implicit input to Advisor or Learning,
-and do not expand private payloads without a separate review. The normative
-details are in [growth-goal-progress-composition-v1-contract.md](growth-goal-progress-composition-v1-contract.md).
+Issue #290 / PR #291 defines and implements the narrow side-by-side composition
+surface after green 12A–12C. It returns the existing Growth Engine and Goal
+Progress results for one explicit current Goal, with exact identity
+revalidation and no cross-branch inference. Do not make Goal Progress an
+implicit input to Advisor or Learning, and do not expand private payloads
+without a separate review. The normative details are in
+[growth-goal-progress-composition-v1-contract.md](growth-goal-progress-composition-v1-contract.md).
 
 ### Stage 12E — Web/API QA and closeout
 
@@ -777,7 +783,7 @@ Add exact integration tests, frontend states, security checks, required CI,
 deployment/env audit and closeout evidence. A production release remains
 owner-gated by the repository lifecycle.
 
-Stage 12D is separately authorized by Issue #290; Stage 12E remains separately
+Stage 12D is complete under Issue #290 / PR #291; Stage 12E remains separately
 gated. This contract does not start Stage 13+ work.
 
 ## 23. Decision register
@@ -812,7 +818,7 @@ true in the implementation PR:
 - no change to second-brain-vault;
 - no new environment variable or systemd requirement;
 - no unrelated runtime or dependency change;
-- env change required: no unless a later diff proves otherwise;
+- env change required: no;
 - final checks run with Python 3.14 and exact-head CI evidence;
 - no Codex Review request, Vault Sync or next-stage auto-start.
 
@@ -836,11 +842,14 @@ Stage 12B post-merge CI: PASS (run #34851102286)
 Stage 12B production deploy: PASS (run #34851314130)
 Stage 12B `/healthz`: HTTP 200
 Stage 12C implementation: COMPLETE (PR #288; private read model, no release route)
-Stage 12D implementation: IN PROGRESS (Issue #290; bounded composition, delivery pending)
+Stage 12D implementation: COMPLETE (Issue #290, PR #291, merge SHA `d78da72fef9f080bedfbd3ad1c87d40e49d227e8`)
+Stage 12D post-merge CI: PASS (run #34877206164)
+Stage 12D production deploy: PASS (run #34877425776)
+Stage 12D `/healthz`: HTTP 200 (`{"status":"ok"}`)
 Stage 12E started: NO
 Stage 13+ started: NO
 HUMAN_REQUIRED: NO; Stage 12B implementation and production closeout are
 complete, Stage 12C is a provider-free read-only implementation slice, and
-Stage 12D is being delivered as a separate read-only composition slice;
-no additional user decision is required
+Stage 12D is a completed separate read-only composition slice; no additional
+user decision is required
 ~~~
