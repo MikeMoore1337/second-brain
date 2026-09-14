@@ -67,6 +67,34 @@ from second_brain.entrypoints.web.cognitive_twin import (
     build_production_stated_observed_mapping_service,
     install_cognitive_twin_routes,
 )
+from second_brain.entrypoints.web.goal_progress import (
+    GOAL_PROGRESS_DEFINITION_APPLY_PATH,
+    GOAL_PROGRESS_DEFINITION_PREPARE_PATH,
+    GOAL_PROGRESS_OBSERVATION_APPLY_PATH,
+    GOAL_PROGRESS_OBSERVATION_PREPARE_PATH,
+    GOAL_PROGRESS_PATH,
+    GOAL_PROGRESS_REQUEST_HEADER_NAME,
+    GOAL_PROGRESS_REQUEST_HEADER_VALUE,
+    GROWTH_GOAL_PROGRESS_PATH,
+    GROWTH_GOAL_PROGRESS_REQUEST_HEADER_VALUE,
+    MAX_GOAL_PROGRESS_APPLY_RESPONSE_BYTES,
+    MAX_GOAL_PROGRESS_READ_RESPONSE_BYTES,
+    MAX_GOAL_PROGRESS_REVIEW_PLAN_BYTES,
+    MAX_GOAL_PROGRESS_REVIEW_RESPONSE_BYTES,
+    MAX_GROWTH_GOAL_PROGRESS_RESPONSE_BYTES,
+    MAX_RAW_GOAL_PROGRESS_BODY_BYTES,
+    GoalProgressApplyPayload,
+    GoalProgressDefinitionPreparePayload,
+    GoalProgressObservationPreparePayload,
+    GoalProgressReadPayload,
+    GoalProgressRequestBoundaryMiddleware,
+    GoalProgressReviewStore,
+    GoalProgressWebService,
+    GrowthGoalProgressPayload,
+    ProductionGoalProgressWebService,
+    build_production_goal_progress_web_service,
+    install_goal_progress_routes,
+)
 from second_brain.entrypoints.web.growth import (
     GROWTH_ENGINE_PATH,
     GROWTH_GOALS_PATH,
@@ -220,6 +248,7 @@ def create_app(**kwargs: Any) -> FastAPI:
     growth_advisor_service = kwargs.pop("growth_advisor_service", None)
     growth_service = kwargs.pop("growth_web_service", None)
     growth_learning_service = kwargs.pop("growth_learning_web_service", None)
+    goal_progress_service = kwargs.pop("goal_progress_web_service", None)
     auth_config = kwargs.pop("web_auth_config", None)
     auth_gateway = kwargs.pop("web_auth_gateway", None)
     auth_clock = kwargs.pop("web_auth_clock", None)
@@ -278,6 +307,12 @@ def create_app(**kwargs: Any) -> FastAPI:
     install_growth_learning_routes(
         app,
         service=growth_learning_service,
+        env_file=env_file,
+        vault_path_override=vault_path_override,
+    )
+    install_goal_progress_routes(
+        app,
+        service=goal_progress_service,
         env_file=env_file,
         vault_path_override=vault_path_override,
     )
@@ -411,6 +446,32 @@ __all__ = [
     "ProductionGrowthLearningWebService",
     "build_production_growth_learning_service",
     "install_growth_learning_routes",
+    "GOAL_PROGRESS_PATH",
+    "GROWTH_GOAL_PROGRESS_PATH",
+    "GOAL_PROGRESS_DEFINITION_PREPARE_PATH",
+    "GOAL_PROGRESS_DEFINITION_APPLY_PATH",
+    "GOAL_PROGRESS_OBSERVATION_PREPARE_PATH",
+    "GOAL_PROGRESS_OBSERVATION_APPLY_PATH",
+    "GOAL_PROGRESS_REQUEST_HEADER_NAME",
+    "GOAL_PROGRESS_REQUEST_HEADER_VALUE",
+    "GROWTH_GOAL_PROGRESS_REQUEST_HEADER_VALUE",
+    "MAX_RAW_GOAL_PROGRESS_BODY_BYTES",
+    "MAX_GOAL_PROGRESS_READ_RESPONSE_BYTES",
+    "MAX_GOAL_PROGRESS_REVIEW_PLAN_BYTES",
+    "MAX_GROWTH_GOAL_PROGRESS_RESPONSE_BYTES",
+    "MAX_GOAL_PROGRESS_REVIEW_RESPONSE_BYTES",
+    "MAX_GOAL_PROGRESS_APPLY_RESPONSE_BYTES",
+    "GoalProgressReadPayload",
+    "GrowthGoalProgressPayload",
+    "GoalProgressDefinitionPreparePayload",
+    "GoalProgressObservationPreparePayload",
+    "GoalProgressApplyPayload",
+    "GoalProgressRequestBoundaryMiddleware",
+    "GoalProgressReviewStore",
+    "GoalProgressWebService",
+    "ProductionGoalProgressWebService",
+    "build_production_goal_progress_web_service",
+    "install_goal_progress_routes",
     "WebAuthConfig",
     "create_app",
 ]
