@@ -11,6 +11,19 @@ PASS for the same exact SHA. Non-mutating
 [`GET /healthz`](https://brain.mikemoore.top/healthz): HTTP 200,
 `{"status":"ok"}`. `env change required: no`.
 
+Stage 12E transport/UI and integration closeout is complete separately in
+[PR #294](https://github.com/MikeMoore1337/second-brain/pull/294), merged as
+`6068e1298ea3637d413498b72f397690a0278172`; its PR CI #34885895217,
+post-merge CI
+[#34886130422](https://github.com/MikeMoore1337/second-brain/actions/runs/34886130422)
+and automatic production deploy
+[#34886348462](https://github.com/MikeMoore1337/second-brain/actions/runs/34886348462)
+passed for the exact SHA. Non-mutating production smoke on 2026-09-14 22:24
+MSK returned `/healthz` HTTP 200 and HTTP 401 `AUTH_REQUIRED` for anonymous
+requests to both private composition/progress routes. No new dependency,
+environment key, schema/NoteType, systemd change or vault write was required;
+`env change required: no`.
+
 Документ задаёт нормативный read-only composition contract; Stage 12E и Stage
 13+ этим документом не запускаются.
 
@@ -179,8 +192,10 @@ unchanged, definition-missing и insufficient/milestone progress states;
 детерминированный JSON/fingerprint, size bound и отсутствие forbidden
 интеграций/side effects.
 
-Stage 12E (Goal Progress экран, forms, HTTP/API/UI или иная следующая
-интеграция) остаётся отдельным будущим scope и этим contract не начат.
+Stage 12E (Goal Progress экран, forms и bounded HTTP/API/UI) завершён отдельным
+implementation contract/slice в PR #294. Этот composition contract остаётся
+нормативным только для read-only side-by-side composition и не расширяется до
+transport, Advisor, Learning или Stage 13.
 
 ## 13. Delivery closeout
 
@@ -189,3 +204,10 @@ Stage 12D implementation и production closeout завершены в PR #291 п
 Мердженный и deployed SHA совпадают: `d78da72fef9f080bedfbd3ad1c87d40e49d227e8`.
 Канонический `second-brain-vault` не изменялся; production environment и
 systemd contract не требовали изменений (`env change required: no`).
+
+Stage 12E implementation и production closeout завершены в PR #294 после
+успешных required checks, post-merge CI #34886130422 и standard automatic
+production deploy #34886348462 для merge SHA
+`6068e1298ea3637d413498b72f397690a0278172`. Private routes требуют auth,
+review/apply остаются explicit и owner-bound; production smoke не создавал
+definition/observation и не изменял vault.
