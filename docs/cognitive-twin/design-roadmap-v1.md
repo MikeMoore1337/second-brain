@@ -1492,7 +1492,7 @@ Stage 11A Current Goal identity/context core = COMPLETE
 Stage 11B Goal-to-choice relation + friction read model = COMPLETE
 Stage 11C0 Growth Advisor privacy/payload/provenance design = COMPLETE
 Stage 11C Growth Advisor runtime = COMPLETE
-Stage 13 Decision Compass / Compare v2 / GrowthCompare v1 design contract = COMPLETE (Issue #296; implementation NOT STARTED)
+Stage 13 Decision Compass / Compare v2 / GrowthCompare v1 design contract = COMPLETE (Issue #296); Stage 13A provider-free implementation = IN PR #305 (Issue #299); Stages 13B–13E = NOT STARTED
 Stage 11D0 Growth Learning / Question design = COMPLETE
 Stage 11D Growth Learning runtime = COMPLETE
 Stage 11E Web/API + integration QA/closeout = COMPLETE
@@ -1547,7 +1547,7 @@ Stage 12B Safe Write = COMPLETE (Issue #284, PR #285, merge SHA `1832dc66de2ea25
 Stage 12C private read surface = COMPLETE (Issue #287, PR #288; no provider/network/write)
 Stage 12D Growth + Goal Progress composition = COMPLETE (Issue #290, PR #291, merge SHA `d78da72fef9f080bedfbd3ad1c87d40e49d227e8`, deployed)
 Stage 12E Web/API QA + closeout = COMPLETE (Issue #293, PR #294, merged/deployed)
-Stage 13 Decision Compass / Compare v2 / GrowthCompare v1 design contract = COMPLETE (Issue #296; implementation NOT STARTED)
+Stage 13 Decision Compass / Compare v2 / GrowthCompare v1 design contract = COMPLETE (Issue #296); Stage 13A provider-free implementation = IN PR #305 (Issue #299); Stages 13B–13E = NOT STARTED
 Stage 14 Personal Experiments = NOT STARTED
 Stage 15 Adaptive Twin = NOT STARTED
 ~~~

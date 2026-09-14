@@ -627,7 +627,8 @@ def test_advisor_learning_and_writer_boundaries_are_not_invoked(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from second_brain.application import growth_advisor, growth_learning
+    import second_brain.application.growth_advisor as growth_advisor
+    import second_brain.application.growth_learning as growth_learning
 
     calls = {"advisor": 0, "learning": 0, "writer": 0}
 
