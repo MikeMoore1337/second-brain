@@ -8,8 +8,11 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from enum import StrEnum
 from pathlib import PurePosixPath
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID
+
+if TYPE_CHECKING:
+    from second_brain.application.goal_progress import DefinitionRecordV1, ObservationRecordV1
 
 _RFC3339_PATTERN = re.compile(
     r"\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}"
@@ -141,6 +144,8 @@ class NoteRecord:
     personal_memory: PersonalMemoryMetadata | None = None
     decision_journal: DecisionJournalRecord | None = None
     outcome_observation: OutcomeObservationRecord | None = None
+    goal_progress_definition: DefinitionRecordV1 | None = None
+    goal_progress_observation: ObservationRecordV1 | None = None
 
     @property
     def personal_memory_metadata(self) -> PersonalMemoryMetadata | None:

@@ -15,6 +15,16 @@ from second_brain.application.decision_journal import (
     parse_decision_journal_body,
     parse_outcome_observation_body,
 )
+from second_brain.application.goal_progress import (
+    GOAL_PROGRESS_DIAGNOSTIC_MESSAGES,
+    DefinitionRecordV1,
+    GoalProgressRecordError,
+    ObservationRecordV1,
+    parse_goal_progress_record,
+    validate_definition_chain,
+    validate_observation_against_definition,
+    validate_observation_chain,
+)
 from second_brain.application.personal_memory import (
     personal_memory_diagnostic_message,
     validate_canonical_personal_memory_fields,
@@ -51,6 +61,7 @@ def build_report(snapshot: VaultSnapshot) -> ScanReport:
     _report_attachment_diagnostics(snapshot.attachments, snapshot.manifest, diagnostics)
     _report_duplicate_ids(notes, diagnostics)
     _report_stage2_relations(notes, diagnostics)
+    _report_goal_progress_relations(notes, diagnostics)
     _report_link_diagnostics(notes, snapshot.attachments, snapshot.links, diagnostics)
     return ScanReport(
         vault_path=snapshot.vault_path,
@@ -96,6 +107,12 @@ def _validate_document(
         document.relative_path,
         diagnostics,
     )
+    goal_progress_definition, goal_progress_observation = _parse_goal_progress(
+        data,
+        note_id,
+        document.relative_path,
+        diagnostics,
+    )
     return NoteRecord(
         relative_path=document.relative_path,
         front_matter=data,
@@ -109,6 +126,8 @@ def _validate_document(
         personal_memory=personal_memory,
         decision_journal=decision_journal,
         outcome_observation=outcome_observation,
+        goal_progress_definition=goal_progress_definition,
+        goal_progress_observation=goal_progress_observation,
     )
 
 
@@ -166,6 +185,46 @@ def _parse_personal_memory(
                 )
             )
     return metadata, decision_journal, outcome_observation
+
+
+def _parse_goal_progress(
+    data: Mapping[str, Any],
+    note_id: UUID | None,
+    path: str,
+    diagnostics: list[Diagnostic],
+) -> tuple[DefinitionRecordV1 | None, ObservationRecordV1 | None]:
+    """Parse only exact marker-enrolled Stage 12A companion records."""
+
+    try:
+        record = parse_goal_progress_record(data, note_id=note_id)
+    except GoalProgressRecordError as exc:
+        diagnostics.append(
+            Diagnostic(
+                exc.code,
+                GOAL_PROGRESS_DIAGNOSTIC_MESSAGES.get(
+                    exc.code,
+                    GOAL_PROGRESS_DIAGNOSTIC_MESSAGES["GOAL_PROGRESS_INVALID_RECORD"],
+                ),
+                DiagnosticSeverity.ERROR,
+                path,
+            )
+        )
+        return None, None
+    except TypeError, ValueError, UnicodeError:
+        diagnostics.append(
+            Diagnostic(
+                "GOAL_PROGRESS_INVALID_RECORD",
+                GOAL_PROGRESS_DIAGNOSTIC_MESSAGES["GOAL_PROGRESS_INVALID_RECORD"],
+                DiagnosticSeverity.ERROR,
+                path,
+            )
+        )
+        return None, None
+    if type(record) is DefinitionRecordV1:
+        return record, None
+    if type(record) is ObservationRecordV1:
+        return None, record
+    return None, None
 
 
 def _parse_note_id(data: dict[str, Any], path: str, diagnostics: list[Diagnostic]) -> UUID | None:
@@ -484,6 +543,135 @@ def _report_stage2_relations(
                     outcome_note.relative_path,
                 )
             )
+
+
+def _report_goal_progress_relations(
+    notes: Iterable[NoteRecord],
+    diagnostics: list[Diagnostic],
+) -> None:
+    """Validate exact Stage 12A cross-record bindings and replacement chains."""
+
+    current_notes = tuple(notes)
+    definitions = tuple(
+        record
+        for _, record in sorted(
+            (
+                (note.relative_path, note.goal_progress_definition)
+                for note in current_notes
+                if note.goal_progress_definition is not None
+            ),
+            key=lambda item: (str(item[1].id), item[0]),
+        )
+    )
+    observations = tuple(
+        record
+        for _, record in sorted(
+            (
+                (note.relative_path, note.goal_progress_observation)
+                for note in current_notes
+                if note.goal_progress_observation is not None
+            ),
+            key=lambda item: (str(item[1].id), item[0]),
+        )
+    )
+    paths_by_id: dict[UUID, str] = {}
+    for note in sorted(current_notes, key=lambda item: item.relative_path):
+        if note.note_id is not None:
+            paths_by_id.setdefault(note.note_id, note.relative_path)
+
+    definitions_by_id: dict[UUID, list[DefinitionRecordV1]] = defaultdict(list)
+    for definition in definitions:
+        definitions_by_id[cast(UUID, definition.id)].append(definition)
+
+    for observation in observations:
+        observation_definition_id = cast(UUID, observation.progress_definition_id)
+        matches = definitions_by_id.get(observation_definition_id, [])
+        if len(matches) != 1:
+            _append_goal_progress_diagnostic(
+                diagnostics,
+                "GOAL_PROGRESS_DEFINITION_NOT_FOUND",
+                paths_by_id.get(cast(UUID, observation.id)),
+            )
+            continue
+        for issue in validate_observation_against_definition(observation, matches[0]):
+            _append_goal_progress_diagnostic(
+                diagnostics,
+                issue,
+                paths_by_id.get(cast(UUID, observation.id)),
+            )
+
+    definition_groups: defaultdict[tuple[UUID, str], list[DefinitionRecordV1]] = defaultdict(list)
+    for definition in definitions:
+        definition_groups[
+            (
+                cast(UUID, definition.goal_source_uuid),
+                definition.goal_identity_fingerprint,
+            )
+        ].append(definition)
+    for definition_group_key in sorted(
+        definition_groups,
+        key=lambda item: (str(item[0]), item[1]),
+    ):
+        definition_group = definition_groups[definition_group_key]
+        result = validate_definition_chain(definition_group)
+        if result.issues:
+            for issue in result.issues:
+                _append_goal_progress_diagnostic(
+                    diagnostics,
+                    issue,
+                    paths_by_id.get(cast(UUID, definition_group[0].id)),
+                )
+        elif result.state.value == "multiple_active":
+            _append_goal_progress_diagnostic(
+                diagnostics,
+                "GOAL_PROGRESS_DEFINITION_CONFLICT",
+                paths_by_id.get(cast(UUID, definition_group[0].id)),
+            )
+
+    observation_groups: defaultdict[tuple[UUID, str, UUID], list[ObservationRecordV1]] = (
+        defaultdict(list)
+    )
+    for observation in observations:
+        observation_groups[
+            (
+                cast(UUID, observation.goal_source_uuid),
+                observation.goal_identity_fingerprint,
+                cast(UUID, observation.progress_definition_id),
+            )
+        ].append(observation)
+    for observation_group_key in sorted(
+        observation_groups,
+        key=lambda item: (str(item[0]), item[1], str(item[2])),
+    ):
+        observation_group = observation_groups[observation_group_key]
+        result = validate_observation_chain(observation_group)
+        for issue in result.issues:
+            _append_goal_progress_diagnostic(
+                diagnostics,
+                issue,
+                paths_by_id.get(cast(UUID, observation_group[0].id)),
+            )
+
+
+def _append_goal_progress_diagnostic(
+    diagnostics: list[Diagnostic],
+    code: str,
+    path: str | None,
+) -> None:
+    """Append one fixed Stage 12 diagnostic without exposing record payloads."""
+
+    if code.startswith("GOAL_PROGRESS_CHAIN_"):
+        message = GOAL_PROGRESS_DIAGNOSTIC_MESSAGES.get(
+            code,
+            GOAL_PROGRESS_DIAGNOSTIC_MESSAGES["GOAL_PROGRESS_OBSERVATION_INVALID"],
+        )
+    else:
+        message = GOAL_PROGRESS_DIAGNOSTIC_MESSAGES.get(
+            code,
+            GOAL_PROGRESS_DIAGNOSTIC_MESSAGES["GOAL_PROGRESS_INVALID_RECORD"],
+        )
+    severity = DiagnosticSeverity.ERROR
+    diagnostics.append(Diagnostic(code, message, severity, path))
 
 
 def _report_link_diagnostics(

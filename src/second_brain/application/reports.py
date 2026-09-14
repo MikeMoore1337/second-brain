@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
+from second_brain.application.goal_progress import DefinitionRecordV1, ObservationRecordV1
 from second_brain.domain.models import (
     AttachmentRecord,
     DecisionJournalRecord,
@@ -237,6 +238,36 @@ class ScanReport:
 
         return tuple(
             note.outcome_observation for note in self.notes if note.outcome_observation is not None
+        )
+
+    @property
+    def goal_progress_definitions(self) -> tuple[DefinitionRecordV1, ...]:
+        """Вернуть deterministic Stage 12A definition projections текущего scan."""
+
+        return tuple(
+            sorted(
+                (
+                    note.goal_progress_definition
+                    for note in self.notes
+                    if note.goal_progress_definition is not None
+                ),
+                key=lambda record: str(record.id),
+            )
+        )
+
+    @property
+    def goal_progress_observations(self) -> tuple[ObservationRecordV1, ...]:
+        """Вернуть deterministic Stage 12A observation projections текущего scan."""
+
+        return tuple(
+            sorted(
+                (
+                    note.goal_progress_observation
+                    for note in self.notes
+                    if note.goal_progress_observation is not None
+                ),
+                key=lambda record: str(record.id),
+            )
         )
 
     def as_dict(self) -> dict[str, Any]:
