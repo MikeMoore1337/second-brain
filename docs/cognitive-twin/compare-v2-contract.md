@@ -2,9 +2,10 @@
 # Decision Compass / Compare v2 / GrowthCompare v1
 
 **Статус:** DESIGN / NORMATIVE CONTRACT GATE COMPLETE; отдельная реализация
-Stage 13A без провайдера ведётся в рамках [Issue #299](https://github.com/MikeMoore1337/second-brain/issues/299)
-и [PR #305](https://github.com/MikeMoore1337/second-brain/pull/305). Этапы
-13B–13E остаются **NOT STARTED**.
+Stage 13A без провайдера завершена в [Issue #299](https://github.com/MikeMoore1337/second-brain/issues/299)
+и [PR #305](https://github.com/MikeMoore1337/second-brain/pull/305), merge SHA
+`9444a0936ed0df6ecf3a84fb65eb8bbd6d910e6f`. Post-merge CI `34900681934`,
+production deploy `34900890972`; этапы 13B–13E остаются **NOT STARTED**.
 
 **Issue:** [#296](https://github.com/MikeMoore1337/second-brain/issues/296)
 
@@ -911,8 +912,8 @@ commands required by AGENTS.md. No live provider, vault, Web/API, browser,
 physical-device or production behavior claim is made by the contract.
 
 Ниже приведён исторический acceptance record для design-гейта Issue #296.
-Отдельная авторизованная реализация Stage 13A отслеживается в Issue #299 и PR
-#305; она не меняет этот нормативный контракт и не авторизует этапы 13B–13E.
+Отдельная авторизованная реализация Stage 13A завершена в Issue #299 и PR #305;
+она не меняет этот нормативный контракт и не авторизует этапы 13B–13E.
 
 The final delivery report must explicitly state:
 

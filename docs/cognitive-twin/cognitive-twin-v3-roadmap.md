@@ -73,9 +73,10 @@ Stage 12 не переносит progress fields в исходный Goal и н�
 
 **Статус:** DESIGN CONTRACT COMPLETE in Issue #296 via
 [compare-v2-contract.md](compare-v2-contract.md); Stage 13A provider-free core
-is implemented under [Issue #299](https://github.com/MikeMoore1337/second-brain/issues/299)
-and [PR #305](https://github.com/MikeMoore1337/second-brain/pull/305). Stages
-13B–13E remain NOT STARTED.
+is COMPLETE under [Issue #299](https://github.com/MikeMoore1337/second-brain/issues/299)
+and [PR #305](https://github.com/MikeMoore1337/second-brain/pull/305), merge SHA
+`9444a0936ed0df6ecf3a84fb65eb8bbd6d910e6f`, post-merge CI `34900681934`,
+production deploy `34900890972`. Stages 13B–13E remain NOT STARTED.
 
 Stage 13 может собрать в owner-only decision context:
 
@@ -92,8 +93,9 @@ retargeting, provider payload expansion и смешение progress with outcom
 judgement. Нормативная граница зафиксирована в отдельном
 [Compare v2 / GrowthCompare v1 contract](compare-v2-contract.md); исходный
 design gate не запускал Stage 13A runtime, Web/API/UI или provider work.
-Отдельный implementation gate Stage 13A зафиксирован в PR #305; он не
-запускает Stage 13B–13E.
+Отдельный implementation gate Stage 13A зафиксирован в PR #305 и завершён с
+merge SHA `9444a0936ed0df6ecf3a84fb65eb8bbd6d910e6f`; он не запускает Stage
+13B–13E.
 
 ## Stage 14 — Personal Experiments
 
