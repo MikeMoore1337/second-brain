@@ -1,16 +1,18 @@
 # Cognitive Twin v3 / Stage 12 — Goal Progress & Structured Outcomes v1
 
-Статус: **STAGE 12B IMPLEMENTATION COMPLETE**.
+Статус: **STAGE 12B COMPLETE**.
 
 Issue: [#277](https://github.com/MikeMoore1337/second-brain/issues/277).
 Implementation issue: [#284](https://github.com/MikeMoore1337/second-brain/issues/284).
 Implementation base: `origin/main` SHA `c7fc135dc1c26475794e780357b668e94077b52c`.
 Stage 12A implementation PR: [#280](https://github.com/MikeMoore1337/second-brain/pull/280), merged as
 `bdde50f2e3de3953dddf1ba58b4e9b371ea050ad`.
-Stage 12B implementation PR: [#285](https://github.com/MikeMoore1337/second-brain/pull/285), merge pending.
-Post-merge CI: run [#34841812341](https://github.com/MikeMoore1337/second-brain/actions/runs/34841812341).
-Production deploy: run [#34842008063](https://github.com/MikeMoore1337/second-brain/actions/runs/34842008063);
-`/healthz` returned HTTP 200 with `{"status":"ok"}`.
+Stage 12B implementation PR: [#285](https://github.com/MikeMoore1337/second-brain/pull/285), merged as
+`1832dc66de2ea25b41bb0d613ea77aae4dcd1fe2`.
+Stage 12B post-merge CI: run [#34851102286](https://github.com/MikeMoore1337/second-brain/actions/runs/34851102286).
+Stage 12B production deploy: run [#34851314130](https://github.com/MikeMoore1337/second-brain/actions/runs/34851314130);
+deployed SHA `1832dc66de2ea25b41bb0d613ea77aae4dcd1fe2`; non-mutating `/healthz`
+returned HTTP 200 with `{"status":"ok"}`.
 
 Этот документ фиксирует контракт и границы Stage 12; Stage 12A остаётся
 canonical records/pure validators, а Stage 12B добавляет только explicit
@@ -807,7 +809,7 @@ Current design-gate state:
 ~~~text
 runtime changed: YES (read-only Stage 12A parser, validators and scan projections)
 canonical schema changed: NO (additive marker, no NoteType/schema_version change)
-Safe Write changed: NO
+Safe Write changed: YES (Stage 12B capability; generic semantics unchanged)
 provider/network changed: NO
 vault changed: NO
 environment changed: NO
@@ -817,8 +819,12 @@ Stage 12A implementation: COMPLETE (PR #280 merged and deployed)
 Stage 12A post-merge CI: PASS
 Stage 12A production deploy: PASS
 Stage 12A `/healthz`: HTTP 200
-Stage 12B–12E started: NO
+Stage 12B implementation: COMPLETE (PR #285 merged and deployed)
+Stage 12B post-merge CI: PASS (run #34851102286)
+Stage 12B production deploy: PASS (run #34851314130)
+Stage 12B `/healthz`: HTTP 200
+Stage 12C–12E started: NO
 Stage 13+ started: NO
-HUMAN_REQUIRED: NO; Stage 12A implementation and closeout are complete; no
-blocker remains
+HUMAN_REQUIRED: NO; Stage 12B implementation and production closeout are
+complete; no blocker remains
 ~~~
