@@ -1497,20 +1497,23 @@ Stage 11D0 Growth Learning / Question design = COMPLETE
 Stage 11D Growth Learning runtime = COMPLETE
 Stage 11E Web/API + integration QA/closeout = COMPLETE
 Stage 12A canonical records/validators = COMPLETE (Issue #279, PR #280, merged/deployed)
-Stage 12B–12E and Stage 13+ = NOT STARTED
+Stage 12B reviewed Safe Write = COMPLETE (Issue #284, implementation)
+Stage 12C–12E and Stage 13+ = NOT STARTED
 ```
 
-## Cognitive Twin v3 design status after Stage 12 gate
+## Cognitive Twin v3 design status after Stage 12B implementation
 
-Issue #277 defines the design boundary and Issue #279 authorizes the current
-Stage 12A implementation slice: Goal Progress & Structured Outcomes v1. The
+Issue #277 defines the design boundary, Issue #279 authorized Stage 12A, and
+Issue #284 authorizes the current Stage 12B implementation slice: Goal Progress
+& Structured Outcomes v1. The
 normative contract is
 [goal-progress-v1-contract.md](goal-progress-v1-contract.md), and the
 high-level sequence is captured in
 [cognitive-twin-v3-roadmap.md](cognitive-twin-v3-roadmap.md).
 
-Cognitive Twin v3 = IN PROGRESS: Stage 12A read-only runtime and its
-production closeout are complete; later stages remain separately gated.
+Cognitive Twin v3 = IN PROGRESS: Stage 12A read-only runtime and Stage 12B
+explicit reviewed Safe Write implementation are complete; later stages remain
+separately gated.
 
 The Stage 12 design decision is to use separate reviewed companion records
 for an explicit progress definition and explicit progress observations. They
@@ -1519,12 +1522,13 @@ V1 supports bounded numeric targets and milestone sets, requires an explicit
 baseline and exact event time, and produces only a deterministic descriptive
 read model. Existing Goal and Stage 2 Outcome authority remain unchanged.
 
-The design gate remains separate from the Stage 12A implementation gate:
+The design gate remains separate from the Stage 12A and Stage 12B
+implementation gates:
 
 ~~~text
 Stage 12 design contract = COMPLETE after Issue #277 merge
 Stage 12A canonical records/validators = COMPLETE (PR #280, merge SHA `bdde50f2e3de3953dddf1ba58b4e9b371ea050ad`)
-Stage 12B Safe Write = NOT STARTED
+Stage 12B Safe Write = COMPLETE (Issue #284 implementation)
 Stage 12C private read surface = NOT STARTED
 Stage 12D Growth composition = NOT STARTED
 Stage 12E Web/API QA + closeout = NOT STARTED
@@ -1533,7 +1537,7 @@ Stage 14 Personal Experiments = NOT STARTED
 Stage 15 Adaptive Twin = NOT STARTED
 ~~~
 
-Stage 12A adds no provider, telemetry, background watcher, automatic write-back,
-vault change, new environment variable, systemd change, Codex Review request,
-Vault Sync or next-stage issue. Stage 12B–12E and later stages remain
+Stage 12A–12B add no provider, telemetry, background watcher, automatic
+write-back, vault change, new environment variable, systemd change, Codex Review
+request, Vault Sync or next-stage issue. Stage 12C–12E and later stages remain
 separately gated.

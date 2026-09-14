@@ -22,6 +22,10 @@ from second_brain.adapters.vault.operation_lock import (
     VaultOperationLock,
     VaultOperationLockError,
 )
+from second_brain.application.goal_progress import (
+    DefinitionRecordV1,
+    ObservationRecordV1,
+)
 from second_brain.application.personal_memory import PERSONAL_MEMORY_MARKER
 from second_brain.application.writes import CreateNotePlan, WriteReceipt, WriteSafetyError
 from second_brain.domain.models import NoteType, VaultManifest
@@ -79,6 +83,43 @@ _STAGE2_CONTROLLED_FIELDS = frozenset(
         "evidence_at_precision",
         "domain",
         "decision_id",
+    }
+)
+_GOAL_PROGRESS_CONTROLLED_FIELDS = frozenset(
+    {
+        "second_brain_goal_progress",
+        "goal_progress_kind",
+        "goal_source_uuid",
+        "goal_identity_fingerprint",
+        "goal_progress_policy_fingerprint",
+        "definition_reviewed_at",
+        "progress_model",
+        "metric_id",
+        "unit",
+        "baseline",
+        "target",
+        "direction",
+        "lower_bound",
+        "upper_bound",
+        "ordering",
+        "milestones",
+        "supersedes_definition_id",
+        "progress_definition_id",
+        "definition_fingerprint",
+        "observed_at",
+        "observed_at_precision",
+        "observation_reviewed_at",
+        "value",
+        "milestone_id",
+        "state",
+        "supersedes_observation_id",
+    }
+)
+_GOAL_PROGRESS_TEMPLATE_CONTROLLED_FIELDS = frozenset(
+    {
+        *_PERSONAL_MEMORY_CONTROLLED_FIELDS,
+        *_STAGE2_CONTROLLED_FIELDS,
+        *_GOAL_PROGRESS_CONTROLLED_FIELDS,
     }
 )
 
@@ -234,6 +275,40 @@ class FileSystemVaultWriter:
                 created,
             ),
             include_precondition=True,
+        )
+
+    def prepare_goal_progress(
+        self,
+        manifest: VaultManifest,
+        record: DefinitionRecordV1 | ObservationRecordV1,
+        title: str,
+        note_id: UUID,
+        created: datetime,
+    ) -> CreateNotePlan:
+        """Подготовить companion record через обычный zettel Safe Write path."""
+
+        if type(record) not in {DefinitionRecordV1, ObservationRecordV1}:
+            raise WriteSafetyError(
+                "CREATE_INVALID_PLAN",
+                "Goal Progress record is not a supported typed record",
+            )
+        if record.id != note_id:
+            raise WriteSafetyError(
+                "CREATE_INVALID_PLAN",
+                "Goal Progress record identity does not match the note identity",
+            )
+        return self._prepare(
+            manifest,
+            NoteType.ZETTEL,
+            title,
+            note_id,
+            created,
+            lambda template_text: _render_goal_progress_template(
+                template_text,
+                record,
+                note_id,
+                created,
+            ),
         )
 
     def _prepare(
@@ -719,6 +794,29 @@ def _render_outcome_observation_template(
     data["tags"] = list(draft.tags)
     data["links"] = list(draft.links)
     return _dump_front_matter(data) + draft.content
+
+
+def _render_goal_progress_template(
+    template_text: str,
+    record: DefinitionRecordV1 | ObservationRecordV1,
+    note_id: UUID,
+    created: datetime,
+) -> str:
+    """Добавить только canonical Stage 12 payload поверх существующего Zettel template."""
+
+    parsed, data = _load_template_data(template_text)
+    if data is None:
+        data = {}
+    _sanitize_template_mapping(data, _GOAL_PROGRESS_TEMPLATE_CONTROLLED_FIELDS)
+    _set_managed_metadata(data, NoteType.ZETTEL, note_id, created)
+    for key, value in record.as_dict().items():
+        if key in {"id", "second_brain_goal_progress"}:
+            # ``id`` is already set from the writer identity and the marker is
+            # deliberately assigned as an int below for strict YAML typing.
+            continue
+        data[key] = value
+    data["second_brain_goal_progress"] = 1
+    return _dump_front_matter(data) + (parsed.body if parsed.has_front_matter else template_text)
 
 
 def _serialize_evidence_at(value: object) -> str:
