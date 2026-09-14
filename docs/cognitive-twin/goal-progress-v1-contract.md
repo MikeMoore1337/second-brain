@@ -7,7 +7,7 @@ Implementation issue: [#284](https://github.com/MikeMoore1337/second-brain/issue
 Implementation base: `origin/main` SHA `c7fc135dc1c26475794e780357b668e94077b52c`.
 Stage 12A implementation PR: [#280](https://github.com/MikeMoore1337/second-brain/pull/280), merged as
 `bdde50f2e3de3953dddf1ba58b4e9b371ea050ad`.
-Stage 12B implementation PR: pending.
+Stage 12B implementation PR: [#285](https://github.com/MikeMoore1337/second-brain/pull/285), merge pending.
 Post-merge CI: run [#34841812341](https://github.com/MikeMoore1337/second-brain/actions/runs/34841812341).
 Production deploy: run [#34842008063](https://github.com/MikeMoore1337/second-brain/actions/runs/34842008063);
 `/healthz` returned HTTP 200 with `{"status":"ok"}`.

@@ -1497,7 +1497,7 @@ Stage 11D0 Growth Learning / Question design = COMPLETE
 Stage 11D Growth Learning runtime = COMPLETE
 Stage 11E Web/API + integration QA/closeout = COMPLETE
 Stage 12A canonical records/validators = COMPLETE (Issue #279, PR #280, merged/deployed)
-Stage 12B reviewed Safe Write = COMPLETE (Issue #284, implementation)
+Stage 12B reviewed Safe Write = COMPLETE (Issue #284, PR #285, merge pending)
 Stage 12C–12E and Stage 13+ = NOT STARTED
 ```
 
@@ -1528,7 +1528,7 @@ implementation gates:
 ~~~text
 Stage 12 design contract = COMPLETE after Issue #277 merge
 Stage 12A canonical records/validators = COMPLETE (PR #280, merge SHA `bdde50f2e3de3953dddf1ba58b4e9b371ea050ad`)
-Stage 12B Safe Write = COMPLETE (Issue #284 implementation)
+Stage 12B Safe Write = COMPLETE (Issue #284, PR #285, merge pending)
 Stage 12C private read surface = NOT STARTED
 Stage 12D Growth composition = NOT STARTED
 Stage 12E Web/API QA + closeout = NOT STARTED
