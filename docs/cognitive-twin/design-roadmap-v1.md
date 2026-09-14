@@ -1499,7 +1499,8 @@ Stage 11E Web/API + integration QA/closeout = COMPLETE
 Stage 12A canonical records/validators = COMPLETE (Issue #279, PR #280, merged/deployed)
 Stage 12B reviewed Safe Write = COMPLETE (Issue #284, PR #285, merged/deployed)
 Stage 12C private read surface = COMPLETE (Issue #287, PR #288; provider-free, no route)
-Stage 12D–12E and Stage 13+ = NOT STARTED
+Stage 12D Growth + Goal Progress composition = IMPLEMENTATION IN PROGRESS (Issue #290)
+Stage 12E and Stage 13+ = NOT STARTED
 ```
 
 ## Cognitive Twin v3 design status after Stage 12C implementation
@@ -1513,9 +1514,10 @@ high-level sequence is captured in
 [cognitive-twin-v3-roadmap.md](cognitive-twin-v3-roadmap.md).
 
 Cognitive Twin v3 = IN PROGRESS: Stage 12A read-only runtime and Stage 12B
-explicit reviewed Safe Write implementation are complete and deployed, while
-Stage 12C private read-only runtime is complete in PR #288; later stages remain
-separately gated.
+explicit reviewed Safe Write implementation are complete and deployed, Stage
+12C private read-only runtime is complete in PR #288, and the bounded Stage 12D
+Growth + Goal Progress composition is being delivered in Issue #290; later
+stages remain separately gated.
 
 The Stage 12 design decision is to use separate reviewed companion records
 for an explicit progress definition and explicit progress observations. They
@@ -1532,14 +1534,14 @@ Stage 12 design contract = COMPLETE after Issue #277 merge
 Stage 12A canonical records/validators = COMPLETE (PR #280, merge SHA `bdde50f2e3de3953dddf1ba58b4e9b371ea050ad`)
 Stage 12B Safe Write = COMPLETE (Issue #284, PR #285, merge SHA `1832dc66de2ea25b41bb0d613ea77aae4dcd1fe2`, deployed)
 Stage 12C private read surface = COMPLETE (Issue #287, PR #288; no provider/network/write)
-Stage 12D Growth composition = NOT STARTED
+Stage 12D Growth + Goal Progress composition = IMPLEMENTATION IN PROGRESS (Issue #290)
 Stage 12E Web/API QA + closeout = NOT STARTED
 Stage 13 Decision Compass / Compare v2 = NOT STARTED
 Stage 14 Personal Experiments = NOT STARTED
 Stage 15 Adaptive Twin = NOT STARTED
 ~~~
 
-Stage 12A–12C add no provider, telemetry, background watcher, automatic
+Stage 12A–12D add no provider, telemetry, background watcher, automatic
 write-back, vault change, new environment variable, systemd change, Codex Review
-request, Vault Sync or next-stage issue. Stage 12D–12E and later stages remain
+request, Vault Sync or next-stage issue. Stage 12E and later stages remain
 separately gated.

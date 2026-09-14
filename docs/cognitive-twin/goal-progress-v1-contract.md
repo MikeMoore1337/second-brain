@@ -6,6 +6,8 @@ Issue: [#277](https://github.com/MikeMoore1337/second-brain/issues/277).
 Implementation issue: [#284](https://github.com/MikeMoore1337/second-brain/issues/284).
 Stage 12C implementation issue: [#287](https://github.com/MikeMoore1337/second-brain/issues/287).
 Stage 12C implementation PR: [#288](https://github.com/MikeMoore1337/second-brain/pull/288).
+Stage 12D implementation issue: [#290](https://github.com/MikeMoore1337/second-brain/issues/290).
+Stage 12D composition contract: [growth-goal-progress-composition-v1-contract.md](growth-goal-progress-composition-v1-contract.md).
 Implementation base: `origin/main` SHA `eadeeb04ec76df1793c3b7909dc1f0728460aba5`.
 Stage 12A implementation PR: [#280](https://github.com/MikeMoore1337/second-brain/pull/280), merged as
 `bdde50f2e3de3953dddf1ba58b4e9b371ea050ad`.
@@ -25,7 +27,10 @@ contract, не создаёт канонические записи автома
 `second-brain-vault`.
 Stage 12A прошёл required CI, post-merge evidence, standard production deploy и
 non-mutating `/healthz`; Stage 12C завершён как provider-free private
-read-only implementation slice, а Stage 12D–12E остаются отдельными gates.
+read-only implementation slice. Stage 12D реализуется как отдельный bounded
+read-only composition slice в Issue #290; PR, merge и production closeout
+остаются pending на момент этого implementation document. Stage 12E остаётся
+отдельным gate.
 
 ## Normative source map
 
@@ -757,11 +762,14 @@ precedence, bounded provenance, current-vault reread, explicit Goal UUID and
 UTC `as_of`. Provider-free A/B/C temporary-vault integration tests and
 same-event conflict/request tests are included. There is no automatic capture.
 
-### Stage 12D — Growth composition
+### Stage 12D — Growth + Goal Progress composition v1 — IMPLEMENTATION IN PROGRESS
 
-Only after 12A–12C are green, define a narrow Growth composition surface.
-Do not make Goal Progress an implicit input to Advisor or Learning, and do not
-expand private payloads without a separate review.
+Issue #290 defines the narrow side-by-side composition surface after green
+12A–12C. It returns the existing Growth Engine and Goal Progress results for
+one explicit current Goal, with exact identity revalidation and no cross-branch
+inference. Do not make Goal Progress an implicit input to Advisor or Learning,
+and do not expand private payloads without a separate review. The normative
+details are in [growth-goal-progress-composition-v1-contract.md](growth-goal-progress-composition-v1-contract.md).
 
 ### Stage 12E — Web/API QA and closeout
 
@@ -769,8 +777,8 @@ Add exact integration tests, frontend states, security checks, required CI,
 deployment/env audit and closeout evidence. A production release remains
 owner-gated by the repository lifecycle.
 
-The exact next slices after Stage 12C, if separately approved, are Stage 12D
-and Stage 12E. This issue does not start them or any Stage 13+ work.
+Stage 12D is separately authorized by Issue #290; Stage 12E remains separately
+gated. This contract does not start Stage 13+ work.
 
 ## 23. Decision register
 
@@ -828,9 +836,11 @@ Stage 12B post-merge CI: PASS (run #34851102286)
 Stage 12B production deploy: PASS (run #34851314130)
 Stage 12B `/healthz`: HTTP 200
 Stage 12C implementation: COMPLETE (PR #288; private read model, no release route)
-Stage 12D–12E started: NO
+Stage 12D implementation: IN PROGRESS (Issue #290; bounded composition, delivery pending)
+Stage 12E started: NO
 Stage 13+ started: NO
 HUMAN_REQUIRED: NO; Stage 12B implementation and production closeout are
-complete, and Stage 12C is a provider-free read-only implementation slice;
-no blocker remains
+complete, Stage 12C is a provider-free read-only implementation slice, and
+Stage 12D is being delivered as a separate read-only composition slice;
+no additional user decision is required
 ~~~

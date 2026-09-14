@@ -39,7 +39,7 @@ write-back. Для текущего implementation gate нормативным �
 `bdde50f2e3de3953dddf1ba58b4e9b371ea050ad` прошёл post-merge CI и standard
 production deploy. Stage 12B COMPLETE в Issue #284 / PR #285; merge SHA
 `1832dc66de2ea25b41bb0d613ea77aae4dcd1fe2` прошёл [post-merge CI #34851102286](https://github.com/MikeMoore1337/second-brain/actions/runs/34851102286)
-и [standard production deploy #34851314130](https://github.com/MikeMoore1337/second-brain/actions/runs/34851314130); non-mutating `/healthz` вернул HTTP 200. Stage 12C COMPLETE в Issue #287 / PR #288: deterministic private read model, без Web/API route, provider, network или записи. Stage 12D–12E и Stage 13+ не начаты.
+и [standard production deploy #34851314130](https://github.com/MikeMoore1337/second-brain/actions/runs/34851314130); non-mutating `/healthz` вернул HTTP 200. Stage 12C COMPLETE в Issue #287 / PR #288: deterministic private read model, без Web/API route, provider, network или записи. Stage 12D implementation IN PROGRESS в [Issue #290](https://github.com/MikeMoore1337/second-brain/issues/290): bounded side-by-side Growth + Goal Progress composition для одного explicit current Goal, без cross-branch inference, Web/API/UI, provider/network или writer. Stage 12E и Stage 13+ не начаты.
 
 Stage 12 вводит минимальную, reviewed и exact-bound structured progress
 модель, привязанную к текущему Stage 11A Goal. Она отвечает на вопрос
@@ -120,14 +120,15 @@ provider-driven canonical writes.
 Дальнейшие stages намеренно не фиксируются как implementation commitments.
 Новые capabilities требуют отдельного issue, contract/design gate, privacy
 review, exact dependency map и explicit acceptance decision. Этот roadmap не
-создаёт Stage 12B–12E, Stage 13 issue или любой следующий backlog item.
+авторизует Stage 12E, Stage 13 issue или любой следующий backlog item.
 
 ## Non-goals for this roadmap
 
 - изменение schemas/NoteType или second-brain-vault; Stage 12A runtime is
   limited to the read-only parser and validators;
 - новый Safe Write, provider/network, Web/API или environment variable/systemd
-  contract beyond the completed Stage 12B/12C boundaries;
+  contract beyond the completed Stage 12B/12C boundaries and the bounded
+  Stage 12D composition;
 - Codex Review request, Vault Sync или live smoke;
 - inference write-back, telemetry, embeddings, vector DB или hidden score;
 - автоматический запуск Stage 12D–12E или любой следующей стадии.
