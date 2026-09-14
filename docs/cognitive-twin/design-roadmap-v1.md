@@ -1492,7 +1492,7 @@ Stage 11A Current Goal identity/context core = COMPLETE
 Stage 11B Goal-to-choice relation + friction read model = COMPLETE
 Stage 11C0 Growth Advisor privacy/payload/provenance design = COMPLETE
 Stage 11C Growth Advisor runtime = COMPLETE
-Stage 11C GrowthCompare/Compare v2 = NOT STARTED
+Stage 13 Decision Compass / Compare v2 / GrowthCompare v1 design contract = COMPLETE (Issue #296; implementation NOT STARTED)
 Stage 11D0 Growth Learning / Question design = COMPLETE
 Stage 11D Growth Learning runtime = COMPLETE
 Stage 11E Web/API + integration QA/closeout = COMPLETE
@@ -1501,7 +1501,7 @@ Stage 12B reviewed Safe Write = COMPLETE (Issue #284, PR #285, merged/deployed)
 Stage 12C private read surface = COMPLETE (Issue #287, PR #288; provider-free, no route)
 Stage 12D Growth + Goal Progress composition = COMPLETE (Issue #290, PR #291, merged/deployed)
 Stage 12E Web/API + UI + integration QA/closeout = COMPLETE (Issue #293, PR #294, merge SHA `6068e1298ea3637d413498b72f397690a0278172`, post-merge CI #34886130422, production deploy #34886348462)
-Stage 13+ = NOT STARTED
+Stage 13 design gate = COMPLETE (Issue #296); Stage 13 implementation and Stage 14+ = NOT STARTED
 ```
 
 ## Cognitive Twin v3 design status after Stage 12E implementation and closeout
@@ -1522,6 +1522,14 @@ smoke was non-mutating; no new environment key, dependency, schema/NoteType,
 systemd change or vault write was required (`env change required: no`). Later
 stages remain separately gated.
 
+The Stage 13 normative design gate is recorded in
+[compare-v2-contract.md](compare-v2-contract.md) under Issue #296. It keeps
+Compare v1 additive and unchanged, composes one exact selected Goal with
+independent Simulate Me, Behavioral, Growth, Goal Progress and explicitly
+requested Advisor branches, and permits only exact request-local structural
+relations. It adds no runtime, provider payload, persistence, Web/API/UI or
+vault behavior.
+
 The Stage 12 design decision is to use separate reviewed companion records
 for an explicit progress definition and explicit progress observations. They
 bind to the exact Stage 11A Goal UUID and GrowthGoalIdentityV1 fingerprint.
@@ -1539,7 +1547,7 @@ Stage 12B Safe Write = COMPLETE (Issue #284, PR #285, merge SHA `1832dc66de2ea25
 Stage 12C private read surface = COMPLETE (Issue #287, PR #288; no provider/network/write)
 Stage 12D Growth + Goal Progress composition = COMPLETE (Issue #290, PR #291, merge SHA `d78da72fef9f080bedfbd3ad1c87d40e49d227e8`, deployed)
 Stage 12E Web/API QA + closeout = COMPLETE (Issue #293, PR #294, merged/deployed)
-Stage 13 Decision Compass / Compare v2 = NOT STARTED
+Stage 13 Decision Compass / Compare v2 / GrowthCompare v1 design contract = COMPLETE (Issue #296; implementation NOT STARTED)
 Stage 14 Personal Experiments = NOT STARTED
 Stage 15 Adaptive Twin = NOT STARTED
 ~~~
