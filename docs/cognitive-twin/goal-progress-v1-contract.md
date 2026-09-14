@@ -1,21 +1,24 @@
 # Cognitive Twin v3 / Stage 12 — Goal Progress & Structured Outcomes v1
 
-Статус: **STAGE 12A COMPLETE**.
+Статус: **STAGE 12B IMPLEMENTATION COMPLETE**.
 
 Issue: [#277](https://github.com/MikeMoore1337/second-brain/issues/277).
-Implementation issue: [#279](https://github.com/MikeMoore1337/second-brain/issues/279).
-Implementation base: `origin/main` SHA `7b338237618f6c9219f0fa16ea2642f8fe514485`.
-Implementation PR: [#280](https://github.com/MikeMoore1337/second-brain/pull/280), merged as
+Implementation issue: [#284](https://github.com/MikeMoore1337/second-brain/issues/284).
+Implementation base: `origin/main` SHA `c7fc135dc1c26475794e780357b668e94077b52c`.
+Stage 12A implementation PR: [#280](https://github.com/MikeMoore1337/second-brain/pull/280), merged as
 `bdde50f2e3de3953dddf1ba58b4e9b371ea050ad`.
+Stage 12B implementation PR: [#285](https://github.com/MikeMoore1337/second-brain/pull/285), merge pending.
 Post-merge CI: run [#34841812341](https://github.com/MikeMoore1337/second-brain/actions/runs/34841812341).
 Production deploy: run [#34842008063](https://github.com/MikeMoore1337/second-brain/actions/runs/34842008063);
 `/healthz` returned HTTP 200 with `{"status":"ok"}`.
 
-Этот документ фиксирует контракт и границы Stage 12; завершённый implementation
-slice ограничен Stage 12A: canonical records и pure validators. Он не меняет
-Safe Write, vault, provider/network, Web/API или release contract. Stage 12A
-прошёл required CI, post-merge evidence, standard production deploy и
-non-mutating `/healthz`; Stage 12B–12E остаются отдельными implementation
+Этот документ фиксирует контракт и границы Stage 12; Stage 12A остаётся
+canonical records/pure validators, а Stage 12B добавляет только explicit
+offline reviewed Safe Write для двух companion record kinds. Он не меняет
+Stage 12A semantics, provider/network, Web/API или release contract, не создаёт
+канонические записи автоматически и не изменяет `second-brain-vault`.
+Stage 12A прошёл required CI, post-merge evidence, standard production deploy и
+non-mutating `/healthz`; Stage 12C–12E остаются отдельными implementation
 slices.
 
 ## Normative source map
@@ -721,8 +724,8 @@ invent a default metric.
 
 ## 22. Future implementation decomposition
 
-Stage 12A is the current authorized implementation slice. The smallest
-compatible vertical slices remain:
+Stage 12A and the explicit Stage 12B implementation are complete slices. The
+remaining compatible vertical slices remain separately gated:
 
 ### Stage 12A — canonical records and pure validators
 
@@ -735,7 +738,11 @@ vault write or production side effect.
 
 Add reviewed draft, dry-run plan, exact plan hash, atomic no-overwrite write,
 full-vault validation and rollback for the two companion record kinds. Keep
-the vault independent and use temporary fixtures.
+the vault independent and use temporary fixtures. The implementation uses
+typed definition/observation drafts, app-owned UUIDv7 identities, current
+Goal/definition/lineage rereads before apply, and the existing receipt-guarded
+filesystem writer. It adds no CLI/API/UI route, watcher, provider or automatic
+capture.
 
 ### Stage 12C — deterministic Goal Progress builder/read model
 
@@ -756,7 +763,7 @@ Add exact integration tests, frontend states, security checks, required CI,
 deployment/env audit and closeout evidence. A production release remains
 owner-gated by the repository lifecycle.
 
-The exact next slices after Stage 12A, if separately approved, are Stage 12B
+The exact next slices after Stage 12B, if separately approved, are Stage 12C
 through Stage 12E. This issue does not start them or any Stage 13+ work.
 
 ## 23. Decision register

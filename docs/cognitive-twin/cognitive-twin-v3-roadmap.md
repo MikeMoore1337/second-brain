@@ -37,7 +37,8 @@ write-back. Для текущего implementation gate нормативным �
 
 **Статус:** Stage 12A COMPLETE в Issue #279 / PR #280; merge SHA
 `bdde50f2e3de3953dddf1ba58b4e9b371ea050ad` прошёл post-merge CI и standard
-production deploy. Stage 12B–12E не начаты.
+production deploy. Stage 12B implementation COMPLETE в Issue #284 / PR #285;
+merge pending. Stage 12C–12E не начаты.
 
 Stage 12 вводит минимальную, reviewed и exact-bound structured progress
 модель, привязанную к текущему Stage 11A Goal. Она отвечает на вопрос
@@ -56,7 +57,9 @@ score.
 - deterministic current result с safe insufficient-data states;
 - replacement/supersedes вместо silent mutation;
 - Stage 12A read-only canonical records, pure validators и scan projections;
-- no provider, telemetry, background inference, automatic Safe Write или
+- Stage 12B explicit reviewed Safe Write с dry-run/hash/apply/full validation и
+  rollback для companion records;
+- no provider, telemetry, background inference, automatic capture или
   изменения second-brain-vault.
 
 Stage 12 не переносит progress fields в исходный Goal и не превращает
