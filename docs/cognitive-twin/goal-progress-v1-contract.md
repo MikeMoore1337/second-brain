@@ -1,7 +1,7 @@
 # Cognitive Twin v3 / Stage 12 — Goal Progress & Structured Outcomes v1
 
-Статус: **STAGE 12D COMPLETE**; Stage 12C remains a provider-free private
-read-only implementation slice within the same Stage 12 boundary.
+Статус: **STAGE 12 COMPLETE**; Stage 12E Web/API/UI and integration closeout
+are complete within the same bounded Stage 12 boundary.
 
 Issue: [#277](https://github.com/MikeMoore1337/second-brain/issues/277).
 Implementation issue: [#284](https://github.com/MikeMoore1337/second-brain/issues/284).
@@ -14,6 +14,19 @@ Stage 12D implementation PR: [#291](https://github.com/MikeMoore1337/second-brai
 Stage 12D post-merge CI: [run #34877206164](https://github.com/MikeMoore1337/second-brain/actions/runs/34877206164).
 Stage 12D production deploy: [run #34877425776](https://github.com/MikeMoore1337/second-brain/actions/runs/34877425776);
 non-mutating `/healthz` returned HTTP 200 with `{"status":"ok"}`.
+Stage 12E implementation issue: [#293](https://github.com/MikeMoore1337/second-brain/issues/293).
+Stage 12E implementation PR: [#294](https://github.com/MikeMoore1337/second-brain/pull/294),
+merged as `6068e1298ea3637d413498b72f397690a0278172`.
+Stage 12E PR CI: [run #34885895217](https://github.com/MikeMoore1337/second-brain/actions/runs/34885895217), PASS.
+Stage 12E post-merge CI: [run #34886130422](https://github.com/MikeMoore1337/second-brain/actions/runs/34886130422), PASS.
+Stage 12E production deploy: [run #34886348462](https://github.com/MikeMoore1337/second-brain/actions/runs/34886348462),
+PASS for the same exact SHA. Non-mutating production smoke on 2026-09-14
+22:24 MSK: `/healthz` HTTP 200 with `{"status":"ok"}`, public shell HTTP 303
+to `/login`, and unauthenticated POST to both private routes HTTP 401
+`AUTH_REQUIRED` with `Cache-Control: no-store`.
+The implementation uses no new dependency, environment key, schema/NoteType,
+systemd change or vault write; no Vault Sync, provider/LLM call or manual deploy
+was used. `env change required: no`.
 Implementation base: `origin/main` SHA `eadeeb04ec76df1793c3b7909dc1f0728460aba5`.
 Stage 12A implementation PR: [#280](https://github.com/MikeMoore1337/second-brain/pull/280), merged as
 `bdde50f2e3de3953dddf1ba58b4e9b371ea050ad`.
@@ -35,7 +48,9 @@ Stage 12A прошёл required CI, post-merge evidence, standard production dep
 non-mutating `/healthz`; Stage 12C завершён как provider-free private
 read-only implementation slice. Stage 12D завершён как отдельный bounded
 read-only composition slice в Issue #290 / PR #291 с exact post-merge и
-production evidence. Stage 12E остаётся отдельным gate.
+production evidence. Stage 12E завершён как отдельный bounded transport/UI/
+integration slice в Issue #293 / PR #294; его production evidence приведено
+выше.
 
 ## Normative source map
 
@@ -82,7 +97,8 @@ Stage 12 не пытается ответить на вопросы «хорош
 - embeddings, vector DB, new database, hidden operational persistence;
 - изменение second-brain-vault, release directories, environment или
   systemd contract;
-- Stage 12E Web/API surface или Stage 13+ implementation.
+- Web/API capability beyond the bounded Stage 12E surface или Stage 13+
+  implementation.
 
 ## 2. Terms and authority
 
@@ -777,14 +793,20 @@ implicit input to Advisor or Learning, and do not expand private payloads
 without a separate review. The normative details are in
 [growth-goal-progress-composition-v1-contract.md](growth-goal-progress-composition-v1-contract.md).
 
-### Stage 12E — Web/API QA and closeout
+### Stage 12E — Web/API, UI, security QA and closeout — COMPLETE
 
-Add exact integration tests, frontend states, security checks, required CI,
-deployment/env audit and closeout evidence. A production release remains
-owner-gated by the repository lifecycle.
+PR #294 добавляет только thin private transport для `/api/goal-progress` и
+`/api/growth-goal-progress`, explicit definition/observation
+prepare → review → confirm → apply UI поверх существующего Safe Write,
+owner-bound ephemeral review state, strict request boundary, Russian
+owner-only surface и regression/integration/security tests. Read model и
+composition остаются отдельными; provider, Advisor, Learning, telemetry,
+percentage/score/forecast, background capture, новая persistence и vault
+mutation не добавлены. Required CI, automatic production deploy и
+non-mutating smoke завершены; exact evidence указано в начале документа.
 
-Stage 12D is complete under Issue #290 / PR #291; Stage 12E remains separately
-gated. This contract does not start Stage 13+ work.
+Stage 12A–12D остаются complete под своими issue/PR. Stage 12E завершён под
+Issue #293 / PR #294. Этот contract не запускает Stage 13+ work.
 
 ## 23. Decision register
 
@@ -825,7 +847,7 @@ true in the implementation PR:
 Current design-gate state:
 
 ~~~text
-runtime changed: YES (Stage 12C provider-free read builder/result; Stage 12A/12B unchanged)
+runtime changed: YES (Stage 12C provider-free read builder/result and bounded Stage 12E Web/API/UI; Stage 12A/12B semantics unchanged)
 canonical schema changed: NO (additive marker, no NoteType/schema_version change)
 Safe Write changed: YES (Stage 12B capability; generic semantics unchanged)
 provider/network changed: NO
@@ -846,10 +868,13 @@ Stage 12D implementation: COMPLETE (Issue #290, PR #291, merge SHA `d78da72fef9f
 Stage 12D post-merge CI: PASS (run #34877206164)
 Stage 12D production deploy: PASS (run #34877425776)
 Stage 12D `/healthz`: HTTP 200 (`{"status":"ok"}`)
-Stage 12E started: NO
+Stage 12E implementation: COMPLETE (Issue #293, PR #294, merge SHA `6068e1298ea3637d413498b72f397690a0278172`)
+Stage 12E PR CI: PASS (run #34885895217)
+Stage 12E post-merge CI: PASS (run #34886130422)
+Stage 12E production deploy: PASS (run #34886348462)
+Stage 12E production smoke: PASS (`/healthz` 200; both private routes unauthenticated 401; no write)
+Stage 12E started: YES
 Stage 13+ started: NO
-HUMAN_REQUIRED: NO; Stage 12B implementation and production closeout are
-complete, Stage 12C is a provider-free read-only implementation slice, and
-Stage 12D is a completed separate read-only composition slice; no additional
-user decision is required
+HUMAN_REQUIRED: NO; Stage 12A–12E implementation and production closeout are
+complete, with no additional user decision required
 ~~~
