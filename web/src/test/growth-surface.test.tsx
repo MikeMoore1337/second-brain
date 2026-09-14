@@ -11,6 +11,7 @@ afterEach(() => {
   act(() => root?.unmount());
   root = undefined;
   vi.restoreAllMocks();
+  vi.useRealTimers();
   document.body.innerHTML = "";
 });
 
@@ -175,7 +176,7 @@ function mockReadApis(): void {
 
 async function build(host: HTMLElement): Promise<void> {
   await act(async () => button(host, "Обновить данные развития").click());
-  setValue(host.querySelector<HTMLSelectElement>("#growth-goal-select")!, goalUuid);
+  await act(async () => setValue(host.querySelector<HTMLSelectElement>("#growth-goal-select")!, goalUuid));
   await act(async () => button(host, "Построить результат развития").click());
 }
 
@@ -216,6 +217,8 @@ describe("Growth Stage 11E owner surface", () => {
 
   it("requires a separate Advisor preview and confirmation and keeps Learning independent", async () => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-14T10:05:00Z"));
     mockReadApis();
     const preview = { ...mappingReview, contract_version: "growth-advisor-v1" as const, goal_source_uuid: goalUuid, goal_identity_fingerprint: goals.goals[0].goal_identity_fingerprint, assistant_contract_version: "assistant-v1", advisor_policy_id: "growth-advisor-owner-explicit-goal-v1", goal_text: "Достичь ясного рабочего ритма", goal_text_utf8_bytes: 42 };
     const branch: api.GrowthAdvisorBranchResponse = { branch: "advisor", state: "result", assistant_result: { output_label: "Независимый анализ", recommendation: "Проверь первый шаг", rationale: ["Только явный ввод"] }, error: null, provenance: {} };
@@ -227,19 +230,25 @@ describe("Growth Stage 11E owner surface", () => {
     const host = await renderSurface();
     await build(host);
 
-    setValue(host.querySelector<HTMLTextAreaElement>("#growth-advisor-task")!, "Сравнить следующий шаг");
+    await act(async () => setValue(host.querySelector<HTMLTextAreaElement>("#growth-advisor-task")!, "Сравнить следующий шаг"));
     await act(async () => button(host, "Показать предпросмотр цели").click());
     expect(api.previewGrowthAdvisor).toHaveBeenCalledOnce();
     expect(host.textContent).toContain("Точная цель, которая будет передана советнику");
     const advisorPanel = host.querySelector<HTMLElement>("[aria-labelledby='growth-advisor-title']")!;
-    advisorPanel.querySelector<HTMLInputElement>("input[type='checkbox']")!.click();
+    await act(async () => advisorPanel.querySelector<HTMLInputElement>("input[type='checkbox']")!.click());
     await act(async () => button(advisorPanel, "Выполнить независимый анализ").click());
     expect(executeSpy).toHaveBeenCalledOnce();
     expect(host.textContent).toContain("Проверь первый шаг");
 
     await act(async () => button(host, "Уточнить развитие").click());
     expect(resolveSpy).not.toHaveBeenCalled();
-    await act(async () => button(host, "Игнорировать").click());
+    await act(async () => {
+      await vi.waitFor(() => expect(button(host, "Игнорировать").disabled).toBe(false));
+    });
+    await act(async () => {
+      button(host, "Игнорировать").click();
+      await Promise.resolve();
+    });
     expect(resolveSpy).toHaveBeenCalledWith(expect.objectContaining({ goal_source_uuid: goalUuid }), candidate, "ignore", null, undefined, expect.any(AbortSignal));
     expect(host.textContent).toContain("Вопрос проигнорирован без записи");
   });
