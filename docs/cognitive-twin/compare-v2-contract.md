@@ -1,8 +1,10 @@
 
 # Decision Compass / Compare v2 / GrowthCompare v1
 
-**Статус:** DESIGN / NORMATIVE CONTRACT GATE COMPLETE; Stage 13 runtime is
-**NOT STARTED**.
+**Статус:** DESIGN / NORMATIVE CONTRACT GATE COMPLETE; отдельная реализация
+Stage 13A без провайдера ведётся в рамках [Issue #299](https://github.com/MikeMoore1337/second-brain/issues/299)
+и [PR #305](https://github.com/MikeMoore1337/second-brain/pull/305). Этапы
+13B–13E остаются **NOT STARTED**.
 
 **Issue:** [#296](https://github.com/MikeMoore1337/second-brain/issues/296)
 
@@ -907,6 +909,10 @@ and repository hygiene verification only: git diff --check, Markdown/link
 checks available in the repository, and the standard Python 3.14 quality
 commands required by AGENTS.md. No live provider, vault, Web/API, browser,
 physical-device or production behavior claim is made by the contract.
+
+Ниже приведён исторический acceptance record для design-гейта Issue #296.
+Отдельная авторизованная реализация Stage 13A отслеживается в Issue #299 и PR
+#305; она не меняет этот нормативный контракт и не авторизует этапы 13B–13E.
 
 The final delivery report must explicitly state:
 

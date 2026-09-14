@@ -72,8 +72,10 @@ Stage 12 не переносит progress fields в исходный Goal и н�
 ## Stage 13 — Decision Compass / Compare v2
 
 **Статус:** DESIGN CONTRACT COMPLETE in Issue #296 via
-[compare-v2-contract.md](compare-v2-contract.md); Stage 13 runtime is NOT
-STARTED. Runtime still depends on a separate implementation gate.
+[compare-v2-contract.md](compare-v2-contract.md); Stage 13A provider-free core
+is implemented under [Issue #299](https://github.com/MikeMoore1337/second-brain/issues/299)
+and [PR #305](https://github.com/MikeMoore1337/second-brain/pull/305). Stages
+13B–13E remain NOT STARTED.
 
 Stage 13 может собрать в owner-only decision context:
 
@@ -88,8 +90,10 @@ Stage 13 может собрать в owner-only decision context:
 универсальный score. Запрещены silent recommendation writes, fuzzy Goal
 retargeting, provider payload expansion и смешение progress with outcome
 judgement. Нормативная граница зафиксирована в отдельном
-[Compare v2 / GrowthCompare v1 contract](compare-v2-contract.md); этот
-design gate не запускает Stage 13A runtime, Web/API/UI или provider work.
+[Compare v2 / GrowthCompare v1 contract](compare-v2-contract.md); исходный
+design gate не запускал Stage 13A runtime, Web/API/UI или provider work.
+Отдельный implementation gate Stage 13A зафиксирован в PR #305; он не
+запускает Stage 13B–13E.
 
 ## Stage 14 — Personal Experiments
 
