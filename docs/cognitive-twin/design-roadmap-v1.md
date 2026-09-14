@@ -1496,7 +1496,7 @@ Stage 11C GrowthCompare/Compare v2 = NOT STARTED
 Stage 11D0 Growth Learning / Question design = COMPLETE
 Stage 11D Growth Learning runtime = COMPLETE
 Stage 11E Web/API + integration QA/closeout = COMPLETE
-Stage 12A canonical records/validators = IMPLEMENTATION IN PROGRESS in Issue #279
+Stage 12A canonical records/validators = COMPLETE (Issue #279, PR #280, merged/deployed)
 Stage 12B–12E and Stage 13+ = NOT STARTED
 ```
 
@@ -1509,8 +1509,8 @@ normative contract is
 high-level sequence is captured in
 [cognitive-twin-v3-roadmap.md](cognitive-twin-v3-roadmap.md).
 
-Cognitive Twin v3 = IN PROGRESS: Stage 12A read-only runtime is implemented;
-later stages remain separately gated.
+Cognitive Twin v3 = IN PROGRESS: Stage 12A read-only runtime and its
+production closeout are complete; later stages remain separately gated.
 
 The Stage 12 design decision is to use separate reviewed companion records
 for an explicit progress definition and explicit progress observations. They
@@ -1523,7 +1523,7 @@ The design gate remains separate from the Stage 12A implementation gate:
 
 ~~~text
 Stage 12 design contract = COMPLETE after Issue #277 merge
-Stage 12A canonical records/validators = IMPLEMENTATION IN PROGRESS in Issue #279
+Stage 12A canonical records/validators = COMPLETE (PR #280, merge SHA `bdde50f2e3de3953dddf1ba58b4e9b371ea050ad`)
 Stage 12B Safe Write = NOT STARTED
 Stage 12C private read surface = NOT STARTED
 Stage 12D Growth composition = NOT STARTED

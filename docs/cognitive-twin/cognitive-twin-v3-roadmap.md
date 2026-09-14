@@ -35,8 +35,9 @@ write-back. Для текущего implementation gate нормативным �
 
 ## Stage 12 — Goal Progress & Structured Outcomes v1
 
-**Статус:** Stage 12A IMPLEMENTATION IN PROGRESS в Issue #279; Stage 12B–12E
-не начаты.
+**Статус:** Stage 12A COMPLETE в Issue #279 / PR #280; merge SHA
+`bdde50f2e3de3953dddf1ba58b4e9b371ea050ad` прошёл post-merge CI и standard
+production deploy. Stage 12B–12E не начаты.
 
 Stage 12 вводит минимальную, reviewed и exact-bound structured progress
 модель, привязанную к текущему Stage 11A Goal. Она отвечает на вопрос

@@ -1,16 +1,22 @@
 # Cognitive Twin v3 / Stage 12 — Goal Progress & Structured Outcomes v1
 
-Статус: **STAGE 12A IMPLEMENTATION IN PROGRESS**.
+Статус: **STAGE 12A COMPLETE**.
 
 Issue: [#277](https://github.com/MikeMoore1337/second-brain/issues/277).
 Implementation issue: [#279](https://github.com/MikeMoore1337/second-brain/issues/279).
 Implementation base: `origin/main` SHA `7b338237618f6c9219f0fa16ea2642f8fe514485`.
+Implementation PR: [#280](https://github.com/MikeMoore1337/second-brain/pull/280), merged as
+`bdde50f2e3de3953dddf1ba58b4e9b371ea050ad`.
+Post-merge CI: run [#34841812341](https://github.com/MikeMoore1337/second-brain/actions/runs/34841812341).
+Production deploy: run [#34842008063](https://github.com/MikeMoore1337/second-brain/actions/runs/34842008063);
+`/healthz` returned HTTP 200 with `{"status":"ok"}`.
 
-Этот документ фиксирует контракт и границы Stage 12; текущий implementation
+Этот документ фиксирует контракт и границы Stage 12; завершённый implementation
 slice ограничен Stage 12A: canonical records и pure validators. Он не меняет
 Safe Write, vault, provider/network, Web/API или release contract. Stage 12A
-должен пройти required CI и post-merge evidence; Stage 12B–12E остаются
-отдельными implementation slices.
+прошёл required CI, post-merge evidence, standard production deploy и
+non-mutating `/healthz`; Stage 12B–12E остаются отдельными implementation
+slices.
 
 ## Normative source map
 
@@ -800,8 +806,12 @@ vault changed: NO
 environment changed: NO
 env change required: no
 Stage 12A started: YES
+Stage 12A implementation: COMPLETE (PR #280 merged and deployed)
+Stage 12A post-merge CI: PASS
+Stage 12A production deploy: PASS
+Stage 12A `/healthz`: HTTP 200
 Stage 12B–12E started: NO
 Stage 13+ started: NO
-HUMAN_REQUIRED: no additional human input for the authorized Stage 12A
-implementation; release/deploy evidence remains lifecycle-gated
+HUMAN_REQUIRED: NO; Stage 12A implementation and closeout are complete; no
+blocker remains
 ~~~
