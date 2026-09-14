@@ -1,10 +1,12 @@
 # Cognitive Twin v3 / Stage 12 — Goal Progress & Structured Outcomes v1
 
-Статус: **STAGE 12B COMPLETE**.
+Статус: **STAGE 12C COMPLETE**.
 
 Issue: [#277](https://github.com/MikeMoore1337/second-brain/issues/277).
 Implementation issue: [#284](https://github.com/MikeMoore1337/second-brain/issues/284).
-Implementation base: `origin/main` SHA `c7fc135dc1c26475794e780357b668e94077b52c`.
+Stage 12C implementation issue: [#287](https://github.com/MikeMoore1337/second-brain/issues/287).
+Stage 12C implementation PR: [#288](https://github.com/MikeMoore1337/second-brain/pull/288).
+Implementation base: `origin/main` SHA `eadeeb04ec76df1793c3b7909dc1f0728460aba5`.
 Stage 12A implementation PR: [#280](https://github.com/MikeMoore1337/second-brain/pull/280), merged as
 `bdde50f2e3de3953dddf1ba58b4e9b371ea050ad`.
 Stage 12B implementation PR: [#285](https://github.com/MikeMoore1337/second-brain/pull/285), merged as
@@ -15,13 +17,15 @@ deployed SHA `1832dc66de2ea25b41bb0d613ea77aae4dcd1fe2`; non-mutating `/healthz`
 returned HTTP 200 with `{"status":"ok"}`.
 
 Этот документ фиксирует контракт и границы Stage 12; Stage 12A остаётся
-canonical records/pure validators, а Stage 12B добавляет только explicit
-offline reviewed Safe Write для двух companion record kinds. Он не меняет
-Stage 12A semantics, provider/network, Web/API или release contract, не создаёт
-канонические записи автоматически и не изменяет `second-brain-vault`.
+canonical records/pure validators, Stage 12B — explicit offline reviewed Safe
+Write для двух companion record kinds, а Stage 12C добавляет только
+provider-free deterministic Goal Progress builder/private read model. Он не
+меняет Stage 12A/12B semantics, provider/network, Web/API или release
+contract, не создаёт канонические записи автоматически и не изменяет
+`second-brain-vault`.
 Stage 12A прошёл required CI, post-merge evidence, standard production deploy и
-non-mutating `/healthz`; Stage 12C–12E остаются отдельными implementation
-slices.
+non-mutating `/healthz`; Stage 12C завершён как provider-free private
+read-only implementation slice, а Stage 12D–12E остаются отдельными gates.
 
 ## Normative source map
 
@@ -68,7 +72,7 @@ Stage 12 не пытается ответить на вопросы «хорош
 - embeddings, vector DB, new database, hidden operational persistence;
 - изменение second-brain-vault, release directories, environment или
   systemd contract;
-- Stage 12B–12E runtime, Web/API surface или Stage 13+ implementation.
+- Stage 12D–12E runtime, Web/API surface или Stage 13+ implementation.
 
 ## 2. Terms and authority
 
@@ -415,8 +419,8 @@ policy mismatch is a fail-closed state, not a best-effort evaluation.
 
 ## 11. Result DTO and status vocabulary
 
-The future provider-free application DTO is named GoalProgressResultV1. It
-must contain:
+The provider-free application DTO is implemented as `GoalProgressResultV1` in
+`second_brain.application.goal_progress_read`. It contains:
 
 - selected exact Goal UUID;
 - current Goal identity fingerprint;
@@ -746,12 +750,12 @@ Goal/definition/lineage rereads before apply, and the existing receipt-guarded
 filesystem writer. It adds no CLI/API/UI route, watcher, provider or automatic
 capture.
 
-### Stage 12C — deterministic Goal Progress builder/read model
+### Stage 12C — deterministic Goal Progress builder/read model — COMPLETE
 
-Implement the GoalProgressResultV1 builder with exact arithmetic, milestone
-state rules, status precedence and bounded provenance. Expose it through a
-private owner-only read model with explicit Goal UUID and as_of. No automatic
-capture.
+Implemented with exact Decimal arithmetic, milestone state rules, status
+precedence, bounded provenance, current-vault reread, explicit Goal UUID and
+UTC `as_of`. Provider-free A/B/C temporary-vault integration tests and
+same-event conflict/request tests are included. There is no automatic capture.
 
 ### Stage 12D — Growth composition
 
@@ -765,8 +769,8 @@ Add exact integration tests, frontend states, security checks, required CI,
 deployment/env audit and closeout evidence. A production release remains
 owner-gated by the repository lifecycle.
 
-The exact next slices after Stage 12B, if separately approved, are Stage 12C
-through Stage 12E. This issue does not start them or any Stage 13+ work.
+The exact next slices after Stage 12C, if separately approved, are Stage 12D
+and Stage 12E. This issue does not start them or any Stage 13+ work.
 
 ## 23. Decision register
 
@@ -807,7 +811,7 @@ true in the implementation PR:
 Current design-gate state:
 
 ~~~text
-runtime changed: YES (read-only Stage 12A parser, validators and scan projections)
+runtime changed: YES (Stage 12C provider-free read builder/result; Stage 12A/12B unchanged)
 canonical schema changed: NO (additive marker, no NoteType/schema_version change)
 Safe Write changed: YES (Stage 12B capability; generic semantics unchanged)
 provider/network changed: NO
@@ -823,8 +827,10 @@ Stage 12B implementation: COMPLETE (PR #285 merged and deployed)
 Stage 12B post-merge CI: PASS (run #34851102286)
 Stage 12B production deploy: PASS (run #34851314130)
 Stage 12B `/healthz`: HTTP 200
-Stage 12C–12E started: NO
+Stage 12C implementation: COMPLETE (PR #288; private read model, no release route)
+Stage 12D–12E started: NO
 Stage 13+ started: NO
 HUMAN_REQUIRED: NO; Stage 12B implementation and production closeout are
-complete; no blocker remains
+complete, and Stage 12C is a provider-free read-only implementation slice;
+no blocker remains
 ~~~
