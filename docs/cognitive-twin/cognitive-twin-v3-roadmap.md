@@ -35,7 +35,8 @@ write-back. Для текущего implementation gate нормативным �
 
 ## Stage 12 — Goal Progress & Structured Outcomes v1
 
-**Статус:** DESIGN / CONTRACT ONLY в Issue #277. Runtime не начат.
+**Статус:** Stage 12A IMPLEMENTATION IN PROGRESS в Issue #279; Stage 12B–12E
+не начаты.
 
 Stage 12 вводит минимальную, reviewed и exact-bound structured progress
 модель, привязанную к текущему Stage 11A Goal. Она отвечает на вопрос
@@ -53,6 +54,7 @@ score.
 - explicit baseline и explicit event time;
 - deterministic current result с safe insufficient-data states;
 - replacement/supersedes вместо silent mutation;
+- Stage 12A read-only canonical records, pure validators и scan projections;
 - no provider, telemetry, background inference, automatic Safe Write или
   изменения second-brain-vault.
 
@@ -110,12 +112,14 @@ provider-driven canonical writes.
 Дальнейшие stages намеренно не фиксируются как implementation commitments.
 Новые capabilities требуют отдельного issue, contract/design gate, privacy
 review, exact dependency map и explicit acceptance decision. Этот roadmap не
-создаёт Stage 12A, Stage 13 issue или любой следующий backlog item.
+создаёт Stage 12B–12E, Stage 13 issue или любой следующий backlog item.
 
 ## Non-goals for this roadmap
 
-- изменение runtime, schemas или second-brain-vault;
-- новый environment variable, systemd unit или production deployment;
+- изменение schemas/NoteType или second-brain-vault; Stage 12A runtime is
+  limited to the read-only parser and validators;
+- Safe Write, provider/network, Web/API или новый environment variable/systemd
+  contract;
 - Codex Review request, Vault Sync или live smoke;
 - inference write-back, telemetry, embeddings, vector DB или hidden score;
-- автоматический запуск Stage 12A или любой следующей стадии.
+- автоматический запуск Stage 12B–12E или любой следующей стадии.

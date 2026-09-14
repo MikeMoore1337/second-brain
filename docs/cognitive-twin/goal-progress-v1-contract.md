@@ -1,15 +1,16 @@
 # Cognitive Twin v3 / Stage 12 — Goal Progress & Structured Outcomes v1
 
-Статус: **DESIGN / CONTRACT ONLY**.
+Статус: **STAGE 12A IMPLEMENTATION IN PROGRESS**.
 
 Issue: [#277](https://github.com/MikeMoore1337/second-brain/issues/277).
-Design base на момент создания: current main
-SHA 2c3affd1d9c3a1e15fbe83f44362d9c2a0589268.
+Implementation issue: [#279](https://github.com/MikeMoore1337/second-brain/issues/279).
+Implementation base: `origin/main` SHA `7b338237618f6c9219f0fa16ea2642f8fe514485`.
 
-Этот документ фиксирует контракт и границы Stage 12 до runtime-реализации.
-Он не изменяет код, vault или release deployment. Любая будущая реализация
-должна пройти отдельный implementation slice, Safe Write review, privacy
-review, required CI и post-merge evidence.
+Этот документ фиксирует контракт и границы Stage 12; текущий implementation
+slice ограничен Stage 12A: canonical records и pure validators. Он не меняет
+Safe Write, vault, provider/network, Web/API или release contract. Stage 12A
+должен пройти required CI и post-merge evidence; Stage 12B–12E остаются
+отдельными implementation slices.
 
 ## Normative source map
 
@@ -56,7 +57,7 @@ Stage 12 не пытается ответить на вопросы «хорош
 - embeddings, vector DB, new database, hidden operational persistence;
 - изменение second-brain-vault, release directories, environment или
   systemd contract;
-- Stage 12A runtime или Stage 13+ implementation.
+- Stage 12B–12E runtime, Web/API surface или Stage 13+ implementation.
 
 ## 2. Terms and authority
 
@@ -92,10 +93,10 @@ configuration.
 | Ephemeral query definition | REJECTED | Cannot support review, correction or reproducible history |
 | Separate companion records | ACCEPTED FOR V1 | Explicit review, exact references, append-only replacement and rebuildability |
 
-The companion record proposal is additive and opt-in. It is not a schema
-change in this design-only issue. Existing Stage 1–11 readers must continue
-to ignore these records as ordinary notes until a future implementation slice
-adds an explicit validator and reader.
+The companion record proposal is additive and opt-in. Stage 12A adds only an
+explicit read-side validator and typed scan projections; it does not add a
+writer, migration or new NoteType. Existing Stage 1–11 semantics remain
+unchanged for notes without the exact marker.
 
 ## 4. Exact Goal binding
 
@@ -714,15 +715,15 @@ invent a default metric.
 
 ## 22. Future implementation decomposition
 
-This design does not create or start Stage 12A. If the owner later authorizes
-implementation, the smallest compatible vertical slices are:
+Stage 12A is the current authorized implementation slice. The smallest
+compatible vertical slices remain:
 
 ### Stage 12A — canonical records and pure validators
 
 Implement bounded DTOs, marker parsing, Decimal canonicalization, exact
-Goal/definition/observation validation, chain rules and deterministic
-provider-free builder tests. No Web/API, provider, vault write or production
-side effect.
+Goal/definition/observation validation, chain rules, deterministic
+provider-free tests and read-only scan diagnostics. No Web/API, provider,
+vault write or production side effect.
 
 ### Stage 12B — Safe Write
 
@@ -749,8 +750,8 @@ Add exact integration tests, frontend states, security checks, required CI,
 deployment/env audit and closeout evidence. A production release remains
 owner-gated by the repository lifecycle.
 
-The exact next implementation slice, if separately approved, is Stage 12A.
-This issue does not create that issue, assign it, or launch it.
+The exact next slices after Stage 12A, if separately approved, are Stage 12B
+through Stage 12E. This issue does not start them or any Stage 13+ work.
 
 ## 23. Decision register
 
@@ -791,14 +792,16 @@ true in the implementation PR:
 Current design-gate state:
 
 ~~~text
-runtime changed: NO
-canonical schema changed: NO (additive marker proposal only)
+runtime changed: YES (read-only Stage 12A parser, validators and scan projections)
+canonical schema changed: NO (additive marker, no NoteType/schema_version change)
 Safe Write changed: NO
 provider/network changed: NO
 vault changed: NO
 environment changed: NO
 env change required: no
-Stage 12A started: NO
+Stage 12A started: YES
+Stage 12B–12E started: NO
 Stage 13+ started: NO
-HUMAN_REQUIRED: none for this design-only gate
+HUMAN_REQUIRED: no additional human input for the authorized Stage 12A
+implementation; release/deploy evidence remains lifecycle-gated
 ~~~
