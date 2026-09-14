@@ -188,6 +188,7 @@ describe("Growth Stage 11E owner surface", () => {
 
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(host.textContent).toContain("Данные раздела «Развитие» загружаются только после явного действия");
+    expect(host.textContent).not.toContain("этап 11E");
     expect(host.textContent).not.toContain("localStorage");
     expect(host.textContent).not.toContain("sessionStorage");
   });

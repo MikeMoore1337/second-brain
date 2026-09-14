@@ -464,8 +464,7 @@ export function CognitiveTwinSurface(): ReactElement {
           <p>Три раздельных слоя: явное утверждение, повторяемые проверенные решения в точных контекстах и связь, которую владелец подтвердил отдельно.</p>
         </div>
         <div className="cognitive-twin-heading-meta">
-          <span>Этап 10D</span>
-          <span>перестроение только для чтения + явное сопоставление</span>
+          <span>Только чтение · данные не изменяются</span>
         </div>
       </div>
       <GrowthSurface />
