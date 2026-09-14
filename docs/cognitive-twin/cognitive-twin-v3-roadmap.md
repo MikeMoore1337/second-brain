@@ -39,7 +39,7 @@ write-back. Для текущего implementation gate нормативным �
 `bdde50f2e3de3953dddf1ba58b4e9b371ea050ad` прошёл post-merge CI и standard
 production deploy. Stage 12B COMPLETE в Issue #284 / PR #285; merge SHA
 `1832dc66de2ea25b41bb0d613ea77aae4dcd1fe2` прошёл [post-merge CI #34851102286](https://github.com/MikeMoore1337/second-brain/actions/runs/34851102286)
-и [standard production deploy #34851314130](https://github.com/MikeMoore1337/second-brain/actions/runs/34851314130); non-mutating `/healthz` вернул HTTP 200. Stage 12C COMPLETE в Issue #287 / PR #288: deterministic private read model, без Web/API route, provider, network или записи. Stage 12D implementation IN PROGRESS в [Issue #290](https://github.com/MikeMoore1337/second-brain/issues/290): bounded side-by-side Growth + Goal Progress composition для одного explicit current Goal, без cross-branch inference, Web/API/UI, provider/network или writer. Stage 12E и Stage 13+ не начаты.
+и [standard production deploy #34851314130](https://github.com/MikeMoore1337/second-brain/actions/runs/34851314130); non-mutating `/healthz` вернул HTTP 200. Stage 12C COMPLETE в Issue #287 / PR #288: deterministic private read model, без Web/API route, provider, network или записи. Stage 12D COMPLETE в [Issue #290](https://github.com/MikeMoore1337/second-brain/issues/290) / [PR #291](https://github.com/MikeMoore1337/second-brain/pull/291), merge SHA `d78da72fef9f080bedfbd3ad1c87d40e49d227e8`, [post-merge CI #34877206164](https://github.com/MikeMoore1337/second-brain/actions/runs/34877206164), [standard production deploy #34877425776](https://github.com/MikeMoore1337/second-brain/actions/runs/34877425776), non-mutating `/healthz` HTTP 200. Composition bounded side-by-side для одного explicit current Goal, без cross-branch inference, Web/API/UI, provider/network или writer. Stage 12E и Stage 13+ не начаты.
 
 Stage 12 вводит минимальную, reviewed и exact-bound structured progress
 модель, привязанную к текущему Stage 11A Goal. Она отвечает на вопрос
@@ -131,4 +131,4 @@ review, exact dependency map и explicit acceptance decision. Этот roadmap �
   Stage 12D composition;
 - Codex Review request, Vault Sync или live smoke;
 - inference write-back, telemetry, embeddings, vector DB или hidden score;
-- автоматический запуск Stage 12D–12E или любой следующей стадии.
+- автоматический запуск Stage 12E или любой следующей стадии.
