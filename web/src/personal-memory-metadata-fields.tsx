@@ -90,7 +90,7 @@ export function PersonalMemoryMetadataFields({
       </label>
       {values.timeMode === "exact" ? (
         <div className="personal-memory-time-field">
-          <label className="draft-field-label" htmlFor={evidenceAtId}>RFC3339 время факта</label>
+          <label className="draft-field-label" htmlFor={evidenceAtId}>Время факта в формате RFC3339</label>
           <input
             className="review-input"
             id={evidenceAtId}

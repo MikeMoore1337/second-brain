@@ -73,17 +73,17 @@ const STATE_COPY: Record<string, string> = {
   mixed_behavior: "В сопоставимых контекстах наблюдались разные варианты. Одного победившего варианта нет.",
   changed_behavior: "В разных временных окнах наблюдались разные варианты. Это изменение наблюдаемого контекста, а не утверждение о личности.",
   behavioral_evidence_insufficient: "Сопоставимых поведенческих данных недостаточно. Безопасный результат — воздержаться от вывода.",
-  not_comparable: "Источники нельзя сопоставить по текущей exact-политике. Вывод не строится.",
+  not_comparable: "Источники нельзя сопоставить по текущей точной политике. Вывод не строится.",
   goal_source_missing: "Источник выбранной цели отсутствует. Связь и вывод недоступны.",
   goal_selection_required: "Сначала явно выбери одну текущую цель.",
 };
 
 const NO_CANDIDATE_COPY: Record<string, string> = {
-  QUESTIONS_DISABLED: "Вопросы Growth отключены для этого запроса.",
+  QUESTIONS_DISABLED: "Вопросы раздела «Развитие» отключены для этого запроса.",
   GOAL_SOURCE_MISSING: "Источник выбранной цели отсутствует; вопрос не создаётся.",
-  GOAL_SELECTION_REQUIRED: "Для вопроса Growth нужно явно выбрать одну цель.",
+  GOAL_SELECTION_REQUIRED: "Для вопроса уточнения нужно явно выбрать одну цель.",
   NO_ACTIONABLE_GROWTH_GAP: "Сейчас нет пробела, который нужно уточнять.",
-  GROWTH_STATE_NOT_COMPARABLE: "Текущее состояние нельзя уточнять по exact-политике.",
+  GROWTH_STATE_NOT_COMPARABLE: "Текущее состояние нельзя уточнять по точной политике.",
   UNSUPPORTED_GROWTH_STATE: "Для этого состояния вопрос не предусмотрен.",
   CANDIDATE_ALREADY_PRESENT_IN_PAGE_MEMORY: "Вопрос уже показан на этой странице.",
 };
@@ -215,7 +215,7 @@ export function GrowthSurface(): ReactElement {
   const [memorySaved, setMemorySaved] = useState<SavedNoteResponse | null>(null);
 
   const [busy, setBusy] = useState<OperationKind | null>(null);
-  const [status, setStatus] = useState("Данные Growth загружаются только после явного действия.");
+  const [status, setStatus] = useState("Данные раздела «Развитие» загружаются только после явного действия.");
   const [error, setError] = useState("");
   const refreshController = useRef<AbortController | null>(null);
   const growthController = useRef<AbortController | null>(null);
@@ -310,7 +310,7 @@ export function GrowthSurface(): ReactElement {
     const sequence = refreshSequence.current;
     setBusy("refresh");
     setError("");
-    setStatus("Перестраиваю список текущих целей и состояние Growth из серверного источника…");
+    setStatus("Перестраиваю список текущих целей и состояние раздела «Развитие» из серверного источника…");
     setSelectedGoalUuid("");
     clearGoalState();
     try {
@@ -322,11 +322,11 @@ export function GrowthSurface(): ReactElement {
       setGoals(nextGoals);
       setMappingStatus(nextMappings);
       setStatus(nextGoals.goals.length > 0
-        ? "Цели готовы. Выбери одну явно, затем отдельно построй Growth."
+        ? "Цели готовы. Выбери одну явно, затем отдельно построй результат развития."
         : "В текущем источнике нет доступной цели.");
     } catch (caught) {
       if (isAbortError(caught) || controller.signal.aborted || sequence !== refreshSequence.current) return;
-      setError(presentError(caught, "Текущие цели Growth недоступны."));
+      setError(presentError(caught, "Текущие цели для раздела «Развитие» недоступны."));
       setStatus("");
     } finally {
       if (sequence === refreshSequence.current) {
@@ -341,7 +341,7 @@ export function GrowthSurface(): ReactElement {
     clearGoalState();
     setSelectedGoalUuid(value);
     setError("");
-    setStatus(value ? "Цель выбрана. Нажми «Построить Growth» для нового серверного rebuild." : "Цель не выбрана.");
+    setStatus(value ? "Цель выбрана. Нажми «Построить результат развития» для нового перестроения на сервере." : "Цель не выбрана.");
   }
 
   async function buildCurrentGrowth(): Promise<void> {
@@ -355,7 +355,7 @@ export function GrowthSurface(): ReactElement {
     const sequence = ++growthSequence.current;
     setBusy("growth");
     setError("");
-    setStatus("Перестраиваю текущий Growth result по выбранной цели…");
+    setStatus("Перестраиваю текущий результат развития по выбранной цели…");
     setGrowth(null);
     setMappingSelector(null);
     setMappingReview(null);
@@ -369,10 +369,10 @@ export function GrowthSurface(): ReactElement {
       const result = await loadGrowth(selectedGoalUuid, undefined, controller.signal);
       if (controller.signal.aborted || sequence !== growthSequence.current) return;
       setGrowth(result);
-      setStatus("Growth готов. Состояние описывает только текущий exact-срез; автоматических действий нет.");
+      setStatus("Картина развития готова. Состояние описывает только текущий точный срез; автоматических действий нет.");
     } catch (caught) {
       if (isAbortError(caught) || controller.signal.aborted || sequence !== growthSequence.current) return;
-      setError(presentError(caught, "Текущий Growth result недоступен."));
+      setError(presentError(caught, "Текущий результат развития недоступен."));
       setStatus("");
     } finally {
       if (!controller.signal.aborted && sequence === growthSequence.current) {
@@ -384,7 +384,7 @@ export function GrowthSurface(): ReactElement {
 
   async function startMappingReview(): Promise<void> {
     if (!currentSelector || !mappingRelation || busy) {
-      if (!currentSelector) setError("Для текущего состояния нет exact-варианта для проверки связи.");
+      if (!currentSelector) setError("Для текущего состояния нет точного варианта для проверки связи.");
       else if (!mappingRelation) setError("Выбери одну связь: согласуется, конфликтует или нейтрально.");
       return;
     }
@@ -397,15 +397,15 @@ export function GrowthSurface(): ReactElement {
     setMappingReview(null);
     setMappingConfirmed(false);
     setMappingAcceptedId("");
-    setStatus("Сервер заново проверяет цель, exact-контекст и выбранный вариант…");
+    setStatus("Сервер заново проверяет цель, точный контекст и выбранный вариант…");
     try {
       const review = await reviewGrowthMapping(currentSelector, mappingRelation, undefined, controller.signal);
       if (controller.signal.aborted || sequence !== mappingSequence.current) return;
       setMappingReview(review);
-      setStatus("Review готов. Проверь текст и контекст, затем явно подтверди связь.");
+      setStatus("Проверка готова. Проверь текст и контекст, затем явно подтверди связь.");
     } catch (caught) {
       if (isAbortError(caught) || controller.signal.aborted || sequence !== mappingSequence.current) return;
-      setError(presentError(caught, "Не удалось подготовить review связи Growth."));
+      setError(presentError(caught, "Не удалось подготовить проверку связи развития."));
       setStatus("");
     } finally {
       if (!controller.signal.aborted && sequence === mappingSequence.current) {
@@ -430,7 +430,7 @@ export function GrowthSurface(): ReactElement {
     const sequence = ++mappingSequence.current;
     setBusy("mapping-confirm");
     setError("");
-    setStatus("Сервер повторно валидирует review и добавляет новую append-only запись…");
+    setStatus("Сервер повторно проверяет данные и добавляет новую запись без изменения истории…");
     try {
       const accepted = await confirmGrowthMapping(
         currentSelector,
@@ -453,7 +453,7 @@ export function GrowthSurface(): ReactElement {
       setGrowth(nextGrowth);
     } catch (caught) {
       if (isAbortError(caught) || controller.signal.aborted || sequence !== mappingSequence.current) return;
-      setError(presentError(caught, "Связь не принята. Review мог устареть; начни его заново."));
+      setError(presentError(caught, "Связь не принята. Проверка могла устареть; начни её заново."));
       setStatus("");
     } finally {
       if (!controller.signal.aborted && sequence === mappingSequence.current) {
@@ -496,7 +496,7 @@ export function GrowthSurface(): ReactElement {
   async function createAdvisorPreview(): Promise<void> {
     const request = makeAdvisorRequest();
     if (!request || busy) {
-      if (!request) setError("Укажи задачу Advisor и проверь, что цель всё ещё выбрана.");
+      if (!request) setError("Укажи задачу для советника и проверь, что цель всё ещё выбрана.");
       return;
     }
     advisorController.current?.abort();
@@ -509,15 +509,15 @@ export function GrowthSurface(): ReactElement {
     setAdvisorPreview(null);
     setAdvisorBranch(null);
     setAdvisorConfirmed(false);
-    setStatus("Готовлю точный preview текущего Goal без provider-вызова…");
+    setStatus("Готовлю предпросмотр текущей цели без вызова провайдера…");
     try {
       const preview = await previewGrowthAdvisor(request, undefined, controller.signal);
       if (controller.signal.aborted || sequence !== advisorSequence.current) return;
       setAdvisorPreview(preview);
-      setStatus("Preview готов. Текст Goal показан отдельно; provider ещё не вызывался.");
+      setStatus("Предпросмотр готов. Текст цели показан отдельно; провайдер ещё не вызывался.");
     } catch (caught) {
       if (isAbortError(caught) || controller.signal.aborted || sequence !== advisorSequence.current) return;
-      setError(presentError(caught, "Не удалось подготовить preview Advisor."));
+      setError(presentError(caught, "Не удалось подготовить предпросмотр советника."));
       setStatus("");
     } finally {
       if (!controller.signal.aborted && sequence === advisorSequence.current) {
@@ -541,7 +541,7 @@ export function GrowthSurface(): ReactElement {
       if (controller.signal.aborted || sequence !== advisorSequence.current) return;
       setAdvisorBranch(branch);
       setAdvisorConfirmed(false);
-      setStatus("Независимая рекомендация готова и остаётся transient-результатом.");
+      setStatus("Независимая рекомендация готова и остаётся временным результатом.");
     } catch (caught) {
       if (isAbortError(caught) || controller.signal.aborted || sequence !== advisorSequence.current) return;
       setError(presentError(caught, "Независимая рекомендация недоступна."));
@@ -556,7 +556,7 @@ export function GrowthSurface(): ReactElement {
 
   async function requestLearning(): Promise<void> {
     if (!learningRequest || learningCandidate || busy) {
-      if (!learningRequest) setError("Для Learning нужно явно выбрать цель.");
+      if (!learningRequest) setError("Для уточнения нужно явно выбрать цель.");
       return;
     }
     learningController.current?.abort();
@@ -567,7 +567,7 @@ export function GrowthSurface(): ReactElement {
     setError("");
     setLearningResolution(null);
     setLearningAnswer("");
-    setStatus("Проверяю текущий Growth и запрашиваю не более одного foreground-вопроса…");
+    setStatus("Проверяю текущее состояние развития и запрашиваю не более одного вопроса по явному запросу…");
     try {
       const result = await requestGrowthLearningQuestion(learningRequest, undefined, controller.signal);
       if (controller.signal.aborted || sequence !== learningSequence.current) return;
@@ -576,7 +576,7 @@ export function GrowthSurface(): ReactElement {
       setStatus(result.status === "candidate" ? "Один вопрос готов. Выбери ровно одно явное действие." : (NO_CANDIDATE_COPY[result.no_candidate_code ?? ""] ?? "Сейчас вопрос не нужен."));
     } catch (caught) {
       if (isAbortError(caught) || controller.signal.aborted || sequence !== learningSequence.current) return;
-      setError(presentError(caught, "Не удалось подготовить вопрос Growth."));
+      setError(presentError(caught, "Не удалось подготовить вопрос для уточнения."));
       setStatus("");
     } finally {
       if (!controller.signal.aborted && sequence === learningSequence.current) {
@@ -594,7 +594,7 @@ export function GrowthSurface(): ReactElement {
     }
     if (Date.parse(learningCandidate.expires_at) <= Date.now()) {
       setLearningCandidate(null);
-      setError("Вопрос Growth устарел; запроси новый после обновления.");
+      setError("Вопрос для уточнения устарел; запроси новый после обновления.");
       setStatus("");
       return;
     }
@@ -621,7 +621,7 @@ export function GrowthSurface(): ReactElement {
         setMappingSelector(result.handoff.selector);
         setMappingReview(null);
         setMappingRelation("");
-        setStatus("Learning передал только exact-selector. Выбери relation и отдельно запусти mapping review.");
+        setStatus("Уточнение передало только точный выбор. Выбери связь и отдельно запусти её проверку.");
         mappingHandoffRef.current?.focus();
       } else if (result.answer_draft) {
         setMemoryDraft({
@@ -636,14 +636,14 @@ export function GrowthSurface(): ReactElement {
         setMemorySaved(null);
         setMemoryFields(EMPTY_MEMORY_FIELDS);
         setMemoryConfirmed(false);
-        setStatus("Ответ подготовлен как transient draft. Только следующий явный review может передать его в Personal Memory.");
+        setStatus("Ответ подготовлен как временный черновик. Только следующая явная проверка может передать его в личную память.");
       } else {
         setStatus(disposition === "ignore" ? "Вопрос проигнорирован без записи." : disposition === "reject" ? "Вопрос отклонён без записи." : "Действие завершено без записи.");
       }
       setLearningAnswer("");
     } catch (caught) {
       if (isAbortError(caught) || controller.signal.aborted || sequence !== learningSequence.current) return;
-      setError(presentError(caught, "Вопрос Growth устарел или недоступен."));
+      setError(presentError(caught, "Вопрос для уточнения устарел или недоступен."));
       setStatus("");
     } finally {
       if (!controller.signal.aborted && sequence === learningSequence.current) {
@@ -674,7 +674,7 @@ export function GrowthSurface(): ReactElement {
   async function reviewMemoryDraft(): Promise<void> {
     if (!memoryDraft || busy) return;
     if (!memoryDraft.title.trim() || !memoryDraft.content.trim()) {
-      setError("Заполни название и содержание ответа перед review Personal Memory.");
+      setError("Заполни название и содержание ответа перед проверкой личной памяти.");
       return;
     }
     memoryController.current?.abort();
@@ -683,7 +683,7 @@ export function GrowthSurface(): ReactElement {
     const sequence = ++memorySequence.current;
     setBusy("memory");
     setError("");
-    setStatus("Проверяю ответ через существующий draft review без записи…");
+    setStatus("Проверяю ответ через существующую проверку черновика без записи…");
     try {
       const reviewed = await reviewActiveLearningAnswer(memoryDraft, undefined, controller.signal);
       if (controller.signal.aborted || sequence !== memorySequence.current) return;
@@ -692,10 +692,10 @@ export function GrowthSurface(): ReactElement {
       setMemoryPlan(null);
       setMemorySaved(null);
       setMemoryConfirmed(false);
-      setStatus("Draft review готов. Проверь метаданные Personal Memory перед подготовкой Safe Write.");
+      setStatus("Проверка черновика готова. Проверь метаданные личной памяти перед подготовкой безопасного сохранения.");
     } catch (caught) {
       if (isAbortError(caught) || controller.signal.aborted || sequence !== memorySequence.current) return;
-      setError(presentError(caught, "Не удалось проверить ответ Personal Memory."));
+      setError(presentError(caught, "Не удалось проверить ответ для личной памяти."));
       setStatus("");
     } finally {
       if (!controller.signal.aborted && sequence === memorySequence.current) {
@@ -709,11 +709,11 @@ export function GrowthSurface(): ReactElement {
     if (!memoryDraft || !memoryReviewToken || busy) return;
     const payload = memoryPayload();
     if (!memoryConfirmed) {
-      setError("Подтверди проверку метаданных Personal Memory.");
+      setError("Подтверди проверку метаданных личной памяти.");
       return;
     }
     if (!payload.evidence_kind || !payload.self_kind || (payload.evidence_at_precision === "exact" && !payload.evidence_at)) {
-      setError("Заполни обязательные метаданные Personal Memory.");
+      setError("Заполни обязательные метаданные личной памяти.");
       return;
     }
     memoryController.current?.abort();
@@ -722,15 +722,15 @@ export function GrowthSurface(): ReactElement {
     const sequence = ++memorySequence.current;
     setBusy("memory");
     setError("");
-    setStatus("Готовлю Safe Write preview; канонической записи ещё нет…");
+    setStatus("Готовлю предпросмотр безопасного сохранения; канонической записи ещё нет…");
     try {
       const plan = await preparePersonalMemory(memoryReviewToken, memoryDraft, payload);
       if (controller.signal.aborted || sequence !== memorySequence.current) return;
       setMemoryPlan(plan);
-      setStatus("Safe Write preview готов. Только явное следующее подтверждение создаст заметку.");
+      setStatus("Предпросмотр безопасного сохранения готов. Только явное следующее подтверждение создаст заметку.");
     } catch (caught) {
       if (isAbortError(caught) || controller.signal.aborted || sequence !== memorySequence.current) return;
-      setError(presentError(caught, "Не удалось подготовить Safe Write."));
+      setError(presentError(caught, "Не удалось подготовить безопасное сохранение."));
       setStatus("");
     } finally {
       if (!controller.signal.aborted && sequence === memorySequence.current) {
@@ -748,15 +748,15 @@ export function GrowthSurface(): ReactElement {
     const sequence = ++memorySequence.current;
     setBusy("memory");
     setError("");
-    setStatus("Сохраняю только после явного подтверждения Safe Write…");
+    setStatus("Сохраняю только после явного подтверждения безопасного сохранения…");
     try {
       const saved = await applyPersonalMemory(memoryReviewToken, memoryPlan.confirmation_token, memoryDraft, memoryPayload());
       if (controller.signal.aborted || sequence !== memorySequence.current) return;
       setMemorySaved(saved);
-      setStatus("Personal Memory сохранена через существующий Safe Write.");
+      setStatus("Личная память сохранена через существующее безопасное сохранение.");
     } catch (caught) {
       if (isAbortError(caught) || controller.signal.aborted || sequence !== memorySequence.current) return;
-      setError(presentError(caught, "Не удалось сохранить Personal Memory."));
+      setError(presentError(caught, "Не удалось сохранить личную память."));
       setStatus("");
     } finally {
       if (!controller.signal.aborted && sequence === memorySequence.current) {
@@ -775,23 +775,23 @@ export function GrowthSurface(): ReactElement {
     <section className="growth-surface" id="growth-engine" aria-labelledby="growth-title" aria-busy={busy !== null}>
       <div className="growth-heading">
         <div>
-          <p className="growth-eyebrow">Cognitive Twin · Stage 11E</p>
-          <h3 id="growth-title">Growth: цель → наблюдаемый выбор</h3>
+          <p className="growth-eyebrow">Модель себя · этап 11E</p>
+          <h3 id="growth-title">Развитие: цель → наблюдаемый выбор</h3>
           <p>Текущая цель, точная наблюдаемая связь и независимая рекомендация остаются отдельными слоями.</p>
         </div>
-        <div className="growth-heading-meta"><span>server-owned</span><span>no-store · foreground-only</span></div>
+        <div className="growth-heading-meta"><span>управляется сервером</span><span>без сохранения · только по явному запросу</span></div>
       </div>
 
       <div className="growth-toolbar">
         <button className="growth-button growth-button-primary" type="button" disabled={busy !== null} aria-busy={busy === "refresh"} onClick={() => void refresh()}>
-          {busy === "refresh" ? "Обновляю…" : "Обновить Growth"}
+          {busy === "refresh" ? "Обновляю…" : "Обновить данные развития"}
         </button>
         <p className="growth-status" role="status" aria-live="polite">{status}</p>
       </div>
       <ErrorMessage message={error} />
 
       {!goals ? (
-        <p className="growth-empty">Нажми «Обновить Growth», чтобы явно загрузить список текущих целей с сервера.</p>
+        <p className="growth-empty">Нажми «Обновить данные развития», чтобы явно загрузить список текущих целей с сервера.</p>
       ) : (
         <>
           <section className="growth-panel growth-goal-panel" aria-labelledby="growth-goal-title">
@@ -804,12 +804,12 @@ export function GrowthSurface(): ReactElement {
             {selectedGoal ? (
               <div className="growth-goal-preview"><p>{selectedGoal.goal_text}</p><dl className="growth-fields"><div><dt>Домен</dt><dd>{safeText(selectedGoal.goal.domain)}</dd></div><div><dt>Источник</dt><dd>{selectedGoal.goal.source_note_uuid}</dd></div></dl></div>
             ) : <p className="growth-muted">После выбора нажми отдельную кнопку построения. Сам выбор не запускает чтение источников.</p>}
-            <button className="growth-button growth-button-secondary" type="button" disabled={!selectedGoalUuid || busy !== null} aria-busy={busy === "growth"} onClick={() => void buildCurrentGrowth()}>{busy === "growth" ? "Строю Growth…" : "Построить Growth result"}</button>
+             <button className="growth-button growth-button-secondary" type="button" disabled={!selectedGoalUuid || busy !== null} aria-busy={busy === "growth"} onClick={() => void buildCurrentGrowth()}>{busy === "growth" ? "Строю результат развития…" : "Построить результат развития"}</button>
           </section>
 
           {growth ? (
             <section className="growth-panel" aria-labelledby="growth-result-title">
-              <div className="growth-panel-heading"><span className="growth-index">02</span><div><h4 id="growth-result-title">Текущее состояние</h4><p>Описательный exact result без score, probability и скрытого вывода о личности.</p></div></div>
+               <div className="growth-panel-heading"><span className="growth-index">02</span><div><h4 id="growth-result-title">Текущее состояние</h4><p>Описательный точный результат без оценки, вероятности и скрытого вывода о личности.</p></div></div>
               <div className="growth-result-list">
                 {growth.goal_results.map((relation, index) => (
                   <article className={`growth-result growth-result-${relation.state}`} key={`${relation.goal?.source_note_uuid ?? "missing"}-${index}`}>
@@ -822,75 +822,75 @@ export function GrowthSurface(): ReactElement {
               </div>
 
               <section className="growth-action-panel" aria-labelledby="growth-mapping-title">
-                <h5 id="growth-mapping-title">Проверка exact-связи</h5>
-                <p>Сервер проверит выбранный UUID, cohort и option fingerprint заново. Labels используются только для review человека; автоматического mapping нет.</p>
+                 <h5 id="growth-mapping-title">Проверка точной связи</h5>
+                 <p>Сервер заново проверит выбранный UUID, группу наблюдений и отпечаток варианта. Подписи нужны только для проверки человеком; автоматического сопоставления нет.</p>
                 {currentSelector ? (
                   <>
                     <label className="growth-label" htmlFor="growth-relation-select">Как эта связь относится к цели?</label>
                     <select className="growth-input" id="growth-relation-select" value={mappingRelation} disabled={busy !== null} onChange={(event) => { setMappingRelation(event.target.value as GrowthRelation | ""); setMappingReview(null); setMappingConfirmed(false); }}>
-                      <option value="">Выбери relation</option>
+                       <option value="">Выбери связь</option>
                       <option value="supports_goal">Согласуется с целью</option>
                       <option value="conflicts_with_goal">Конфликтует с целью</option>
                       <option value="neutral_or_unknown">Нейтрально или неизвестно</option>
                     </select>
-                    <div className="growth-action-row"><button className="growth-button growth-button-secondary" type="button" disabled={!mappingRelation || busy !== null} aria-busy={busy === "mapping-review"} onClick={() => void startMappingReview()}>{busy === "mapping-review" ? "Проверяю…" : "Уточнить связь — показать review"}</button></div>
+                     <div className="growth-action-row"><button className="growth-button growth-button-secondary" type="button" disabled={!mappingRelation || busy !== null} aria-busy={busy === "mapping-review"} onClick={() => void startMappingReview()}>{busy === "mapping-review" ? "Проверяю…" : "Уточнить связь — показать проверку"}</button></div>
                   </>
-                ) : <p className="growth-muted">Для mixed, changed, insufficient и not comparable нет бинарного варианта для автоматического выбора. Можно только сохранить безопасное состояние.</p>}
-                {activeMapping ? <p className="growth-inline-state">Для этого exact-варианта уже действует связь: {RELATION_LABELS[activeMapping.relation]}. Новая запись возможна только через новый review.</p> : null}
+                 ) : <p className="growth-muted">Для смешанных, изменившихся, недостаточных и несопоставимых состояний нет двоичного варианта для автоматического выбора. Можно только сохранить безопасное состояние.</p>}
+                 {activeMapping ? <p className="growth-inline-state">Для этого точного варианта уже действует связь: {RELATION_LABELS[activeMapping.relation]}. Новая запись возможна только через новую проверку.</p> : null}
                 {mappingReview ? (
                   <div className="growth-review" aria-labelledby="growth-review-title">
-                    <h6 id="growth-review-title">Review текущего источника</h6>
+                     <h6 id="growth-review-title">Проверка текущего источника</h6>
                     <p className="growth-review-goal">{mappingReview.goal_text}</p>
                     <dl className="growth-fields"><div><dt>Домен цели</dt><dd>{mappingReview.goal_domain}</dd></div><div><dt>Ситуация</dt><dd>{mappingReview.situation}</dd></div><div><dt>Известная информация</dt><dd>{mappingReview.information_known_at_decision_time}</dd></div><div><dt>Текущий вариант</dt><dd>{selectedOptionLabel(mappingReview)}</dd></div></dl>
                     <p className="growth-review-note">Критерии: {mappingReview.criteria.join(" · ") || "—"}</p>
                     <p className="growth-review-note">Все варианты: {mappingReview.ordered_options.map((item) => `${item.option_index}: ${item.label}`).join(" · ")}</p>
                     <p className="growth-review-note">Предлагаемая связь: {mappingReview.proposed_relation ? RELATION_LABELS[mappingReview.proposed_relation] : "не задана"}</p>
-                    <details className="growth-technical"><summary>Отпечатки для повторной проверки</summary><dl className="growth-fields growth-fields-technical"><div><dt>Goal fingerprint</dt><dd>{mappingReview.goal.claim_fingerprint}</dd></div><div><dt>Candidate mapping fingerprint</dt><dd>{safeText(mappingReview.candidate_mapping_fingerprint)}</dd></div><div><dt>Option fingerprint</dt><dd>{mappingReview.selected_option.option_fingerprint}</dd></div></dl></details>
-                    <label className="growth-confirm-label"><input type="checkbox" checked={mappingConfirmed} disabled={busy !== null || sameMappingAlreadyActive} onChange={(event) => setMappingConfirmed(event.target.checked)} />Я проверил Goal, exact-контекст и вариант и подтверждаю эту связь.</label>
+                     <details className="growth-technical"><summary>Отпечатки для повторной проверки</summary><dl className="growth-fields growth-fields-technical"><div><dt>Отпечаток цели</dt><dd>{mappingReview.goal.claim_fingerprint}</dd></div><div><dt>Отпечаток предлагаемого сопоставления</dt><dd>{safeText(mappingReview.candidate_mapping_fingerprint)}</dd></div><div><dt>Отпечаток варианта</dt><dd>{mappingReview.selected_option.option_fingerprint}</dd></div></dl></details>
+                     <label className="growth-confirm-label"><input type="checkbox" checked={mappingConfirmed} disabled={busy !== null || sameMappingAlreadyActive} onChange={(event) => setMappingConfirmed(event.target.checked)} />Я проверил цель, точный контекст и вариант и подтверждаю эту связь.</label>
                     <button className="growth-button growth-button-primary" type="button" disabled={!mappingConfirmed || busy !== null || sameMappingAlreadyActive} aria-busy={busy === "mapping-confirm"} onClick={() => void confirmMapping()}>{busy === "mapping-confirm" ? "Подтверждаю…" : sameMappingAlreadyActive ? "Эта связь уже действует" : "Подтвердить связь"}</button>
                   </div>
                 ) : null}
-                {mappingAcceptedId ? <p className="growth-success" role="status">Принято: {mappingAcceptedId}. Lifecycle остаётся append-only.</p> : null}
-                <details className="growth-technical"><summary>Lifecycle mapping store</summary>{mappingStatus?.mappings.length ? <ul className="growth-lifecycle-list">{mappingStatus.mappings.map((item) => <li key={item.mapping_id}><span>{lifecycleLabel(item.lifecycle_state)}</span><span>{item.mapping_id}</span><span>{RELATION_LABELS[item.relation]}</span></li>)}</ul> : <p>Записей сопоставления пока нет.</p>}</details>
+                 {mappingAcceptedId ? <p className="growth-success" role="status">Принято: {mappingAcceptedId}. История не изменяется, добавляется новая запись.</p> : null}
+                 <details className="growth-technical"><summary>Хранилище жизненного цикла сопоставлений</summary>{mappingStatus?.mappings.length ? <ul className="growth-lifecycle-list">{mappingStatus.mappings.map((item) => <li key={item.mapping_id}><span>{lifecycleLabel(item.lifecycle_state)}</span><span>{item.mapping_id}</span><span>{RELATION_LABELS[item.relation]}</span></li>)}</ul> : <p>Записей сопоставления пока нет.</p>}</details>
               </section>
 
               <section className="growth-action-panel" aria-labelledby="growth-learning-title">
-                <h5 id="growth-learning-title">Growth Learning / Question</h5>
-                <p>Один foreground-вопрос, без provider-вызова и без автоматической записи. Advisor и Learning не вызывают друг друга.</p>
-                <button className="growth-button growth-button-secondary" type="button" disabled={busy !== null || learningCandidate !== null || !learningRequest} aria-busy={busy === "learning"} onClick={() => void requestLearning()}>{busy === "learning" ? "Проверяю…" : "Уточнить Growth — задать один вопрос"}</button>
+                 <h5 id="growth-learning-title">Уточнение развития</h5>
+                 <p>Один вопрос по явному запросу, без вызова провайдера и без автоматической записи. Советник и уточнение не вызывают друг друга.</p>
+                 <button className="growth-button growth-button-secondary" type="button" disabled={busy !== null || learningCandidate !== null || !learningRequest} aria-busy={busy === "learning"} onClick={() => void requestLearning()}>{busy === "learning" ? "Проверяю…" : "Уточнить развитие — задать один вопрос"}</button>
                 {learningResult?.status === "no_candidate" ? <p className="growth-muted">{NO_CANDIDATE_COPY[learningResult.no_candidate_code ?? ""] ?? "Сейчас вопрос не нужен."}</p> : null}
                 {learningCandidate ? (
                   <div className="growth-question">
-                    <p className="growth-eyebrow">{presentCode(learningCandidate.reason_code, "Вопрос Growth")}</p>
+                    <p className="growth-eyebrow">{presentCode(learningCandidate.reason_code, "Вопрос для уточнения")}</p>
                     <h6>{learningCandidate.question}</h6>
                     <p className="growth-review-note">Вопрос действует ограниченное время и будет заново проверен сервером перед любым ответом.</p>
-                    <textarea className="growth-input" rows={4} value={learningAnswer} aria-label="Ответ на вопрос Growth" placeholder="Ответ нужен только для явного действия «Ответить»" onChange={(event) => setLearningAnswer(event.target.value)} />
+                    <textarea className="growth-input" rows={4} value={learningAnswer} aria-label="Ответ на вопрос для уточнения" placeholder="Ответ нужен только для явного действия «Ответить»" onChange={(event) => setLearningAnswer(event.target.value)} />
                     <div className="growth-action-row"><button className="growth-button growth-button-primary" type="button" disabled={learningButtonDisabled || !learningAnswer.trim()} onClick={() => void resolveLearning("answer")}>Ответить</button><button className="growth-button growth-button-secondary" type="button" disabled={learningButtonDisabled} onClick={() => void resolveLearning("review")}>Проверить связь</button><button className="growth-button growth-button-quiet" type="button" disabled={learningButtonDisabled} onClick={() => void resolveLearning("ignore")}>Игнорировать</button><button className="growth-button growth-button-quiet" type="button" disabled={learningButtonDisabled} onClick={() => void resolveLearning("reject")}>Отклонить</button></div>
                   </div>
                 ) : null}
-                {learningResolution?.handoff?.kind === "relation_review" ? <p className="growth-handoff" ref={mappingHandoffRef} tabIndex={-1}>Learning передал только selector для relation review. Выбери relation выше и запусти review вручную.</p> : null}
+                 {learningResolution?.handoff?.kind === "relation_review" ? <p className="growth-handoff" ref={mappingHandoffRef} tabIndex={-1}>Уточнение передало только точный выбор. Выбери связь выше и запусти проверку вручную.</p> : null}
               </section>
 
               {memoryDraft ? (
                 <section className="growth-action-panel growth-memory-panel" aria-labelledby="growth-memory-title">
-                  <h5 id="growth-memory-title">Ответ → существующий Personal Memory review</h5>
-                  <p>Ответ Learning не является канонической памятью. Сначала отредактируй текст и пройди существующие review и Safe Write.</p>
+                  <h5 id="growth-memory-title">Ответ → проверка в личной памяти</h5>
+                  <p>Ответ уточнения не является канонической памятью. Сначала отредактируй текст и пройди существующие проверки и безопасное сохранение.</p>
                   <div className="growth-memory-fields"><label className="growth-label" htmlFor="growth-memory-draft-title">Название</label><input className="growth-input" id="growth-memory-draft-title" value={memoryDraft.title} disabled={busy !== null || memorySaved !== null} onChange={(event) => updateMemoryDraft("title", event.target.value)} /><label className="growth-label" htmlFor="growth-memory-draft-content">Содержание ответа</label><textarea className="growth-input" id="growth-memory-draft-content" rows={8} value={memoryDraft.content} disabled={busy !== null || memorySaved !== null} onChange={(event) => updateMemoryDraft("content", event.target.value)} /></div>
                   {!memoryReviewToken ? <button className="growth-button growth-button-secondary" type="button" disabled={busy !== null || !memoryDraft.title.trim() || !memoryDraft.content.trim()} aria-busy={busy === "memory"} onClick={() => void reviewMemoryDraft()}>{busy === "memory" ? "Проверяю…" : "Проверить ответ"}</button> : null}
-                  {memoryReviewToken ? <div className="growth-memory-review"><h6>Метаданные Personal Memory</h6><p>Ничего не классифицируется автоматически. Выбери каждое значение сам.</p><PersonalMemoryMetadataFields idPrefix="growth-personal-memory" disabled={busy !== null || memorySaved !== null} values={memoryFields} onEvidenceKindChange={(value) => setMemoryFields((current) => ({ ...current, evidenceKind: value }))} onSelfKindChange={(value) => setMemoryFields((current) => ({ ...current, selfKind: value }))} onTimeModeChange={(value: PersonalMemoryTimeMode) => setMemoryFields((current) => ({ ...current, timeMode: value, evidenceAt: value === "exact" ? "" : "unknown" }))} onEvidenceAtChange={(value) => setMemoryFields((current) => ({ ...current, evidenceAt: value }))} onDomainChange={(value) => setMemoryFields((current) => ({ ...current, domain: value }))} onNow={() => setMemoryFields((current) => ({ ...current, timeMode: "exact", evidenceAt: new Date().toISOString() }))} /><label className="growth-confirm-label"><input type="checkbox" checked={memoryConfirmed} disabled={busy !== null || memorySaved !== null} onChange={(event) => { setMemoryConfirmed(event.target.checked); setMemoryPlan(null); }} />Я проверил метаданные и понимаю, что следующее подтверждение создаст каноническое свидетельство.</label><div className="growth-action-row"><button className="growth-button growth-button-secondary" type="button" disabled={busy !== null || memorySaved !== null} aria-busy={busy === "memory"} onClick={() => void prepareMemory()}>{busy === "memory" ? "Готовлю…" : "Подготовить Safe Write"}</button>{memoryPlan ? <button className="growth-button growth-button-primary" type="button" disabled={busy !== null || memorySaved !== null} aria-busy={busy === "memory"} onClick={() => void saveMemory()}>{busy === "memory" ? "Сохраняю…" : "Подтвердить сохранение"}</button> : null}</div>{memoryPlan ? <details className="growth-technical" open><summary>Diff до записи</summary><pre>{memoryPlan.diff}</pre></details> : null}{memorySaved ? <p className="growth-success" role="status">Personal Memory создана: {memorySaved.note.id}</p> : null}</div> : null}
+                  {memoryReviewToken ? <div className="growth-memory-review"><h6>Метаданные личной памяти</h6><p>Ничего не классифицируется автоматически. Выбери каждое значение сам.</p><PersonalMemoryMetadataFields idPrefix="growth-personal-memory" disabled={busy !== null || memorySaved !== null} values={memoryFields} onEvidenceKindChange={(value) => setMemoryFields((current) => ({ ...current, evidenceKind: value }))} onSelfKindChange={(value) => setMemoryFields((current) => ({ ...current, selfKind: value }))} onTimeModeChange={(value: PersonalMemoryTimeMode) => setMemoryFields((current) => ({ ...current, timeMode: value, evidenceAt: value === "exact" ? "" : "unknown" }))} onEvidenceAtChange={(value) => setMemoryFields((current) => ({ ...current, evidenceAt: value }))} onDomainChange={(value) => setMemoryFields((current) => ({ ...current, domain: value }))} onNow={() => setMemoryFields((current) => ({ ...current, timeMode: "exact", evidenceAt: new Date().toISOString() }))} /><label className="growth-confirm-label"><input type="checkbox" checked={memoryConfirmed} disabled={busy !== null || memorySaved !== null} onChange={(event) => { setMemoryConfirmed(event.target.checked); setMemoryPlan(null); }} />Я проверил метаданные и понимаю, что следующее подтверждение создаст каноническое свидетельство.</label><div className="growth-action-row"><button className="growth-button growth-button-secondary" type="button" disabled={busy !== null || memorySaved !== null} aria-busy={busy === "memory"} onClick={() => void prepareMemory()}>{busy === "memory" ? "Готовлю…" : "Подготовить безопасное сохранение"}</button>{memoryPlan ? <button className="growth-button growth-button-primary" type="button" disabled={busy !== null || memorySaved !== null} aria-busy={busy === "memory"} onClick={() => void saveMemory()}>{busy === "memory" ? "Сохраняю…" : "Подтвердить сохранение"}</button> : null}</div>{memoryPlan ? <details className="growth-technical" open><summary>Список изменений до записи</summary><pre>{memoryPlan.diff}</pre></details> : null}{memorySaved ? <p className="growth-success" role="status">Личная память создана: {memorySaved.note.id}</p> : null}</div> : null}
                 </section>
               ) : null}
 
               <section className="growth-action-panel growth-advisor-panel" aria-labelledby="growth-advisor-title">
                 <h5 id="growth-advisor-title">Независимая рекомендация / анализ</h5>
-                <p>Advisor получает только явно введённые данные и точный текущий Goal. Growth, Stage 9, Stage 10 и Memory автоматически не передаются.</p>
-                <div className="growth-memory-fields"><label className="growth-label" htmlFor="growth-advisor-task">Задача Advisor</label><textarea className="growth-input" id="growth-advisor-task" rows={3} value={advisorTask} disabled={busy !== null} onChange={(event) => updateAdvisor({ field: "task", text: event.target.value })} /><label className="growth-label" htmlFor="growth-advisor-options">Варианты (по одному на строку, необязательно)</label><textarea className="growth-input" id="growth-advisor-options" rows={3} value={advisorOptions} disabled={busy !== null} onChange={(event) => updateAdvisor({ field: "options", text: event.target.value })} /><label className="growth-label" htmlFor="growth-advisor-constraints">Ограничения (по одному на строку)</label><textarea className="growth-input" id="growth-advisor-constraints" rows={3} value={advisorConstraints} disabled={busy !== null} onChange={(event) => updateAdvisor({ field: "constraints", text: event.target.value })} /><label className="growth-label" htmlFor="growth-advisor-facts">Явные факты (по одному на строку)</label><textarea className="growth-input" id="growth-advisor-facts" rows={3} value={advisorFacts} disabled={busy !== null} onChange={(event) => updateAdvisor({ field: "facts", text: event.target.value })} /><label className="growth-label" htmlFor="growth-advisor-background">Явный фон (по одному на строку)</label><textarea className="growth-input" id="growth-advisor-background" rows={3} value={advisorBackground} disabled={busy !== null} onChange={(event) => updateAdvisor({ field: "background", text: event.target.value })} /></div>
-                <button className="growth-button growth-button-secondary" type="button" disabled={busy !== null || !selectedGoalUuid || !advisorTask.trim()} aria-busy={busy === "advisor"} onClick={() => void createAdvisorPreview()}>{busy === "advisor" ? "Готовлю…" : "Показать Goal preview"}</button>
-                {advisorPreview ? <div className="growth-advisor-preview"><h6>Точный Goal, который будет передан Advisor</h6><p>{advisorPreview.goal_text}</p><label className="growth-confirm-label"><input type="checkbox" checked={advisorConfirmed} disabled={busy !== null} onChange={(event) => setAdvisorConfirmed(event.target.checked)} />Я проверил Goal и явно разрешаю один независимый Advisor-вызов.</label><div className="growth-action-row"><button className="growth-button growth-button-primary" type="button" disabled={!advisorConfirmed || busy !== null} aria-busy={busy === "advisor"} onClick={() => void executeAdvisor()}>Выполнить независимый анализ</button><button className="growth-button growth-button-quiet" type="button" disabled={busy !== "advisor"} onClick={() => { advisorController.current?.abort(); advisorSequence.current += 1; setBusy(null); setStatus("Advisor-операция отменена; provider-вызов не продолжается на клиенте."); }}>Отменить</button></div></div> : null}
-                {advisorBranch ? <div className="growth-advisor-result" role="status"><p className="growth-state-chip">{advisorBranch.state === "abstention" ? "Безопасное воздержание Advisor" : advisorBranch.state === "error" ? "Advisor завершился ошибкой" : "Результат Advisor"}</p>{advisorBranch.error ? <p>{advisorBranch.error.message}</p> : null}{advisorText.map((item, index) => <p key={`${item}-${index}`}>{item}</p>)}<p className="growth-review-note">Результат transient и не изменяет Growth, Memory или Simulate Me.</p></div> : null}
+                <p>Советник получает только явно введённые данные и текущую точную цель. Развитие, этап 9, этап 10 и память автоматически не передаются.</p>
+                <div className="growth-memory-fields"><label className="growth-label" htmlFor="growth-advisor-task">Задача для советника</label><textarea className="growth-input" id="growth-advisor-task" rows={3} value={advisorTask} disabled={busy !== null} onChange={(event) => updateAdvisor({ field: "task", text: event.target.value })} /><label className="growth-label" htmlFor="growth-advisor-options">Варианты (по одному на строку, необязательно)</label><textarea className="growth-input" id="growth-advisor-options" rows={3} value={advisorOptions} disabled={busy !== null} onChange={(event) => updateAdvisor({ field: "options", text: event.target.value })} /><label className="growth-label" htmlFor="growth-advisor-constraints">Ограничения (по одному на строку)</label><textarea className="growth-input" id="growth-advisor-constraints" rows={3} value={advisorConstraints} disabled={busy !== null} onChange={(event) => updateAdvisor({ field: "constraints", text: event.target.value })} /><label className="growth-label" htmlFor="growth-advisor-facts">Явные факты (по одному на строку)</label><textarea className="growth-input" id="growth-advisor-facts" rows={3} value={advisorFacts} disabled={busy !== null} onChange={(event) => updateAdvisor({ field: "facts", text: event.target.value })} /><label className="growth-label" htmlFor="growth-advisor-background">Явный фон (по одному на строку)</label><textarea className="growth-input" id="growth-advisor-background" rows={3} value={advisorBackground} disabled={busy !== null} onChange={(event) => updateAdvisor({ field: "background", text: event.target.value })} /></div>
+                <button className="growth-button growth-button-secondary" type="button" disabled={busy !== null || !selectedGoalUuid || !advisorTask.trim()} aria-busy={busy === "advisor"} onClick={() => void createAdvisorPreview()}>{busy === "advisor" ? "Готовлю…" : "Показать предпросмотр цели"}</button>
+                {advisorPreview ? <div className="growth-advisor-preview"><h6>Точная цель, которая будет передана советнику</h6><p>{advisorPreview.goal_text}</p><label className="growth-confirm-label"><input type="checkbox" checked={advisorConfirmed} disabled={busy !== null} onChange={(event) => setAdvisorConfirmed(event.target.checked)} />Я проверил цель и явно разрешаю один независимый вызов советника.</label><div className="growth-action-row"><button className="growth-button growth-button-primary" type="button" disabled={!advisorConfirmed || busy !== null} aria-busy={busy === "advisor"} onClick={() => void executeAdvisor()}>Выполнить независимый анализ</button><button className="growth-button growth-button-quiet" type="button" disabled={busy !== "advisor"} onClick={() => { advisorController.current?.abort(); advisorSequence.current += 1; setBusy(null); setStatus("Операция советника отменена; вызов провайдера не продолжается на клиенте."); }}>Отменить</button></div></div> : null}
+                {advisorBranch ? <div className="growth-advisor-result" role="status"><p className="growth-state-chip">{advisorBranch.state === "abstention" ? "Безопасное воздержание советника" : advisorBranch.state === "error" ? "Советник завершился ошибкой" : "Результат советника"}</p>{advisorBranch.error ? <p>{advisorBranch.error.message}</p> : null}{advisorText.map((item, index) => <p key={`${item}-${index}`}>{item}</p>)}<p className="growth-review-note">Временный результат не изменяет развитие, память или прогноз.</p></div> : null}
               </section>
             </section>
-          ) : selectedGoal ? <p className="growth-empty">Цель выбрана. Построй Growth отдельной кнопкой, чтобы увидеть только текущий server-owned result.</p> : null}
+          ) : selectedGoal ? <p className="growth-empty">Цель выбрана. Построй результат развития отдельной кнопкой, чтобы увидеть только текущий результат, сформированный сервером.</p> : null}
         </>
       )}
     </section>

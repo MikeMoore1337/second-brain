@@ -89,19 +89,19 @@ try{
     await cognitive.getByRole('button',{name:'Подтвердить сопоставление',exact:true}).click();
     await cognitive.getByText('UUID принятого сопоставления').waitFor();
     const growth=page.locator('#growth-engine');
-    await growth.getByRole('button',{name:'Обновить Growth',exact:true}).click();
+    await growth.getByRole('button',{name:'Обновить данные развития',exact:true}).click();
     await growth.locator('#growth-goal-select').selectOption(id);
-    await growth.getByRole('button',{name:'Построить Growth result',exact:true}).click();
+    await growth.getByRole('button',{name:'Построить результат развития',exact:true}).click();
     await growth.locator('#growth-relation-select').selectOption('conflicts_with_goal');
-    await growth.getByRole('button',{name:'Уточнить связь — показать review',exact:true}).click();
-    await growth.getByLabel('Я проверил Goal, exact-контекст и вариант и подтверждаю эту связь.').check();
+    await growth.getByRole('button',{name:'Уточнить связь — показать проверку',exact:true}).click();
+    await growth.getByLabel('Я проверил цель, точный контекст и вариант и подтверждаю эту связь.').check();
     await growth.getByRole('button',{name:'Подтвердить связь',exact:true}).click();
     await growth.locator('#growth-advisor-task').fill('Проверить следующий шаг');
-    await growth.getByRole('button',{name:'Показать Goal preview',exact:true}).click();
+    await growth.getByRole('button',{name:'Показать предпросмотр цели',exact:true}).click();
     await growth.locator('.growth-advisor-panel input[type=checkbox]').check();
     await growth.getByRole('button',{name:'Выполнить независимый анализ',exact:true}).click();
     await growth.getByText('Проверь первый шаг').waitFor();
-    await growth.getByRole('button',{name:'Уточнить Growth — задать один вопрос',exact:true}).click();
+    await growth.getByRole('button',{name:'Уточнить развитие — задать один вопрос',exact:true}).click();
     await growth.getByRole('button',{name:'Игнорировать',exact:true}).click();
     await growth.getByText('Вопрос проигнорирован без записи').waitFor();
     for(const selector of ['#timeline','#self-model','#cognitive-twin','#growth-engine','.self-retrieval-item','.simulate-me-result','.stage7-result-grid','#diagnostics']){

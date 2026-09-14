@@ -71,7 +71,7 @@ export function LoginScreen({ error }: { readonly error?: LoginError }): ReactEl
             <GitHubMark />
             <span>Войти через GitHub</span>
           </a>
-          <p className="login-reassurance">Вход подтверждается на сервере по вашему идентификатору GitHub.</p>
+          <p className="login-reassurance">Вход подтверждается на сервере по вашему GitHub ID.</p>
         </section>
 
         <div className="login-scene" aria-hidden="true">

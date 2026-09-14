@@ -208,7 +208,7 @@ function AnswerSavePlan({ plan }: { plan: SavePlanResponse }): ReactElement {
         <div className="draft-field"><dt className="draft-field-label">Тип</dt><dd className="draft-field-value">{presentCode(plan.note.type, "Тип не указан")}</dd></div>
         <div className="draft-field"><dt className="draft-field-label">Путь</dt><dd className="draft-field-value">{plan.note.relative_path ?? "—"}</dd></div>
       </dl>
-      <h5>Предлагаемый Markdown-файл</h5>
+      <h5>Предлагаемый файл в формате Markdown</h5>
       <pre className="save-diff" tabIndex={0} aria-label="Полный список изменений предлагаемого файла">{plan.diff}</pre>
     </section>
   );
