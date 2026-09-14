@@ -9,10 +9,18 @@ from uuid import UUID
 
 import pytest
 
-from second_brain.adapters.vault import FileSystemVaultReader
+from second_brain.adapters.vault import FileSystemVaultReader, FileSystemVaultWriter
 from second_brain.application.goal_progress import (
     GOAL_PROGRESS_POLICY_FINGERPRINT,
     DefinitionRecordV1,
+    MilestoneObservationV1,
+    MilestoneSetDefinitionV1,
+    MilestoneStateV1,
+    MilestoneV1,
+    NumericDirectionV1,
+    NumericObservationV1,
+    NumericTargetDefinitionV1,
+    ProgressModelV1,
     goal_progress_hash_json,
     parse_definition_record,
 )
@@ -24,6 +32,12 @@ from second_brain.application.goal_progress_read import (
     GoalProgressRequestV1,
     GoalProgressStatusV1,
 )
+from second_brain.application.goal_progress_safe_write import (
+    GoalProgressDefinitionDraftV1,
+    GoalProgressObservationDraftV1,
+    GoalProgressSafeWrite,
+    GoalProgressSafeWriteResult,
+)
 from second_brain.application.growth import (
     BuildGrowthGoalContext,
     GrowthEngineRequestV1,
@@ -31,9 +45,11 @@ from second_brain.application.growth import (
     GrowthGoalSelectionV1,
 )
 from second_brain.application.ports import VaultReader
+from second_brain.application.writes import CreateStatus
 from tests.conftest import create_vault, write_note
 
 GOAL_ID = "0198f4c5-6a00-7000-8000-000000000301"
+GOAL_B_ID = "0198f4c5-6a00-7000-8000-000000000312"
 DEFINITION_ID = "0198f4c5-6a00-7000-8000-000000000302"
 NUMERIC_OLD_ID = "0198f4c5-6a00-7000-8000-000000000303"
 NUMERIC_CURRENT_ID = "0198f4c5-6a00-7000-8000-000000000304"
@@ -44,13 +60,15 @@ MILESTONE_DEFINITION_ID = "0198f4c5-6a00-7000-8000-000000000308"
 MILESTONE_START_ID = "0198f4c5-6a00-7000-8000-000000000309"
 MILESTONE_FINISH_ID = "0198f4c5-6a00-7000-8000-000000000310"
 DUPLICATE_EVENT_ID = "0198f4c5-6a00-7000-8000-000000000311"
+DEFINITION_B_ID = "0198f4c5-6a00-7000-8000-000000000313"
+OBSERVATION_B_ID = "0198f4c5-6a00-7000-8000-000000000314"
 
 AS_OF = datetime(2026, 9, 10, 12, 0, tzinfo=UTC)
 
 
-def _goal_note(*, body: str = "Цель пользователя.") -> str:
+def _goal_note(*, goal_id: str = GOAL_ID, body: str = "Цель пользователя.") -> str:
     return f"""---
-id: {GOAL_ID}
+id: {goal_id}
 type: zettel
 created: "2026-09-05T12:00:00+03:00"
 tags: []
@@ -89,7 +107,7 @@ def _render_note(fields: dict[str, object], *, body: str = "# Companion record\n
     return "\n".join([*lines, "---", body])
 
 
-def _goal_identity_hash(vault: Path) -> str:
+def _goal_identity_hash(vault: Path, *, goal_id: str = GOAL_ID) -> str:
     context = BuildGrowthGoalContext(
         FileSystemVaultReader(vault),
         clock=lambda: AS_OF,
@@ -97,7 +115,7 @@ def _goal_identity_hash(vault: Path) -> str:
         GrowthEngineRequestV1(
             selection=GrowthGoalSelectionV1(
                 GrowthGoalSelectionModeV1.SELECTED_GOAL,
-                UUID(GOAL_ID),
+                UUID(goal_id),
             )
         )
     )
@@ -108,6 +126,7 @@ def _goal_identity_hash(vault: Path) -> str:
 def _definition_fields(
     goal_hash: str,
     *,
+    goal_id: str = GOAL_ID,
     record_id: str = DEFINITION_ID,
     model: str = "numeric_target",
     reviewed_at: str = "2026-09-05T11:00:00Z",
@@ -119,7 +138,7 @@ def _definition_fields(
         "tags": [],
         "second_brain_goal_progress": 1,
         "goal_progress_kind": "definition",
-        "goal_source_uuid": GOAL_ID,
+        "goal_source_uuid": goal_id,
         "goal_identity_fingerprint": goal_hash,
         "goal_progress_policy_fingerprint": GOAL_PROGRESS_POLICY_FINGERPRINT,
         "definition_reviewed_at": reviewed_at,
@@ -154,6 +173,7 @@ def _observation_fields(
     goal_hash: str,
     definition: DefinitionRecordV1,
     *,
+    goal_id: str = GOAL_ID,
     record_id: str,
     observed_at: str,
     value: str = "76.000",
@@ -169,7 +189,7 @@ def _observation_fields(
         "tags": [],
         "second_brain_goal_progress": 1,
         "goal_progress_kind": "observation",
-        "goal_source_uuid": GOAL_ID,
+        "goal_source_uuid": goal_id,
         "goal_identity_fingerprint": goal_hash,
         "goal_progress_policy_fingerprint": GOAL_PROGRESS_POLICY_FINGERPRINT,
         "progress_definition_id": str(definition.id),
@@ -192,8 +212,8 @@ def _write_companion(vault: Path, filename: str, fields: dict[str, object]) -> N
     write_note(vault, f"40 Zettelkasten/{filename}.md", _render_note(fields))
 
 
-def _request() -> GoalProgressRequestV1:
-    return GoalProgressRequestV1(UUID(GOAL_ID), AS_OF)
+def _request(goal_id: str = GOAL_ID) -> GoalProgressRequestV1:
+    return GoalProgressRequestV1(UUID(goal_id), AS_OF)
 
 
 def test_stage12c_a_numeric_current_vault_read_model_is_exact_and_deterministic(
@@ -370,6 +390,227 @@ def test_stage12c_c_milestones_and_current_goal_drift_fail_closed(
     assert {item.reason for item in drifted.excluded_observations} == {
         GoalProgressExclusionReasonV1.GOAL_SOURCE_CHANGED
     }
+
+
+SAFE_NOW = datetime(2026, 9, 14, 12, 0, tzinfo=UTC)
+SAFE_REVIEWED_AT = datetime(2026, 9, 14, 10, 0, tzinfo=UTC)
+
+
+def _install_safe_write_templates(vault: Path) -> None:
+    for name in ("Project.md", "Area.md", "Resource.md", "Zettel.md"):
+        write_note(vault, f"_templates/{name}", f"# {name}\n")
+
+
+def _safe_write_service(vault: Path) -> GoalProgressSafeWrite:
+    return GoalProgressSafeWrite(
+        FileSystemVaultReader(vault),
+        FileSystemVaultWriter(vault),
+        clock=lambda: SAFE_NOW,
+    )
+
+
+def _safe_write_goal_binding(vault: Path) -> tuple[UUID, str]:
+    context = BuildGrowthGoalContext(
+        FileSystemVaultReader(vault),
+        clock=lambda: SAFE_NOW,
+    ).execute(
+        GrowthEngineRequestV1(
+            selection=GrowthGoalSelectionV1(
+                GrowthGoalSelectionModeV1.SELECTED_GOAL,
+                UUID(GOAL_ID),
+            )
+        )
+    )
+    assert len(context.goals) == 1
+    return UUID(GOAL_ID), goal_progress_hash_json(context.goals[0].as_dict())
+
+
+def _apply_safe_write_plan(
+    service: GoalProgressSafeWrite,
+    prepared: GoalProgressSafeWriteResult,
+) -> UUID:
+    plan = prepared.plan
+    assert plan is not None
+    applied = service.apply(plan, plan.plan_sha256)
+    assert applied.status is CreateStatus.CREATED
+    return plan.note_id
+
+
+def test_stage12c_stage12b_safe_write_numeric_round_trip(tmp_path: Path) -> None:
+    vault = create_vault(tmp_path / "vault-safe-numeric")
+    _install_safe_write_templates(vault)
+    write_note(vault, "10 Projects/Goal.md", _goal_note())
+    service = _safe_write_service(vault)
+    goal_uuid, goal_hash = _safe_write_goal_binding(vault)
+
+    definition = GoalProgressDefinitionDraftV1(
+        goal_source_uuid=goal_uuid,
+        goal_identity_fingerprint=goal_hash,
+        definition_reviewed_at=SAFE_REVIEWED_AT,
+        progress_model=ProgressModelV1.NUMERIC_TARGET,
+        numeric_target=NumericTargetDefinitionV1(
+            metric_id="weight",
+            unit="kg",
+            baseline="80.000",
+            target="72.000",
+            direction=NumericDirectionV1.DECREASE_TO,
+            lower_bound="40",
+            upper_bound="120",
+        ),
+    )
+    definition_result = service.prepare_definition(definition)
+    definition_id = _apply_safe_write_plan(service, definition_result)
+    observation = GoalProgressObservationDraftV1(
+        goal_source_uuid=goal_uuid,
+        goal_identity_fingerprint=goal_hash,
+        progress_definition_id=definition_id,
+        progress_model=ProgressModelV1.NUMERIC_TARGET,
+        observed_at=datetime(2026, 9, 14, 11, 0, tzinfo=UTC),
+        observed_at_precision="exact",
+        observation_reviewed_at=SAFE_REVIEWED_AT,
+        numeric_observation=NumericObservationV1("weight", "kg", "76.800"),
+    )
+    observation_id = _apply_safe_write_plan(service, service.prepare_observation(observation))
+
+    result = BuildGoalProgress(FileSystemVaultReader(vault)).execute(
+        GoalProgressRequestV1(goal_uuid, SAFE_NOW)
+    )
+
+    assert result.status is GoalProgressStatusV1.TOWARD_TARGET
+    assert result.current_observation_uuids == (observation_id,)
+    assert result.provenance is not None
+    assert result.provenance.write == "none"
+
+
+def test_stage12c_stage12b_safe_write_milestone_round_trip(tmp_path: Path) -> None:
+    vault = create_vault(tmp_path / "vault-safe-milestones")
+    _install_safe_write_templates(vault)
+    write_note(vault, "10 Projects/Goal.md", _goal_note())
+    service = _safe_write_service(vault)
+    goal_uuid, goal_hash = _safe_write_goal_binding(vault)
+    definition = GoalProgressDefinitionDraftV1(
+        goal_source_uuid=goal_uuid,
+        goal_identity_fingerprint=goal_hash,
+        definition_reviewed_at=SAFE_REVIEWED_AT,
+        progress_model=ProgressModelV1.MILESTONE_SET,
+        milestone_set=MilestoneSetDefinitionV1(
+            ordering="display_only_v1",
+            milestones=(
+                MilestoneV1("start", "Начать", 1),
+                MilestoneV1("finish", "Завершить", 2),
+            ),
+        ),
+    )
+    definition_id = _apply_safe_write_plan(service, service.prepare_definition(definition))
+    for milestone_id, state, observed_at in (
+        ("start", MilestoneStateV1.COMPLETED, datetime(2026, 9, 14, 11, 0, tzinfo=UTC)),
+        (
+            "finish",
+            MilestoneStateV1.NOT_COMPLETED,
+            datetime(2026, 9, 14, 11, 30, tzinfo=UTC),
+        ),
+    ):
+        observation = GoalProgressObservationDraftV1(
+            goal_source_uuid=goal_uuid,
+            goal_identity_fingerprint=goal_hash,
+            progress_definition_id=definition_id,
+            progress_model=ProgressModelV1.MILESTONE_SET,
+            observed_at=observed_at,
+            observed_at_precision="exact",
+            observation_reviewed_at=SAFE_REVIEWED_AT,
+            milestone_observation=MilestoneObservationV1(milestone_id, state),
+        )
+        _apply_safe_write_plan(service, service.prepare_observation(observation))
+
+    result = BuildGoalProgress(FileSystemVaultReader(vault)).execute(
+        GoalProgressRequestV1(goal_uuid, SAFE_NOW)
+    )
+
+    assert result.status is GoalProgressStatusV1.MILESTONE_OBSERVATIONS_AVAILABLE
+    assert result.completed_milestone_ids == ("start",)
+    assert result.not_completed_milestone_ids == ("finish",)
+
+
+def test_stage12c_request_isolated_from_unrelated_goal_records(tmp_path: Path) -> None:
+    vault = create_vault(tmp_path / "vault-isolation")
+    write_note(vault, "10 Projects/GoalA.md", _goal_note(goal_id=GOAL_ID))
+    write_note(vault, "10 Projects/GoalB.md", _goal_note(goal_id=GOAL_B_ID, body="Чужая цель."))
+    goal_a_hash = _goal_identity_hash(vault, goal_id=GOAL_ID)
+    goal_b_hash = _goal_identity_hash(vault, goal_id=GOAL_B_ID)
+    definition_a_fields = _definition_fields(goal_a_hash)
+    definition_b_fields = _definition_fields(
+        goal_b_hash,
+        goal_id=GOAL_B_ID,
+        record_id=DEFINITION_B_ID,
+    )
+    definition_a = parse_definition_record(definition_a_fields)
+    definition_b = parse_definition_record(definition_b_fields)
+    assert definition_a is not None
+    assert definition_b is not None
+    _write_companion(vault, "DefinitionA", definition_a_fields)
+    _write_companion(vault, "DefinitionB", definition_b_fields)
+    _write_companion(
+        vault,
+        "ObservationA",
+        _observation_fields(
+            goal_a_hash,
+            definition_a,
+            record_id=NUMERIC_CURRENT_ID,
+            observed_at="2026-09-06T10:00:00Z",
+        ),
+    )
+    _write_companion(
+        vault,
+        "ObservationB",
+        _observation_fields(
+            goal_b_hash,
+            definition_b,
+            goal_id=GOAL_B_ID,
+            record_id=OBSERVATION_B_ID,
+            observed_at="2026-09-06T10:00:00Z",
+        ),
+    )
+
+    result = BuildGoalProgress(FileSystemVaultReader(vault)).execute(_request(GOAL_ID))
+    payload = result.to_json()
+
+    assert result.status is GoalProgressStatusV1.TOWARD_TARGET
+    assert result.current_observation_uuids == (UUID(NUMERIC_CURRENT_ID),)
+    assert OBSERVATION_B_ID not in payload
+    assert DEFINITION_B_ID not in payload
+    assert GOAL_B_ID not in payload
+
+
+def test_stage12c_rebuild_is_stable_when_record_filenames_are_reordered(
+    tmp_path: Path,
+) -> None:
+    results: list[str] = []
+    for vault_name, definition_name, observation_name in (
+        ("vault-order-a", "A-definition", "Z-observation"),
+        ("vault-order-b", "Z-definition", "A-observation"),
+    ):
+        vault = create_vault(tmp_path / vault_name)
+        write_note(vault, "10 Projects/Goal.md", _goal_note())
+        goal_hash = _goal_identity_hash(vault)
+        definition_fields = _definition_fields(goal_hash)
+        definition = parse_definition_record(definition_fields)
+        assert definition is not None
+        _write_companion(vault, definition_name, definition_fields)
+        _write_companion(
+            vault,
+            observation_name,
+            _observation_fields(
+                goal_hash,
+                definition,
+                record_id=NUMERIC_CURRENT_ID,
+                observed_at="2026-09-06T10:00:00Z",
+            ),
+        )
+        results.append(
+            BuildGoalProgress(FileSystemVaultReader(vault)).execute(_request()).to_json()
+        )
+
+    assert results[0] == results[1]
 
 
 def test_stage12c_duplicate_active_event_leaves_are_not_comparable(tmp_path: Path) -> None:
