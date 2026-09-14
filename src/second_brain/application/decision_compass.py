@@ -1,10 +1,10 @@
-"""Provider-free Cognitive Twin v3 / Stage 13A Decision Compass.
+"""Cognitive Twin v3 / Stage 13 Decision Compass.
 
 This module is an additive, transient read/composition boundary.  It keeps the
-existing Compare v1, Stage 10, Stage 11 and Stage 12D DTOs authoritative and
-only adds the exact identity bindings needed to display their independent
-branches together.  It deliberately has no Advisor, provider, network, write
-or persistence capability.
+existing Compare v1, Stage 10, Stage 11 and Stage 12D DTOs authoritative.  The
+normal composition remains provider-free; the separate explicit Advisor
+handoff reuses the existing Growth Advisor boundary without adding provider
+payload fields, persistence or write capability.
 """
 
 from __future__ import annotations
@@ -14,13 +14,13 @@ import json
 import re
 import time
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Final, Protocol, cast
 from uuid import UUID
 
-from second_brain.application.assistant import AssistantExplicitContext
+from second_brain.application.assistant import AssistantExplicitContext, AssistantOption
 from second_brain.application.behavioral_self_model import (
     DEFAULT_BEHAVIORAL_SELF_MODEL_REQUEST,
     BehavioralPatternTypeV1,
@@ -67,6 +67,16 @@ from second_brain.application.growth import (
     growth_hash_json,
     validate_growth_goal_context,
 )
+from second_brain.application.growth_advisor import (
+    GROWTH_ADVISOR_CONTRACT_VERSION,
+    GrowthAdvisorBranchStateV1,
+    GrowthAdvisorBranchV1,
+    GrowthAdvisorError,
+    GrowthAdvisorErrorCode,
+    GrowthAdvisorGoalPreviewV1,
+    GrowthAdvisorRequestV1,
+    validate_growth_advisor_branch,
+)
 from second_brain.application.growth_goal_progress_composition import (
     COMPOSITION_POLICY_FINGERPRINT,
     BuildGrowthGoalProgressCompositionV1,
@@ -77,7 +87,7 @@ from second_brain.application.growth_goal_progress_composition import (
     validate_growth_goal_progress_composition_request,
     validate_growth_goal_progress_composition_result,
 )
-from second_brain.application.ports import VaultReader
+from second_brain.application.ports import CancellationToken, VaultReader
 from second_brain.application.simulate_me import (
     POLICY_FINGERPRINT as SIMULATE_ME_POLICY_FINGERPRINT,
 )
@@ -106,6 +116,7 @@ POLICY_ID: Final[str] = "growth-compare-decision-compass-v1"
 DECISION_COMPASS_CONTRACT_VERSION: Final[str] = CONTRACT_VERSION
 DECISION_COMPASS_DERIVATION_VERSION: Final[str] = DERIVATION_VERSION
 DECISION_COMPASS_POLICY_ID: Final[str] = POLICY_ID
+DECISION_COMPASS_ADVISOR_PROVENANCE: Final[str] = "growth-advisor-v1-explicit"
 
 MAX_RESULT_BYTES: Final[int] = DEFAULT_MAX_RESULT_BYTES
 MAX_OPTIONS: Final[int] = 8
@@ -220,6 +231,20 @@ class DecisionCompassBranchErrorCodeV1(StrEnum):
     BEHAVIORAL_POLICY_MISMATCH = "DECISION_COMPASS_BEHAVIORAL_POLICY_MISMATCH"
     BEHAVIORAL_RESULT_TOO_LARGE = "DECISION_COMPASS_BEHAVIORAL_RESULT_TOO_LARGE"
     BEHAVIORAL_INTERNAL = "DECISION_COMPASS_BEHAVIORAL_INTERNAL"
+    ADVISOR_INVALID_REQUEST = "DECISION_COMPASS_ADVISOR_INVALID_REQUEST"
+    ADVISOR_GOAL_UNAVAILABLE = "DECISION_COMPASS_ADVISOR_GOAL_UNAVAILABLE"
+    ADVISOR_GOAL_MISSING = "DECISION_COMPASS_ADVISOR_GOAL_MISSING"
+    ADVISOR_GOAL_CHANGED = "DECISION_COMPASS_ADVISOR_GOAL_CHANGED"
+    ADVISOR_GOAL_TEXT_UNSUPPORTED = "DECISION_COMPASS_ADVISOR_GOAL_TEXT_UNSUPPORTED"
+    ADVISOR_GOAL_TEXT_TOO_LARGE = "DECISION_COMPASS_ADVISOR_GOAL_TEXT_TOO_LARGE"
+    ADVISOR_CONTEXT_TOO_LARGE = "DECISION_COMPASS_ADVISOR_CONTEXT_TOO_LARGE"
+    ADVISOR_RESULT_TOO_LARGE = "DECISION_COMPASS_ADVISOR_RESULT_TOO_LARGE"
+    ADVISOR_UNAVAILABLE = "DECISION_COMPASS_ADVISOR_UNAVAILABLE"
+    ADVISOR_CANCELLED = "DECISION_COMPASS_ADVISOR_CANCELLED"
+    ADVISOR_TIMEOUT = "DECISION_COMPASS_ADVISOR_TIMEOUT"
+    ADVISOR_FAILURE = "DECISION_COMPASS_ADVISOR_FAILURE"
+    ADVISOR_RESULT_INVALID = "DECISION_COMPASS_ADVISOR_RESULT_INVALID"
+    ADVISOR_POLICY_MISMATCH = "DECISION_COMPASS_ADVISOR_POLICY_MISMATCH"
 
 
 _BRANCH_ERROR_MESSAGES: Final[dict[DecisionCompassBranchErrorCodeV1, str]] = {
@@ -247,6 +272,38 @@ _BRANCH_ERROR_MESSAGES: Final[dict[DecisionCompassBranchErrorCodeV1, str]] = {
     DecisionCompassBranchErrorCodeV1.BEHAVIORAL_INTERNAL: (
         "Поведенческая ветка временно недоступна."
     ),
+    DecisionCompassBranchErrorCodeV1.ADVISOR_INVALID_REQUEST: ("Запрос ветки Advisor некорректен."),
+    DecisionCompassBranchErrorCodeV1.ADVISOR_GOAL_UNAVAILABLE: (
+        "Источник Цели для ветки Advisor недоступен."
+    ),
+    DecisionCompassBranchErrorCodeV1.ADVISOR_GOAL_MISSING: (
+        "Выбранная Цель для ветки Advisor не найдена."
+    ),
+    DecisionCompassBranchErrorCodeV1.ADVISOR_GOAL_CHANGED: (
+        "Источник Цели для ветки Advisor изменился."
+    ),
+    DecisionCompassBranchErrorCodeV1.ADVISOR_GOAL_TEXT_UNSUPPORTED: (
+        "Проекция Цели для ветки Advisor некорректна."
+    ),
+    DecisionCompassBranchErrorCodeV1.ADVISOR_GOAL_TEXT_TOO_LARGE: (
+        "Проекция Цели для ветки Advisor слишком велика."
+    ),
+    DecisionCompassBranchErrorCodeV1.ADVISOR_CONTEXT_TOO_LARGE: (
+        "Контекст ветки Advisor превышает допустимый размер."
+    ),
+    DecisionCompassBranchErrorCodeV1.ADVISOR_RESULT_TOO_LARGE: (
+        "Результат ветки Advisor превышает допустимый размер."
+    ),
+    DecisionCompassBranchErrorCodeV1.ADVISOR_UNAVAILABLE: "Ветка Advisor недоступна.",
+    DecisionCompassBranchErrorCodeV1.ADVISOR_CANCELLED: "Ветка Advisor отменена.",
+    DecisionCompassBranchErrorCodeV1.ADVISOR_TIMEOUT: "Ветка Advisor превысила срок.",
+    DecisionCompassBranchErrorCodeV1.ADVISOR_FAILURE: "Ветка Advisor завершилась ошибкой.",
+    DecisionCompassBranchErrorCodeV1.ADVISOR_RESULT_INVALID: (
+        "Результат ветки Advisor некорректен."
+    ),
+    DecisionCompassBranchErrorCodeV1.ADVISOR_POLICY_MISMATCH: (
+        "Политика ветки Advisor не подтверждена."
+    ),
 }
 
 
@@ -266,7 +323,7 @@ DecisionCompassBehavioralState = DecisionCompassBehavioralStateV1
 
 
 class DecisionCompassAdvisorStateV1(StrEnum):
-    """Future-compatible Advisor states; Stage 13A emits only NOT_REQUESTED."""
+    """Transient explicit Growth Advisor branch states."""
 
     NOT_REQUESTED = "not_requested"
     RESULT = "result"
@@ -737,7 +794,7 @@ DecisionCompassBehaviorBranch = DecisionCompassBehaviorBranchV1
 
 @dataclass(frozen=True, slots=True)
 class DecisionCompassAdvisorBranchV1:
-    """Future-compatible Advisor wrapper; Stage 13A permits one state only."""
+    """Transient wrapper retaining the existing Growth Advisor branch exactly."""
 
     state: DecisionCompassAdvisorStateV1 | str = DecisionCompassAdvisorStateV1.NOT_REQUESTED
     result: object | None = None
@@ -751,6 +808,15 @@ class DecisionCompassAdvisorBranchV1:
             self.result is not None or self.error is not None
         ):
             raise ValueError("Decision Compass Advisor not-requested state is invalid")
+        if state in {
+            DecisionCompassAdvisorStateV1.RESULT,
+            DecisionCompassAdvisorStateV1.ABSTENTION,
+        } and (self.result is None or self.error is not None):
+            raise ValueError("Decision Compass Advisor result branch is invalid")
+        if state is DecisionCompassAdvisorStateV1.ERROR and (
+            self.result is not None or self.error is None
+        ):
+            raise ValueError("Decision Compass Advisor error branch is invalid")
         object.__setattr__(self, "state", state)
 
     def as_dict(self) -> dict[str, object]:
@@ -766,6 +832,12 @@ class DecisionCompassAdvisorBranchV1:
             "result": result,
             "error": self.error.as_dict() if self.error is not None else None,
         }
+
+    @property
+    def growth_advisor_branch(self) -> GrowthAdvisorBranchV1 | None:
+        """Return the retained existing Growth Advisor branch, when present."""
+
+        return self.result if type(self.result) is GrowthAdvisorBranchV1 else None
 
 
 DecisionCompassAdvisorBranch = DecisionCompassAdvisorBranchV1
@@ -869,7 +941,7 @@ class DecisionCompassProvenanceV1:
             or self.network != "none"
             or self.write != "none"
             or self.persistence != "none"
-            or self.advisor != "not_requested"
+            or self.advisor not in {"not_requested", DECISION_COMPASS_ADVISOR_PROVENANCE}
         ):
             raise ValueError("Decision Compass side-effect provenance is invalid")
 
@@ -948,6 +1020,28 @@ class DecisionCompassGoalContextBuilder(Protocol):
 
     def execute(self, request: GrowthEngineRequestV1) -> object:
         """Read one exact current Goal context."""
+
+
+class DecisionCompassGrowthAdvisorBuilder(Protocol):
+    """Existing explicit Growth Advisor preview/execute boundary."""
+
+    def preview(
+        self,
+        request: object,
+        *,
+        cancellation: CancellationToken | None = None,
+    ) -> GrowthAdvisorGoalPreviewV1:
+        """Rebuild one exact current Goal without invoking a provider."""
+
+    def execute(
+        self,
+        request: object,
+        preview: object,
+        *,
+        confirmed: bool = True,
+        cancellation: CancellationToken | None = None,
+    ) -> GrowthAdvisorBranchV1:
+        """Run one explicitly confirmed Growth Advisor operation."""
 
 
 DecisionCompassSimulateMePort = CompareSimulateMePort
@@ -1171,30 +1265,29 @@ def validate_decision_compass_result(
             raise DecisionCompassGoalSourceChangedError()
         if type(result.advisor) is not DecisionCompassAdvisorBranchV1:
             raise DecisionCompassCompositionInvalidError()
-        if (
-            result.advisor.state is not DecisionCompassAdvisorStateV1.NOT_REQUESTED
-            or result.advisor.result is not None
-            or result.advisor.error is not None
-        ):
-            raise DecisionCompassCompositionInvalidError()
+        advisor_branch = _validate_advisor_branch(result.advisor, normalized_request)
         if type(result.structural_relations) is not tuple:
             raise DecisionCompassCompositionInvalidError()
         relations = tuple(_validate_relation(item) for item in result.structural_relations)
         expected_relations = _build_structural_relations(
-            simulate_branch, behavioral_branch, normalized_request
+            simulate_branch, behavioral_branch, normalized_request, advisor_branch
         )
         if relations != expected_relations:
             raise DecisionCompassCompositionInvalidError()
         if type(result.caveats) is not tuple:
             raise DecisionCompassCompositionInvalidError()
         caveats = _normalize_caveats(result.caveats)
-        expected_caveats = _build_caveats(normalized_request, behavioral_branch)
+        expected_caveats = _build_caveats(normalized_request, behavioral_branch, advisor_branch)
         if caveats != expected_caveats:
             raise DecisionCompassCompositionInvalidError()
         if type(result.provenance) is not DecisionCompassProvenanceV1:
             raise DecisionCompassCompositionInvalidError()
         _validate_provenance(
-            result.provenance, normalized_request, result.growth_progress, behavioral_branch
+            result.provenance,
+            normalized_request,
+            result.growth_progress,
+            behavioral_branch,
+            advisor_branch,
         )
         normalized = DecisionCompassResultV1(
             contract_version=CONTRACT_VERSION,
@@ -1206,7 +1299,7 @@ def validate_decision_compass_result(
             simulate_me=simulate_branch,
             behavioral=behavioral_branch,
             growth_progress=result.growth_progress,
-            advisor=DecisionCompassAdvisorBranchV1(),
+            advisor=advisor_branch,
             structural_relations=relations,
             caveats=caveats,
             provenance=result.provenance,
@@ -1283,6 +1376,7 @@ class BuildDecisionCompass:
         simulate_me: CompareSimulateMePort | BuildSimulateMe | None = None,
         goal_context: DecisionCompassGoalContextBuilder | None = None,
         current_goal: DecisionCompassGoalContextBuilder | None = None,
+        growth_advisor: DecisionCompassGrowthAdvisorBuilder | None = None,
         policy: object | None = None,
         growth_clock: Callable[[], datetime] | None = None,
         behavioral_clock: Callable[[], datetime] | None = None,
@@ -1334,6 +1428,12 @@ class BuildDecisionCompass:
         if supplied_goal is None and reader is not None:
             supplied_goal = BuildGrowthGoalContext(reader=reader, clock=self._goal_clock)
         self._goal_context = supplied_goal
+        if growth_advisor is not None and not (
+            callable(getattr(growth_advisor, "preview", None))
+            and callable(getattr(growth_advisor, "execute", None))
+        ):
+            raise ValueError("Growth Advisor builder is invalid")
+        self._growth_advisor = growth_advisor
 
         if isinstance(simulate_me, BuildSimulateMe):
             self._simulate_me: CompareSimulateMePort | None = _SynchronousSimulateMeAdapter(
@@ -1500,6 +1600,194 @@ class BuildDecisionCompass:
     build = execute
     compose = execute
 
+    def build_growth_advisor_request(
+        self,
+        request: object,
+    ) -> GrowthAdvisorRequestV1:
+        """Project only the Compass request fields allowed by Growth Advisor."""
+
+        return build_growth_advisor_request(request)
+
+    def preview_advisor(
+        self,
+        request: object,
+        *,
+        cancellation: CancellationToken | None = None,
+        growth_advisor: DecisionCompassGrowthAdvisorBuilder | None = None,
+    ) -> GrowthAdvisorGoalPreviewV1:
+        """Run the existing owner-facing Growth Advisor preview only."""
+
+        builder = growth_advisor or self._growth_advisor
+        if builder is None:
+            raise ValueError("Growth Advisor builder is unavailable")
+        advisor_request = self.build_growth_advisor_request(request)
+        return builder.preview(advisor_request, cancellation=cancellation)
+
+    def execute_advisor(
+        self,
+        request: object,
+        base_result: object,
+        preview: object,
+        *,
+        execution: CompareExecutionContextV1,
+        confirmed: bool = True,
+        growth_advisor: DecisionCompassGrowthAdvisorBuilder | None = None,
+    ) -> DecisionCompassResultV1 | DecisionCompassErrorV1:
+        """Attach one explicit Growth Advisor result to a valid base result.
+
+        The base result is never rebuilt here.  The supplied preview and
+        confirmation are passed through the existing Growth Advisor boundary;
+        all other Compass branches remain the already validated transient
+        siblings.
+        """
+
+        control_error = self._control_error(execution)
+        if control_error is not None:
+            return control_error
+        try:
+            normalized_request = validate_decision_compass_request(request)
+        except DecisionCompassValidationError as error:
+            return _top_error(error.code)
+        except TypeError, ValueError, UnicodeError, OverflowError:
+            return _top_error(DecisionCompassErrorCodeV1.INVALID_REQUEST)
+
+        try:
+            normalized_base = validate_decision_compass_result(
+                base_result,
+                request=normalized_request,
+            )
+            if normalized_base.advisor.state is not DecisionCompassAdvisorStateV1.NOT_REQUESTED:
+                return _top_error(DecisionCompassErrorCodeV1.INVALID_REQUEST)
+        except DecisionCompassGoalSourceChangedError:
+            return _top_error(DecisionCompassErrorCodeV1.GOAL_SOURCE_CHANGED)
+        except DecisionCompassValidationError as error:
+            return _top_error(error.code)
+        except TypeError, ValueError, UnicodeError, OverflowError:
+            return _top_error(DecisionCompassErrorCodeV1.INVALID_REQUEST)
+
+        builder = growth_advisor or self._growth_advisor
+        if builder is None:
+            return self._compose_advisor_branch(
+                normalized_base,
+                normalized_request,
+                _advisor_error_branch(DecisionCompassBranchErrorCodeV1.ADVISOR_UNAVAILABLE),
+            )
+
+        try:
+            advisor_request = self.build_growth_advisor_request(normalized_request)
+        except DecisionCompassValidationError:
+            return self._compose_advisor_branch(
+                normalized_base,
+                normalized_request,
+                _advisor_error_branch(DecisionCompassBranchErrorCodeV1.ADVISOR_INVALID_REQUEST),
+            )
+        except TypeError, ValueError, UnicodeError, OverflowError:
+            return self._compose_advisor_branch(
+                normalized_base,
+                normalized_request,
+                _advisor_error_branch(DecisionCompassBranchErrorCodeV1.ADVISOR_INVALID_REQUEST),
+            )
+
+        goal_error = self._revalidate_goal(
+            normalized_request,
+            normalized_base.growth_progress,
+        )
+        if goal_error is not None:
+            return goal_error
+        control_error = self._control_error(execution)
+        if control_error is not None:
+            return control_error
+
+        try:
+            growth_branch = builder.execute(
+                advisor_request,
+                preview,
+                confirmed=confirmed,
+                cancellation=execution.cancellation,
+            )
+            advisor_branch = _advisor_branch_from_growth(growth_branch, normalized_request)
+        except DecisionCompassGoalSourceChangedError:
+            return _top_error(DecisionCompassErrorCodeV1.GOAL_SOURCE_CHANGED)
+        except DecisionCompassCompositionInvalidError:
+            advisor_branch = _advisor_error_branch(
+                DecisionCompassBranchErrorCodeV1.ADVISOR_RESULT_INVALID
+            )
+        except GrowthAdvisorError as error:
+            if _is_growth_goal_error(error):
+                return _top_error(_map_growth_goal_top_error(error))
+            advisor_branch = _advisor_error_branch(_map_growth_advisor_error(error.code))
+        except TypeError, ValueError, UnicodeError, OverflowError:
+            advisor_branch = _advisor_error_branch(
+                DecisionCompassBranchErrorCodeV1.ADVISOR_RESULT_INVALID
+            )
+        except Exception:
+            advisor_branch = _advisor_error_branch(DecisionCompassBranchErrorCodeV1.ADVISOR_FAILURE)
+
+        control_error = self._control_error(execution)
+        if control_error is not None:
+            return control_error
+        goal_error = self._revalidate_goal(
+            normalized_request,
+            normalized_base.growth_progress,
+        )
+        if goal_error is not None:
+            return goal_error
+        return self._compose_advisor_branch(
+            normalized_base,
+            normalized_request,
+            advisor_branch,
+        )
+
+    execute_with_advisor = execute_advisor
+    handoff_advisor = execute_advisor
+
+    def _compose_advisor_branch(
+        self,
+        base_result: DecisionCompassResultV1,
+        request: DecisionCompassRequestV1,
+        advisor: DecisionCompassAdvisorBranchV1,
+    ) -> DecisionCompassResultV1 | DecisionCompassErrorV1:
+        """Compose and validate a transient branch without changing siblings."""
+
+        try:
+            provenance = replace(
+                base_result.provenance,
+                advisor=(
+                    "not_requested"
+                    if advisor.state is DecisionCompassAdvisorStateV1.NOT_REQUESTED
+                    else DECISION_COMPASS_ADVISOR_PROVENANCE
+                ),
+            )
+            result = replace(
+                base_result,
+                request=request,
+                selected_goal=cast(DecisionCompassGoalSelectorV1, request.selected_goal),
+                advisor=advisor,
+                structural_relations=_build_structural_relations(
+                    base_result.simulate_me,
+                    base_result.behavioral,
+                    request,
+                    advisor,
+                ),
+                caveats=_build_caveats(request, base_result.behavioral, advisor),
+                provenance=provenance,
+            )
+            normalized = validate_decision_compass_result(result)
+            _canonical_result_bytes(normalized)
+            return normalized
+        except DecisionCompassResultTooLargeError:
+            return _top_error(DecisionCompassErrorCodeV1.RESULT_TOO_LARGE)
+        except DecisionCompassPolicyMismatchError:
+            return _top_error(DecisionCompassErrorCodeV1.POLICY_MISMATCH)
+        except DecisionCompassGoalSourceChangedError:
+            return _top_error(DecisionCompassErrorCodeV1.GOAL_SOURCE_CHANGED)
+        except DecisionCompassValidationError, GrowthGoalProgressCompositionError:
+            return _top_error(DecisionCompassErrorCodeV1.INTERNAL)
+        except TypeError, ValueError, UnicodeError, OverflowError:
+            return _top_error(DecisionCompassErrorCodeV1.INTERNAL)
+        except Exception:
+            return _top_error(DecisionCompassErrorCodeV1.INTERNAL)
+
     def _control_error(
         self,
         execution: CompareExecutionContextV1,
@@ -1659,6 +1947,7 @@ def build_decision_compass(
     behavioral: DecisionCompassBehavioralBuilder | None = None,
     simulate_me: CompareSimulateMePort | BuildSimulateMe | None = None,
     goal_context: DecisionCompassGoalContextBuilder | None = None,
+    growth_advisor: DecisionCompassGrowthAdvisorBuilder | None = None,
     growth_clock: Callable[[], datetime] | None = None,
     behavioral_clock: Callable[[], datetime] | None = None,
     goal_clock: Callable[[], datetime] | None = None,
@@ -1674,6 +1963,7 @@ def build_decision_compass(
         behavioral=behavioral,
         simulate_me=simulate_me,
         goal_context=goal_context,
+        growth_advisor=growth_advisor,
         growth_clock=growth_clock,
         behavioral_clock=behavioral_clock,
         goal_clock=goal_clock,
@@ -1683,6 +1973,80 @@ def build_decision_compass(
 
 
 build_growth_compare = build_decision_compass
+
+
+def build_growth_advisor_request(request: object) -> GrowthAdvisorRequestV1:
+    """Build the existing Growth Advisor request without Compass context union."""
+
+    normalized = validate_decision_compass_request(request)
+    selector = cast(DecisionCompassGoalSelectorV1, normalized.selected_goal)
+    try:
+        return GrowthAdvisorRequestV1(
+            contract_version=GROWTH_ADVISOR_CONTRACT_VERSION,
+            goal_source_uuid=selector.source_uuid,
+            goal_identity_fingerprint=selector.identity_fingerprint,
+            task=normalized.task,
+            options=tuple(AssistantOption(item.id, item.label) for item in normalized.options),
+            explicit_constraints=normalized.explicit_constraints,
+            explicit_context=normalized.explicit_context,
+            max_context_bytes=DEFAULT_ASSISTANT_MAX_CONTEXT_BYTES,
+            max_result_bytes=min(
+                DEFAULT_ASSISTANT_MAX_RESULT_BYTES,
+                normalized.max_result_bytes,
+            ),
+        )
+    except TypeError, ValueError, UnicodeError, OverflowError:
+        raise DecisionCompassInvalidRequestError() from None
+
+
+build_decision_compass_advisor_request = build_growth_advisor_request
+
+
+def build_decision_compass_advisor(
+    request: object,
+    base_result: object,
+    preview: object,
+    *,
+    execution: CompareExecutionContextV1,
+    growth_advisor: DecisionCompassGrowthAdvisorBuilder,
+    reader: VaultReader | None = None,
+    store: GrowthMappingStore | None = None,
+    growth_progress: DecisionCompassGrowthProgressBuilder | None = None,
+    behavioral: DecisionCompassBehavioralBuilder | None = None,
+    simulate_me: CompareSimulateMePort | BuildSimulateMe | None = None,
+    goal_context: DecisionCompassGoalContextBuilder | None = None,
+    growth_clock: Callable[[], datetime] | None = None,
+    behavioral_clock: Callable[[], datetime] | None = None,
+    goal_clock: Callable[[], datetime] | None = None,
+    monotonic_clock: Callable[[], float] | None = None,
+    policy: object | None = None,
+    confirmed: bool = True,
+) -> DecisionCompassResultV1 | DecisionCompassErrorV1:
+    """Function form of the explicit, transient Growth Advisor handoff."""
+
+    return BuildDecisionCompass(
+        reader=reader,
+        store=store,
+        growth_progress=growth_progress,
+        behavioral=behavioral,
+        simulate_me=simulate_me,
+        goal_context=goal_context,
+        growth_advisor=growth_advisor,
+        growth_clock=growth_clock,
+        behavioral_clock=behavioral_clock,
+        goal_clock=goal_clock,
+        monotonic_clock=monotonic_clock,
+        policy=policy,
+    ).execute_advisor(
+        request,
+        base_result,
+        preview,
+        execution=execution,
+        confirmed=confirmed,
+    )
+
+
+build_growth_compare_advisor = build_decision_compass_advisor
 
 
 def _context_from_dict(value: object) -> AssistantExplicitContext:
@@ -1864,20 +2228,241 @@ def _behavior_selected_id(
     return binding.request_option_id
 
 
+def _advisor_error_branch(
+    code: DecisionCompassBranchErrorCodeV1,
+) -> DecisionCompassAdvisorBranchV1:
+    """Create a fixed safe branch-local Advisor error."""
+
+    return DecisionCompassAdvisorBranchV1(
+        state=DecisionCompassAdvisorStateV1.ERROR,
+        error=DecisionCompassBranchErrorV1(code, _BRANCH_ERROR_MESSAGES[code]),
+    )
+
+
+def _map_growth_advisor_error(
+    code: GrowthAdvisorErrorCode | str,
+) -> DecisionCompassBranchErrorCodeV1:
+    """Map existing Growth Advisor failures to Compass' fixed safe vocabulary."""
+
+    value = code.value if isinstance(code, GrowthAdvisorErrorCode) else str(code)
+    return {
+        GrowthAdvisorErrorCode.INVALID_REQUEST.value: (
+            DecisionCompassBranchErrorCodeV1.ADVISOR_INVALID_REQUEST
+        ),
+        GrowthAdvisorErrorCode.GOAL_UNAVAILABLE.value: (
+            DecisionCompassBranchErrorCodeV1.ADVISOR_GOAL_UNAVAILABLE
+        ),
+        GrowthAdvisorErrorCode.GOAL_MISSING.value: (
+            DecisionCompassBranchErrorCodeV1.ADVISOR_GOAL_MISSING
+        ),
+        GrowthAdvisorErrorCode.GOAL_CHANGED.value: (
+            DecisionCompassBranchErrorCodeV1.ADVISOR_GOAL_CHANGED
+        ),
+        GrowthAdvisorErrorCode.GOAL_TEXT_UNSUPPORTED.value: (
+            DecisionCompassBranchErrorCodeV1.ADVISOR_GOAL_TEXT_UNSUPPORTED
+        ),
+        GrowthAdvisorErrorCode.GOAL_TEXT_TOO_LARGE.value: (
+            DecisionCompassBranchErrorCodeV1.ADVISOR_GOAL_TEXT_TOO_LARGE
+        ),
+        GrowthAdvisorErrorCode.CONTEXT_TOO_LARGE.value: (
+            DecisionCompassBranchErrorCodeV1.ADVISOR_CONTEXT_TOO_LARGE
+        ),
+        GrowthAdvisorErrorCode.RESULT_TOO_LARGE.value: (
+            DecisionCompassBranchErrorCodeV1.ADVISOR_RESULT_TOO_LARGE
+        ),
+        GrowthAdvisorErrorCode.RECOMMENDATION_UNAVAILABLE.value: (
+            DecisionCompassBranchErrorCodeV1.ADVISOR_UNAVAILABLE
+        ),
+        GrowthAdvisorErrorCode.CANCELLED.value: DecisionCompassBranchErrorCodeV1.ADVISOR_CANCELLED,
+        GrowthAdvisorErrorCode.TIMEOUT.value: DecisionCompassBranchErrorCodeV1.ADVISOR_TIMEOUT,
+        GrowthAdvisorErrorCode.FAILURE.value: DecisionCompassBranchErrorCodeV1.ADVISOR_FAILURE,
+        GrowthAdvisorErrorCode.INVALID_RESULT.value: (
+            DecisionCompassBranchErrorCodeV1.ADVISOR_RESULT_INVALID
+        ),
+        GrowthAdvisorErrorCode.POLICY_MISMATCH.value: (
+            DecisionCompassBranchErrorCodeV1.ADVISOR_POLICY_MISMATCH
+        ),
+    }.get(value, DecisionCompassBranchErrorCodeV1.ADVISOR_FAILURE)
+
+
+def _is_growth_goal_error(error: GrowthAdvisorError) -> bool:
+    return str(error.code) in {
+        GrowthAdvisorErrorCode.GOAL_MISSING.value,
+        GrowthAdvisorErrorCode.GOAL_UNAVAILABLE.value,
+        GrowthAdvisorErrorCode.GOAL_CHANGED.value,
+    }
+
+
+def _map_growth_goal_top_error(error: GrowthAdvisorError) -> DecisionCompassErrorCodeV1:
+    if str(error.code) == GrowthAdvisorErrorCode.GOAL_CHANGED.value:
+        return DecisionCompassErrorCodeV1.GOAL_SOURCE_CHANGED
+    return DecisionCompassErrorCodeV1.GOAL_UNAVAILABLE
+
+
+def _advisor_branch_from_growth(
+    value: object,
+    request: DecisionCompassRequestV1,
+) -> DecisionCompassAdvisorBranchV1:
+    """Normalize the existing Growth Advisor branch into the Compass wrapper."""
+
+    if type(value) is not GrowthAdvisorBranchV1:
+        return _advisor_error_branch(DecisionCompassBranchErrorCodeV1.ADVISOR_RESULT_INVALID)
+    growth_branch = validate_growth_advisor_branch(value)
+    if growth_branch.state is GrowthAdvisorBranchStateV1.ERROR:
+        if growth_branch.error is None:
+            return _advisor_error_branch(DecisionCompassBranchErrorCodeV1.ADVISOR_RESULT_INVALID)
+        code = _map_growth_advisor_error(growth_branch.error.code)
+        if code in {
+            DecisionCompassBranchErrorCodeV1.ADVISOR_GOAL_CHANGED,
+            DecisionCompassBranchErrorCodeV1.ADVISOR_GOAL_MISSING,
+            DecisionCompassBranchErrorCodeV1.ADVISOR_GOAL_UNAVAILABLE,
+        }:
+            # The caller handles these as top-level Goal/source drift when the
+            # existing Growth Advisor returns its own bounded error branch.
+            raise GrowthAdvisorError(
+                {
+                    DecisionCompassBranchErrorCodeV1.ADVISOR_GOAL_CHANGED: (
+                        GrowthAdvisorErrorCode.GOAL_CHANGED
+                    ),
+                    DecisionCompassBranchErrorCodeV1.ADVISOR_GOAL_MISSING: (
+                        GrowthAdvisorErrorCode.GOAL_MISSING
+                    ),
+                    DecisionCompassBranchErrorCodeV1.ADVISOR_GOAL_UNAVAILABLE: (
+                        GrowthAdvisorErrorCode.GOAL_UNAVAILABLE
+                    ),
+                }[code]
+            )
+        return _advisor_error_branch(code)
+    state = (
+        DecisionCompassAdvisorStateV1.ABSTENTION
+        if growth_branch.state is GrowthAdvisorBranchStateV1.ABSTENTION
+        else DecisionCompassAdvisorStateV1.RESULT
+    )
+    return _validate_advisor_branch(
+        DecisionCompassAdvisorBranchV1(state=state, result=growth_branch),
+        request,
+    )
+
+
+def _advisor_selected_id(
+    branch: DecisionCompassAdvisorBranchV1,
+    request: DecisionCompassRequestV1,
+) -> str | None:
+    """Return only an exact request-local option selected by Growth Advisor."""
+
+    growth_branch = branch.growth_advisor_branch
+    if growth_branch is None or growth_branch.assistant_result is None:
+        return None
+    assistant_result = growth_branch.assistant_result
+    if assistant_result is None:
+        raise DecisionCompassCompositionInvalidError()
+    selected = assistant_result.selected_option
+    if selected is None:
+        return None
+    if selected not in tuple(AssistantOption(item.id, item.label) for item in request.options):
+        return None
+    return selected.id
+
+
+def _validate_advisor_branch(
+    value: object,
+    request: DecisionCompassRequestV1,
+) -> DecisionCompassAdvisorBranchV1:
+    """Validate explicit Growth Advisor state and preserve its typed branch."""
+
+    if type(value) is not DecisionCompassAdvisorBranchV1:
+        raise DecisionCompassCompositionInvalidError()
+    branch = value
+    try:
+        state = _parse_enum(branch.state, DecisionCompassAdvisorStateV1)
+    except ValueError:
+        raise DecisionCompassCompositionInvalidError() from None
+    if state is DecisionCompassAdvisorStateV1.NOT_REQUESTED:
+        if branch.result is not None or branch.error is not None:
+            raise DecisionCompassCompositionInvalidError()
+        return DecisionCompassAdvisorBranchV1()
+    if state is DecisionCompassAdvisorStateV1.ERROR:
+        if branch.result is not None or type(branch.error) is not DecisionCompassBranchErrorV1:
+            raise DecisionCompassCompositionInvalidError()
+        if cast(DecisionCompassBranchErrorCodeV1, branch.error.code).name not in {
+            code.name
+            for code in DecisionCompassBranchErrorCodeV1
+            if code.name.startswith("ADVISOR_")
+        }:
+            raise DecisionCompassCompositionInvalidError()
+        return DecisionCompassAdvisorBranchV1(state=state, error=branch.error)
+    if type(branch.result) is not GrowthAdvisorBranchV1 or branch.error is not None:
+        raise DecisionCompassCompositionInvalidError()
+    try:
+        growth_branch = validate_growth_advisor_branch(branch.result)
+    except GrowthAdvisorError:
+        raise DecisionCompassCompositionInvalidError() from None
+    expected_state = (
+        DecisionCompassAdvisorStateV1.ABSTENTION
+        if growth_branch.state is GrowthAdvisorBranchStateV1.ABSTENTION
+        else DecisionCompassAdvisorStateV1.RESULT
+    )
+    if state is not expected_state:
+        raise DecisionCompassCompositionInvalidError()
+    provenance = growth_branch.provenance
+    selector = cast(DecisionCompassGoalSelectorV1, request.selected_goal)
+    if (
+        provenance is None
+        or provenance.goal_source_uuid != selector.source_uuid
+        or provenance.goal_identity_fingerprint != selector.identity_fingerprint
+    ):
+        raise DecisionCompassGoalSourceChangedError()
+    assistant_result = growth_branch.assistant_result
+    if assistant_result is None:
+        raise DecisionCompassCompositionInvalidError()
+    selected = assistant_result.selected_option
+    if selected is not None and selected not in tuple(
+        AssistantOption(item.id, item.label) for item in request.options
+    ):
+        raise DecisionCompassCompositionInvalidError()
+    return DecisionCompassAdvisorBranchV1(state=state, result=growth_branch)
+
+
 def _build_structural_relations(
     simulate_branch: CompareSimulateMeBranchV1,
     behavioral_branch: DecisionCompassBehaviorBranchV1,
     request: DecisionCompassRequestV1,
+    advisor_branch: DecisionCompassAdvisorBranchV1 | None = None,
 ) -> tuple[DecisionCompassStructuralRelationV1, ...]:
-    relations: list[DecisionCompassStructuralRelationV1] = [
-        DecisionCompassStructuralRelationV1(
-            code=DecisionCompassStructuralRelationCodeV1.ADVISOR_NOT_REQUESTED,
-            left_branch=DecisionCompassStructuralBranchV1.ADVISOR,
-            right_branch=DecisionCompassStructuralBranchV1.DECISION_COMPASS,
-            left_state=DecisionCompassAdvisorStateV1.NOT_REQUESTED.value,
-            right_state=DecisionCompassAdvisorStateV1.NOT_REQUESTED.value,
+    advisor = advisor_branch or DecisionCompassAdvisorBranchV1()
+    relations: list[DecisionCompassStructuralRelationV1] = []
+    if advisor.state is DecisionCompassAdvisorStateV1.NOT_REQUESTED:
+        relations.append(
+            DecisionCompassStructuralRelationV1(
+                code=DecisionCompassStructuralRelationCodeV1.ADVISOR_NOT_REQUESTED,
+                left_branch=DecisionCompassStructuralBranchV1.ADVISOR,
+                right_branch=DecisionCompassStructuralBranchV1.DECISION_COMPASS,
+                left_state=DecisionCompassAdvisorStateV1.NOT_REQUESTED.value,
+                right_state=DecisionCompassAdvisorStateV1.NOT_REQUESTED.value,
+            )
         )
-    ]
+    else:
+        simulate_id = _selected_simulate_id(simulate_branch)
+        advisor_id = _advisor_selected_id(advisor, request)
+        if simulate_id is not None and advisor_id is not None:
+            code = (
+                DecisionCompassStructuralRelationCodeV1.SIMULATE_ADVISOR_SAME_OPTION
+                if simulate_id == advisor_id
+                else DecisionCompassStructuralRelationCodeV1.SIMULATE_ADVISOR_DIFFERENT_OPTIONS
+            )
+        else:
+            code = DecisionCompassStructuralRelationCodeV1.SIMULATE_ADVISOR_NOT_COMPARABLE
+        relations.append(
+            DecisionCompassStructuralRelationV1(
+                code=code,
+                left_branch=DecisionCompassStructuralBranchV1.SIMULATE_ME,
+                right_branch=DecisionCompassStructuralBranchV1.ADVISOR,
+                left_state=_simulate_state_value(simulate_branch),
+                right_state=cast(DecisionCompassAdvisorStateV1, advisor.state).value,
+                left_option_id=simulate_id,
+                right_option_id=advisor_id,
+            )
+        )
     scope = request.behavioral_scope
     if scope is None:
         relations.append(
@@ -1922,18 +2507,47 @@ def _build_structural_relations(
                 right_option_id=behavior_id,
             )
         )
+        if advisor.state is not DecisionCompassAdvisorStateV1.NOT_REQUESTED:
+            advisor_id = _advisor_selected_id(advisor, request)
+            if advisor_id is not None and behavior_id is not None:
+                advisor_behavior_code = (
+                    DecisionCompassStructuralRelationCodeV1.ADVISOR_BEHAVIOR_SAME_OPTION
+                    if advisor_id == behavior_id
+                    else DecisionCompassStructuralRelationCodeV1.ADVISOR_BEHAVIOR_DIFFERENT_OPTIONS
+                )
+            else:
+                advisor_behavior_code = (
+                    DecisionCompassStructuralRelationCodeV1.ADVISOR_BEHAVIOR_NOT_COMPARABLE
+                )
+            relations.append(
+                DecisionCompassStructuralRelationV1(
+                    code=advisor_behavior_code,
+                    left_branch=DecisionCompassStructuralBranchV1.ADVISOR,
+                    right_branch=DecisionCompassStructuralBranchV1.BEHAVIORAL,
+                    left_state=cast(DecisionCompassAdvisorStateV1, advisor.state).value,
+                    right_state=cast(
+                        DecisionCompassBehavioralStateV1,
+                        behavioral_branch.state,
+                    ).value,
+                    left_option_id=advisor_id,
+                    right_option_id=behavior_id,
+                )
+            )
     return tuple(sorted(relations, key=_relation_sort_key))
 
 
 def _build_caveats(
     request: DecisionCompassRequestV1,
     behavioral_branch: DecisionCompassBehaviorBranchV1,
+    advisor_branch: DecisionCompassAdvisorBranchV1 | None = None,
 ) -> tuple[DecisionCompassCaveatV1, ...]:
+    advisor = advisor_branch or DecisionCompassAdvisorBranchV1()
     values: set[DecisionCompassCaveatV1] = {
-        DecisionCompassCaveatV1.ADVISOR_NOT_REQUESTED,
         DecisionCompassCaveatV1.NO_HIDDEN_WINNER,
         DecisionCompassCaveatV1.NO_CAUSAL_CLAIM,
     }
+    if advisor.state is DecisionCompassAdvisorStateV1.NOT_REQUESTED:
+        values.add(DecisionCompassCaveatV1.ADVISOR_NOT_REQUESTED)
     if request.behavioral_scope is None:
         values.add(DecisionCompassCaveatV1.BEHAVIORAL_SCOPE_NOT_SELECTED)
     elif request.behavioral_option_binding is None:
@@ -2147,6 +2761,7 @@ def _validate_provenance(
     request: DecisionCompassRequestV1,
     growth_progress: GrowthGoalProgressCompositionResultV1,
     behavioral: DecisionCompassBehaviorBranchV1,
+    advisor: DecisionCompassAdvisorBranchV1,
 ) -> None:
     selector = cast(DecisionCompassGoalSelectorV1, request.selected_goal)
     progress_as_of = cast(datetime, request.progress_as_of)
@@ -2164,6 +2779,13 @@ def _validate_provenance(
         behavioral.pattern.policy_fingerprint if behavioral.pattern is not None else None
     )
     if provenance.behavioral_policy_fingerprint != expected_behavioral_fp:
+        raise DecisionCompassCompositionInvalidError()
+    expected_advisor_provenance = (
+        "not_requested"
+        if advisor.state is DecisionCompassAdvisorStateV1.NOT_REQUESTED
+        else DECISION_COMPASS_ADVISOR_PROVENANCE
+    )
+    if provenance.advisor != expected_advisor_provenance:
         raise DecisionCompassCompositionInvalidError()
 
 
@@ -2532,6 +3154,7 @@ def _validate_behavior_state(value: str) -> None:
 
 __all__ = [
     "CONTRACT_VERSION",
+    "DECISION_COMPASS_ADVISOR_PROVENANCE",
     "DECISION_COMPASS_CONTRACT_VERSION",
     "DECISION_COMPASS_DERIVATION_VERSION",
     "DECISION_COMPASS_POLICY_ID",
@@ -2587,6 +3210,7 @@ __all__ = [
     "DecisionCompassGoalContextBuilder",
     "DecisionCompassGoalSelector",
     "DecisionCompassGoalSelectorV1",
+    "DecisionCompassGrowthAdvisorBuilder",
     "DecisionCompassGrowthProgressBuilder",
     "DecisionCompassInvalidRequestError",
     "DecisionCompassOption",
@@ -2614,7 +3238,11 @@ __all__ = [
     "GrowthCompareResultV1",
     "GrowthCompareStructuralRelationV1",
     "build_decision_compass",
+    "build_decision_compass_advisor",
+    "build_decision_compass_advisor_request",
+    "build_growth_advisor_request",
     "build_growth_compare",
+    "build_growth_compare_advisor",
     "canonical_decision_compass_json",
     "canonical_decision_compass_result_bytes",
     "decision_compass_hash_json",
