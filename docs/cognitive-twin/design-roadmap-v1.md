@@ -1497,11 +1497,11 @@ Stage 11D0 Growth Learning / Question design = COMPLETE
 Stage 11D Growth Learning runtime = COMPLETE
 Stage 11E Web/API + integration QA/closeout = COMPLETE
 Stage 12A canonical records/validators = COMPLETE (Issue #279, PR #280, merged/deployed)
-Stage 12B reviewed Safe Write = COMPLETE (Issue #284, PR #285, merge pending)
+Stage 12B reviewed Safe Write = COMPLETE (Issue #284, PR #285, merged/deployed)
 Stage 12C–12E and Stage 13+ = NOT STARTED
 ```
 
-## Cognitive Twin v3 design status after Stage 12B implementation
+## Cognitive Twin v3 design status after Stage 12B production closeout
 
 Issue #277 defines the design boundary, Issue #279 authorized Stage 12A, and
 Issue #284 authorizes the current Stage 12B implementation slice: Goal Progress
@@ -1512,8 +1512,8 @@ high-level sequence is captured in
 [cognitive-twin-v3-roadmap.md](cognitive-twin-v3-roadmap.md).
 
 Cognitive Twin v3 = IN PROGRESS: Stage 12A read-only runtime and Stage 12B
-explicit reviewed Safe Write implementation are complete; later stages remain
-separately gated.
+explicit reviewed Safe Write implementation are complete and deployed; later
+stages remain separately gated.
 
 The Stage 12 design decision is to use separate reviewed companion records
 for an explicit progress definition and explicit progress observations. They
@@ -1528,7 +1528,7 @@ implementation gates:
 ~~~text
 Stage 12 design contract = COMPLETE after Issue #277 merge
 Stage 12A canonical records/validators = COMPLETE (PR #280, merge SHA `bdde50f2e3de3953dddf1ba58b4e9b371ea050ad`)
-Stage 12B Safe Write = COMPLETE (Issue #284, PR #285, merge pending)
+Stage 12B Safe Write = COMPLETE (Issue #284, PR #285, merge SHA `1832dc66de2ea25b41bb0d613ea77aae4dcd1fe2`, deployed)
 Stage 12C private read surface = NOT STARTED
 Stage 12D Growth composition = NOT STARTED
 Stage 12E Web/API QA + closeout = NOT STARTED
