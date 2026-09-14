@@ -33,6 +33,8 @@ describe("single-owner login surface", () => {
       "Сохраняй мысли. Находи связи. Возвращайся к важному.",
     );
     expect(host.textContent).toContain("Доступ разрешён только владельцу.");
+    expect(host.textContent).toContain("по вашему GitHub ID.");
+    expect(host.textContent).not.toContain("идентификатор GitHub");
     expect(host.querySelector<HTMLAnchorElement>('a[href="/auth/github/login"]')?.textContent).toContain(
       "Войти через GitHub",
     );

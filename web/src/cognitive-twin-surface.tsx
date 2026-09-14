@@ -307,7 +307,7 @@ export function CognitiveTwinSurface(): ReactElement {
       setBundle({ stated, behavioral, mappings });
       setSelectedStatedId("");
       setSelectedTargetKey("");
-      setStatus("Показаны данные из текущего rebuild. Автоматического обновления нет.");
+      setStatus("Показаны данные из текущего перестроения. Автоматического обновления нет.");
     } catch (caught) {
       if (isAbortError(caught) || controller.signal.aborted || sequence !== refreshSequence.current) return;
       setError(responseError(caught, "Модель связей сейчас недоступна."));
@@ -413,7 +413,7 @@ export function CognitiveTwinSurface(): ReactElement {
       setComposition(nextComposition);
     } catch (caught) {
       if (isAbortError(caught) || controller.signal.aborted) return;
-      setError(responseError(caught, "Связь не принята. Проверь актуальность review и повтори его."));
+      setError(responseError(caught, "Связь не принята. Проверь актуальность проверки и повтори её."));
       setStatus("");
     } finally {
       setConfirmBusy(false);

@@ -942,7 +942,7 @@ export function loadGrowthMappingStatus(
     "growth-engine-v1",
     {},
     fetcher,
-    "Не удалось загрузить состояние сопоставлений Growth.",
+    "Не удалось загрузить состояние сопоставлений развития.",
     signal,
   );
 }
@@ -962,7 +962,7 @@ export function loadGrowth(
       max_result_bytes: 131072,
     },
     fetcher,
-    "Не удалось построить текущую картину Growth.",
+    "Не удалось построить текущую картину развития.",
     signal,
   );
 }
@@ -978,7 +978,7 @@ export function reviewGrowthMapping(
     "growth-engine-v1",
     { ...selector, relation },
     fetcher,
-    "Не удалось подготовить проверку связи Growth.",
+    "Не удалось подготовить проверку связи развития.",
     signal,
   );
 }
@@ -1003,7 +1003,7 @@ export function confirmGrowthMapping(
       supersedes_mapping_id: null,
     },
     fetcher,
-    "Связь Growth не принята. Повтори review.",
+    "Связь развития не принята. Повтори проверку.",
     signal,
   );
 }
@@ -1049,7 +1049,7 @@ export function requestGrowthLearningQuestion(
     "growth-learning-v1",
     request,
     fetcher,
-    "Не удалось подготовить вопрос Growth.",
+    "Не удалось подготовить вопрос для уточнения.",
     signal,
   );
 }
@@ -1075,7 +1075,7 @@ export function resolveGrowthLearningQuestion(
       },
     },
     fetcher,
-    "Не удалось завершить вопрос Growth.",
+    "Не удалось завершить вопрос для уточнения.",
     signal,
   );
 }

@@ -174,9 +174,9 @@ function mockReadApis(): void {
 }
 
 async function build(host: HTMLElement): Promise<void> {
-  await act(async () => button(host, "Обновить Growth").click());
+  await act(async () => button(host, "Обновить данные развития").click());
   setValue(host.querySelector<HTMLSelectElement>("#growth-goal-select")!, goalUuid);
-  await act(async () => button(host, "Построить Growth result").click());
+  await act(async () => button(host, "Построить результат развития").click());
 }
 
 describe("Growth Stage 11E owner surface", () => {
@@ -186,7 +186,7 @@ describe("Growth Stage 11E owner surface", () => {
     const host = await renderSurface();
 
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(host.textContent).toContain("Данные Growth загружаются только после явного действия");
+    expect(host.textContent).toContain("Данные раздела «Развитие» загружаются только после явного действия");
     expect(host.textContent).not.toContain("localStorage");
     expect(host.textContent).not.toContain("sessionStorage");
   });
@@ -197,18 +197,18 @@ describe("Growth Stage 11E owner surface", () => {
     const reviewSpy = vi.spyOn(api, "reviewGrowthMapping").mockResolvedValue(mappingReview);
     const host = await renderSurface();
 
-    await act(async () => button(host, "Обновить Growth").click());
+    await act(async () => button(host, "Обновить данные развития").click());
     expect(api.loadGrowthGoals).toHaveBeenCalledOnce();
     expect(api.loadGrowth).not.toHaveBeenCalled();
     setValue(host.querySelector<HTMLSelectElement>("#growth-goal-select")!, goalUuid);
     expect(api.loadGrowth).not.toHaveBeenCalled();
-    await act(async () => button(host, "Построить Growth result").click());
+    await act(async () => button(host, "Построить результат развития").click());
     expect(api.loadGrowth).toHaveBeenCalledWith(goalUuid, undefined, expect.any(AbortSignal));
     expect(host.textContent).toContain("Связь ещё не задана");
     expect(host.textContent).toContain("Отсутствие связи не означает конфликт");
 
     setValue(host.querySelector<HTMLSelectElement>("#growth-relation-select")!, "conflicts_with_goal");
-    await act(async () => button(host, "Уточнить связь").click());
+    await act(async () => button(host, "Уточнить связь — показать проверку").click());
     expect(reviewSpy).toHaveBeenCalledWith(expect.objectContaining({ source_note_uuid: goalUuid }), "conflicts_with_goal", undefined, expect.any(AbortSignal));
     expect(host.textContent).toContain("Достичь ясного рабочего ритма");
     expect(host.textContent).toContain("Перед рабочим блоком");
@@ -228,16 +228,16 @@ describe("Growth Stage 11E owner surface", () => {
     await build(host);
 
     setValue(host.querySelector<HTMLTextAreaElement>("#growth-advisor-task")!, "Сравнить следующий шаг");
-    await act(async () => button(host, "Показать Goal preview").click());
+    await act(async () => button(host, "Показать предпросмотр цели").click());
     expect(api.previewGrowthAdvisor).toHaveBeenCalledOnce();
-    expect(host.textContent).toContain("Точный Goal, который будет передан Advisor");
+    expect(host.textContent).toContain("Точная цель, которая будет передана советнику");
     const advisorPanel = host.querySelector<HTMLElement>("[aria-labelledby='growth-advisor-title']")!;
     advisorPanel.querySelector<HTMLInputElement>("input[type='checkbox']")!.click();
     await act(async () => button(advisorPanel, "Выполнить независимый анализ").click());
     expect(executeSpy).toHaveBeenCalledOnce();
     expect(host.textContent).toContain("Проверь первый шаг");
 
-    await act(async () => button(host, "Уточнить Growth").click());
+    await act(async () => button(host, "Уточнить развитие").click());
     expect(resolveSpy).not.toHaveBeenCalled();
     await act(async () => button(host, "Игнорировать").click());
     expect(resolveSpy).toHaveBeenCalledWith(expect.objectContaining({ goal_source_uuid: goalUuid }), candidate, "ignore", null, undefined, expect.any(AbortSignal));
