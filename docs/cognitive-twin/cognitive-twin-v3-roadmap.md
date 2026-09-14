@@ -39,7 +39,7 @@ write-back. Для текущего implementation gate нормативным �
 `bdde50f2e3de3953dddf1ba58b4e9b371ea050ad` прошёл post-merge CI и standard
 production deploy. Stage 12B COMPLETE в Issue #284 / PR #285; merge SHA
 `1832dc66de2ea25b41bb0d613ea77aae4dcd1fe2` прошёл [post-merge CI #34851102286](https://github.com/MikeMoore1337/second-brain/actions/runs/34851102286)
-и [standard production deploy #34851314130](https://github.com/MikeMoore1337/second-brain/actions/runs/34851314130); non-mutating `/healthz` вернул HTTP 200. Stage 12C–12E не начаты.
+и [standard production deploy #34851314130](https://github.com/MikeMoore1337/second-brain/actions/runs/34851314130); non-mutating `/healthz` вернул HTTP 200. Stage 12C COMPLETE в Issue #287 / PR #288: deterministic private read model, без Web/API route, provider, network или записи. Stage 12D–12E и Stage 13+ не начаты.
 
 Stage 12 вводит минимальную, reviewed и exact-bound structured progress
 модель, привязанную к текущему Stage 11A Goal. Она отвечает на вопрос
@@ -60,6 +60,9 @@ score.
 - Stage 12A read-only canonical records, pure validators и scan projections;
 - Stage 12B explicit reviewed Safe Write с dry-run/hash/apply/full validation и
   rollback для companion records;
+- Stage 12C provider-free deterministic `GoalProgressResultV1` builder/private
+  read model с explicit Goal UUID, UTC `as_of`, numeric/milestone evaluation и
+  bounded provenance;
 - no provider, telemetry, background inference, automatic capture или
   изменения second-brain-vault.
 
@@ -123,8 +126,8 @@ review, exact dependency map и explicit acceptance decision. Этот roadmap �
 
 - изменение schemas/NoteType или second-brain-vault; Stage 12A runtime is
   limited to the read-only parser and validators;
-- Safe Write, provider/network, Web/API или новый environment variable/systemd
-  contract;
+- новый Safe Write, provider/network, Web/API или environment variable/systemd
+  contract beyond the completed Stage 12B/12C boundaries;
 - Codex Review request, Vault Sync или live smoke;
 - inference write-back, telemetry, embeddings, vector DB или hidden score;
-- автоматический запуск Stage 12B–12E или любой следующей стадии.
+- автоматический запуск Stage 12D–12E или любой следующей стадии.
