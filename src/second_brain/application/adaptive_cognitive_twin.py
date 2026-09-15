@@ -2079,6 +2079,7 @@ __all__ = [
     "AdaptiveCandidate",
     "AdaptiveCandidateReasonV1",
     "AdaptiveCognitiveTwinInputError",
+    "AdaptiveHashV1",
     "AdaptiveProfile",
     "AdaptiveProfileProposal",
     "AdaptiveSourceReadinessV1",
