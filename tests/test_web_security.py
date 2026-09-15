@@ -28,6 +28,11 @@ from second_brain.entrypoints.web.app import (
     COGNITIVE_TWIN_REQUEST_HEADER_VALUE,
     COMPARE_REQUEST_HEADER_NAME,
     COMPARE_REQUEST_HEADER_VALUE,
+    DECISION_COMPASS_ADVISOR_EXECUTE_PATH,
+    DECISION_COMPASS_ADVISOR_PREVIEW_PATH,
+    DECISION_COMPASS_PATH,
+    DECISION_COMPASS_REQUEST_HEADER_NAME,
+    DECISION_COMPASS_REQUEST_HEADER_VALUE,
     DIAGNOSTICS_REQUEST_HEADER_NAME,
     DIAGNOSTICS_REQUEST_HEADER_VALUE,
     DRAFT_REQUEST_HEADER_NAME,
@@ -62,6 +67,7 @@ from second_brain.entrypoints.web.app import (
     MAX_RAW_ASSISTANT_BODY_BYTES,
     MAX_RAW_COGNITIVE_TWIN_BODY_BYTES,
     MAX_RAW_COMPARE_BODY_BYTES,
+    MAX_RAW_DECISION_COMPASS_BODY_BYTES,
     MAX_RAW_DIAGNOSTICS_BODY_BYTES,
     MAX_RAW_DRAFT_BODY_BYTES,
     MAX_RAW_GOAL_PROGRESS_BODY_BYTES,
@@ -295,6 +301,21 @@ def _growth_advisor_route(path: str, body: bytes) -> PrivateRoute:
         invalid_code="GROWTH_ADVISOR_INVALID_REQUEST",
         content_too_large_code="GROWTH_ADVISOR_CONTEXT_TOO_LARGE",
         max_body_bytes=MAX_RAW_GROWTH_ADVISOR_BODY_BYTES,
+    )
+
+
+def _decision_compass_route(path: str, body: bytes = b"{}") -> PrivateRoute:
+    """Build one Stage 13C private route descriptor."""
+
+    return PrivateRoute(
+        path=path,
+        request_header_name=DECISION_COMPASS_REQUEST_HEADER_NAME,
+        request_header_value=DECISION_COMPASS_REQUEST_HEADER_VALUE,
+        content_type="application/json",
+        body=body,
+        invalid_code="DECISION_COMPASS_INVALID_REQUEST",
+        content_too_large_code="DECISION_COMPASS_RESULT_TOO_LARGE",
+        max_body_bytes=MAX_RAW_DECISION_COMPASS_BODY_BYTES,
     )
 
 
@@ -579,6 +600,9 @@ PRIVATE_ROUTES: tuple[PrivateRoute, ...] = (
             }
         ),
     ),
+    _decision_compass_route(DECISION_COMPASS_PATH),
+    _decision_compass_route(DECISION_COMPASS_ADVISOR_PREVIEW_PATH),
+    _decision_compass_route(DECISION_COMPASS_ADVISOR_EXECUTE_PATH),
     _growth_route(GROWTH_ENGINE_PATH),
     _growth_route(GROWTH_GOALS_PATH),
     _growth_route(GROWTH_MAPPING_STATUS_PATH),

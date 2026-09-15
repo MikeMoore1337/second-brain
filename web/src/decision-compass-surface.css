@@ -1,0 +1,460 @@
+.decision-compass-surface {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+  margin-top: 2rem;
+  border-top: 1px solid var(--sb-color-line-strong);
+  padding-top: 2rem;
+}
+
+.decision-compass-heading,
+.decision-compass-result-heading,
+.decision-compass-editor-heading,
+.decision-compass-build-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.decision-compass-heading > div:first-child {
+  min-width: 0;
+}
+
+.decision-compass-heading h3,
+.decision-compass-result-heading h4 {
+  max-width: 24ch;
+  margin: 0;
+  color: var(--sb-color-text-primary);
+  font-size: clamp(1.35rem, 2.4vw, 2rem);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+}
+
+.decision-compass-heading p:not(.decision-compass-eyebrow) {
+  max-width: 72ch;
+  margin: 0.6rem 0 0;
+  color: var(--sb-color-text-secondary);
+  line-height: 1.6;
+}
+
+.decision-compass-eyebrow {
+  margin: 0 0 0.45rem;
+  color: var(--sb-color-accent);
+  font-family: var(--sb-font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.decision-compass-heading-meta {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 0.35rem;
+  color: var(--sb-color-text-tertiary);
+  font-family: var(--sb-font-mono);
+  font-size: 0.7rem;
+  text-align: right;
+}
+
+.decision-compass-toolbar,
+.decision-compass-advisor-action,
+.decision-compass-binding {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.decision-compass-toolbar {
+  align-items: flex-start;
+}
+
+.decision-compass-button {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--sb-color-line-strong);
+  border-radius: 8px;
+  padding: 0.65rem 0.9rem;
+  color: var(--sb-color-text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 650;
+  line-height: 1.2;
+  transition: background-color 160ms ease-out, border-color 160ms ease-out, color 160ms ease-out;
+}
+
+.decision-compass-button-primary {
+  border-color: var(--sb-color-accent);
+  background: var(--sb-color-accent);
+  color: var(--sb-color-on-accent);
+}
+
+.decision-compass-button-secondary {
+  background: transparent;
+}
+
+.decision-compass-button-quiet {
+  background: transparent;
+  color: var(--sb-color-text-secondary);
+}
+
+.decision-compass-button:hover:not(:disabled) {
+  border-color: var(--sb-color-accent-hover);
+}
+
+.decision-compass-button-primary:hover:not(:disabled) {
+  background: var(--sb-color-accent-hover);
+}
+
+.decision-compass-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.decision-compass-button:focus-visible,
+.decision-compass-input:focus-visible,
+.decision-compass-confirm input:focus-visible,
+.decision-compass-technical summary:focus-visible {
+  outline: 2px solid var(--sb-color-focus);
+  outline-offset: 3px;
+}
+
+.decision-compass-status,
+.decision-compass-muted,
+.decision-compass-empty,
+.decision-compass-freshness,
+.decision-compass-inline-success,
+.decision-compass-technical-line {
+  margin: 0;
+  color: var(--sb-color-text-secondary);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.decision-compass-empty {
+  border: 1px dashed var(--sb-color-line-strong);
+  padding: 1rem;
+}
+
+.decision-compass-error,
+.decision-compass-branch-error {
+  margin: 0;
+  border: 1px solid color-mix(in srgb, #d88d5d 65%, var(--sb-color-line));
+  padding: 0.8rem;
+  color: #f1bd94;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.decision-compass-panel,
+.decision-compass-result,
+.decision-compass-preview {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  border: 1px solid var(--sb-color-line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--sb-color-basin) 82%, transparent);
+  padding: 1.1rem;
+}
+
+.decision-compass-result {
+  border-color: color-mix(in srgb, var(--sb-color-accent) 52%, var(--sb-color-line));
+}
+
+.decision-compass-panel-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.decision-compass-panel-heading > span {
+  flex: 0 0 auto;
+  color: var(--sb-color-accent);
+  font-family: var(--sb-font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.decision-compass-panel-heading h4,
+.decision-compass-editor-heading h5,
+.decision-compass-preview h5 {
+  margin: 0;
+  color: var(--sb-color-text-primary);
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+.decision-compass-panel-heading p {
+  max-width: 70ch;
+  margin: 0.35rem 0 0;
+  color: var(--sb-color-text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.decision-compass-label,
+.decision-compass-date-label {
+  display: grid;
+  gap: 0.4rem;
+  color: var(--sb-color-text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.decision-compass-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--sb-color-line-strong);
+  border-radius: 8px;
+  background: var(--sb-color-ink);
+  color: var(--sb-color-text-primary);
+  padding: 0.65rem 0.75rem;
+  font: inherit;
+}
+
+.decision-compass-textarea {
+  min-height: 6rem;
+  resize: vertical;
+}
+
+.decision-compass-goal-preview,
+.decision-compass-binding,
+.decision-compass-preview,
+.decision-compass-result-heading,
+.decision-compass-facts,
+.decision-compass-technical {
+  min-width: 0;
+  border-top: 1px solid var(--sb-color-line);
+  padding-top: 0.9rem;
+}
+
+.decision-compass-goal-preview > p {
+  margin: 0;
+  color: var(--sb-color-text-primary);
+  font-size: 1rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.decision-compass-facts {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0.9rem 0 0;
+}
+
+.decision-compass-facts > div {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.8fr) minmax(0, 1.2fr);
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.decision-compass-facts dt {
+  color: var(--sb-color-text-tertiary);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.decision-compass-facts dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--sb-color-text-primary);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.decision-compass-facts code,
+.decision-compass-emphasis code,
+.decision-compass-technical-line code {
+  overflow-wrap: anywhere;
+  font-family: var(--sb-font-mono);
+  font-size: 0.72rem;
+}
+
+.decision-compass-editor-heading {
+  align-items: center;
+  border-top: 1px solid var(--sb-color-line);
+  padding-top: 1rem;
+}
+
+.decision-compass-option-list,
+.decision-compass-criterion-list,
+.decision-compass-result-list,
+.decision-compass-copy-list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.decision-compass-option-row,
+.decision-compass-criterion-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.75rem;
+}
+
+.decision-compass-criterion-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+}
+
+.decision-compass-build-row {
+  align-items: end;
+  gap: 1rem;
+}
+
+.decision-compass-date-label {
+  width: min(100%, 17rem);
+}
+
+.decision-compass-state,
+.decision-compass-emphasis {
+  margin: 0;
+  color: var(--sb-color-text-primary);
+  font-size: 0.92rem;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.decision-compass-emphasis {
+  color: var(--sb-color-accent);
+}
+
+.decision-compass-branch {
+  background: color-mix(in srgb, var(--sb-color-basin) 64%, transparent);
+}
+
+.decision-compass-advisor {
+  border-color: color-mix(in srgb, var(--sb-color-accent) 38%, var(--sb-color-line));
+}
+
+.decision-compass-copy-list li {
+  border-left: 2px solid var(--sb-color-line-strong);
+  padding-left: 0.75rem;
+  color: var(--sb-color-text-secondary);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.decision-compass-confirm {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.65rem;
+  color: var(--sb-color-text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.decision-compass-confirm input {
+  width: 18px;
+  height: 18px;
+  margin: 0.1rem 0 0;
+  accent-color: var(--sb-color-accent);
+}
+
+.decision-compass-result-heading {
+  align-items: flex-start;
+}
+
+.decision-compass-result-heading > p {
+  margin: 0;
+  color: var(--sb-color-text-tertiary);
+  font-family: var(--sb-font-mono);
+  font-size: 0.7rem;
+  line-height: 1.5;
+  text-align: right;
+}
+
+.decision-compass-freshness {
+  border-left: 2px solid var(--sb-color-accent);
+  padding-left: 0.75rem;
+}
+
+.decision-compass-technical {
+  border-top: 1px solid var(--sb-color-line);
+}
+
+.decision-compass-technical summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--sb-color-text-secondary);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.decision-compass-facts-technical {
+  margin-bottom: 0;
+}
+
+@media (max-width: 700px) {
+  .decision-compass-heading,
+  .decision-compass-result-heading,
+  .decision-compass-build-row {
+    display: grid;
+    align-items: start;
+  }
+
+  .decision-compass-heading-meta,
+  .decision-compass-result-heading > p {
+    text-align: left;
+  }
+
+  .decision-compass-criterion-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .decision-compass-date-label {
+    width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .decision-compass-surface {
+    gap: 0.9rem;
+    padding-top: 1.25rem;
+  }
+
+  .decision-compass-panel,
+  .decision-compass-result,
+  .decision-compass-preview {
+    gap: 0.8rem;
+    border-radius: 10px;
+    padding: 0.85rem;
+  }
+
+  .decision-compass-option-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .decision-compass-option-row .decision-compass-button {
+    width: 100%;
+  }
+
+  .decision-compass-facts > div {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+
+  .decision-compass-button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .decision-compass-button {
+    transition: none;
+  }
+}

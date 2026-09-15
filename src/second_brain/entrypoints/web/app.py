@@ -67,6 +67,30 @@ from second_brain.entrypoints.web.cognitive_twin import (
     build_production_stated_observed_mapping_service,
     install_cognitive_twin_routes,
 )
+from second_brain.entrypoints.web.decision_compass import (
+    DECISION_COMPASS_ADVISOR_EXECUTE_PATH,
+    DECISION_COMPASS_ADVISOR_PREVIEW_PATH,
+    DECISION_COMPASS_PATH,
+    DECISION_COMPASS_REQUEST_HEADER_NAME,
+    DECISION_COMPASS_REQUEST_HEADER_VALUE,
+    DECISION_COMPASS_TOTAL_DEADLINE_SECONDS,
+    MAX_DECISION_COMPASS_RESPONSE_BYTES,
+    MAX_RAW_DECISION_COMPASS_BODY_BYTES,
+    DecisionCompassAdvisorExecutePayload,
+    DecisionCompassBehaviorBindingPayload,
+    DecisionCompassBehaviorScopePayload,
+    DecisionCompassContextPayload,
+    DecisionCompassCriterionPayload,
+    DecisionCompassGoalPayload,
+    DecisionCompassOptionPayload,
+    DecisionCompassPreviewPayload,
+    DecisionCompassRequestBoundaryMiddleware,
+    DecisionCompassRequestPayload,
+    DecisionCompassWebService,
+    ProductionDecisionCompassWebService,
+    build_production_decision_compass_service,
+    install_decision_compass_routes,
+)
 from second_brain.entrypoints.web.goal_progress import (
     GOAL_PROGRESS_DEFINITION_APPLY_PATH,
     GOAL_PROGRESS_DEFINITION_PREPARE_PATH,
@@ -246,6 +270,7 @@ def create_app(**kwargs: Any) -> FastAPI:
     behavioral_self_model_service = kwargs.pop("behavioral_self_model_service", None)
     stated_observed_mapping_service = kwargs.pop("stated_observed_mapping_service", None)
     growth_advisor_service = kwargs.pop("growth_advisor_service", None)
+    decision_compass_service = kwargs.pop("decision_compass_service", None)
     growth_service = kwargs.pop("growth_web_service", None)
     growth_learning_service = kwargs.pop("growth_learning_web_service", None)
     goal_progress_service = kwargs.pop("goal_progress_web_service", None)
@@ -295,6 +320,12 @@ def create_app(**kwargs: Any) -> FastAPI:
     install_growth_advisor_routes(
         app,
         service=growth_advisor_service,
+        env_file=env_file,
+        vault_path_override=vault_path_override,
+    )
+    install_decision_compass_routes(
+        app,
+        service=decision_compass_service,
         env_file=env_file,
         vault_path_override=vault_path_override,
     )
@@ -407,6 +438,28 @@ __all__ = [
     "ProductionGrowthAdvisorWebService",
     "build_production_growth_advisor_service",
     "install_growth_advisor_routes",
+    "DECISION_COMPASS_ADVISOR_EXECUTE_PATH",
+    "DECISION_COMPASS_ADVISOR_PREVIEW_PATH",
+    "DECISION_COMPASS_PATH",
+    "DECISION_COMPASS_REQUEST_HEADER_NAME",
+    "DECISION_COMPASS_REQUEST_HEADER_VALUE",
+    "DECISION_COMPASS_TOTAL_DEADLINE_SECONDS",
+    "DecisionCompassAdvisorExecutePayload",
+    "DecisionCompassBehaviorBindingPayload",
+    "DecisionCompassBehaviorScopePayload",
+    "DecisionCompassCriterionPayload",
+    "DecisionCompassContextPayload",
+    "DecisionCompassGoalPayload",
+    "DecisionCompassOptionPayload",
+    "DecisionCompassPreviewPayload",
+    "DecisionCompassRequestBoundaryMiddleware",
+    "DecisionCompassRequestPayload",
+    "DecisionCompassWebService",
+    "MAX_DECISION_COMPASS_RESPONSE_BYTES",
+    "MAX_RAW_DECISION_COMPASS_BODY_BYTES",
+    "ProductionDecisionCompassWebService",
+    "build_production_decision_compass_service",
+    "install_decision_compass_routes",
     "GROWTH_ENGINE_PATH",
     "GROWTH_GOALS_PATH",
     "GROWTH_MAPPING_CONFIRM_PATH",

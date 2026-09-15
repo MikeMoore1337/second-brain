@@ -683,6 +683,88 @@ export interface GrowthAdvisorBranchResponse {
   readonly provenance: Readonly<Record<string, unknown>> | null;
 }
 
+export interface DecisionCompassOption {
+  readonly id: string;
+  readonly label: string;
+}
+
+export interface DecisionCompassCriterion {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string | null;
+}
+
+export interface DecisionCompassRequest {
+  readonly contract_version: "growth-compare-v1";
+  readonly task: string;
+  readonly options: readonly DecisionCompassOption[];
+  readonly selected_goal: {
+    readonly source_uuid: string;
+    readonly identity_fingerprint: string;
+  } | null;
+  readonly criteria: readonly DecisionCompassCriterion[];
+  readonly explicit_constraints: readonly string[];
+  readonly explicit_context: readonly { readonly kind: "fact" | "background"; readonly text: string }[];
+  readonly progress_as_of: string;
+  readonly behavioral_scope: { readonly behavioral_cohort_fingerprint: string } | null;
+  readonly behavioral_option_binding: {
+    readonly request_option_id: string;
+    readonly behavioral_cohort_fingerprint: string;
+    readonly behavioral_option_index: number;
+    readonly behavioral_option_fingerprint: string;
+  } | null;
+  readonly max_result_bytes: number;
+}
+
+export interface DecisionCompassBranchError {
+  readonly code: string;
+  readonly message: string;
+}
+
+export interface DecisionCompassSimulateBranch {
+  readonly state: string;
+  readonly result: SimulateMeResponse | null;
+  readonly error: DecisionCompassBranchError | null;
+}
+
+export interface DecisionCompassBehaviorBranch {
+  readonly state: string;
+  readonly pattern: BehavioralPattern | null;
+  readonly error: DecisionCompassBranchError | null;
+}
+
+export interface DecisionCompassAdvisorBranch {
+  readonly state: "not_requested" | "result" | "abstention" | "error";
+  readonly result: Readonly<Record<string, unknown>> | null;
+  readonly error: DecisionCompassBranchError | null;
+}
+
+export interface DecisionCompassStructuralRelation {
+  readonly code: string;
+  readonly left_branch: string;
+  readonly right_branch: string;
+  readonly left_state: string;
+  readonly right_state: string;
+  readonly left_option_id: string | null;
+  readonly right_option_id: string | null;
+}
+
+export interface DecisionCompassResponse {
+  readonly contract_version: string;
+  readonly derivation_version: string;
+  readonly policy_id: string;
+  readonly policy_fingerprint: string;
+  readonly selected_goal: NonNullable<DecisionCompassRequest["selected_goal"]>;
+  readonly request: DecisionCompassRequest;
+  readonly simulate_me: DecisionCompassSimulateBranch;
+  readonly behavioral: DecisionCompassBehaviorBranch;
+  readonly growth_progress: GrowthGoalProgressCompositionResponse;
+  readonly advisor: DecisionCompassAdvisorBranch;
+  readonly structural_relations: readonly DecisionCompassStructuralRelation[];
+  readonly caveats: readonly string[];
+  readonly provenance: Readonly<Record<string, unknown>>;
+}
+
 export interface GrowthLearningRequest {
   readonly contract_version: "growth-learning-v1";
   readonly goal_source_uuid: string | null;
@@ -1295,6 +1377,52 @@ export function executeGrowthAdvisor(
   return requestJson(
     "/api/growth-advisor/execute",
     "growth-advisor-v1",
+    { request, preview, confirmed: true },
+    fetcher,
+    "Независимая рекомендация недоступна.",
+    signal,
+  );
+}
+
+export function buildDecisionCompass(
+  request: DecisionCompassRequest,
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<DecisionCompassResponse> {
+  return requestJson(
+    "/api/decision-compass",
+    "decision-compass-v1",
+    request,
+    fetcher,
+    "Не удалось построить компас решения.",
+    signal,
+  );
+}
+
+export function previewDecisionCompassAdvisor(
+  request: DecisionCompassRequest,
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<GrowthAdvisorPreviewResponse> {
+  return requestJson(
+    "/api/decision-compass/advisor/preview",
+    "decision-compass-v1",
+    request,
+    fetcher,
+    "Не удалось подготовить независимую рекомендацию.",
+    signal,
+  );
+}
+
+export function executeDecisionCompassAdvisor(
+  request: DecisionCompassRequest,
+  preview: GrowthAdvisorPreviewResponse,
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<DecisionCompassResponse> {
+  return requestJson(
+    "/api/decision-compass/advisor/execute",
+    "decision-compass-v1",
     { request, preview, confirmed: true },
     fetcher,
     "Независимая рекомендация недоступна.",
