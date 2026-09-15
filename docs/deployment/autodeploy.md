@@ -48,7 +48,10 @@ deploy/autodeploy.sh --sha <CI_SHA>
 ## Диагностика clean-state guard
 
 До любого `fetch`, fast-forward, candidate creation или activation autodeploy
-проверяет control-checkout и sibling vault через `git status --porcelain`.
+проверяет control-checkout и sibling vault через
+`GIT_OPTIONAL_LOCKS=0 git status --porcelain`. Optional index locks отключены
+намеренно: production user должен доказать clean state без попытки записи
+index refresh в control checkout.
 Если `git status` сам возвращает non-zero, deploy остаётся fail-closed и
 выводит только exit code, bounded/normalized stderr, stdout/status metadata и
 bounded Git Trace2 diagnostic. Если команда успешно возвращает dirty metadata,
@@ -60,8 +63,10 @@ deploy также останавливается и выводит только 
 отличить Git integration/index problem от unreadable repository state. До
 комбинированного fallback autodeploy также выполняет три bounded
 one-variable probes: только optional locks, только `core.fsmonitor=false` и
-только `core.untrackedCache=false`. Это позволяет выбрать narrow repository
-fix по evidence, не угадывая причину. Probe никогда не превращает failed
+только `core.untrackedCache=false`. Для инцидента 2026-09-15 на exact
+`efb4f45` one-variable evidence был: `GIT_OPTIONAL_LOCKS=0` — `exit=0` и
+clean; два других варианта — `exit=128`. Поэтому основной guard использует
+только доказанный optional-locks режим; probe никогда не превращает failed
 primary check в clean result. Все диагностические файлы временно сохраняются
 вне production repositories и удаляются после чтения.
 

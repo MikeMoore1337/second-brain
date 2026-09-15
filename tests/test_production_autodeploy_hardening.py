@@ -362,7 +362,8 @@ def _failing_git_environment(tmp_path: Path) -> tuple[dict[str, str], Path]:
     bash_env = tmp_path / "bash-env.sh"
     bash_env.write_text(
         "git() {\n"
-        '  printf \'%s\\n\' "$*" >> "$GIT_CALL_LOG"\n'
+        "  printf '%s optional_locks=%s\\n' \"$*\" "
+        '"${GIT_OPTIONAL_LOCKS-<unset>}" >> "$GIT_CALL_LOG"\n'
         'if [[ " $* " == *" status "* ]]; then\n'
         "  printf 'fatal: simulated index failure\\n' >&2\n"
         "  printf 'simulated status diagnostic on stdout\\n'\n"
@@ -447,6 +448,7 @@ def test_nonzero_git_status_is_bounded_fail_closed_and_stops_before_mutation(
     calls = call_log.read_text(encoding="utf-8")
     assert "symbolic-ref" in calls
     assert "status" in calls
+    assert "optional_locks=0" in calls
     for forbidden in ("fetch", "worktree", "reset", "clean", "checkout", "activate"):
         assert forbidden not in calls.casefold()
 
@@ -473,7 +475,9 @@ def test_clean_state_diagnostic_is_bounded_and_precedes_release_mutation() -> No
     ):
         assert required in script
 
-    status_guard = script.index('git -C "$path" status --porcelain=v1 --untracked-files=all')
+    status_guard = script.index(
+        "if GIT_OPTIONAL_LOCKS=0 GIT_TRACE2_CONFIG_PARAMS= GIT_TRACE2_ENV_VARS="
+    )
     fetch = script.index('git -C "$APP_ROOT" fetch --no-tags origin main')
     candidate = script.index('CANDIDATE_RELEASE="$RELEASES_ROOT/$TARGET_SHA"')
     assert status_guard < fetch < candidate

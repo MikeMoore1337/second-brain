@@ -173,7 +173,7 @@ assert_clean_main() {
     || die "не удалось подготовить bounded git status diagnostic $label"
   status_trace_file="$(mktemp)" \
     || die "не удалось подготовить bounded git status trace $label"
-  if GIT_TRACE2_CONFIG_PARAMS= GIT_TRACE2_ENV_VARS= \
+  if GIT_OPTIONAL_LOCKS=0 GIT_TRACE2_CONFIG_PARAMS= GIT_TRACE2_ENV_VARS= \
     GIT_TRACE2_EVENT="$status_trace_file" \
     git -C "$path" status --porcelain=v1 --untracked-files=all \
       >"$status_file" 2>"$status_stderr_file"; then
