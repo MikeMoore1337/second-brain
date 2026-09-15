@@ -41,7 +41,7 @@ def test_personal_experiments_contract_is_complete_design_gate() -> None:
         assert literal in text
 
 
-def test_stage_14_is_complete_but_stage_15_remains_not_started() -> None:
+def test_stage_14_is_complete_and_stage_15_contract_is_in_delivery() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     design_roadmap = DESIGN_ROADMAP.read_text(encoding="utf-8")
     assert (
@@ -53,4 +53,7 @@ def test_stage_14_is_complete_but_stage_15_remains_not_started() -> None:
     assert "Phase 14.4 owner-only Web/API/UI" in design_roadmap
     assert "Phase 14.5 adversarial security/E2E gate" in design_roadmap
     assert "Phase 14.6 final release/closeout" in design_roadmap
-    assert "Stage 15" in roadmap and "PLANNED / NOT STARTED" in roadmap
+    assert "Stage 15" in roadmap
+    assert "PHASE 15.0 CONTRACT IN DELIVERY" in roadmap
+    assert "15.1–15.6 are NOT STARTED" in roadmap
+    assert "adaptive-cognitive-twin-v1-contract.md" in roadmap
