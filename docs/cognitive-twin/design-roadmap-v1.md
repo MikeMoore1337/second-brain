@@ -30,8 +30,9 @@ Stage 14 Personal Experiments v1 получил нормативный design co
 records, explicit lifecycle и enrollment, provider-free descriptive result,
 Safe Write boundary и запрет автоматической адаптации. Phase 14.1 read-side
 records реализованы в текущем implementation gate; Phase 14.2 reviewed Safe
-Write реализован отдельным implementation gate; evaluator, Web/API и UI
-остаются отдельными gates. Stage 15 остаётся planned/not started.
+Write реализован отдельным implementation gate; Phase 14.3 provider-free
+evaluator реализован отдельным implementation gate; Web/API и UI остаются
+отдельными gates. Stage 15 остаётся planned/not started.
 
 По текущему status после merged Stage 8 QA Cognitive Twin v1 / Stages 1–8
 завершены и находятся в production. Stage 9 — это следующий уровень
@@ -1534,8 +1535,9 @@ systemd change or vault write was required (`env change required: no`). Stage
 13 final runtime/deploy is `7426c079bc95a2fed9f33b7f2b497a1fd5364c40`, with
 post-merge CI `34949012024`, automatic deploy `34949240222`, HTTP 200 health
 and an anonymous private-boundary 401 smoke. Stage 14 design, read-side
-records and reviewed Safe Write are complete; its evaluator/Web/API/UI and
-release gates remain separate. Stage 15 remains planned and not started.
+records, reviewed Safe Write and provider-free evaluator are complete; its
+Web/API/UI and release gates remain separate. Stage 15 remains planned and
+not started.
 
 The Stage 13 normative design gate is recorded in
 [compare-v2-contract.md](compare-v2-contract.md) under Issue #296. It keeps
@@ -1565,12 +1567,12 @@ Stage 12C private read surface = COMPLETE (Issue #287, PR #288; no provider/netw
 Stage 12D Growth + Goal Progress composition = COMPLETE (Issue #290, PR #291, merge SHA `d78da72fef9f080bedfbd3ad1c87d40e49d227e8`, deployed)
 Stage 12E Web/API QA + closeout = COMPLETE (Issue #293, PR #294, merged/deployed)
 Stage 13 Decision Compass / Compare v2 / GrowthCompare v1 = COMPLETE (design Issue #296 / PR #298 / merge `452a51fda49fd7ed30e116b55f73fe457ae3d4c7`; 13A Issue #299 / PR #305 / merge `9444a0936ed0df6ecf3a84fb65eb8bbd6d910e6f`; 13B Issue #300 / PR #307 / merge `cadc01b41b9c766056d45ef6b1b4d753027a236e`; 13C Issue #301 / PR #315 / merge `ab61a4f35d9ad8196b82bffef36170a889f8fc2a`; 13D Issue #302 / PR #316 / merge `7426c079bc95a2fed9f33b7f2b497a1fd5364c40`; 13E Issue #303 closeout; post-merge CI `34949012024`; automatic deploy `34949240222`)
-Stage 14 Personal Experiments = PHASE 14.2 REVIEWED SAFE WRITE COMPLETE
+Stage 14 Personal Experiments = PHASE 14.3 PROVIDER-FREE EVALUATOR COMPLETE
 Stage 15 Adaptive Twin = NOT STARTED
 ~~~
 
 Stage 12A–12E and Stage 13 add no provider, telemetry, background watcher,
 automatic write-back, vault change, new environment variable, systemd change,
-Codex Review request or Vault Sync. Stage 14 continues through its separately
-authorized evaluator/Web/API/UI and release gates; Stage 15 remains planned
-and not started.
+Codex Review request or Vault Sync. Stage 14 evaluator is provider-free and
+read-only; Web/API/UI and release gates remain separately authorized. Stage 15
+remains planned and not started.
