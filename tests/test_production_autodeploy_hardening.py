@@ -363,10 +363,10 @@ def _failing_git_environment(tmp_path: Path) -> tuple[dict[str, str], Path]:
     bash_env.write_text(
         "git() {\n"
         '  printf \'%s\\n\' "$*" >> "$GIT_CALL_LOG"\n'
-        'if [[ "${1:-}" == "-C" && "${3:-}" == "status" ]]; then\n'
+        'if [[ " $* " == *" status "* ]]; then\n'
         "  printf 'fatal: simulated index failure\\n' >&2\n"
         "  printf 'simulated status diagnostic on stdout\\n'\n"
-        "  exit 73\n"
+        "  return 73\n"
         "fi\n"
         '  "$REAL_GIT" "$@"\n'
         "}\n",
@@ -436,6 +436,8 @@ def test_nonzero_git_status_is_bounded_fail_closed_and_stops_before_mutation(
     assert "exit_code=73" in result.stderr
     assert "bounded_stderr=fatal: simulated index failure" in result.stderr
     assert "bounded_stdout=simulated status diagnostic on stdout" in result.stderr
+    assert "fallback_exit=73" in result.stderr
+    assert "fallback_stderr=fatal: simulated index failure" in result.stderr
     assert secret_content not in result.stdout + result.stderr
     assert len(result.stderr) < 1500
     assert _run_git(control, "rev-parse", "HEAD") == before_head
@@ -453,23 +455,27 @@ def test_clean_state_diagnostic_is_bounded_and_precedes_release_mutation() -> No
         "GIT_STATUS_DIAGNOSTIC_MAX_BYTES=512",
         "mktemp",
         "head -c",
+        "tail -c",
         "exit_code=",
         "bounded_stderr=",
         "bounded_stdout=",
+        "trace2=",
+        "fallback_exit=",
+        "GIT_OPTIONAL_LOCKS=0",
+        "core.fsmonitor=false",
+        "core.untrackedCache=false",
         "bounded_status=",
         "автоматическая очистка запрещена",
     ):
         assert required in script
 
-    status_guard = script.index(
-        'if status="$(git -C "$path" status --porcelain=v1 --untracked-files=all'
-    )
+    status_guard = script.index('git -C "$path" status --porcelain=v1 --untracked-files=all')
     fetch = script.index('git -C "$APP_ROOT" fetch --no-tags origin main')
     candidate = script.index('CANDIDATE_RELEASE="$RELEASES_ROOT/$TARGET_SHA"')
     assert status_guard < fetch < candidate
 
     failure_start = script.index("else\n    status_exit=$?", status_guard)
-    failure_end = script.index("\n  fi\n\n  status_stderr=", failure_start)
+    failure_end = script.index("\n  fi\n\n  status=", failure_start)
     failure_path = script[failure_start:failure_end]
     for forbidden in (
         "git fetch",

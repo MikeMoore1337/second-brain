@@ -50,12 +50,17 @@ deploy/autodeploy.sh --sha <CI_SHA>
 До любого `fetch`, fast-forward, candidate creation или activation autodeploy
 проверяет control-checkout и sibling vault через `git status --porcelain`.
 Если `git status` сам возвращает non-zero, deploy остаётся fail-closed и
-выводит только exit code, bounded/normalized stderr и bounded/normalized
-stdout/status metadata, если Git что-либо вернул в stdout. Если команда успешно
-возвращает dirty metadata, deploy также останавливается и выводит только
-bounded porcelain status; содержимое файлов, credentials и environment values
-не читаются в output. Диагностический stderr временно сохраняется вне
-production repositories и удаляется после чтения.
+выводит только exit code, bounded/normalized stderr, stdout/status metadata и
+bounded Git Trace2 diagnostic. Если команда успешно возвращает dirty metadata,
+deploy также останавливается и выводит только bounded porcelain status;
+содержимое файлов, credentials и environment values не читаются в output.
+После первичного failure выполняется ещё один read-only diagnostic probe с
+`GIT_OPTIONAL_LOCKS=0`, отключёнными `core.fsmonitor` и
+`core.untrackedCache`; его exit code, bounded output и Trace2 помогают
+отличить Git integration/index problem от unreadable repository state. Probe
+никогда не превращает failed primary check в clean result. Все диагностические
+файлы временно сохраняются вне production repositories и удаляются после
+чтения.
 
 Таким образом, сообщение о невозможности проверить clean state не означает
 автоматическую очистку checkout: reset, clean, overwrite и удаление unknown

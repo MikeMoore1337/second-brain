@@ -101,62 +101,144 @@ sanitize_git_status_diagnostic() {
   printf '%s' "${diagnostic:0:GIT_STATUS_DIAGNOSTIC_MAX_BYTES}"
 }
 
-read_bounded_git_status_stderr() {
-  local stderr_file="$1"
-  local stderr
+read_bounded_git_status_file() {
+  local output_file="$1"
+  local output
 
-  stderr="$(head -c "$GIT_STATUS_DIAGNOSTIC_MAX_BYTES" "$stderr_file" 2>/dev/null)" \
+  output="$(head -c "$GIT_STATUS_DIAGNOSTIC_MAX_BYTES" "$output_file" 2>/dev/null)" \
     || return 1
-  sanitize_git_status_diagnostic "$stderr"
+  sanitize_git_status_diagnostic "$output"
+}
+
+read_bounded_git_trace_file() {
+  local trace_file="$1"
+  local trace
+
+  # Trace2 writes terminal error/exit events last, so keep the bounded tail
+  # rather than the initial argv-only events.
+  trace="$(tail -c "$GIT_STATUS_DIAGNOSTIC_MAX_BYTES" "$trace_file" 2>/dev/null)" \
+    || return 1
+  sanitize_git_status_diagnostic "$trace"
 }
 
 assert_clean_main() {
   local path="$1"
   local label="$2"
-  local branch status status_stderr status_exit bounded_status
-  local status_stderr_file marker marker_path
+  local branch status status_stderr status_trace status_exit
+  local fallback_status fallback_stderr fallback_trace fallback_exit
+  local status_file status_stderr_file status_trace_file
+  local fallback_status_file fallback_stderr_file fallback_trace_file
+  local marker marker_path
 
   branch="$(git -C "$path" symbolic-ref --quiet --short HEAD 2>/dev/null)" \
     || die "$label находится в detached HEAD"
   [[ "$branch" == "main" ]] || die "$label должен находиться на branch main"
 
-  # Keep stderr outside shell variables until it has been byte-bounded. This
-  # diagnostic file is ephemeral and never points into either production
-  # checkout; it is removed on both the success and failure paths below.
+  # Keep Git output outside shell variables until it has been byte-bounded. The
+  # diagnostic files are ephemeral and never point into either production
+  # checkout; they are removed on both the success and failure paths below.
+  status_file="$(mktemp)" \
+    || die "не удалось подготовить bounded git status output $label"
   status_stderr_file="$(mktemp)" \
     || die "не удалось подготовить bounded git status diagnostic $label"
-  if status="$(git -C "$path" status --porcelain=v1 --untracked-files=all 2>"$status_stderr_file")"; then
+  status_trace_file="$(mktemp)" \
+    || die "не удалось подготовить bounded git status trace $label"
+  if GIT_TRACE2_CONFIG_PARAMS= GIT_TRACE2_ENV_VARS= \
+    GIT_TRACE2_EVENT="$status_trace_file" \
+    git -C "$path" status --porcelain=v1 --untracked-files=all \
+      >"$status_file" 2>"$status_stderr_file"; then
     status_exit=0
   else
     status_exit=$?
-    status_stderr="$(read_bounded_git_status_stderr "$status_stderr_file")" \
+    status="$(read_bounded_git_status_file "$status_file")" \
       || {
-        rm -f -- "$status_stderr_file" \
+        rm -f -- "$status_file" "$status_stderr_file" "$status_trace_file" \
           || true
         die "$label git status failed; exit_code=$status_exit; stderr capture failed"
       }
-    bounded_status="$(sanitize_git_status_diagnostic "$status")"
+    status_stderr="$(read_bounded_git_status_file "$status_stderr_file")" \
+      || {
+        rm -f -- "$status_file" "$status_stderr_file" "$status_trace_file" \
+          || true
+        die "$label git status failed; exit_code=$status_exit; stderr capture failed"
+      }
+    status_trace="$(read_bounded_git_trace_file "$status_trace_file")" \
+      || {
+        rm -f -- "$status_file" "$status_stderr_file" "$status_trace_file" \
+          || true
+        die "$label git status failed; exit_code=$status_exit; trace capture failed"
+      }
+
+    # This second invocation is diagnostic-only. It disables Git's optional
+    # index locks and fsmonitor/untracked-cache integrations to distinguish a
+    # local Git integration failure from an unreadable repository state. It
+    # never turns a failed primary check into a clean result.
+    fallback_status_file="$(mktemp)" \
+      || {
+        rm -f -- "$status_file" "$status_stderr_file" "$status_trace_file" \
+          || true
+        die "$label git status fallback output setup failed"
+      }
+    fallback_stderr_file="$(mktemp)" \
+      || {
+        rm -f -- "$status_file" "$status_stderr_file" "$status_trace_file" \
+          "$fallback_status_file" || true
+        die "$label git status fallback stderr setup failed"
+      }
+    fallback_trace_file="$(mktemp)" \
+      || {
+        rm -f -- "$status_file" "$status_stderr_file" "$status_trace_file" \
+          "$fallback_status_file" "$fallback_stderr_file" || true
+        die "$label git status fallback trace setup failed"
+      }
+    if GIT_OPTIONAL_LOCKS=0 GIT_TRACE2_CONFIG_PARAMS= GIT_TRACE2_ENV_VARS= \
+      GIT_TRACE2_EVENT="$fallback_trace_file" \
+      git -C "$path" -c core.fsmonitor=false -c core.untrackedCache=false \
+        status --porcelain=v1 --untracked-files=all \
+        >"$fallback_status_file" 2>"$fallback_stderr_file"; then
+      fallback_exit=0
+    else
+      fallback_exit=$?
+    fi
+    fallback_status="$(read_bounded_git_status_file "$fallback_status_file")" \
+      || fallback_status="<capture-failed>"
+    fallback_stderr="$(read_bounded_git_status_file "$fallback_stderr_file")" \
+      || fallback_stderr="<capture-failed>"
+    fallback_trace="$(read_bounded_git_trace_file "$fallback_trace_file")" \
+      || fallback_trace="<capture-failed>"
+
     rm -f -- "$status_stderr_file" \
-      || die "не удалось удалить temporary git status diagnostic $label"
+      "$status_file" "$status_trace_file" "$fallback_status_file" \
+      "$fallback_stderr_file" "$fallback_trace_file" \
+      || die "не удалось удалить temporary git status diagnostics $label"
     [[ -n "$status_stderr" ]] || status_stderr="<empty>"
-    [[ -n "$bounded_status" ]] || bounded_status="<empty>"
-    die "$label git status failed; exit_code=$status_exit; bounded_stderr=$status_stderr; bounded_stdout=$bounded_status"
+    [[ -n "$status" ]] || status="<empty>"
+    [[ -n "$status_trace" ]] || status_trace="<empty>"
+    [[ -n "$fallback_stderr" ]] || fallback_stderr="<empty>"
+    [[ -n "$fallback_status" ]] || fallback_status="<empty>"
+    [[ -n "$fallback_trace" ]] || fallback_trace="<empty>"
+    die "$label git status failed; exit_code=$status_exit; bounded_stderr=$status_stderr; bounded_stdout=$status; trace2=$status_trace; fallback_exit=$fallback_exit; fallback_stderr=$fallback_stderr; fallback_stdout=$fallback_status; fallback_trace2=$fallback_trace"
   fi
 
-  status_stderr="$(read_bounded_git_status_stderr "$status_stderr_file")" \
+  status="$(read_bounded_git_status_file "$status_file")" \
     || {
-      rm -f -- "$status_stderr_file" \
+      rm -f -- "$status_file" "$status_stderr_file" "$status_trace_file" \
         || true
+      die "$label git status output capture failed; exit_code=$status_exit"
+    }
+  status_stderr="$(read_bounded_git_status_file "$status_stderr_file")" \
+    || {
+      rm -f -- "$status_file" "$status_stderr_file" "$status_trace_file" \
+      || true
       die "$label git status diagnostic capture failed; exit_code=$status_exit"
     }
-  rm -f -- "$status_stderr_file" \
-    || die "не удалось удалить temporary git status diagnostic $label"
+  rm -f -- "$status_file" "$status_stderr_file" "$status_trace_file" \
+    || die "не удалось удалить temporary git status diagnostics $label"
   [[ -z "$status_stderr" ]] \
     || die "$label git status returned stderr; exit_code=$status_exit; bounded_stderr=$status_stderr"
 
   if [[ -n "$status" ]]; then
-    bounded_status="$(sanitize_git_status_diagnostic "$status")"
-    die "$label dirty; автоматическая очистка запрещена; bounded_status=$bounded_status"
+    die "$label dirty; автоматическая очистка запрещена; bounded_status=$status"
   fi
 
   for marker in \
@@ -332,7 +414,7 @@ done
 [[ "$(id -u)" != "0" ]] || die "autodeploy нельзя запускать от root"
 [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || die "--sha должен быть exact 40-character lowercase Git SHA"
 
-for command in bash git uv npm curl readlink flock seq cmp find stat mktemp head rm; do
+for command in bash git uv npm curl readlink flock seq cmp find stat mktemp head tail rm; do
   require_command "$command"
 done
 [[ -x /usr/bin/sudo ]] || die "ожидается /usr/bin/sudo для narrowly-scoped release control"
