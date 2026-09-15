@@ -17,6 +17,7 @@ from second_brain.entrypoints.web.adaptive_cognitive_twin import (
     ADAPTIVE_COGNITIVE_TWIN_REVIEW_PATH,
     ADAPTIVE_COGNITIVE_TWIN_STATE_PATH,
     ADAPTIVE_COGNITIVE_TWIN_SUPERSEDE_PATH,
+    MAX_ADAPTIVE_COGNITIVE_TWIN_STATE_RESPONSE_BYTES,
     MAX_RAW_ADAPTIVE_COGNITIVE_TWIN_BODY_BYTES,
     AdaptiveCognitiveTwinActivatePayload,
     AdaptiveCognitiveTwinCandidatePayload,
@@ -285,3 +286,57 @@ def test_owner_auth_is_checked_before_adaptive_service() -> None:
     assert response.status_code == 401
     assert response.json() == {"error": {"code": "AUTH_REQUIRED", "message": "Требуется вход"}}
     assert service.calls == []
+
+
+def test_adaptive_endpoint_never_leaks_service_exception_details() -> None:
+    class ExplodingService(_StubService):
+        def state(self, payload: AdaptiveCognitiveTwinStatePayload) -> dict[str, object]:
+            del payload
+            raise RuntimeError("C:/private-vault/Goal.md: source body")
+
+    service = ExplodingService()
+    application = _app(service)
+
+    with TestClient(application, base_url=BASE_URL) as client:
+        response = client.post(ADAPTIVE_COGNITIVE_TWIN_STATE_PATH, json={}, headers=_headers())
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "error": {
+            "code": "ADAPTIVE_COGNITIVE_TWIN_SOURCE_UNAVAILABLE",
+            "message": "Точный источник адаптивного слоя сейчас недоступен.",
+        }
+    }
+    assert "private-vault" not in response.text
+    assert "source body" not in response.text
+
+
+def test_adaptive_endpoint_rejects_private_fields_from_a_downstream_result() -> None:
+    class LeakingService(_StubService):
+        def state(self, payload: AdaptiveCognitiveTwinStatePayload) -> dict[str, object]:
+            del payload
+            return {"path": "C:/private-vault/Goal.md"}
+
+    application = _app(LeakingService())
+
+    with TestClient(application, base_url=BASE_URL) as client:
+        response = client.post(ADAPTIVE_COGNITIVE_TWIN_STATE_PATH, json={}, headers=_headers())
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "ADAPTIVE_COGNITIVE_TWIN_SOURCE_UNAVAILABLE"
+    assert "private-vault" not in response.text
+
+
+def test_adaptive_endpoint_enforces_serialized_response_bound() -> None:
+    class OversizedService(_StubService):
+        def state(self, payload: AdaptiveCognitiveTwinStatePayload) -> dict[str, object]:
+            del payload
+            return {"payload": "x" * (MAX_ADAPTIVE_COGNITIVE_TWIN_STATE_RESPONSE_BYTES + 1)}
+
+    application = _app(OversizedService())
+
+    with TestClient(application, base_url=BASE_URL) as client:
+        response = client.post(ADAPTIVE_COGNITIVE_TWIN_STATE_PATH, json={}, headers=_headers())
+
+    assert response.status_code == 413
+    assert response.json()["error"]["code"] == "ADAPTIVE_COGNITIVE_TWIN_RESULT_TOO_LARGE"

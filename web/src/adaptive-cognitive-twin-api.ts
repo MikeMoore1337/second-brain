@@ -172,6 +172,22 @@ const UUID7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[
 const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const CONTROL_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
 const BANNED_PRIVATE_KEYS = new Set(["content", "raw", "path", "relative_path", "source_body"]);
+const ADAPTIVE_ERROR_MESSAGES: Readonly<Record<string, string>> = {
+  AUTH_REQUIRED: "Требуется вход",
+  ADAPTIVE_COGNITIVE_TWIN_INVALID_REQUEST: "Запрос адаптивного слоя недействителен.",
+  ADAPTIVE_COGNITIVE_TWIN_AUTH_REQUIRED: "Требуется вход владельца.",
+  ADAPTIVE_COGNITIVE_TWIN_SOURCE_UNAVAILABLE: "Точный источник адаптивного слоя сейчас недоступен.",
+  ADAPTIVE_COGNITIVE_TWIN_INSUFFICIENT_EVIDENCE: "Недостаточно точных проверенных данных для предложения изменения.",
+  ADAPTIVE_COGNITIVE_TWIN_NOT_COMPARABLE: "Выбранные источники нельзя безопасно сопоставить.",
+  ADAPTIVE_COGNITIVE_TWIN_SOURCE_CHANGED: "Источник изменился; требуется новая проверка.",
+  ADAPTIVE_COGNITIVE_TWIN_POLICY_MISMATCH: "Версия политики адаптивного слоя недействительна.",
+  ADAPTIVE_COGNITIVE_TWIN_STALE_CANDIDATE: "Предложение устарело; сначала пересоберите его.",
+  ADAPTIVE_COGNITIVE_TWIN_IDEMPOTENCY_CONFLICT: "Операция конфликтует с уже обработанным запросом.",
+  ADAPTIVE_COGNITIVE_TWIN_CONCURRENCY_CONFLICT: "Состояние изменилось; требуется повторная проверка.",
+  ADAPTIVE_COGNITIVE_TWIN_STORE_UNAVAILABLE: "Операционное состояние адаптивного слоя недоступно.",
+  ADAPTIVE_COGNITIVE_TWIN_STORE_CORRUPT: "Операционное состояние адаптивного слоя не прошло проверку целостности.",
+  ADAPTIVE_COGNITIVE_TWIN_RESULT_TOO_LARGE: "Результат адаптивного слоя превышает допустимый размер.",
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -213,7 +229,7 @@ function containsPrivateKey(value: unknown, seen = new Set<object>()): boolean {
   if (!isRecord(value)) return false;
   if (seen.has(value)) return true;
   seen.add(value);
-  return Object.entries(value).some(([key, nested]) => BANNED_PRIVATE_KEYS.has(key) || containsPrivateKey(nested, seen));
+  return Object.entries(value).some(([key, nested]) => BANNED_PRIVATE_KEYS.has(key.toLowerCase()) || containsPrivateKey(nested, seen));
 }
 
 function invalidResponse(): ApiRequestError {
@@ -403,8 +419,9 @@ async function readJson(response: Response): Promise<unknown> {
 }
 
 function responseMessage(payload: unknown, fallback: string): string {
-  if (isRecord(payload) && isRecord(payload.error) && isBoundedText(payload.error.message, 1024)
-    && /[А-Яа-яЁё]/u.test(payload.error.message)) return payload.error.message;
+  if (isRecord(payload) && isRecord(payload.error) && typeof payload.error.code === "string") {
+    return ADAPTIVE_ERROR_MESSAGES[payload.error.code] ?? fallback;
+  }
   return fallback;
 }
 
