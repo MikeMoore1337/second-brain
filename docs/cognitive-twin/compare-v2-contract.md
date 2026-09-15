@@ -1,11 +1,27 @@
 
 # Decision Compass / Compare v2 / GrowthCompare v1
 
-**Статус:** DESIGN / NORMATIVE CONTRACT GATE COMPLETE; отдельная реализация
-Stage 13A без провайдера завершена в [Issue #299](https://github.com/MikeMoore1337/second-brain/issues/299)
-и [PR #305](https://github.com/MikeMoore1337/second-brain/pull/305), merge SHA
-`9444a0936ed0df6ecf3a84fb65eb8bbd6d910e6f`. Post-merge CI `34900681934`,
-production deploy `34900890972`; этапы 13B–13E остаются **NOT STARTED**.
+**Статус:** DESIGN / NORMATIVE CONTRACT GATE COMPLETE; Stage 13A–13D и
+финальный release/closeout gate Stage 13E завершены в Issues
+[#299](https://github.com/MikeMoore1337/second-brain/issues/299),
+[#300](https://github.com/MikeMoore1337/second-brain/issues/300),
+[#301](https://github.com/MikeMoore1337/second-brain/issues/301),
+[#302](https://github.com/MikeMoore1337/second-brain/issues/302) и
+[#303](https://github.com/MikeMoore1337/second-brain/issues/303). Design gate
+доставлен через [PR #298](https://github.com/MikeMoore1337/second-brain/pull/298)
+(`452a51fda49fd7ed30e116b55f73fe457ae3d4c7`); реализация доставлена через
+[PR #305](https://github.com/MikeMoore1337/second-brain/pull/305)
+(`9444a0936ed0df6ecf3a84fb65eb8bbd6d910e6f`),
+[PR #307](https://github.com/MikeMoore1337/second-brain/pull/307)
+(`cadc01b41b9c766056d45ef6b1b4d753027a236e`),
+[PR #315](https://github.com/MikeMoore1337/second-brain/pull/315)
+(`ab61a4f35d9ad8196b82bffef36170a889f8fc2a`) и
+[PR #316](https://github.com/MikeMoore1337/second-brain/pull/316)
+(`7426c079bc95a2fed9f33b7f2b497a1fd5364c40`). Финальный runtime head и
+production deploy — `7426c079bc95a2fed9f33b7f2b497a1fd5364c40`, post-merge CI
+`34949012024`, automatic deploy `34949240222`; `/healthz` HTTP 200,
+private anonymous smoke — ожидаемый 401 без раскрытия данных. `env change
+required: no`; Stage 14–15 не начинались.
 
 **Issue:** [#296](https://github.com/MikeMoore1337/second-brain/issues/296)
 
