@@ -30,7 +30,7 @@ type Operation = "load" | "definition" | "lifecycle" | "observation" | "evaluate
 type SurfaceMode = "list" | "create";
 
 const BASELINE_LABELS: Record<PersonalExperimentBaselineStrategy, string> = {
-  stage12_definition_explicit: "Явная база из правила Stage 12",
+  stage12_definition_explicit: "Исходное значение из правила измерения",
   reviewed_pre_activation_observation: "Проверенное наблюдение до активации",
 };
 
@@ -115,7 +115,7 @@ function stage12StatusLabel(value: unknown): string {
 }
 
 function definitionSummary(definition: PersonalExperimentStage12Definition | undefined): string {
-  if (!definition) return "Точное правило Stage 12 недоступно.";
+  if (!definition) return "Правило измерения прогресса недоступно.";
   if (definition.progress_model === "numeric_target") {
     return [
       definition.metric_id,
@@ -141,7 +141,7 @@ function enrollmentSummary(enrollment: PersonalExperimentEnrollment): string {
   const milestone = recordText(enrollment, "milestone_id", "");
   const state = recordText(enrollment, "state", "");
   return [value && unit ? `${value} ${unit}` : value, milestone, state].filter(isString).join(" · ")
-    || "Точное значение доступно в источнике Stage 12.";
+    || "Точное значение доступно в исходном наблюдении прогресса.";
 }
 
 function ErrorMessage({ message }: { readonly message: string }): ReactElement | null {
@@ -178,7 +178,7 @@ function ReviewPayload({ review }: { readonly review: PersonalExperimentReviewRe
   if (review.record_kind === "observation") {
     return (
       <dl className="pe-review-fields">
-        <div><dt>Наблюдение Stage 12</dt><dd>{recordText(payload, "stage12_observation_id")}</dd></div>
+        <div><dt>Наблюдение прогресса</dt><dd>{recordText(payload, "stage12_observation_id")}</dd></div>
         <div><dt>Отпечаток наблюдения</dt><dd>{recordText(payload, "stage12_observation_fingerprint")}</dd></div>
       </dl>
     );
@@ -278,7 +278,7 @@ function ProgressDefinitionSelect({
 }): ReactElement {
   return (
     <label className="pe-field">
-      <span>Точное правило прогресса Stage 12</span>
+      <span>Правило измерения прогресса</span>
       <select value={value} onChange={(event) => onChange(event.target.value)} disabled={definitions.length === 0}>
         <option value="">Выбери правило</option>
         {definitions.map((definition) => <option value={definition.id} key={`${definition.id}:${definition.definition_fingerprint}`}>{definitionSummary(definition)}</option>)}
@@ -374,7 +374,7 @@ function CreateExperiment({
 function Measurement({ definition }: { readonly definition: PersonalExperimentStage12Definition | undefined }): ReactElement {
   return (
     <section className="pe-section" aria-labelledby="pe-measurement-title">
-      <div className="pe-section-heading"><span className="pe-step-number">03</span><div><h3 id="pe-measurement-title">Измерение</h3><p>Результат переиспользует действующее правило Stage 12 без собственной метрики.</p></div></div>
+      <div className="pe-section-heading"><span className="pe-step-number">03</span><div><h3 id="pe-measurement-title">Измерение</h3><p>Результат рассчитывается по действующему правилу измерения прогресса цели.</p></div></div>
       <div className="pe-measurement">
         <StatusPill tone={definition?.active ? "accent" : "danger"}>{definition?.active ? "Активное правило" : "Источник требует проверки"}</StatusPill>
         <p>{definitionSummary(definition)}</p>
@@ -418,7 +418,7 @@ function ObservationEnrollment({
 }): ReactElement {
   return (
     <section className="pe-section" aria-labelledby="pe-observations-title">
-      <div className="pe-section-heading"><span className="pe-step-number">04</span><div><h3 id="pe-observations-title">Наблюдения</h3><p>Наблюдения Stage 12 попадают в эксперимент только после отдельного явного включения.</p></div></div>
+      <div className="pe-section-heading"><span className="pe-step-number">04</span><div><h3 id="pe-observations-title">Наблюдения</h3><p>Наблюдения прогресса попадают в эксперимент только после твоего подтверждения.</p></div></div>
       <div className="pe-observation-columns">
         <div><h4>Уже включены</h4>{experiment.enrollments.length > 0 ? <ul className="pe-record-list">{experiment.enrollments.map((item) => <li key={item.id}><strong>{enrollmentSummary(item)}</strong><small>{formatMoment(item.observed_at)} · {item.stage12_observation_id}</small></li>)}</ul> : <p className="pe-empty">Пока нет включённых наблюдений.</p>}</div>
         <div><h4>Доступны для включения</h4>{experiment.eligible_stage12_observations.length > 0 ? <ul className="pe-record-list">{experiment.eligible_stage12_observations.map((item) => <li key={item.id}><div><strong>{observationSummary(item)}</strong><small>{formatMoment(item.observed_at)} · проверено {formatMoment(item.observation_reviewed_at)}</small></div><button type="button" className="pe-button pe-button-secondary" disabled={busy} onClick={() => onEnroll(item)}>Включить</button></li>)}</ul> : <p className="pe-empty">Нет новых наблюдений, которые точно попадают в окно эксперимента.</p>}</div>
@@ -447,7 +447,7 @@ function ResultSection({
       {result ? (
         <div className="pe-result" data-personal-experiments-result>
           <div className="pe-result-header"><StatusPill tone={result.status === "not_comparable" || result.status === "policy_mismatch" ? "danger" : "accent"}>{resultLabel(result.status)}</StatusPill><span>Срез на: {formatMoment(result.as_of)}</span></div>
-          <dl className="pe-result-counts"><div><dt>Включено</dt><dd>{valueCount(result, "included_observations")}</dd></div><div><dt>Исключено</dt><dd>{valueCount(result, "excluded_observations")}</dd></div><div><dt>Состояние Stage 12</dt><dd>{stage12StatusLabel(result.stage12_status)}</dd></div></dl>
+          <dl className="pe-result-counts"><div><dt>Включено</dt><dd>{valueCount(result, "included_observations")}</dd></div><div><dt>Исключено</dt><dd>{valueCount(result, "excluded_observations")}</dd></div><div><dt>Состояние прогресса</dt><dd>{stage12StatusLabel(result.stage12_status)}</dd></div></dl>
           <p className="pe-result-caveat">Наблюдаемый срез не является доказательством причинного эффекта и не меняет другие разделы системы.</p>
           <details className="pe-provenance"><summary>Показать происхождение результата</summary><dl><div><dt>Источник</dt><dd>{result.provenance.source}</dd></div><div><dt>Провайдер</dt><dd>{result.provenance.provider}</dd></div><div><dt>Сеть</dt><dd>{result.provenance.network}</dd></div><div><dt>Запись</dt><dd>{result.provenance.write}</dd></div><div><dt>Отпечаток результата</dt><dd>{result.result_fingerprint}</dd></div><div><dt>Отпечаток определения</dt><dd>{definition.experiment_definition_fingerprint}</dd></div></dl></details>
         </div>
@@ -517,7 +517,7 @@ function ExperimentDetail({
       <ObservationEnrollment experiment={experiment} busy={busy === "observation"} onEnroll={onEnroll} />
       <ResultSection definition={definition} result={result} busy={busy === "evaluate"} onEvaluate={onEvaluate} />
       <ReassessmentSection experiment={experiment} result={result} busy={busy === "reassessment"} onPrepare={onReassessment} />
-      <details className="pe-provenance pe-detail-provenance"><summary>Показать техническое происхождение эксперимента</summary><dl><div><dt>ID определения эксперимента</dt><dd>{definition.id}</dd></div><div><dt>Отпечаток эксперимента</dt><dd>{definition.experiment_definition_fingerprint}</dd></div><div><dt>Отпечаток цели</dt><dd>{definition.goal_identity_fingerprint}</dd></div><div><dt>Отпечаток Stage 12</dt><dd>{definition.goal_progress_definition_fingerprint}</dd></div><div><dt>Политика</dt><dd>{definition.experiment_policy_id} · {definition.experiment_policy_fingerprint}</dd></div></dl></details>
+      <details className="pe-provenance pe-detail-provenance"><summary>Показать техническое происхождение эксперимента</summary><dl><div><dt>ID определения эксперимента</dt><dd>{definition.id}</dd></div><div><dt>Отпечаток эксперимента</dt><dd>{definition.experiment_definition_fingerprint}</dd></div><div><dt>Отпечаток цели</dt><dd>{definition.goal_identity_fingerprint}</dd></div><div><dt>Отпечаток правила измерения</dt><dd>{definition.goal_progress_definition_fingerprint}</dd></div><div><dt>Политика</dt><dd>{definition.experiment_policy_id} · {definition.experiment_policy_fingerprint}</dd></div></dl></details>
     </div>
   );
 }
@@ -657,7 +657,7 @@ export function PersonalExperimentsSurface(): ReactElement {
   return (
     <section className="personal-experiments-surface" id="personal-experiments" aria-labelledby="personal-experiments-title" aria-busy={busy !== null} data-personal-experiments-state={state ? "loaded" : "idle"}>
       <header className="pe-heading">
-        <div><h3 id="personal-experiments-title">Личные эксперименты</h3><p>Проверяй собственные гипотезы рядом с целью и Stage 12, сохраняя границу между наблюдаемым изменением и причинным выводом.</p></div>
+        <div><h3 id="personal-experiments-title">Личные эксперименты</h3><p>Проверяй свои гипотезы и отслеживай прогресс цели. Наблюдаемое изменение само по себе не доказывает, что его вызвал эксперимент.</p></div>
         <div className="pe-heading-meta"><span>Только текущая страница</span><span>Без провайдера и автоадаптации</span></div>
       </header>
       <div className="pe-causality-warning pe-causality-warning-heading">Изменение во время эксперимента не доказывает причинность.</div>

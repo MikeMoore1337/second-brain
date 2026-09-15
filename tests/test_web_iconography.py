@@ -45,7 +45,7 @@ def test_different_sections_have_unique_icons() -> None:
     names = [name for _, name in sections]
     assert len(names) == len(set(names)), sections
     assert ("decision-compass", "decision-compass") in sections
-    assert ("personal-experiments", "refresh") in sections
+    assert ("personal-experiments", "personal-experiments") in sections
     assert 'id: "decision-compass", label: "Компас решения"' in semantic
     assert 'id="semantic-navigation"' in semantic
     assert "pillars" not in app

@@ -68,7 +68,7 @@ export const semanticGroups = [
     icon: "growth",
     tools: [
       { id: "growth-engine", label: "Цели и прогресс", description: "Проверь цель, измеряемый прогресс, совет и следующий шаг.", target: "#growth-engine", icon: "growth", availability: "available", renderSurface: true },
-      { id: "personal-experiments", label: "Личные эксперименты", description: "Проверь свою гипотезу рядом с целью и Stage 12 через явную проверку.", target: "#personal-experiments", icon: "refresh", availability: "available", renderSurface: true },
+      { id: "personal-experiments", label: "Личные эксперименты", description: "Проверь свою гипотезу и оцени изменения по правилу измерения прогресса цели.", target: "#personal-experiments", icon: "personal-experiments", availability: "available", renderSurface: true },
     ],
   },
 ] as const satisfies readonly SemanticGroupDefinition[];
