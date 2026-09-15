@@ -27,6 +27,37 @@ from second_brain.entrypoints.web.active_personal_learning import (
     LazyVaultActiveLearningService,
     install_active_learning_routes,
 )
+from second_brain.entrypoints.web.adaptive_cognitive_twin import (
+    ADAPTIVE_COGNITIVE_TWIN_ACTIVATE_PATH,
+    ADAPTIVE_COGNITIVE_TWIN_CANDIDATE_PATH,
+    ADAPTIVE_COGNITIVE_TWIN_EVALUATE_PATH,
+    ADAPTIVE_COGNITIVE_TWIN_REJECT_PATH,
+    ADAPTIVE_COGNITIVE_TWIN_REQUEST_HEADER_NAME,
+    ADAPTIVE_COGNITIVE_TWIN_REQUEST_HEADER_VALUE,
+    ADAPTIVE_COGNITIVE_TWIN_RESULT_TOO_LARGE,
+    ADAPTIVE_COGNITIVE_TWIN_REVERT_PATH,
+    ADAPTIVE_COGNITIVE_TWIN_REVIEW_PATH,
+    ADAPTIVE_COGNITIVE_TWIN_STATE_PATH,
+    ADAPTIVE_COGNITIVE_TWIN_SUPERSEDE_PATH,
+    MAX_ADAPTIVE_COGNITIVE_TWIN_MUTATION_RESPONSE_BYTES,
+    MAX_ADAPTIVE_COGNITIVE_TWIN_STATE_RESPONSE_BYTES,
+    MAX_RAW_ADAPTIVE_COGNITIVE_TWIN_BODY_BYTES,
+    AdaptiveCognitiveTwinActivatePayload,
+    AdaptiveCognitiveTwinCandidateOperationPayload,
+    AdaptiveCognitiveTwinCandidatePayload,
+    AdaptiveCognitiveTwinEvaluatePayload,
+    AdaptiveCognitiveTwinRejectPayload,
+    AdaptiveCognitiveTwinRequestBoundaryMiddleware,
+    AdaptiveCognitiveTwinRevertPayload,
+    AdaptiveCognitiveTwinReviewPayload,
+    AdaptiveCognitiveTwinStatePayload,
+    AdaptiveCognitiveTwinSupersedePayload,
+    AdaptiveCognitiveTwinWebError,
+    AdaptiveCognitiveTwinWebService,
+    ProductionAdaptiveCognitiveTwinWebService,
+    build_production_adaptive_cognitive_twin_web_service,
+    install_adaptive_cognitive_twin_routes,
+)
 from second_brain.entrypoints.web.assistant_compare import (
     ASSISTANT_REQUEST_HEADER_NAME,
     ASSISTANT_REQUEST_HEADER_VALUE,
@@ -306,6 +337,7 @@ def create_app(**kwargs: Any) -> FastAPI:
     growth_learning_service = kwargs.pop("growth_learning_web_service", None)
     goal_progress_service = kwargs.pop("goal_progress_web_service", None)
     personal_experiments_service = kwargs.pop("personal_experiments_web_service", None)
+    adaptive_cognitive_twin_service = kwargs.pop("adaptive_cognitive_twin_web_service", None)
     auth_config = kwargs.pop("web_auth_config", None)
     auth_gateway = kwargs.pop("web_auth_gateway", None)
     auth_clock = kwargs.pop("web_auth_clock", None)
@@ -382,6 +414,12 @@ def create_app(**kwargs: Any) -> FastAPI:
     install_personal_experiment_routes(
         app,
         service=personal_experiments_service,
+        env_file=env_file,
+        vault_path_override=vault_path_override,
+    )
+    install_adaptive_cognitive_twin_routes(
+        app,
+        service=adaptive_cognitive_twin_service,
         env_file=env_file,
         vault_path_override=vault_path_override,
     )
@@ -592,6 +630,35 @@ __all__ = [
     "build_personal_experiments_state",
     "build_production_personal_experiment_web_service",
     "install_personal_experiment_routes",
+    "ADAPTIVE_COGNITIVE_TWIN_ACTIVATE_PATH",
+    "ADAPTIVE_COGNITIVE_TWIN_CANDIDATE_PATH",
+    "ADAPTIVE_COGNITIVE_TWIN_EVALUATE_PATH",
+    "ADAPTIVE_COGNITIVE_TWIN_REJECT_PATH",
+    "ADAPTIVE_COGNITIVE_TWIN_REQUEST_HEADER_NAME",
+    "ADAPTIVE_COGNITIVE_TWIN_REQUEST_HEADER_VALUE",
+    "ADAPTIVE_COGNITIVE_TWIN_REVERT_PATH",
+    "ADAPTIVE_COGNITIVE_TWIN_REVIEW_PATH",
+    "ADAPTIVE_COGNITIVE_TWIN_STATE_PATH",
+    "ADAPTIVE_COGNITIVE_TWIN_SUPERSEDE_PATH",
+    "ADAPTIVE_COGNITIVE_TWIN_RESULT_TOO_LARGE",
+    "MAX_ADAPTIVE_COGNITIVE_TWIN_MUTATION_RESPONSE_BYTES",
+    "MAX_ADAPTIVE_COGNITIVE_TWIN_STATE_RESPONSE_BYTES",
+    "MAX_RAW_ADAPTIVE_COGNITIVE_TWIN_BODY_BYTES",
+    "AdaptiveCognitiveTwinActivatePayload",
+    "AdaptiveCognitiveTwinCandidateOperationPayload",
+    "AdaptiveCognitiveTwinCandidatePayload",
+    "AdaptiveCognitiveTwinEvaluatePayload",
+    "AdaptiveCognitiveTwinRejectPayload",
+    "AdaptiveCognitiveTwinRequestBoundaryMiddleware",
+    "AdaptiveCognitiveTwinRevertPayload",
+    "AdaptiveCognitiveTwinReviewPayload",
+    "AdaptiveCognitiveTwinStatePayload",
+    "AdaptiveCognitiveTwinSupersedePayload",
+    "AdaptiveCognitiveTwinWebError",
+    "AdaptiveCognitiveTwinWebService",
+    "ProductionAdaptiveCognitiveTwinWebService",
+    "build_production_adaptive_cognitive_twin_web_service",
+    "install_adaptive_cognitive_twin_routes",
     "WebAuthConfig",
     "create_app",
 ]

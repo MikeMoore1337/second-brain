@@ -21,6 +21,16 @@ from second_brain.entrypoints.web.app import (
     ACTIVE_LEARNING_REQUEST_HEADER_NAME,
     ACTIVE_LEARNING_REQUEST_HEADER_VALUE,
     ACTIVE_LEARNING_RESOLVE_PATH,
+    ADAPTIVE_COGNITIVE_TWIN_ACTIVATE_PATH,
+    ADAPTIVE_COGNITIVE_TWIN_CANDIDATE_PATH,
+    ADAPTIVE_COGNITIVE_TWIN_EVALUATE_PATH,
+    ADAPTIVE_COGNITIVE_TWIN_REJECT_PATH,
+    ADAPTIVE_COGNITIVE_TWIN_REQUEST_HEADER_NAME,
+    ADAPTIVE_COGNITIVE_TWIN_REQUEST_HEADER_VALUE,
+    ADAPTIVE_COGNITIVE_TWIN_REVERT_PATH,
+    ADAPTIVE_COGNITIVE_TWIN_REVIEW_PATH,
+    ADAPTIVE_COGNITIVE_TWIN_STATE_PATH,
+    ADAPTIVE_COGNITIVE_TWIN_SUPERSEDE_PATH,
     ASSISTANT_REQUEST_HEADER_NAME,
     ASSISTANT_REQUEST_HEADER_VALUE,
     BEHAVIORAL_SELF_MODEL_PATH,
@@ -64,6 +74,7 @@ from second_brain.entrypoints.web.app import (
     GROWTH_REQUEST_HEADER_NAME,
     GROWTH_REQUEST_HEADER_VALUE,
     MAX_RAW_ACTIVE_LEARNING_BODY_BYTES,
+    MAX_RAW_ADAPTIVE_COGNITIVE_TWIN_BODY_BYTES,
     MAX_RAW_ASSISTANT_BODY_BYTES,
     MAX_RAW_COGNITIVE_TWIN_BODY_BYTES,
     MAX_RAW_COMPARE_BODY_BYTES,
@@ -112,6 +123,7 @@ from second_brain.entrypoints.web.app import (
     TIMELINE_REQUEST_HEADER_VALUE,
     TRANSCRIPTION_REQUEST_HEADER_NAME,
     TRANSCRIPTION_REQUEST_HEADER_VALUE,
+    AdaptiveCognitiveTwinWebService,
     GrowthAdvisorWebService,
     PersonalExperimentWebService,
     TranscriptionRequestBoundaryMiddleware,
@@ -401,6 +413,21 @@ def _personal_experiment_route(path: str) -> PrivateRoute:
     )
 
 
+def _adaptive_cognitive_twin_route(path: str) -> PrivateRoute:
+    """Build one Stage 15.4 private route descriptor."""
+
+    return PrivateRoute(
+        path=path,
+        request_header_name=ADAPTIVE_COGNITIVE_TWIN_REQUEST_HEADER_NAME,
+        request_header_value=ADAPTIVE_COGNITIVE_TWIN_REQUEST_HEADER_VALUE,
+        content_type="application/json",
+        body=b"{}",
+        invalid_code="ADAPTIVE_COGNITIVE_TWIN_INVALID_REQUEST",
+        content_too_large_code="ADAPTIVE_COGNITIVE_TWIN_RESULT_TOO_LARGE",
+        max_body_bytes=MAX_RAW_ADAPTIVE_COGNITIVE_TWIN_BODY_BYTES,
+    )
+
+
 PRIVATE_ROUTES: tuple[PrivateRoute, ...] = (
     PrivateRoute(
         path="/api/assistant",
@@ -657,6 +684,14 @@ PRIVATE_ROUTES: tuple[PrivateRoute, ...] = (
     _personal_experiment_route(PERSONAL_EXPERIMENT_EVALUATE_PATH),
     _personal_experiment_route(PERSONAL_EXPERIMENT_REASSESSMENT_PREPARE_PATH),
     _personal_experiment_route(PERSONAL_EXPERIMENT_REASSESSMENT_APPLY_PATH),
+    _adaptive_cognitive_twin_route(ADAPTIVE_COGNITIVE_TWIN_STATE_PATH),
+    _adaptive_cognitive_twin_route(ADAPTIVE_COGNITIVE_TWIN_CANDIDATE_PATH),
+    _adaptive_cognitive_twin_route(ADAPTIVE_COGNITIVE_TWIN_REVIEW_PATH),
+    _adaptive_cognitive_twin_route(ADAPTIVE_COGNITIVE_TWIN_ACTIVATE_PATH),
+    _adaptive_cognitive_twin_route(ADAPTIVE_COGNITIVE_TWIN_REJECT_PATH),
+    _adaptive_cognitive_twin_route(ADAPTIVE_COGNITIVE_TWIN_EVALUATE_PATH),
+    _adaptive_cognitive_twin_route(ADAPTIVE_COGNITIVE_TWIN_SUPERSEDE_PATH),
+    _adaptive_cognitive_twin_route(ADAPTIVE_COGNITIVE_TWIN_REVERT_PATH),
     PrivateRoute(
         path="/api/self-retrieval",
         request_header_name=SELF_RETRIEVAL_REQUEST_HEADER_NAME,
@@ -767,6 +802,7 @@ def _boundary_test_app() -> tuple[FastAPI, RecordingBoundaryService]:
         stated_observed_mapping_service=cast(StatedObservedMappingWebService, service),
         growth_advisor_service=cast(GrowthAdvisorWebService, service),
         personal_experiments_web_service=cast(PersonalExperimentWebService, service),
+        adaptive_cognitive_twin_web_service=cast(AdaptiveCognitiveTwinWebService, service),
     )
     return application, service
 

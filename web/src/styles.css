@@ -5,6 +5,7 @@
 @import "./growth-surface.css";
 @import "./decision-compass-surface.css";
 @import "./personal-experiments-surface.css";
+@import "./adaptive-cognitive-twin-surface.css";
 
 .icon {
   display: inline-block;
