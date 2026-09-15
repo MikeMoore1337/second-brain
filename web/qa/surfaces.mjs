@@ -60,6 +60,26 @@ const fixtures={
 };
 const out=process.env.SB_QA_OUT ?? '../.local/design-v4';const results=[];
 const browser=await chromium.launch({headless:true,executablePath:process.env.SB_QA_CHROMIUM});
+async function reveal(page, selector) {
+  await page.locator(selector).evaluate(e=>{
+    const group=e.closest('[data-semantic-group]');
+    const trigger=group?.querySelector('[data-semantic-group-trigger]');
+    if(trigger?.getAttribute('aria-expanded')!=='true') trigger.click();
+  });
+  await page.waitForTimeout(100);
+  await page.locator(selector).evaluate(e=>{
+    const group=e.closest('[data-semantic-group]');
+    const surface=e.closest('[data-semantic-functional-surface]');
+    const toolId=surface?.getAttribute('data-semantic-functional-surface') ?? e.id;
+    const link=toolId ? group?.querySelector(`a[data-semantic-tool-link="${toolId}"]`) : null;
+    link?.click();
+    e.scrollIntoView({block:'start'});
+  });
+  await page.waitForTimeout(450);
+  await page.locator(selector).evaluate(e=>e.scrollIntoView({block:'start'}));
+  await page.waitForTimeout(100);
+}
+
 try{
   for(const width of [1440,390]){
     const c=await browser.newContext({viewport:{width,height:width===390?844:1000}});
@@ -68,18 +88,19 @@ try{
       return fixtures[u.pathname]?route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(fixtures[u.pathname])}):route.continue();
     });
     const page=await c.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('http://127.0.0.1:8137');
-    await page.locator('.fold-section').evaluateAll(items=>items.forEach(e=>e.open=true));
+    await reveal(page,'#self-model');
     await page.locator('#self-model').getByRole('button',{name:'Построить / обновить'}).click();
-    await page.getByLabel('Запрос для контекста').fill('идеи');await page.locator('#self-retrieval').getByRole('button',{name:'Собрать',exact:true}).click();
+    await reveal(page,'#self-retrieval');await page.getByLabel('Запрос для контекста').fill('идеи');await page.locator('#self-retrieval').getByRole('button',{name:'Собрать',exact:true}).click();
+    await reveal(page,'#simulate-me');
     await page.locator('#simulate-me').getByLabel('Задача или запрос').fill('Как вернуться к идеям?');
     await page.locator('#simulate-me').getByLabel('Название',{exact:true}).fill('Вернуться к заметкам');
     await page.locator('#simulate-me button[type=submit]').click();
-    await page.locator('#assistant-compare textarea').first().fill('Как вернуться к идеям?');
+    await reveal(page,'#assistant-compare');await page.locator('#assistant-compare textarea').first().fill('Как вернуться к идеям?');
     await page.locator('.stage7-option-row input').nth(0).fill('Вернуться к заметкам');await page.locator('.stage7-option-row input').nth(1).fill('Собрать новый материал');
     await page.getByRole('button',{name:'Независимый совет + прогноз + сравнение',exact:true}).click();
     await page.locator('.stage7-delta-panel').waitFor();
-    await page.locator('#diagnostics').getByRole('button',{name:'Обновить',exact:true}).click();
-    const cognitive=page.locator('#cognitive-twin');
+    await reveal(page,'#diagnostics');await page.locator('#diagnostics').getByRole('button',{name:'Обновить',exact:true}).click();
+    await reveal(page,'#cognitive-twin');const cognitive=page.locator('#cognitive-twin');
     await cognitive.getByRole('button',{name:'Обновить текущие данные',exact:true}).click();
     await cognitive.locator('#cognitive-twin-stated-select').selectOption(id);
     await cognitive.locator('#cognitive-twin-observed-select').selectOption(`${stage10Cohort}:0:${stage10Option}`);
@@ -88,7 +109,7 @@ try{
     await cognitive.locator('.cognitive-twin-confirm-label input').check();
     await cognitive.getByRole('button',{name:'Подтвердить сопоставление',exact:true}).click();
     await cognitive.getByText('UUID принятого сопоставления').waitFor();
-    const growth=page.locator('#growth-engine');
+    await reveal(page,'#growth-engine');const growth=page.locator('#growth-engine');
     await growth.getByRole('button',{name:'Обновить данные развития',exact:true}).click();
     await growth.locator('#growth-goal-select').selectOption(id);
     await growth.getByRole('button',{name:'Построить результат развития',exact:true}).click();
@@ -105,7 +126,7 @@ try{
     await growth.getByRole('button',{name:'Игнорировать',exact:true}).click();
     await growth.getByText('Вопрос проигнорирован без записи').waitFor();
     for(const selector of ['#timeline','#self-model','#cognitive-twin','#growth-engine','.self-retrieval-item','.simulate-me-result','.stage7-result-grid','#diagnostics']){
-      const e=page.locator(selector);await e.waitFor();await e.evaluate(e=>e.scrollIntoView({block:'start'}));await page.waitForTimeout(350);
+      await reveal(page,selector);const e=page.locator(selector);await e.waitFor();
       await page.screenshot({path:`${out}/populated-${selector.replace(/[.#]/g,'')}-${width}.png`});
     }
     const axe=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();

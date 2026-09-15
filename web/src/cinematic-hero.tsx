@@ -97,7 +97,7 @@ export function CinematicHero(): ReactElement {
       <h1 id="hero-title">Second<br /><span>Brain</span></h1>
       <p className="universe-thesis">Мысли обретают форму.</p>
       <p className="universe-description">Сохраняй мысли. Находи связи.<br />Возвращайся к важному.</p>
-      <div className="universe-actions"><a className="universe-primary" href="#capture">Добавить мысль <Icon name="add" size={19} /></a><a className="universe-search" href="#search"><Icon name="search" size={19} /> Найти в памяти</a></div>
+      <div className="universe-actions"><a className="universe-primary" href="#semantic-group-memory">Начать с памяти <Icon name="memory" size={19} /></a><a className="universe-search" href="#semantic-navigation"><Icon name="open" size={19} /> Посмотреть направления</a></div>
       <p className="universe-promise">Твои знания. Твой выбор.<br />Сохранение — только после проверки.</p>
     </div>
     <div className="universe-caption"><span>Больше связей. Больше ясности.</span>{reducedMotion ? <span className="motion-preference">Движение отключено настройкой устройства</span> : null}</div>

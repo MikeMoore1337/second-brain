@@ -3,10 +3,8 @@ import { useEffect, useState, type ReactElement } from "react";
 import { CinematicHero } from "./cinematic-hero";
 import { LoginScreen, type LoginError } from "./login-screen";
 import { PageMotion } from "./page-motion";
-import { FoldSection, revealDestination } from "./fold-section";
+import { revealDestination } from "./fold-section";
 import { SectionMenu } from "./section-menu";
-import memoryBackdrop from "./assets/icons/memory-detail-192.webp";
-import growthBackdrop from "./assets/icons/growth-detail-192.webp";
 import brainMark from "./assets/brain-mark-48.webp";
 import brainMark2x from "./assets/brain-mark-96.webp";
 
@@ -27,22 +25,29 @@ import { applyPwaUpdate, hasPwaUpdate, subscribeToPwaUpdate } from "./pwa";
 import { ProspectiveAuditSurface } from "./prospective-audit-surface";
 import { CognitiveTwinSurface } from "./cognitive-twin-surface";
 import { DecisionCompassSurface } from "./decision-compass-surface";
+import { GrowthSurface } from "./growth-surface";
+import { SemanticNavigation, semanticGroups, type SemanticTool } from "./semantic-navigation";
 
-const navigation = [
-  ["#decision-journal", "Журнал решений", "decision"],
-  ["#timeline", "Хронология", "timeline"],
-  ["#self-model", "Модель себя", "self-model"],
-  ["#simulate-me", "Прогноз", "simulate"],
-  ["#prospective-audit", "Аудит прогноза", "prospective-audit"],
-  ["#assistant-compare", "Совет и сравнение", "relation"],
-  ["#decision-compass", "Компас решения", "decision-compass"],
-  ["#retrospective-calibration", "Ретроспективная проверка", "retrospective"],
-  ["#self-retrieval", "Сбор контекста", "self-retrieval"],
-  ["#search", "Поиск", "search"],
-  ["#diagnostics", "Диагностика", "diagnostics"],
-  ["#memory", "Память", "memory"],
-  ["#growth", "Развитие", "growth"],
-] as const;
+function renderSemanticTool(tool: SemanticTool): ReactElement | null {
+  switch (tool.id) {
+    case "capture": return <CaptureSurface />;
+    case "search": return <SearchSurface />;
+    case "decision-journal": return <DecisionJournalSurface />;
+    case "timeline": return <TimelineSurface />;
+    case "self-retrieval": return <SelfRetrievalSurface />;
+    case "self-model": return <SelfModelSurface />;
+    case "cognitive-twin": return <CognitiveTwinSurface includeGrowth={false} />;
+    case "retrospective-calibration": return <RetrospectiveCalibrationSurface />;
+    case "diagnostics": return <DiagnosticsSurface />;
+    case "simulate-me": return <SimulateMeSurface />;
+    case "prospective-audit": return <ProspectiveAuditSurface />;
+    case "assistant-compare": return <AssistantCompareSurface />;
+    case "decision-compass": return <DecisionCompassSurface />;
+    case "active-learning": return null;
+    case "growth-engine": return <GrowthSurface />;
+    default: return tool satisfies never;
+  }
+}
 
 export function AccountControl(): ReactElement {
   return (
@@ -148,28 +153,13 @@ export function App(): ReactElement {
           <a className="brand" href="#main-content" aria-label="Second Brain — начало">
             <img className="brand-brain" src={brainMark} srcSet={`${brainMark} 1x, ${brainMark2x} 2x`} width={44} height={44} alt="" />
             <span className="brand-copy"><span className="brand-eyebrow">Личная система знаний</span><span className="brand-name">Second Brain</span></span>
-          </a><div className="topbar-actions"><nav className="quick-nav" aria-label="Быстрые действия"><a href="#capture"><Icon name="add" size={18} />Добавить</a><a href="#search"><Icon name="search" size={18} />Поиск</a><SectionMenu navigation={[["#capture", "Добавить материал", "add"], ...navigation]} /></nav>{showAccountControl && <AccountControl />}</div>
+          </a><div className="topbar-actions"><nav className="quick-nav" aria-label="Навигация по направлениям"><SectionMenu groups={semanticGroups} /></nav>{showAccountControl && <AccountControl />}</div>
         </header>
         <div className="workspace-frame">
           <div className="workspace-content">
             <main id="main-content" tabIndex={-1}>
               <CinematicHero />
-              <CaptureSurface />
-              <SearchSurface />
-              <div className="tools-heading"><h2>Твоё пространство</h2><p>Открой нужный раздел — остальное подождёт.</p></div>
-              <div className="fold-list">
-                <FoldSection id="decision-journal" title="Журнал решений" icon="decision"><DecisionJournalSurface /></FoldSection>
-                <FoldSection id="timeline" title="Хронология" icon="timeline"><TimelineSurface /></FoldSection>
-                <FoldSection id="self-model" title="Модель себя" icon="self-model"><SelfModelSurface /><CognitiveTwinSurface /></FoldSection>
-                <FoldSection id="simulate-me" title="Прогноз" icon="simulate"><SimulateMeSurface /></FoldSection>
-                <FoldSection id="prospective-audit" title="Аудит прогноза" icon="prospective-audit"><ProspectiveAuditSurface /></FoldSection>
-                <FoldSection id="assistant-compare" title="Совет и сравнение" icon="relation"><AssistantCompareSurface /></FoldSection>
-                <FoldSection id="decision-compass" title="Компас решения" icon="decision-compass"><DecisionCompassSurface /></FoldSection>
-                <FoldSection id="retrospective-calibration" title="Ретроспективная проверка" icon="retrospective"><RetrospectiveCalibrationSurface /></FoldSection>
-                <FoldSection id="self-retrieval" title="Сбор контекста" icon="self-retrieval"><SelfRetrievalSurface /></FoldSection>
-                <FoldSection id="diagnostics" title="Диагностика" icon="diagnostics"><DiagnosticsSurface /></FoldSection>
-              </div>
-              <section className="pillars" aria-labelledby="pillars-title"><div className="section-heading"><p className="eyebrow">Две центральные части</p><h2 id="pillars-title">Система, которая растёт вместе с тобой.</h2></div><div className="pillar-grid"><article className="pillar-card pillar-card-memory" id="memory"><img className="pillar-backdrop" src={memoryBackdrop} width={192} height={192} alt="" aria-hidden="true" loading="lazy" decoding="async" /><div className="card-topline"><span className="card-index">01</span><span className="card-dot" aria-hidden="true" /></div><Icon name="memory" size={64} className="section-art" /><h3>Память</h3><p>Собирай идеи, источники и наблюдения в надёжную личную память.</p><div className="card-meta"><span>База знаний</span><Icon name="open" size={18} /></div></article><article className="pillar-card pillar-card-growth" id="growth"><img className="pillar-backdrop" src={growthBackdrop} width={192} height={192} alt="" aria-hidden="true" loading="lazy" decoding="async" /><div className="card-topline"><span className="card-index">02</span><span className="card-dot" aria-hidden="true" /></div><Icon name="growth" size={64} className="section-art" /><h3>Развитие</h3><p>Превращай накопленное знание в ясность, навыки и следующий шаг.</p><div className="card-meta"><span>Личное развитие</span><Icon name="open" size={18} /></div></article></div></section>
+              <SemanticNavigation renderTool={renderSemanticTool} />
             </main>
             <footer className="footer"><span>Локально по умолчанию</span><span className="footer-line" aria-hidden="true" /><span>Приватные знания, осознанное развитие</span></footer>
           </div>

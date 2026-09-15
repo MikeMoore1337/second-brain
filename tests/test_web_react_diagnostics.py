@@ -15,10 +15,10 @@ def _read(relative_path: str) -> str:
 
 def test_diagnostics_surface_is_russian_safe_and_explicit_refresh_only() -> None:
     source = _read("web/src/diagnostics-surface.tsx")
-    app = _read("web/src/App.tsx")
     api = _read("web/src/api.ts")
+    navigation = _read("web/src/semantic-navigation.tsx")
 
-    assert "Диагностика" in app
+    assert 'id: "diagnostics", label: "Диагностика"' in navigation
     assert "Обновить" in source
     assert "Нажми «Обновить»" in source
     assert '"/api/diagnostics"' in api
@@ -35,7 +35,7 @@ def test_diagnostics_surface_is_russian_safe_and_explicit_refresh_only() -> None
 
 def test_diagnostics_surface_has_accessible_statuses_codes_and_local_icons() -> None:
     source = _read("web/src/diagnostics-surface.tsx")
-    app = _read("web/src/App.tsx")
+    navigation = _read("web/src/semantic-navigation.tsx")
 
     assert "data-diagnostics-surface" in source
     assert 'aria-live="polite"' in source
@@ -44,7 +44,7 @@ def test_diagnostics_surface_has_accessible_statuses_codes_and_local_icons() -> 
     assert "name={copy.icon}" in source
     assert "data-diagnostics-status={report.status}" in source
     assert 'className="diagnostics-code"' in source
-    assert '["#diagnostics", "Диагностика", "diagnostics"]' in app
+    assert 'target: "#diagnostics"' in navigation
 
 
 def test_diagnostics_surface_covers_mobile_overflow_and_reduced_motion_contract() -> None:

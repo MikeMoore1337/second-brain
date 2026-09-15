@@ -7,6 +7,7 @@ import "./styles.css";
 import "./cinematic.css";
 import "./page-atmosphere.css";
 import "./compact-glass.css";
+import "./semantic-navigation.css";
 import "./login.css";
 
 const rootElement = document.getElementById("root");

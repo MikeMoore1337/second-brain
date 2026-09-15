@@ -11,6 +11,26 @@ async function context(options={}) {
   await c.route('**/*',r=>new URL(r.request().url()).origin===origin?r.continue():r.abort());
   return c;
 }
+async function reveal(page, selector) {
+  await page.locator(selector).evaluate(e=>{
+    const group=e.closest('[data-semantic-group]');
+    const trigger=group?.querySelector('[data-semantic-group-trigger]');
+    if(trigger?.getAttribute('aria-expanded')!=='true') trigger.click();
+  });
+  await page.waitForTimeout(100);
+  await page.locator(selector).evaluate(e=>{
+    const group=e.closest('[data-semantic-group]');
+    const surface=e.closest('[data-semantic-functional-surface]');
+    const toolId=surface?.getAttribute('data-semantic-functional-surface') ?? e.id;
+    const link=toolId ? group?.querySelector(`a[data-semantic-tool-link="${toolId}"]`) : null;
+    link?.click();
+    e.scrollIntoView({block:'start'});
+  });
+  await page.waitForTimeout(450);
+  await page.locator(selector).evaluate(e=>e.scrollIntoView({block:'start'}));
+  await page.waitForTimeout(100);
+}
+
 async function shot(page,name,selector) {
   if(selector)await page.locator(selector).scrollIntoViewIfNeeded();
   await page.screenshot({path:`${out}/${name}.png`});
@@ -56,7 +76,7 @@ try {
     report.motion.push({width,phase:'paused-stable-650ms',...second});
     await shot(p,`paused-${width}`,'.cinematic-hero');
     await p.getByRole('button',{name:'Разделы',exact:true}).click();await p.getByRole('switch',{name:'Анимация'}).check();await p.keyboard.press('Escape');
-    await p.locator('#search').scrollIntoViewIfNeeded();await p.waitForTimeout(200);assert.equal((await states()).moving,'false');
+    await reveal(p,'#search');await p.locator('#search').scrollIntoViewIfNeeded();await p.waitForTimeout(200);assert.equal((await states()).moving,'false');
     report.motion.push({width,phase:'offscreen',...await states()});
     await p.evaluate(()=>scrollTo(0,0));await p.waitForTimeout(300);
     for(const rate of [1,4]) {
@@ -73,7 +93,7 @@ try {
     await c.close();
   }
   const c=await context({viewport:{width:390,height:844}});const p=await c.newPage();
-  await p.goto(origin);await p.getByRole('link',{name:'Добавить мысль'}).click();
+  await p.goto(origin);await p.getByRole('link',{name:'Начать с памяти'}).click();await reveal(p,'#capture');
   const capture=p.locator('#capture');
   await capture.getByLabel('Публичный URL').fill('https://example.com/synthetic');
   await capture.getByRole('button',{name:'Создать черновик',exact:true}).click();await capture.getByRole('heading',{name:'Черновик готов'}).waitFor();
@@ -103,7 +123,8 @@ try {
   await q.keyboard.press('Tab');assert.equal(await q.locator('.skip-link').evaluate(e=>e===document.activeElement),true);
   await shot(q,'keyboard-skip');await q.keyboard.press('Enter');assert.equal(await q.locator('main').evaluate(e=>e===document.activeElement),true);
   async function tabTo(locator){for(let i=0;i<80;i++){await q.keyboard.press('Tab');if(await locator.evaluate(e=>e===document.activeElement))return;}throw Error('Keyboard target unreachable');}
-  await tabTo(q.getByRole('link',{name:'Добавить мысль'}));await q.keyboard.press('Enter');
+  await tabTo(q.getByRole('link',{name:'Начать с памяти'}));await q.keyboard.press('Enter');
+  await tabTo(q.locator('.semantic-tool-link[data-semantic-tool-link="capture"]'));await q.keyboard.press('Enter');
   await tabTo(q.locator('#capture').getByRole('button',{name:'Текст',exact:true}));await q.keyboard.press('Space');
   await tabTo(q.getByLabel('Текст материала'));await q.keyboard.type('Synthetic keyboard input');
   await shot(q,'keyboard-focus','#capture');
@@ -113,7 +134,9 @@ try {
     await q.waitForTimeout(200);
   }
   await q.locator('.saved-note').waitFor();
-  await tabTo(q.locator('.quick-nav').getByRole('link',{name:'Поиск',exact:true}));await q.keyboard.press('Enter');
+  await tabTo(q.getByRole('button',{name:'Разделы',exact:true}));await q.keyboard.press('Enter');
+  await tabTo(q.locator('.section-dropdown .section-dropdown-group-link[href="#semantic-group-memory"]'));await q.keyboard.press('Enter');
+  await tabTo(q.locator('.semantic-tool-link[data-semantic-tool-link="search"]'));await q.keyboard.press('Enter');
   await tabTo(q.getByLabel('Поисковый запрос'));await q.keyboard.type('идеи');
   await tabTo(q.locator('#search').getByRole('button',{name:'Найти',exact:true}));await q.keyboard.press('Enter');
   await q.locator('.search-hit').waitFor();await tabTo(q.locator('.search-hit').getByRole('button',{name:'Открыть',exact:true}));await q.keyboard.press('Enter');

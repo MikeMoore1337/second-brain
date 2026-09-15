@@ -7,6 +7,7 @@ import * as api from "../api";
 import { DiagnosticsSurface } from "../diagnostics-surface";
 import { CaptureSurface } from "../parity";
 import { presentCode, presentError, presentValue } from "../presentation";
+import { semanticGroups } from "../semantic-navigation";
 
 let root: Root | undefined;
 
@@ -179,10 +180,11 @@ describe("React Web parity shell", () => {
     try {
       const host = await renderApp();
       expect(host.querySelector('.sections-trigger')).not.toBeNull();
-      expect(host.querySelector('.fold-list')).not.toBeNull();
+      expect(host.querySelector('.semantic-navigation')).not.toBeNull();
+      expect(host.querySelectorAll('[data-semantic-group]')).toHaveLength(4);
       expect(host.querySelector('[aria-label="Режим добавления"]')).not.toBeNull();
       expect(host.querySelector('[aria-label="Режим журнала решений"]')).not.toBeNull();
-      expect(host.textContent).toContain("Сбор контекста");
+      expect(host.textContent).toContain("Собрать контекст");
       expect(host.textContent).toContain("Подтвердить сохранение");
     } finally {
       Object.defineProperty(window, "innerWidth", { configurable: true, value: originalWidth });
@@ -200,17 +202,28 @@ describe("React Web parity shell", () => {
     const host = await renderApp();
 
     expect(host.querySelector("main#main-content")).not.toBeNull();
-    expect(host.querySelector('.fold-list')).not.toBeNull();
+    expect(host.querySelector('.semantic-navigation')).not.toBeNull();
+    expect(host.querySelectorAll('[data-semantic-group]')).toHaveLength(4);
+    expect(Array.from(host.querySelectorAll('[data-semantic-group] > .semantic-group-summary h3')).map((heading) => heading.textContent)).toEqual(["Память", "Понимание себя", "Решения", "Развитие"]);
     expect(host.querySelector("#hero-title")?.textContent).toContain("Second");
-    for (const id of ["decision-journal", "timeline", "self-model", "simulate-me", "prospective-audit", "assistant-compare", "decision-compass", "retrospective-calibration", "self-retrieval", "search", "memory", "growth"]) {
-      expect(host.querySelector(`#${id}`), id).not.toBeNull();
+    for (const id of ["decision-journal", "timeline", "self-model", "cognitive-twin", "simulate-me", "prospective-audit", "assistant-compare", "decision-compass", "retrospective-calibration", "self-retrieval", "active-learning", "diagnostics", "search", "capture", "growth-engine"]) {
+      expect(host.querySelector("#" + id), id).not.toBeNull();
     }
+    expect(host.querySelector("#memory")).toBeNull();
+    expect(host.querySelector("#growth")).toBeNull();
+    for (const group of semanticGroups) {
+      for (const tool of group.tools) {
+        expect(host.querySelectorAll(`a[href="${tool.target}"]`), tool.id).toHaveLength(1);
+        expect(host.querySelector(`.semantic-tool-links a[href="${tool.target}"]`), tool.id).not.toBeNull();
+      }
+    }
+    expect(host.querySelectorAll(".section-dropdown-tool-link")).toHaveLength(0);
     expect(host.querySelector('[data-capture-panel]')).not.toBeNull();
     expect(host.querySelector('[data-self-retrieval-surface]')).not.toBeNull();
     expect(host.querySelector('[data-calibration-state="idle"]')).not.toBeNull();
     expect(host.querySelector('#entry-title [data-icon="add"]')).not.toBeNull();
-    expect(host.querySelector('.fold-section summary [data-icon="decision"]')).not.toBeNull();
-    expect(host.querySelector('.card-meta [data-icon="open"]')).not.toBeNull();
+    expect(host.querySelector('.semantic-functional-heading [data-icon="decision"]')).not.toBeNull();
+    expect(host.querySelector('.semantic-tool-open [data-icon="open"]')).not.toBeNull();
   });
 
   it("reflects busy state on the complete Self Retrieval surface while the request is pending", async () => {
