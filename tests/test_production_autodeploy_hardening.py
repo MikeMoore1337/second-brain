@@ -45,16 +45,24 @@ def _bash_path() -> str | None:
     return None
 
 
-def _run_bash(script: Path, *args: str) -> subprocess.CompletedProcess[str]:
+def _run_bash(
+    script: Path,
+    *args: str,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     bash = _bash_path()
     if bash is None:
         pytest.skip("bash is required for shell helper integration tests")
+    process_env = os.environ.copy()
+    if env is not None:
+        process_env.update(env)
     return subprocess.run(
         [bash, str(script), *args],
         cwd=PROJECT_ROOT,
         capture_output=True,
         text=True,
         check=False,
+        env=process_env,
     )
 
 
@@ -302,6 +310,173 @@ def _write_candidate_state(
     path = candidate / relative_path
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
+
+
+def _clean_state_repository(tmp_path: Path) -> Path:
+    """Create a plain main checkout without POSIX-only candidate symlinks."""
+    repository, _sha = _init_seed_repository(
+        tmp_path,
+        "format_version=1\nrequired=PUBLIC_VALUE\n",
+    )
+    (repository / "tracked.txt").write_text("baseline\n", encoding="utf-8")
+    _run_git(repository, "add", "--", "tracked.txt")
+    _run_git(repository, "commit", "-m", "add tracked fixture")
+    return repository
+
+
+def _clean_state_harness(tmp_path: Path) -> Path:
+    """Run the production clean-state function against an isolated fixture."""
+    script = AUTODEPLOY_PATH.read_text(encoding="utf-8")
+    die_start = script.index("die() {")
+    die_end = script.index("\n\nhandle_interruption", die_start)
+    clean_start = script.index("GIT_STATUS_DIAGNOSTIC_MAX_BYTES=")
+    clean_end = script.index("\n\nreset_candidate_python_environment()", clean_start)
+
+    harness = tmp_path / "clean-state-harness.sh"
+    harness.write_text(
+        "#!/usr/bin/env bash\nset -Eeuo pipefail\n"
+        f"{script[die_start:die_end]}\n"
+        f"{script[clean_start:clean_end]}\n"
+        'assert_clean_main "$1" "$2"\n',
+        encoding="utf-8",
+    )
+    harness.chmod(0o755)
+    return harness
+
+
+def _failing_git_environment(tmp_path: Path) -> tuple[dict[str, str], Path]:
+    """Make only the status subcommand fail while delegating all other Git calls."""
+    bash = _bash_path()
+    assert bash is not None
+    real_git_result = subprocess.run(
+        [bash, "-lc", "command -v git"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert real_git_result.returncode == 0, real_git_result.stderr
+    real_git = real_git_result.stdout.strip()
+    assert real_git
+
+    call_log = tmp_path / "git-calls.log"
+    bash_env = tmp_path / "bash-env.sh"
+    bash_env.write_text(
+        "git() {\n"
+        '  printf \'%s\\n\' "$*" >> "$GIT_CALL_LOG"\n'
+        'if [[ "${1:-}" == "-C" && "${3:-}" == "status" ]]; then\n'
+        "  printf 'fatal: simulated index failure\\n' >&2\n"
+        "  printf 'SECRET_FILE_CONTENT\\n'\n"
+        "  exit 73\n"
+        "fi\n"
+        '  "$REAL_GIT" "$@"\n'
+        "}\n",
+        encoding="utf-8",
+    )
+
+    environment = {
+        "BASH_ENV": str(bash_env),
+        "REAL_GIT": real_git,
+        "GIT_CALL_LOG": str(call_log),
+    }
+    return environment, call_log
+
+
+@pytest.mark.skipif(_bash_path() is None, reason="bash is required for clean-state tests")
+def test_clean_state_guard_keeps_clean_checkout_flow_green(tmp_path: Path) -> None:
+    repository = _clean_state_repository(tmp_path)
+    result = _run_bash(
+        _clean_state_harness(tmp_path),
+        str(repository),
+        "second-brain",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == ""
+    assert result.stderr == ""
+
+
+@pytest.mark.skipif(_bash_path() is None, reason="bash is required for clean-state tests")
+def test_dirty_clean_state_guard_reports_bounded_status_metadata_only(tmp_path: Path) -> None:
+    control = _clean_state_repository(tmp_path)
+    secret_content = "PRIVATE_FILE_CONTENT_MUST_NOT_BE_LOGGED"
+    (control / "tracked.txt").write_text(secret_content, encoding="utf-8")
+
+    result = _run_bash(
+        _clean_state_harness(tmp_path),
+        str(control),
+        "second-brain",
+    )
+
+    assert result.returncode != 0
+    assert "second-brain dirty;" in result.stderr
+    assert "bounded_status=" in result.stderr
+    assert "tracked.txt" in result.stderr
+    assert secret_content not in result.stdout + result.stderr
+    assert len(result.stderr) < 1500
+
+
+@pytest.mark.skipif(_bash_path() is None, reason="bash is required for clean-state tests")
+def test_nonzero_git_status_is_bounded_fail_closed_and_stops_before_mutation(
+    tmp_path: Path,
+) -> None:
+    control = _clean_state_repository(tmp_path)
+    environment, call_log = _failing_git_environment(tmp_path)
+    before_head = _run_git(control, "rev-parse", "HEAD")
+    result = _run_bash(
+        _clean_state_harness(tmp_path),
+        str(control),
+        "second-brain",
+        env=environment,
+    )
+
+    assert result.returncode != 0
+    assert "git status failed" in result.stderr
+    assert "exit_code=73" in result.stderr
+    assert "bounded_stderr=fatal: simulated index failure" in result.stderr
+    assert "SECRET_FILE_CONTENT" not in result.stdout + result.stderr
+    assert len(result.stderr) < 1500
+    assert _run_git(control, "rev-parse", "HEAD") == before_head
+    calls = call_log.read_text(encoding="utf-8")
+    assert "symbolic-ref" in calls
+    assert "status" in calls
+    for forbidden in ("fetch", "worktree", "reset", "clean", "checkout", "activate"):
+        assert forbidden not in calls.casefold()
+
+
+def test_clean_state_diagnostic_is_bounded_and_precedes_release_mutation() -> None:
+    script = AUTODEPLOY_PATH.read_text(encoding="utf-8")
+
+    for required in (
+        "GIT_STATUS_DIAGNOSTIC_MAX_BYTES=512",
+        "mktemp",
+        "head -c",
+        "exit_code=",
+        "bounded_stderr=",
+        "bounded_status=",
+        "автоматическая очистка запрещена",
+    ):
+        assert required in script
+
+    status_guard = script.index(
+        'if status="$(git -C "$path" status --porcelain=v1 --untracked-files=all'
+    )
+    fetch = script.index('git -C "$APP_ROOT" fetch --no-tags origin main')
+    candidate = script.index('CANDIDATE_RELEASE="$RELEASES_ROOT/$TARGET_SHA"')
+    assert status_guard < fetch < candidate
+
+    failure_start = script.index("else\n    status_exit=$?", status_guard)
+    failure_end = script.index("\n  fi\n\n  status_stderr=", failure_start)
+    failure_path = script[failure_start:failure_end]
+    for forbidden in (
+        "git fetch",
+        "git worktree",
+        "git reset",
+        "git clean",
+        "git checkout",
+        "release-control",
+        "rm -rf",
+    ):
+        assert forbidden not in failure_path.casefold()
 
 
 def _run_candidate_check(

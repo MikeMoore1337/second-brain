@@ -45,6 +45,24 @@ deploy/autodeploy.sh --sha <CI_SHA>
        +-> bounded rollback при post-activation failure
 ```
 
+## Диагностика clean-state guard
+
+До любого `fetch`, fast-forward, candidate creation или activation autodeploy
+проверяет control-checkout и sibling vault через `git status --porcelain`.
+Если `git status` сам возвращает non-zero, deploy остаётся fail-closed и
+выводит только exit code и bounded/normalized stderr. Если команда успешно
+возвращает dirty metadata, deploy также останавливается и выводит только
+bounded porcelain status; содержимое файлов, credentials и environment values
+не читаются в output. Диагностический stderr временно сохраняется вне
+production repositories и удаляется после чтения.
+
+Таким образом, сообщение о невозможности проверить clean state не означает
+автоматическую очистку checkout: reset, clean, overwrite и удаление unknown
+production files не выполняются. Любая следующая диагностика должна сначала
+классифицировать точную причину (`permissions`, index/worktree/config или
+unknown tracked/untracked state), а затем выбрать только доказанный
+non-destructive repair либо `HUMAN_REQUIRED`.
+
 ## Versioned production env preflight
 
 Каждый deploy читает `deploy/production-env-requirements.conf` из exact target

@@ -86,18 +86,76 @@ run_runtime_entrypoint_check() {
     --candidate "$candidate_path"
 }
 
+GIT_STATUS_DIAGNOSTIC_MAX_BYTES=512
+
+sanitize_git_status_diagnostic() {
+  local diagnostic="$1"
+
+  # Git status output is metadata only, but normalize control characters before
+  # writing it to a CI log. The byte limit is applied to the captured value
+  # before this formatting so untrusted repository names cannot expand output.
+  diagnostic="${diagnostic//$'\r'/ }"
+  diagnostic="${diagnostic//$'\n'/ | }"
+  diagnostic="${diagnostic//$'\t'/ }"
+  diagnostic="${diagnostic//$'\e'/ }"
+  printf '%s' "${diagnostic:0:GIT_STATUS_DIAGNOSTIC_MAX_BYTES}"
+}
+
+read_bounded_git_status_stderr() {
+  local stderr_file="$1"
+  local stderr
+
+  stderr="$(head -c "$GIT_STATUS_DIAGNOSTIC_MAX_BYTES" "$stderr_file" 2>/dev/null)" \
+    || return 1
+  sanitize_git_status_diagnostic "$stderr"
+}
+
 assert_clean_main() {
   local path="$1"
   local label="$2"
-  local branch status marker marker_path
+  local branch status status_stderr status_exit bounded_status
+  local status_stderr_file marker marker_path
 
   branch="$(git -C "$path" symbolic-ref --quiet --short HEAD 2>/dev/null)" \
     || die "$label находится в detached HEAD"
   [[ "$branch" == "main" ]] || die "$label должен находиться на branch main"
 
-  status="$(git -C "$path" status --porcelain=v1 --untracked-files=all 2>/dev/null)" \
-    || die "не удалось проверить clean state $label"
-  [[ -z "$status" ]] || die "$label dirty; автоматическая очистка запрещена"
+  # Keep stderr outside shell variables until it has been byte-bounded. This
+  # diagnostic file is ephemeral and never points into either production
+  # checkout; it is removed on both the success and failure paths below.
+  status_stderr_file="$(mktemp)" \
+    || die "не удалось подготовить bounded git status diagnostic $label"
+  if status="$(git -C "$path" status --porcelain=v1 --untracked-files=all 2>"$status_stderr_file")"; then
+    status_exit=0
+  else
+    status_exit=$?
+    status_stderr="$(read_bounded_git_status_stderr "$status_stderr_file")" \
+      || {
+        rm -f -- "$status_stderr_file" \
+          || true
+        die "$label git status failed; exit_code=$status_exit; stderr capture failed"
+      }
+    rm -f -- "$status_stderr_file" \
+      || die "не удалось удалить temporary git status diagnostic $label"
+    [[ -n "$status_stderr" ]] || status_stderr="<empty>"
+    die "$label git status failed; exit_code=$status_exit; bounded_stderr=$status_stderr"
+  fi
+
+  status_stderr="$(read_bounded_git_status_stderr "$status_stderr_file")" \
+    || {
+      rm -f -- "$status_stderr_file" \
+        || true
+      die "$label git status diagnostic capture failed; exit_code=$status_exit"
+    }
+  rm -f -- "$status_stderr_file" \
+    || die "не удалось удалить temporary git status diagnostic $label"
+  [[ -z "$status_stderr" ]] \
+    || die "$label git status returned stderr; exit_code=$status_exit; bounded_stderr=$status_stderr"
+
+  if [[ -n "$status" ]]; then
+    bounded_status="$(sanitize_git_status_diagnostic "$status")"
+    die "$label dirty; автоматическая очистка запрещена; bounded_status=$bounded_status"
+  fi
 
   for marker in \
     MERGE_HEAD \
@@ -272,7 +330,7 @@ done
 [[ "$(id -u)" != "0" ]] || die "autodeploy нельзя запускать от root"
 [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || die "--sha должен быть exact 40-character lowercase Git SHA"
 
-for command in bash git uv npm curl readlink flock seq cmp find stat; do
+for command in bash git uv npm curl readlink flock seq cmp find stat mktemp head rm; do
   require_command "$command"
 done
 [[ -x /usr/bin/sudo ]] || die "ожидается /usr/bin/sudo для narrowly-scoped release control"
