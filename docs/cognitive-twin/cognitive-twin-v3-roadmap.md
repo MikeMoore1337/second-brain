@@ -110,9 +110,8 @@ Stage 13E завершены указанными Issues/PRs; они не изм
 
 ## Stage 14 — Personal Experiments
 
-**Статус:** DESIGN CONTRACT COMPLETE / PHASE 14.1 READ-SIDE RECORDS COMPLETE /
-PHASE 14.2 REVIEWED SAFE WRITE COMPLETE / PHASE 14.3 PROVIDER-FREE EVALUATOR
-COMPLETE / WEB/API AND UI NOT STARTED. Контракт
+**Статус:** STAGE 14 COMPLETE / PHASES 14.0–14.6 COMPLETE / PRODUCTION
+CLOSEOUT COMPLETE. Контракт
 [Personal Experiments v1](personal-experiments-v1-contract.md) принят в Issue
 [#304](https://github.com/MikeMoore1337/second-brain/issues/304); Phase 14.1
 добавил immutable DTO, strict parser, exact chain/source validators и typed scan
@@ -120,7 +119,20 @@ projections. Phase 14.2 добавил dedicated reviewed Safe Write с prepare/
 exact plan/token binding, no-overwrite, full validation, rollback, lifecycle и
 supersession. Phase 14.3 добавил provider-free deterministic evaluator с
 immutable result, exact provenance, Stage 12 authority, explicit as_of и
-bounded non-causal статусами. Implementation gates 14.4–14.6 ещё не начаты.
+bounded non-causal статусами. Phase 14.4 добавил owner-only memory-only
+Web/API/UI surface с PWA/security/accessibility QA; Phase 14.5 добавил
+adversarial identity/isolation/lifecycle/Safe Write/privacy/semantic gate; Phase
+14.6 зафиксировал final regression, release, production и cleanup evidence.
+
+Serial delivery evidence: PR #318 → `19f6a1184ac77c9547cfa6711ef41ba2ac18991b`,
+PR #322 → `229e6d75060eac239216481c48864573ef801d19`, PR #323 →
+`108c5a8a77bd52f6a6d2a31a9bc00c7842b2c34b`, PR #325 →
+`6be81abcc8a8e550f8ab85d2cd9ffd85fb35de9f`, PR #327 →
+`d3cf87dc67f2122492e8e1e75108dec6212fdc68`, PR #328 →
+`fae8ce99066f3654fb798f2800cd1209c26fd372`; exact CI/deploy run map is
+recorded in the normative contract. The final release PR contains `Closes #304`;
+its final main/runtime SHA and production evidence are recorded in the final
+delivery report.
 
 Предполагаемый bounded workflow:
 

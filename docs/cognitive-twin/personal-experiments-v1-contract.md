@@ -1,6 +1,6 @@
 # Cognitive Twin v3 / Stage 14 — Personal Experiments v1
 
-Статус: **NORMATIVE CONTRACT / PHASE 14.0 COMPLETE; PHASE 14.1 READ-SIDE RECORDS COMPLETE; PHASE 14.2 REVIEWED SAFE WRITE COMPLETE; PHASE 14.3 PROVIDER-FREE EVALUATOR COMPLETE; WEB/API AND UI NOT STARTED**.
+Статус: **NORMATIVE CONTRACT / STAGE 14 COMPLETE; PHASES 14.0–14.6 COMPLETE; PRODUCTION CLOSEOUT COMPLETE**.
 
 Issue: [#304](https://github.com/MikeMoore1337/second-brain/issues/304).
 Этот документ является единственным нормативным контрактом Stage 14. Он
@@ -622,11 +622,30 @@ non-mutating health/private boundary smoke, cleanup, fresh origin/main.
     second-brain-vault_change        = NO
     production_env_change            = NO
     Stage14_contract                  = YES (14.0 design gate complete)
-    Stage14_runtime                   = PARTIAL / PHASES 14.1-14.3 COMPLETE; WEB/API/UI NOT STARTED
+    Stage14_runtime                   = COMPLETE / PHASES 14.1-14.6 COMPLETE; PRODUCTION CLOSEOUT COMPLETE
     Stage15                         = NO / NOT STARTED
-    HUMAN_REQUIRED                  = NO unless an external release gate genuinely fails
+    HUMAN_REQUIRED                  = NO
 
-Последующие gates могут пометить Stage 14 runtime complete только с exact
-evidence в финальном ledger. production_env_change сообщается по actual diff и
-deploy contract, а не выводится из существующего значения environment
-variable.
+Stage 14 runtime помечен complete только после exact evidence serial gates,
+final regression, post-merge CI, standard automatic deploy, private-boundary
+smoke и cleanup. production_env_change сообщается по actual diff и deploy
+contract, а не выводится из существующего значения environment variable.
+
+## 13. Delivery evidence for Issue #304
+
+Фактическая карта serial implementation/release gates:
+
+| Phase | PR / merge SHA | Exact-head or post-merge CI | Standard production deploy |
+| --- | --- | --- | --- |
+| 14.0 | [PR #318](https://github.com/MikeMoore1337/second-brain/pull/318) / `19f6a1184ac77c9547cfa6711ef41ba2ac18991b` | PR CI [#34960480421](https://github.com/MikeMoore1337/second-brain/actions/runs/34960480421); post-merge CI [#34960722980](https://github.com/MikeMoore1337/second-brain/actions/runs/34960722980) | [#34960916147](https://github.com/MikeMoore1337/second-brain/actions/runs/34960916147) ran on subsequent main `617a78be89789bbe7c6bec8c2f6e6db44864d9ae` after independent PR #319 |
+| 14.1 | [PR #322](https://github.com/MikeMoore1337/second-brain/pull/322) / `229e6d75060eac239216481c48864573ef801d19` | PR CI [#34964275111](https://github.com/MikeMoore1337/second-brain/actions/runs/34964275111); post-merge CI [#34964535153](https://github.com/MikeMoore1337/second-brain/actions/runs/34964535153) | [#34964763903](https://github.com/MikeMoore1337/second-brain/actions/runs/34964763903) |
+| 14.2 | [PR #323](https://github.com/MikeMoore1337/second-brain/pull/323) / `108c5a8a77bd52f6a6d2a31a9bc00c7842b2c34b` | PR CI [#34970313509](https://github.com/MikeMoore1337/second-brain/actions/runs/34970313509); post-merge CI [#34970618241](https://github.com/MikeMoore1337/second-brain/actions/runs/34970618241) | [#34970850567](https://github.com/MikeMoore1337/second-brain/actions/runs/34970850567) |
+| 14.3 | [PR #325](https://github.com/MikeMoore1337/second-brain/pull/325) / `6be81abcc8a8e550f8ab85d2cd9ffd85fb35de9f` | PR CI [#34976095607](https://github.com/MikeMoore1337/second-brain/actions/runs/34976095607); post-merge CI [#34976429537](https://github.com/MikeMoore1337/second-brain/actions/runs/34976429537) | automatic deploys [#34976489643](https://github.com/MikeMoore1337/second-brain/actions/runs/34976489643) and [#34976641014](https://github.com/MikeMoore1337/second-brain/actions/runs/34976641014), both successful |
+| 14.4 | [PR #327](https://github.com/MikeMoore1337/second-brain/pull/327) / `d3cf87dc67f2122492e8e1e75108dec6212fdc68` | PR CI [#34988340392](https://github.com/MikeMoore1337/second-brain/actions/runs/34988340392); post-merge CI [#35002765484](https://github.com/MikeMoore1337/second-brain/actions/runs/35002765484) | [#35003035670](https://github.com/MikeMoore1337/second-brain/actions/runs/35003035670) |
+| 14.5 | [PR #328](https://github.com/MikeMoore1337/second-brain/pull/328) / `fae8ce99066f3654fb798f2800cd1209c26fd372` | PR CI [#35005683761](https://github.com/MikeMoore1337/second-brain/actions/runs/35005683761); post-merge CI [#35005991433](https://github.com/MikeMoore1337/second-brain/actions/runs/35005991433) | [#35006277128](https://github.com/MikeMoore1337/second-brain/actions/runs/35006277128) |
+
+Phase 14.6 — финальный release/closeout PR с `Closes #304`, exact-head
+final regression, standard automatic deploy, production smoke и cleanup —
+фиксируется в итоговом delivery report после merge. В 14.6 не добавляются
+новые feature semantics, зависимости, persistence, schema/NoteType или
+изменения `second-brain-vault`.
