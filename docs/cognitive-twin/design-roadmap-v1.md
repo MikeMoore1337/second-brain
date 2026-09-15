@@ -23,6 +23,14 @@ Retrospective Calibration v1 остаётся отдельным current-vault �
 pre-choice-only contract; provider-free bounded core реализован в issue #175,
 а user-facing Web/API/CLI и persistence остаются future gates.
 
+Stage 14 Personal Experiments v1 получил нормативный design contract в Issue
+[#304](https://github.com/MikeMoore1337/second-brain/issues/304) и
+[personal-experiments-v1-contract.md](personal-experiments-v1-contract.md).
+На design gate зафиксированы exact Goal/Stage 12 binding, reviewed companion
+records, explicit lifecycle и enrollment, provider-free descriptive result,
+Safe Write boundary и запрет автоматической адаптации. Stage 14 runtime ещё не
+начат; Stage 15 остаётся planned/not started.
+
 По текущему status после merged Stage 8 QA Cognitive Twin v1 / Stages 1–8
 завершены и находятся в production. Stage 9 — это следующий уровень
 **Cognitive Twin v2**; его prospective audit/calibration contract фиксируется
