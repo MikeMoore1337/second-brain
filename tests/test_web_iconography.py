@@ -27,3 +27,13 @@ def test_react_production_icon_affordances_are_local_raster() -> None:
     assert "@lucide" not in icons
     assert ">↗<" not in app
     assert not re.search(r'className="entry-icon"[^>]*>\s*\+\s*</div>', production_surfaces)
+
+
+def test_different_sections_have_unique_icons() -> None:
+    app = (ROOT / "web/src/App.tsx").read_text(encoding="utf-8")
+    sections = re.findall(r'<FoldSection\s+id="([^"]+)"[^>]*icon="([^"]+)"', app)
+    assert len(sections) > 5
+    names = [name for _, name in sections]
+    assert len(names) == len(set(names)), sections
+    assert ("decision-compass", "decision-compass") in sections
+    assert '["#decision-compass", "Компас решения", "decision-compass"]' in app

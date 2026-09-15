@@ -599,7 +599,7 @@ export function GoalProgressSurface({ selectedGoal }: { readonly selectedGoal: G
   return (
     <section className="goal-progress-surface" aria-labelledby="goal-progress-title">
       <div className="goal-progress-heading">
-        <div><p className="growth-eyebrow">Этап 12</p><h4 id="goal-progress-title">Связь цели и измеряемый прогресс</h4><p>Выбранная цель: {selectedGoal.goal_text}</p></div>
+        <div><h4 id="goal-progress-title">Связь цели и измеряемый прогресс</h4><p>Выбранная цель: {selectedGoal.goal_text}</p></div>
         <button className="growth-button growth-button-secondary" type="button" disabled={operation !== null} aria-busy={operation === "check"} onClick={() => void checkProgress()}>{operation === "check" ? "Проверяю…" : "Проверить прогресс"}</button>
       </div>
       <p className="growth-status">{status}</p>

@@ -485,7 +485,7 @@ export function CognitiveTwinSurface(): ReactElement {
               {statedClaims.map((claim) => <option key={claim.supporting_evidence[0]?.id} value={claim.supporting_evidence[0]?.id}>{safeText(claim.domain)} · {safeText(claim.claim, "Без текста")}</option>)}
             </select>
             {selectedClaim ? <ClaimOption claim={selectedClaim} /> : <p className="cognitive-twin-muted">Доступны только утверждения о предпочтениях с одним текущим подтверждающим свидетельством.</p>}
-            <details className="cognitive-twin-technical"><summary>Почему утверждение доступно для сопоставления</summary><p>Этап 10C принимает только измерение «предпочтение», непустой точный домен, одно подтверждающее свидетельство и отсутствие противоречащих или контекстных свидетельств.</p></details>
+            <details className="cognitive-twin-technical"><summary>Почему утверждение доступно для сопоставления</summary><p>Для сопоставления подходят только измерение «предпочтение», непустой точный домен, одно подтверждающее свидетельство и отсутствие противоречащих или контекстных свидетельств.</p></details>
           </section>
 
           <section className="cognitive-twin-layer" aria-labelledby="cognitive-twin-observed-title">

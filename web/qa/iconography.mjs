@@ -25,6 +25,7 @@ const ATLAS = [
   ["diagnostics", "Диагностика", true],
   ["simulate", "Прогноз", true],
   ["growth", "Развитие", true],
+  ["decision-compass", "Компас решения", true],
   ["open", "Открыть", false],
   ["refresh", "Обновить", false],
   ["close", "Закрыть", false],
@@ -37,8 +38,8 @@ const ATLAS = [
   ["play", "Совместимый alias play", false],
 ];
 const files = new Set(await readdir("src/assets/icons"));
-const EXPECTED_MENU_ICONS = ["add", "decision", "timeline", "self-model", "simulate", "relation", "self-retrieval", "search", "diagnostics", "memory", "growth"];
-const EXPECTED_MENU_TARGETS = ["capture", "decision-journal", "timeline", "self-model", "simulate-me", "assistant-compare", "self-retrieval", "search", "diagnostics", "memory", "growth"];
+const EXPECTED_MENU_ICONS = ["add", "decision", "timeline", "self-model", "simulate", "relation", "decision-compass", "self-retrieval", "search", "diagnostics", "memory", "growth"];
+const EXPECTED_MENU_TARGETS = ["capture", "decision-journal", "timeline", "self-model", "simulate-me", "assistant-compare", "decision-compass", "self-retrieval", "search", "diagnostics", "memory", "growth"];
 const INITIAL_VIEWPORT = { width: 1200, height: 1000 };
 const INITIAL_PHASE_MS = 750;
 const DEFERRED_IMAGE_CONTRACT = [
@@ -172,8 +173,12 @@ async function waitForImageLoaded(image, name) {
 
 const imageData = async (name, variant, size) => {
   const suffix = variant === "detail" ? 96 : 48;
-  const file = `${name}-${variant}-${suffix}.webp`;
-  const retina = `${name}-${variant}-${suffix * 2}.webp`;
+  // Newly added section symbols keep one shared 96px master for the detail
+  // 1x and compact 2x slots; older symbols retain a dedicated detail master.
+  const file = variant === "detail" && !files.has(`${name}-detail-96.webp`)
+    ? `${name}-compact-96.webp`
+    : `${name}-${variant}-${suffix}.webp`;
+  const retina = `${name}-${variant === "detail" && !files.has(`${name}-detail-96.webp`) ? "detail" : variant}-${suffix * 2}.webp`;
   check(files.has(file) && files.has(retina), `missing local icon master ${name}/${variant}`);
   const [source, source2x] = await Promise.all([readFile(`src/assets/icons/${file}`), readFile(`src/assets/icons/${retina}`)]);
   return `<img width="${size}" height="${size}" src="data:image/webp;base64,${source.toString("base64")}" srcset="data:image/webp;base64,${source2x.toString("base64")} 2x" alt="">`;

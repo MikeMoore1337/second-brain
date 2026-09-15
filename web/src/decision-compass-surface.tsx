@@ -480,7 +480,7 @@ export function DecisionCompassSurface(): ReactElement {
           {relation?.cohort_fingerprint ? <p className="decision-compass-technical-line">Точный контекст: <code>{relation.cohort_fingerprint}</code></p> : null}
         </section>
         <section className="decision-compass-panel decision-compass-branch" aria-labelledby="decision-compass-progress-title">
-          <div className="decision-compass-panel-heading"><span>07</span><div><h4 id="decision-compass-progress-title">Измеряемый прогресс</h4><p>Этап 12 измеряет состояние выбранной цели на указанную дату, а не эффективность варианта.</p></div></div>
+          <div className="decision-compass-panel-heading"><span>07</span><div><h4 id="decision-compass-progress-title">Измеряемый прогресс</h4><p>Прогресс показывает состояние выбранной цели на указанную дату, а не эффективность варианта.</p></div></div>
           <p className="decision-compass-state">{stateLabel(progress.status, PROGRESS_STATE_LABELS, "Состояние прогресса не определено")}</p>
           <p className="decision-compass-muted">Дата среза: {safeText(progress.as_of)}</p>
         </section>
@@ -522,7 +522,7 @@ export function DecisionCompassSurface(): ReactElement {
   return (
     <section id="decision-compass" className="decision-compass-surface" aria-labelledby="decision-compass-title" aria-busy={busy !== null} data-decision-compass-surface>
       <div className="decision-compass-heading">
-        <div><p className="decision-compass-eyebrow">Когнитивный двойник · этап 13</p><h3 id="decision-compass-title">Компас решения</h3><p>Собери одну точную цель, свои варианты и контекст. Каждая ветка останется самостоятельной и проверяемой.</p></div>
+        <div><p className="decision-compass-eyebrow">Когнитивный двойник</p><h3 id="decision-compass-title">Компас решения</h3><p>Собери одну точную цель, свои варианты и контекст. Каждая ветка останется самостоятельной и проверяемой.</p></div>
         <div className="decision-compass-heading-meta"><span>только для владельца</span><span>без сохранения · явный запрос</span></div>
       </div>
       <div className="decision-compass-toolbar">
