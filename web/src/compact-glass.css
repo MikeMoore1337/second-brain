@@ -56,7 +56,21 @@ main .section-heading { display:block; margin-bottom:20px; }
 .motion-world .timeline-controls select,
 .motion-world .simulate-me-option-row input,
 .motion-world .simulate-me-option-row > button { height:52px; min-height:52px; margin-bottom:0; }
-.motion-world select.review-input { appearance:none; padding-right:44px; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c49aff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 14px center; background-size:20px; }
+/* Same-origin asset works with the application's img-src 'self' policy. */
+.motion-world select:not([multiple]):is(:not([size]),[size="1"]) {
+  appearance:none;
+  padding-right:44px;
+  background-image:url("/icons/select-chevron.svg");
+  background-repeat:no-repeat;
+  background-position:right 14px center;
+  background-size:20px;
+}
+@media(forced-colors:active) {
+  .motion-world select:not([multiple]):is(:not([size]),[size="1"]) {
+    appearance:auto;
+    background-image:none;
+  }
+}
 .fold-body .section-heading h2,.fold-body .section-heading > .section-art { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
 .fold-body .section-heading h2 .section-art { display:none; }
 .fold-body .section-heading { margin:4px 0 18px; }
