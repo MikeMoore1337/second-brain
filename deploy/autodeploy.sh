@@ -121,6 +121,56 @@ read_bounded_git_trace_file() {
   sanitize_git_status_diagnostic "$trace"
 }
 
+capture_filesystem_diagnostic() {
+  local blocks inodes
+
+  # df is read-only and its output is bounded/normalized before it reaches the
+  # CI log. This diagnostic is intentionally observational: it does not try to
+  # reclaim space or inspect file contents.
+  blocks="$(df -Pk "$SECOND_BRAIN_ROOT" 2>&1 | head -c "$GIT_STATUS_DIAGNOSTIC_MAX_BYTES")" \
+    || blocks="<capture-failed>"
+  inodes="$(df -Pik "$SECOND_BRAIN_ROOT" 2>&1 | head -c "$GIT_STATUS_DIAGNOSTIC_MAX_BYTES")" \
+    || inodes="<capture-failed>"
+  blocks="$(sanitize_git_status_diagnostic "$blocks")"
+  inodes="$(sanitize_git_status_diagnostic "$inodes")"
+  [[ -n "$blocks" ]] || blocks="<empty>"
+  [[ -n "$inodes" ]] || inodes="<empty>"
+  printf 'df_blocks=%s;df_inodes=%s' "$blocks" "$inodes"
+}
+
+run_git_fetch() {
+  local path="$1"
+  local label="$2"
+  local output_file stderr_file output stderr fetch_exit filesystem
+
+  output_file="$(mktemp)" \
+    || die "$label git fetch diagnostics setup failed"
+  stderr_file="$(mktemp)" \
+    || {
+      rm -f -- "$output_file" || true
+      die "$label git fetch diagnostics setup failed"
+    }
+  if git -C "$path" fetch --no-tags origin main \
+    >"$output_file" 2>"$stderr_file"; then
+    rm -f -- "$output_file" "$stderr_file" \
+      || die "не удалось удалить temporary git fetch diagnostics $label"
+    return 0
+  else
+    fetch_exit=$?
+  fi
+
+  output="$(read_bounded_git_status_file "$output_file")" \
+    || output="<capture-failed>"
+  stderr="$(read_bounded_git_status_file "$stderr_file")" \
+    || stderr="<capture-failed>"
+  filesystem="$(capture_filesystem_diagnostic)" \
+    || filesystem="filesystem_diagnostic=<capture-failed>"
+  rm -f -- "$output_file" "$stderr_file" || true
+  [[ -n "$output" ]] || output="<empty>"
+  [[ -n "$stderr" ]] || stderr="<empty>"
+  die "$label git fetch failed; exit_code=$fetch_exit; bounded_stderr=$stderr; bounded_stdout=$output; $filesystem"
+}
+
 run_git_status_probe() {
   local probe_name="$1"
   shift
@@ -454,7 +504,7 @@ done
 [[ "$(id -u)" != "0" ]] || die "autodeploy нельзя запускать от root"
 [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || die "--sha должен быть exact 40-character lowercase Git SHA"
 
-for command in bash git uv npm curl readlink flock seq cmp find stat mktemp head tail rm; do
+for command in bash git uv npm curl readlink flock seq cmp find stat mktemp head tail rm df; do
   require_command "$command"
 done
 [[ -x /usr/bin/sudo ]] || die "ожидается /usr/bin/sudo для narrowly-scoped release control"
@@ -490,7 +540,7 @@ flock -n 9 || die "другой production deploy уже выполняется"
 assert_clean_main "$APP_ROOT" "second-brain"
 assert_clean_main "$VAULT_ROOT" "second-brain-vault"
 
-git -C "$APP_ROOT" fetch --no-tags origin main
+run_git_fetch "$APP_ROOT" "second-brain"
 
 ORIGIN_APP_SHA="$(git -C "$APP_ROOT" rev-parse --verify 'refs/remotes/origin/main^{commit}')" \
   || die "origin/main second-brain недоступен"
@@ -513,7 +563,7 @@ git -C "$APP_ROOT" merge-base --is-ancestor "$LOCAL_APP_SHA" "$TARGET_SHA" \
 run_env_preflight \
   || die "exact target production env preflight failed; candidate creation запрещена"
 
-git -C "$VAULT_ROOT" fetch --no-tags origin main
+run_git_fetch "$VAULT_ROOT" "second-brain-vault"
 git -C "$APP_ROOT" merge --ff-only origin/main
 [[ "$(git -C "$APP_ROOT" rev-parse --verify HEAD)" == "$TARGET_SHA" ]] \
   || die "control checkout не обновился до exact CI SHA"
