@@ -26,6 +26,15 @@ from second_brain.application.goal_progress import (
     DefinitionRecordV1,
     ObservationRecordV1,
 )
+from second_brain.application.personal_experiments import (
+    PERSONAL_EXPERIMENT_MARKER,
+    PersonalExperimentDefinitionRecordV1,
+    PersonalExperimentLifecycleRecordV1,
+    PersonalExperimentObservationRecordV1,
+    PersonalExperimentReassessmentRecordV1,
+    PersonalExperimentRecordV1,
+    parse_personal_experiment_record,
+)
 from second_brain.application.personal_memory import PERSONAL_MEMORY_MARKER
 from second_brain.application.writes import CreateNotePlan, WriteReceipt, WriteSafetyError
 from second_brain.domain.models import NoteType, VaultManifest
@@ -120,6 +129,48 @@ _GOAL_PROGRESS_TEMPLATE_CONTROLLED_FIELDS = frozenset(
         *_PERSONAL_MEMORY_CONTROLLED_FIELDS,
         *_STAGE2_CONTROLLED_FIELDS,
         *_GOAL_PROGRESS_CONTROLLED_FIELDS,
+    }
+)
+_PERSONAL_EXPERIMENT_TEMPLATE_COMMON_FIELDS = frozenset({"updated", "tags", "links"})
+_PERSONAL_EXPERIMENT_TEMPLATE_CONTROLLED_FIELDS = frozenset(
+    {
+        PERSONAL_EXPERIMENT_MARKER,
+        "personal_experiment_kind",
+        "experiment_policy_id",
+        "experiment_policy_fingerprint",
+        "experiment_definition_id",
+        "experiment_definition_fingerprint",
+        "goal_source_uuid",
+        "goal_identity_fingerprint",
+        "goal_progress_definition_id",
+        "goal_progress_definition_fingerprint",
+        "goal_progress_policy_fingerprint",
+        "hypothesis",
+        "intervention",
+        "baseline_strategy",
+        "baseline_observation_uuid",
+        "baseline_observation_fingerprint",
+        "definition_reviewed_at",
+        "lifecycle_event",
+        "event_at",
+        "lifecycle_reviewed_at",
+        "stage12_observation_id",
+        "stage12_observation_fingerprint",
+        "observation_reviewed_at",
+        "result_fingerprint",
+        "evaluation_as_of",
+        "evaluation_policy_fingerprint",
+        "disposition",
+        "rationale",
+        "reassessment_reviewed_at",
+        "supersedes_definition_id",
+        "supersedes_definition_fingerprint",
+        "supersedes_lifecycle_id",
+        "supersedes_lifecycle_fingerprint",
+        "supersedes_observation_id",
+        "supersedes_observation_fingerprint",
+        "supersedes_reassessment_id",
+        "supersedes_reassessment_fingerprint",
     }
 )
 
@@ -304,6 +355,45 @@ class FileSystemVaultWriter:
             note_id,
             created,
             lambda template_text: _render_goal_progress_template(
+                template_text,
+                record,
+                note_id,
+                created,
+            ),
+        )
+
+    def prepare_personal_experiment(
+        self,
+        manifest: VaultManifest,
+        record: PersonalExperimentRecordV1,
+        title: str,
+        note_id: UUID,
+        created: datetime,
+    ) -> CreateNotePlan:
+        """Подготовить Stage 14 companion record через dedicated serializer."""
+
+        if type(record) not in {
+            PersonalExperimentDefinitionRecordV1,
+            PersonalExperimentLifecycleRecordV1,
+            PersonalExperimentObservationRecordV1,
+            PersonalExperimentReassessmentRecordV1,
+        }:
+            raise WriteSafetyError(
+                "CREATE_INVALID_PLAN",
+                "Personal Experiment record is not a supported typed record",
+            )
+        if record.id != note_id:
+            raise WriteSafetyError(
+                "CREATE_INVALID_PLAN",
+                "Personal Experiment record identity does not match the note identity",
+            )
+        return self._prepare(
+            manifest,
+            NoteType.ZETTEL,
+            title,
+            note_id,
+            created,
+            lambda template_text: _render_personal_experiment_template(
                 template_text,
                 record,
                 note_id,
@@ -817,6 +907,55 @@ def _render_goal_progress_template(
         data[key] = value
     data["second_brain_goal_progress"] = 1
     return _dump_front_matter(data) + (parsed.body if parsed.has_front_matter else template_text)
+
+
+def _render_personal_experiment_template(
+    template_text: str,
+    record: PersonalExperimentRecordV1,
+    note_id: UUID,
+    created: datetime,
+) -> str:
+    """Serialize one canonical Stage 14 record through a strict allowlist.
+
+    Personal Experiment records are not ordinary Zettels with an additive
+    metadata overlay: their front matter is itself a closed canonical record.
+    Only the harmless generic presentation fields from the template survive;
+    all application-owned identity and Stage 14 fields come from the reviewed
+    typed record.
+    """
+
+    parsed, template_data = _load_template_data(template_text)
+    data: dict[str, object] = {}
+    if template_data is not None:
+        for field in _PERSONAL_EXPERIMENT_TEMPLATE_COMMON_FIELDS:
+            if field in template_data:
+                data[field] = template_data[field]
+    _set_managed_metadata(data, NoteType.ZETTEL, note_id, created)
+    for key, value in record.as_dict().items():
+        if key == "id":
+            continue
+        data[key] = value
+    data[PERSONAL_EXPERIMENT_MARKER] = 1
+    content = _dump_front_matter(data) + (parsed.body if parsed.has_front_matter else template_text)
+    rendered = parse_front_matter(content)
+    if rendered.error is not None or not rendered.has_front_matter:
+        raise WriteSafetyError(
+            "CREATE_TEMPLATE_INVALID",
+            "rendered Personal Experiment front matter could not be validated",
+        )
+    try:
+        parsed_record = parse_personal_experiment_record(rendered.data, note_id=note_id)
+    except Exception as exc:
+        raise WriteSafetyError(
+            "CREATE_INVALID_PLAN",
+            "rendered Personal Experiment record is invalid",
+        ) from exc
+    if parsed_record != record:
+        raise WriteSafetyError(
+            "CREATE_INVALID_PLAN",
+            "rendered Personal Experiment record differs from the reviewed record",
+        )
+    return content
 
 
 def _serialize_evidence_at(value: object) -> str:

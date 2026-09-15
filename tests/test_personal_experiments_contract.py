@@ -41,11 +41,14 @@ def test_personal_experiments_contract_is_complete_design_gate() -> None:
         assert literal in text
 
 
-def test_stage_14_records_phase_is_complete_but_runtime_remains_scoped() -> None:
+def test_stage_14_safe_write_phase_is_complete_but_runtime_remains_scoped() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     design_roadmap = DESIGN_ROADMAP.read_text(encoding="utf-8")
-    assert "DESIGN CONTRACT COMPLETE / PHASE 14.1 READ-SIDE RECORDS COMPLETE" in roadmap
+    assert (
+        "PHASE 14.1 READ-SIDE RECORDS COMPLETE /\nPHASE 14.2 REVIEWED SAFE WRITE COMPLETE"
+        in roadmap
+    )
     assert "Phase 14.1 read-side" in design_roadmap
-    assert "Safe Write, evaluator," in design_roadmap
-    assert "Web/API и UI остаются отдельными gates" in design_roadmap
+    assert "Phase 14.2 reviewed Safe\nWrite" in design_roadmap
+    assert "evaluator, Web/API и UI\nостаются отдельными gates" in design_roadmap
     assert "Stage 15" in roadmap and "PLANNED / NOT STARTED" in roadmap
