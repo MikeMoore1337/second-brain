@@ -33,8 +33,8 @@ records, Phase 14.2 reviewed Safe Write, Phase 14.3 provider-free evaluator,
 Phase 14.4 owner-only Web/API/UI, Phase 14.5 adversarial security/E2E gate и
 Phase 14.6 final release/closeout завершены serial PRs #322, #323, #325, #327,
 #328 и финальным release PR с `Closes #304`; точная evidence-карта находится в
-нормативном контракте. Stage 14 находится в production; Stage 15 остаётся
-planned/not started.
+нормативном контракте. Stage 14 находится в production; Phase 15.0 contract
+по Issue #331 находится в delivery, а runtime phases 15.1–15.6 ещё не начаты.
 
 По текущему status после merged Stage 8 QA Cognitive Twin v1 / Stages 1–8
 завершены и находятся в production. Stage 9 — это следующий уровень
@@ -1570,7 +1570,8 @@ Stage 12D Growth + Goal Progress composition = COMPLETE (Issue #290, PR #291, me
 Stage 12E Web/API QA + closeout = COMPLETE (Issue #293, PR #294, merged/deployed)
 Stage 13 Decision Compass / Compare v2 / GrowthCompare v1 = COMPLETE (design Issue #296 / PR #298 / merge `452a51fda49fd7ed30e116b55f73fe457ae3d4c7`; 13A Issue #299 / PR #305 / merge `9444a0936ed0df6ecf3a84fb65eb8bbd6d910e6f`; 13B Issue #300 / PR #307 / merge `cadc01b41b9c766056d45ef6b1b4d753027a236e`; 13C Issue #301 / PR #315 / merge `ab61a4f35d9ad8196b82bffef36170a889f8fc2a`; 13D Issue #302 / PR #316 / merge `7426c079bc95a2fed9f33b7f2b497a1fd5364c40`; 13E Issue #303 closeout; post-merge CI `34949012024`; automatic deploy `34949240222`)
 Stage 14 Personal Experiments = COMPLETE (PHASES 14.0–14.6; production closeout complete)
-Stage 15 Adaptive Twin = NOT STARTED
+Stage 15 Adaptive Twin = PHASE 15.0 CONTRACT IN DELIVERY (Issue #331);
+runtime phases 15.1–15.6 = NOT STARTED
 ~~~
 
 Stage 12A–12E and Stage 13 add no provider, telemetry, background watcher,
@@ -1579,4 +1580,5 @@ Codex Review request or Vault Sync. Stage 14 is complete and deployed through
 its provider-free evaluator, owner-only Web/API/UI, adversarial gate and final
 release/closeout; its production smoke was non-mutating and its exact evidence
 is recorded in [Personal Experiments v1 contract](personal-experiments-v1-contract.md).
-Stage 15 remains planned and not started.
+Stage 15 Phase 15.0 contract is in delivery under Issue #331; runtime phases
+15.1–15.6 remain not started.
