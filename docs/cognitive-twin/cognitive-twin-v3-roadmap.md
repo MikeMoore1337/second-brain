@@ -149,7 +149,9 @@ remains owner-reviewed and reversible.
 **Статус:** PHASE 15.0 CONTRACT COMPLETE under Issue #331; PHASE 15.1
 EXACT SOURCE/CANDIDATE CORE COMPLETE (PR #333, merged/deployed as
 `e233f61feee15b27adc1bc84c43e544eff3fa62f`). PHASE 15.2 OPERATIONAL PROFILE
-LIFECYCLE IN DELIVERY; runtime phases 15.3–15.6 are NOT STARTED. Depends on Stage 9 calibration, Stage 10
+LIFECYCLE COMPLETE (PR #334, merged/deployed as
+`f0d3f8a543c602d28ec3913281adf399c1c9e5b7`); PHASE 15.3 PROJECTION AND
+EVALUATION IN DELIVERY; runtime phases 15.4–15.6 are NOT STARTED. Depends on Stage 9 calibration, Stage 10
 behavioral model, Stage 12 progress and Stage 14 experiments. Нормативная
 граница зафиксирована в [adaptive-cognitive-twin-v1-contract.md](adaptive-cognitive-twin-v1-contract.md).
 
