@@ -178,7 +178,7 @@ describe("Decision Compass Stage 13C owner surface", () => {
     await act(async () => button(host, "Смоделировать меня").click());
 
     const alert = host.querySelector<HTMLElement>("[role='alert']");
-    expect(alert?.textContent).toBe("Не удалось построить Decision Compass.");
+    expect(alert?.textContent).toBe("Не удалось построить компас решения.");
     expect(document.activeElement).toBe(alert);
   });
 });

@@ -1394,7 +1394,7 @@ export function buildDecisionCompass(
     "decision-compass-v1",
     request,
     fetcher,
-    "Не удалось построить Decision Compass.",
+    "Не удалось построить компас решения.",
     signal,
   );
 }
