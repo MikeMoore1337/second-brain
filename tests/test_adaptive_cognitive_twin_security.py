@@ -67,29 +67,35 @@ def test_activation_revalidates_every_exact_source_family(
     store.review_candidate(candidate, operation_id=f"review-{family}")
 
     if family == "stage9_calibration":
-        changed_family = replace(
-            source.stage9_calibration,
-            result_fingerprint=HASH_D,
+        changed_source = replace(
+            source,
+            stage9_calibration=replace(source.stage9_calibration, result_fingerprint=HASH_D),
+            source_snapshot_fingerprint="",
         )
     elif family == "stage10_behavioral":
-        changed_family = replace(
-            source.stage10_behavioral,
-            cohort_fingerprint=HASH_D,
+        changed_source = replace(
+            source,
+            stage10_behavioral=replace(source.stage10_behavioral, cohort_fingerprint=HASH_D),
+            source_snapshot_fingerprint="",
         )
     elif family == "stage12_progress":
-        changed_family = replace(
-            source.stage12_progress,
-            progress_result_fingerprint=HASH_D,
+        changed_source = replace(
+            source,
+            stage12_progress=replace(
+                source.stage12_progress,
+                progress_result_fingerprint=HASH_D,
+            ),
+            source_snapshot_fingerprint="",
         )
     else:
-        changed_family = replace(
-            source.stage14_experiment,
-            terminal_result_fingerprint=HASH_D,
+        changed_source = replace(
+            source,
+            stage14_experiment=replace(
+                source.stage14_experiment,
+                terminal_result_fingerprint=HASH_D,
+            ),
+            source_snapshot_fingerprint="",
         )
-    changed_source = replace(
-        source,
-        **{family: changed_family, "source_snapshot_fingerprint": ""},
-    )
 
     with pytest.raises(AdaptiveCognitiveTwinStoreSourceChangedError):
         store.activate_candidate(candidate, changed_source, operation_id=f"activate-{family}")
