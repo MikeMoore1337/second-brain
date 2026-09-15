@@ -365,7 +365,7 @@ def _failing_git_environment(tmp_path: Path) -> tuple[dict[str, str], Path]:
         '  printf \'%s\\n\' "$*" >> "$GIT_CALL_LOG"\n'
         'if [[ "${1:-}" == "-C" && "${3:-}" == "status" ]]; then\n'
         "  printf 'fatal: simulated index failure\\n' >&2\n"
-        "  printf 'SECRET_FILE_CONTENT\\n'\n"
+        "  printf 'simulated status diagnostic on stdout\\n'\n"
         "  exit 73\n"
         "fi\n"
         '  "$REAL_GIT" "$@"\n'
@@ -420,6 +420,8 @@ def test_nonzero_git_status_is_bounded_fail_closed_and_stops_before_mutation(
     tmp_path: Path,
 ) -> None:
     control = _clean_state_repository(tmp_path)
+    secret_content = "PRIVATE_FILE_CONTENT_MUST_NOT_BE_LOGGED"
+    (control / "tracked.txt").write_text(secret_content, encoding="utf-8")
     environment, call_log = _failing_git_environment(tmp_path)
     before_head = _run_git(control, "rev-parse", "HEAD")
     result = _run_bash(
@@ -433,7 +435,8 @@ def test_nonzero_git_status_is_bounded_fail_closed_and_stops_before_mutation(
     assert "git status failed" in result.stderr
     assert "exit_code=73" in result.stderr
     assert "bounded_stderr=fatal: simulated index failure" in result.stderr
-    assert "SECRET_FILE_CONTENT" not in result.stdout + result.stderr
+    assert "bounded_stdout=simulated status diagnostic on stdout" in result.stderr
+    assert secret_content not in result.stdout + result.stderr
     assert len(result.stderr) < 1500
     assert _run_git(control, "rev-parse", "HEAD") == before_head
     calls = call_log.read_text(encoding="utf-8")
@@ -452,6 +455,7 @@ def test_clean_state_diagnostic_is_bounded_and_precedes_release_mutation() -> No
         "head -c",
         "exit_code=",
         "bounded_stderr=",
+        "bounded_stdout=",
         "bounded_status=",
         "автоматическая очистка запрещена",
     ):
