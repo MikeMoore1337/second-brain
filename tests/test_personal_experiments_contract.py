@@ -69,6 +69,7 @@ def test_stage_14_and_stage_15_status_is_factual() -> None:
     assert "STAGE 15 COMPLETE / PRODUCTION" in adaptive_contract
     assert "15.5 security/privacy/integration/E2E = COMPLETE" in adaptive_contract
     assert "15.6 final release/closeout = COMPLETE" in adaptive_contract
+    assert "PR #338" in adaptive_contract
     assert "Production smoke" in adaptive_contract
     assert "env change required = no" in adaptive_contract
     assert "adaptive-cognitive-twin-v1-contract.md" in roadmap

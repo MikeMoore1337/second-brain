@@ -969,7 +969,7 @@ Stage 15.2 operational profile lifecycle = COMPLETE (PR #334)
 Stage 15.3 projection/evaluation = COMPLETE (PR #335)
 Stage 15.4 private Web/API/UI = COMPLETE (PR #336)
 Stage 15.5 security/privacy/integration/E2E = COMPLETE (PR #337)
-Stage 15.6 final release/closeout = COMPLETE (final PR for Issue #331)
+Stage 15.6 final release/closeout = COMPLETE (PR #338, Closes #331)
 Stage 15 = COMPLETE / PRODUCTION
 Cognitive Twin v3 = COMPLETE / PRODUCTION
 Stage 16+ = FUTURE / NOT STARTED
@@ -994,7 +994,7 @@ post-merge CI, а production deploy выполнялся стандартным 
 | 15.3 | PR #335 / 64c995a294cd7f25977b69e38e592d271a19bed2 | CI #35025050431 | CI #35025397265 | run #35025652466 / deployment 6468808183 |
 | 15.4 | PR #336 / 7304488355661d99af1d79f3aac676a328597434 | CI #35031899078 | CI #35032127178 | run #35032308583 / deployment 6469912929 |
 | 15.5 | PR #337 / 69b66fa6008cc4993d8ca1babe5edeb0e5b3247f | CI #35034619467 | CI #35034811212 | run #35035044381 / deployment 6470370530 |
-| 15.6 | final closeout PR with Closes #331 | exact-head gate of this PR | post-merge CI of this PR | standard deploy of final main SHA |
+| 15.6 | PR #338 / final closeout with Closes #331 | exact-head gate of this PR | post-merge CI of this PR | standard deploy of final main SHA |
 
 Production smoke for the completed runtime was non-mutating: /healthz returned
 HTTP 200 with X-Content-Type-Options: nosniff, root redirected to /login, and

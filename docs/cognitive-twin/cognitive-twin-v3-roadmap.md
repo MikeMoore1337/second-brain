@@ -157,7 +157,7 @@ COMPLETE (PR #336, merged/deployed as
 `7304488355661d99af1d79f3aac676a328597434`); PHASE 15.5
 SECURITY/PRIVACY/INTEGRATION/E2E COMPLETE (PR #337, merged/deployed as
 69b66fa6008cc4993d8ca1babe5edeb0e5b3247f); PHASE 15.6 FINAL
-RELEASE/CLOSEOUT COMPLETE via final PR Closes #331. Depends on Stage 9 calibration, Stage 10
+RELEASE/CLOSEOUT COMPLETE via PR #338 with Closes #331. Depends on Stage 9 calibration, Stage 10
 behavioral model, Stage 12 progress and Stage 14 experiments. Нормативная
 граница зафиксирована в [adaptive-cognitive-twin-v1-contract.md](adaptive-cognitive-twin-v1-contract.md).
 

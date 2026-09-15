@@ -41,7 +41,7 @@ Phase 14.6 final release/closeout завершены serial PRs #322, #323, #325
 `7304488355661d99af1d79f3aac676a328597434`), а Phase 15.5
 security/privacy/integration/E2E complete (PR #337, merged/deployed as
 69b66fa6008cc4993d8ca1babe5edeb0e5b3247f), and Phase 15.6 final
-release/closeout complete through the final PR with Closes #331. Cognitive
+release/closeout complete through PR #338 with Closes #331. Cognitive
 Twin v3 is now complete in production; Stage 16+ remains future/not started.
 
 По текущему status после merged Stage 8 QA Cognitive Twin v1 / Stages 1–8
@@ -1591,7 +1591,7 @@ COMPLETE (PR #336, merged/deployed as
 `7304488355661d99af1d79f3aac676a328597434`); PHASE 15.5
 SECURITY/PRIVACY/INTEGRATION/E2E COMPLETE (PR #337, merged/deployed as
 69b66fa6008cc4993d8ca1babe5edeb0e5b3247f); PHASE 15.6 FINAL
-RELEASE/CLOSEOUT COMPLETE via final PR Closes #331
+RELEASE/CLOSEOUT COMPLETE via PR #338 with Closes #331
 ~~~
 
 Stage 12A–12E and Stage 13 add no provider, telemetry, background watcher,
