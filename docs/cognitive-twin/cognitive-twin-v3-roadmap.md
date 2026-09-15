@@ -6,7 +6,9 @@
 Stage 11E. Он не является runtime-контрактом, не меняет vault, не создаёт
 новые note types и не разрешает провайдерный, фоновый или автоматический
 write-back. Для текущего implementation gate нормативным документом является
-отдельный [Goal Progress v1 contract](goal-progress-v1-contract.md).
+отдельный [Goal Progress v1 contract](goal-progress-v1-contract.md). Для Stage
+14 нормативным документом после design gate является отдельный
+[Personal Experiments v1 contract](personal-experiments-v1-contract.md).
 
 ## Generation invariants
 
@@ -108,8 +110,10 @@ Stage 13E завершены указанными Issues/PRs; они не изм
 
 ## Stage 14 — Personal Experiments
 
-**Статус:** PLANNED / NOT STARTED. Depends on explicit Goal Progress
-definitions and observations.
+**Статус:** DESIGN CONTRACT COMPLETE / RUNTIME NOT STARTED. Контракт
+[Personal Experiments v1](personal-experiments-v1-contract.md) принят в Issue
+[#304](https://github.com/MikeMoore1337/second-brain/issues/304); implementation
+gates 14.1–14.6 ещё не начаты.
 
 Предполагаемый bounded workflow:
 
