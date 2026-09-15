@@ -71,12 +71,21 @@ Stage 12 не переносит progress fields в исходный Goal и н�
 
 ## Stage 13 — Decision Compass / Compare v2
 
-**Статус:** DESIGN CONTRACT COMPLETE in Issue #296 via
-[compare-v2-contract.md](compare-v2-contract.md); Stage 13A provider-free core
-is COMPLETE under [Issue #299](https://github.com/MikeMoore1337/second-brain/issues/299)
-and [PR #305](https://github.com/MikeMoore1337/second-brain/pull/305), merge SHA
-`9444a0936ed0df6ecf3a84fb65eb8bbd6d910e6f`, post-merge CI `34900681934`,
-production deploy `34900890972`. Stages 13B–13E remain NOT STARTED.
+**Статус:** DESIGN CONTRACT COMPLETE in [Issue #296](https://github.com/MikeMoore1337/second-brain/issues/296)
+via [compare-v2-contract.md](compare-v2-contract.md) and [PR #298](https://github.com/MikeMoore1337/second-brain/pull/298)
+(`452a51fda49fd7ed30e116b55f73fe457ae3d4c7`); Stage 13A–13D и
+финальный Stage 13E release/closeout COMPLETE в Issues #299–#303. PR map:
+[PR #305](https://github.com/MikeMoore1337/second-brain/pull/305) →
+`9444a0936ed0df6ecf3a84fb65eb8bbd6d910e6f`,
+[PR #307](https://github.com/MikeMoore1337/second-brain/pull/307) →
+`cadc01b41b9c766056d45ef6b1b4d753027a236e`,
+[PR #315](https://github.com/MikeMoore1337/second-brain/pull/315) →
+`ab61a4f35d9ad8196b82bffef36170a889f8fc2a`,
+[PR #316](https://github.com/MikeMoore1337/second-brain/pull/316) →
+`7426c079bc95a2fed9f33b7f2b497a1fd5364c40`. Final runtime/deployed SHA:
+`7426c079bc95a2fed9f33b7f2b497a1fd5364c40`; post-merge CI `34949012024`,
+automatic deploy `34949240222`, `/healthz` HTTP 200 and anonymous private
+boundary smoke 401 без раскрытия данных. `env change required: no`.
 
 Stage 13 может собрать в owner-only decision context:
 
@@ -93,9 +102,9 @@ retargeting, provider payload expansion и смешение progress with outcom
 judgement. Нормативная граница зафиксирована в отдельном
 [Compare v2 / GrowthCompare v1 contract](compare-v2-contract.md); исходный
 design gate не запускал Stage 13A runtime, Web/API/UI или provider work.
-Отдельный implementation gate Stage 13A зафиксирован в PR #305 и завершён с
-merge SHA `9444a0936ed0df6ecf3a84fb65eb8bbd6d910e6f`; он не запускает Stage
-13B–13E.
+Отдельные implementation gates Stage 13A–13D и serial release/closeout gate
+Stage 13E завершены указанными Issues/PRs; они не изменяют Compare v1 и не
+авторизуют Stage 14 или Stage 15.
 
 ## Stage 14 — Personal Experiments
 
