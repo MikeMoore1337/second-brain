@@ -176,7 +176,7 @@ paths, titles, URLs, full evidence или UUID inventory.
 
 ```text
 SourceReadinessV1 =
-  exact_current | source_missing | unavailable | stale |
+  exact_current | source_missing | unavailable | stale | source_changed |
   not_comparable | policy_mismatch
 
 GoalSourceSnapshotV1 {
@@ -386,6 +386,20 @@ Stage15AdaptiveProfileV1 {
   profile_policy_fingerprint:      HashV1
   profile_fingerprint:              HashV1
 }
+
+Stage15ProfileProposalV1 {
+  contract_version:                "adaptive-cognitive-twin-v1"
+  profile_version:                 "1"
+  goal_source_uuid:                UUIDv7
+  goal_identity_fingerprint:       HashV1
+  source_snapshot_fingerprint:     HashV1
+  projection_focus:                Stage15ProjectionFocusV1
+  interaction_mode:                Stage15InteractionModeV1
+  evaluation_measure:              Stage15MeasureV1
+  profile_policy_id:               "stage15-adaptive-profile-v1"
+  profile_policy_fingerprint:      HashV1
+  profile_fingerprint:              HashV1
+}
 ```
 
 No labels, prompt fragments, free text, numeric weight, risk/personality
@@ -413,7 +427,7 @@ AdaptationCandidateV1 {
   source_snapshot_fingerprint:     HashV1
   prior_profile_id:                UUIDv7 | null
   prior_profile_fingerprint:       HashV1 | null
-  proposed_profile:                Stage15AdaptiveProfileV1 | null
+  proposed_profile:                Stage15ProfileProposalV1 | null
   reasons:                         tuple[closed Stage15 reason, ...]
   evaluation_plan:                 Stage15EvaluationPlanV1
   caveats:                         tuple[closed Stage15 caveat, ...]
@@ -512,8 +526,9 @@ source snapshot, prior profile identity, proposed closed fields, explicit
 text, paths, secrets, browser token или process-specific dynamic fields.
 
 Candidate с тем же exact input и `as_of` обязан иметь byte-equivalent profile,
-reasons, plan, caveats и fingerprint. UUID store-owned profile генерируется
-только при explicit activation и не участвует в candidate identity.
+reasons, plan, caveats и fingerprint. До explicit activation candidate содержит
+только `Stage15ProfileProposalV1` без store-owned UUID; UUID active profile
+генерируется только при explicit activation и не участвует в candidate identity.
 
 ## 10. Operational store и lifecycle
 
