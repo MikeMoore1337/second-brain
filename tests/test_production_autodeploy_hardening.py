@@ -478,7 +478,7 @@ def test_clean_state_diagnostic_is_bounded_and_precedes_release_mutation() -> No
     status_guard = script.index(
         "if GIT_OPTIONAL_LOCKS=0 GIT_TRACE2_CONFIG_PARAMS= GIT_TRACE2_ENV_VARS="
     )
-    fetch = script.index('git -C "$APP_ROOT" fetch --no-tags origin main')
+    fetch = script.index('run_git_fetch "$APP_ROOT" "second-brain"')
     candidate = script.index('CANDIDATE_RELEASE="$RELEASES_ROOT/$TARGET_SHA"')
     assert status_guard < fetch < candidate
 

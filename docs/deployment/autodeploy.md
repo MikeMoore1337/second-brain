@@ -77,6 +77,24 @@ production files не выполняются. Любая следующая ди
 unknown tracked/untracked state), а затем выбрать только доказанный
 non-destructive repair либо `HUMAN_REQUIRED`.
 
+## Диагностика ошибки fetch и заполненного диска
+
+Fetch control checkout и sibling vault также выполняется через bounded
+fail-closed wrapper. При ненулевом exit code в CI выводятся только
+normalized/bounded stderr/stdout и read-only `df -Pk`/`df -Pik` для
+`/srv/second-brain`; содержимое файлов и список владельцев места не читаются.
+Wrapper не выполняет `rm -rf`, `git gc`, `git prune`, cleanup, reset или другую
+попытку освободить место; `rm -f` используется только для удаления созданных
+им самим temporary diagnostic files. Если Git сообщает `No space left on device`, это
+останавливает pipeline до candidate creation и требует отдельной
+owner-managed проверки безопасного источника заполнения диска.
+
+Для recovery incident 2026-09-15 deploy `34933672954` на merge SHA
+`9d1277e394185516617eca1118b53bcdd1d72fe0` остановился во время fetch с
+`fatal: unable to write loose object file: No space left on device` и
+`fatal: unpack-objects failed`. До candidate/merge/activation дело не дошло;
+current, service, vault и неизвестные production files не изменялись.
+
 ## Versioned production env preflight
 
 Каждый deploy читает `deploy/production-env-requirements.conf` из exact target

@@ -34,8 +34,12 @@ def test_autodeploy_script_has_strict_exact_sha_release_contract() -> None:
     for required in (
         '[[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]',
         "flock -n 9",
-        'git -C "$APP_ROOT" fetch --no-tags origin main',
-        'git -C "$VAULT_ROOT" fetch --no-tags origin main',
+        'run_git_fetch "$APP_ROOT" "second-brain"',
+        'run_git_fetch "$VAULT_ROOT" "second-brain-vault"',
+        'git -C "$path" fetch --no-tags origin main',
+        "capture_filesystem_diagnostic",
+        "df -Pk",
+        "df -Pik",
         'merge-base --is-ancestor "$TARGET_SHA" "$ORIGIN_APP_SHA"',
         'git -C "$APP_ROOT" merge --ff-only origin/main',
         'git -C "$APP_ROOT" worktree add --detach',
@@ -81,6 +85,38 @@ def test_autodeploy_script_keeps_root_config_and_vault_fail_closed() -> None:
         "source ",
     ):
         assert forbidden not in lowered
+
+
+def test_fetch_failure_diagnostic_is_bounded_read_only_and_precedes_candidate() -> None:
+    script = AUTODEPLOY_SCRIPT.read_text(encoding="utf-8")
+
+    wrapper = script.index("run_git_fetch()")
+    app_fetch = script.index('run_git_fetch "$APP_ROOT" "second-brain"')
+    vault_fetch = script.index('run_git_fetch "$VAULT_ROOT" "second-brain-vault"')
+    candidate = script.index('CANDIDATE_RELEASE="$RELEASES_ROOT/$TARGET_SHA"')
+
+    assert wrapper < app_fetch < vault_fetch < candidate
+    for required in (
+        "bounded_stderr=",
+        "bounded_stdout=",
+        "df_blocks=",
+        "df_inodes=",
+    ):
+        assert required in script
+
+    fetch_failure_start = script.index("else\n    fetch_exit=$?", wrapper)
+    fetch_failure_end = script.index("\n}\n\nrun_git_status_probe", fetch_failure_start)
+    failure_path = script[fetch_failure_start:fetch_failure_end]
+    for forbidden in (
+        "git gc",
+        "git prune",
+        "git reset",
+        "git clean",
+        "rm -rf",
+        "worktree add",
+        "activate",
+    ):
+        assert forbidden not in failure_path.casefold()
 
 
 def test_release_control_is_narrow_root_owned_contract() -> None:
