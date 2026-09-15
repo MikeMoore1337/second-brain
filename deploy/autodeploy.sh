@@ -135,10 +135,12 @@ assert_clean_main() {
           || true
         die "$label git status failed; exit_code=$status_exit; stderr capture failed"
       }
+    bounded_status="$(sanitize_git_status_diagnostic "$status")"
     rm -f -- "$status_stderr_file" \
       || die "не удалось удалить temporary git status diagnostic $label"
     [[ -n "$status_stderr" ]] || status_stderr="<empty>"
-    die "$label git status failed; exit_code=$status_exit; bounded_stderr=$status_stderr"
+    [[ -n "$bounded_status" ]] || bounded_status="<empty>"
+    die "$label git status failed; exit_code=$status_exit; bounded_stderr=$status_stderr; bounded_stdout=$bounded_status"
   fi
 
   status_stderr="$(read_bounded_git_status_stderr "$status_stderr_file")" \

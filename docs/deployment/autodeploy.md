@@ -50,7 +50,8 @@ deploy/autodeploy.sh --sha <CI_SHA>
 До любого `fetch`, fast-forward, candidate creation или activation autodeploy
 проверяет control-checkout и sibling vault через `git status --porcelain`.
 Если `git status` сам возвращает non-zero, deploy остаётся fail-closed и
-выводит только exit code и bounded/normalized stderr. Если команда успешно
+выводит только exit code, bounded/normalized stderr и bounded/normalized
+stdout/status metadata, если Git что-либо вернул в stdout. Если команда успешно
 возвращает dirty metadata, deploy также останавливается и выводит только
 bounded porcelain status; содержимое файлов, credentials и environment values
 не читаются в output. Диагностический stderr временно сохраняется вне
