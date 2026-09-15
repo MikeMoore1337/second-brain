@@ -205,7 +205,7 @@ function CompositionResult({ result }: { readonly result: StatedObservedComposit
   );
 }
 
-export function CognitiveTwinSurface(): ReactElement {
+export function CognitiveTwinSurface({ includeGrowth = true }: { readonly includeGrowth?: boolean } = {}): ReactElement {
   const [bundle, setBundle] = useState<SurfaceBundle | null>(null);
   const [selectedStatedId, setSelectedStatedId] = useState("");
   const [selectedTargetKey, setSelectedTargetKey] = useState("");
@@ -467,7 +467,7 @@ export function CognitiveTwinSurface(): ReactElement {
           <span>Только чтение · данные не изменяются</span>
         </div>
       </div>
-      <GrowthSurface />
+      {includeGrowth ? <GrowthSurface /> : null}
       <div className="cognitive-twin-toolbar">
         <button className="cognitive-twin-button cognitive-twin-button-primary" type="button" disabled={busy || reviewBusy || compositionBusy || confirmBusy} aria-busy={busy} onClick={() => void refresh()}>
           {busy ? "Обновляю…" : "Обновить текущие данные"}

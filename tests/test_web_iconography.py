@@ -31,9 +31,22 @@ def test_react_production_icon_affordances_are_local_raster() -> None:
 
 def test_different_sections_have_unique_icons() -> None:
     app = (ROOT / "web/src/App.tsx").read_text(encoding="utf-8")
-    sections = re.findall(r'<FoldSection\s+id="([^"]+)"[^>]*icon="([^"]+)"', app)
-    assert len(sections) > 5
+    semantic = (ROOT / "web/src/semantic-navigation.tsx").read_text(encoding="utf-8")
+    tool_pattern = (
+        r'\{ id: "([^"]+)", label: "[^"]+", description: "[^"]+", '
+        r'target: "#[^"]+", icon: "([^"]+)", availability: "available", '
+        r'renderSurface: (?:true|false)(?:, foldId: "[^"]+")? \}'
+    )
+    sections = re.findall(
+        tool_pattern,
+        semantic,
+    )
+    assert len(sections) == 15
     names = [name for _, name in sections]
     assert len(names) == len(set(names)), sections
     assert ("decision-compass", "decision-compass") in sections
-    assert '["#decision-compass", "Компас решения", "decision-compass"]' in app
+    assert 'id: "decision-compass", label: "Компас решения"' in semantic
+    assert 'id="semantic-navigation"' in semantic
+    assert "pillars" not in app
+    assert "memoryBackdrop" not in app
+    assert "growthBackdrop" not in app

@@ -18,8 +18,28 @@ async function audit(page, name) {
   const results = await new AxeBuilder({ page }).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();
   report.accessibility.push({ name, violations: results.violations.map(v => ({ id:v.id, impact:v.impact, nodes:v.nodes.map(n=>({target:n.target,summary:n.failureSummary})) })) });
 }
+async function reveal(page, selector) {
+  await page.locator(selector).evaluate(e=>{
+    const group=e.closest('[data-semantic-group]');
+    const trigger=group?.querySelector('[data-semantic-group-trigger]');
+    if(trigger?.getAttribute('aria-expanded')!=='true') trigger.click();
+  });
+  await page.waitForTimeout(100);
+  await page.locator(selector).evaluate(e=>{
+    const group=e.closest('[data-semantic-group]');
+    const surface=e.closest('[data-semantic-functional-surface]');
+    const toolId=surface?.getAttribute('data-semantic-functional-surface') ?? e.id;
+    const link=toolId ? group?.querySelector(`a[data-semantic-tool-link="${toolId}"]`) : null;
+    link?.click();
+    e.scrollIntoView({block:'start'});
+  });
+  await page.waitForTimeout(450);
+  await page.locator(selector).evaluate(e=>e.scrollIntoView({block:'start'}));
+  await page.waitForTimeout(100);
+}
+
 async function screenshot(page, name, selector) {
-  if (selector) await page.locator(selector).evaluate(e=>{const d=e.closest('details');if(d)d.open=true;e.scrollIntoView({block:'start'});});
+  if (selector) await reveal(page, selector);
   await page.waitForTimeout(450);
   await page.screenshot({ path: `${out}/${name}.png` });
 }
@@ -56,7 +76,8 @@ try {
     page.on('request',r=>{if(r.url().endsWith('/save/apply')) applies++;});
     await page.goto(origin);await page.waitForTimeout(1800);
     await page.mouse.move(width*.7,240);await page.waitForTimeout(1200);await page.mouse.move(width*.9,550);await page.waitForTimeout(1200);
-    await page.getByRole('link',{name:'Добавить мысль'}).click();
+    await page.getByRole('link',{name:'Начать с памяти'}).click();
+    await reveal(page,'#capture');
     await page.locator('#capture').getByRole('button',{name:'Текст',exact:true}).click();
     await page.getByLabel('Текст материала').fill('Мысль становится полезнее, когда мы возвращаемся к ней. Синтетический материал.');
     await screenshot(page,`text-${width}`,'#capture');
@@ -79,6 +100,7 @@ try {
     await page.locator('.saved-note').waitFor(); assert.equal(applies,1);
     await screenshot(page,`saved-${width}`,'.saved-note');
     await audit(page,`saved-${width}`);
+    await reveal(page,'#search');
     await page.getByLabel('Поисковый запрос').fill('идеи');
     await page.locator('#search').getByRole('button',{name:'Найти',exact:true}).click();
     await page.locator('.search-hit').waitFor();
@@ -88,6 +110,7 @@ try {
     assert.match(await page.locator('.retrieved-note-body').textContent(),/Мысль становится полезнее/);
     await screenshot(page,`note-${width}`,'.retrieved-note');
     await audit(page,`note-${width}`);
+    await reveal(page,'#search');
     await page.getByLabel('Поисковый запрос').fill('пусто');
     await page.locator('#search').getByRole('button',{name:'Найти',exact:true}).click();
     await page.locator('.search-empty').waitFor();
