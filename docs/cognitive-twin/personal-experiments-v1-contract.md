@@ -1,6 +1,6 @@
 # Cognitive Twin v3 / Stage 14 — Personal Experiments v1
 
-Статус: **NORMATIVE CONTRACT / PHASE 14.0 COMPLETE; PHASE 14.1 READ-SIDE RECORDS COMPLETE; PHASE 14.2 REVIEWED SAFE WRITE COMPLETE; EVALUATOR, WEB/API AND UI NOT STARTED**.
+Статус: **NORMATIVE CONTRACT / PHASE 14.0 COMPLETE; PHASE 14.1 READ-SIDE RECORDS COMPLETE; PHASE 14.2 REVIEWED SAFE WRITE COMPLETE; PHASE 14.3 PROVIDER-FREE EVALUATOR COMPLETE; WEB/API AND UI NOT STARTED**.
 
 Issue: [#304](https://github.com/MikeMoore1337/second-brain/issues/304).
 Этот документ является единственным нормативным контрактом Stage 14. Он
@@ -622,7 +622,7 @@ non-mutating health/private boundary smoke, cleanup, fresh origin/main.
     second-brain-vault_change        = NO
     production_env_change            = NO
     Stage14_contract                  = YES (14.0 design gate complete)
-    Stage14_runtime                   = NO / NOT STARTED
+    Stage14_runtime                   = PARTIAL / PHASES 14.1-14.3 COMPLETE; WEB/API/UI NOT STARTED
     Stage15                         = NO / NOT STARTED
     HUMAN_REQUIRED                  = NO unless an external release gate genuinely fails
 

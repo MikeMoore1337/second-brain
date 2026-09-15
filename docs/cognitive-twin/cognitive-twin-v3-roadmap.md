@@ -111,14 +111,16 @@ Stage 13E завершены указанными Issues/PRs; они не изм
 ## Stage 14 — Personal Experiments
 
 **Статус:** DESIGN CONTRACT COMPLETE / PHASE 14.1 READ-SIDE RECORDS COMPLETE /
-PHASE 14.2 REVIEWED SAFE WRITE COMPLETE / EVALUATOR, WEB/API AND UI NOT
-STARTED. Контракт
+PHASE 14.2 REVIEWED SAFE WRITE COMPLETE / PHASE 14.3 PROVIDER-FREE EVALUATOR
+COMPLETE / WEB/API AND UI NOT STARTED. Контракт
 [Personal Experiments v1](personal-experiments-v1-contract.md) принят в Issue
 [#304](https://github.com/MikeMoore1337/second-brain/issues/304); Phase 14.1
 добавил immutable DTO, strict parser, exact chain/source validators и typed scan
 projections. Phase 14.2 добавил dedicated reviewed Safe Write с prepare/apply,
 exact plan/token binding, no-overwrite, full validation, rollback, lifecycle и
-supersession. Implementation gates 14.3–14.6 ещё не начаты.
+supersession. Phase 14.3 добавил provider-free deterministic evaluator с
+immutable result, exact provenance, Stage 12 authority, explicit as_of и
+bounded non-causal статусами. Implementation gates 14.4–14.6 ещё не начаты.
 
 Предполагаемый bounded workflow:
 
