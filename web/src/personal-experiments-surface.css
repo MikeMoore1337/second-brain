@@ -390,6 +390,23 @@
   accent-color: var(--sb-color-accent);
 }
 
+/* Keep native choices and their labels in one row at every viewport width. */
+.personal-experiments-surface .pe-radio {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.personal-experiments-surface .pe-radio input {
+  margin: 0;
+}
+
+.personal-experiments-surface .pe-radio > span {
+  min-width: 0;
+}
+
 .pe-field-nested {
   margin-top: 0.35rem;
   padding-top: 0.75rem;
