@@ -146,14 +146,18 @@ remains owner-reviewed and reversible.
 
 ## Stage 15 — Adaptive Cognitive Twin
 
-**Статус:** PLANNED / NOT STARTED. Depends on Stage 9 calibration, Stage 10
-behavioral model, Stage 12 progress and Stage 14 experiments.
+**Статус:** PHASE 15.0 CONTRACT IN DELIVERY under Issue #331; runtime phases
+15.1–15.6 are NOT STARTED. Depends on Stage 9 calibration, Stage 10
+behavioral model, Stage 12 progress and Stage 14 experiments. Нормативная
+граница зафиксирована в [adaptive-cognitive-twin-v1-contract.md](adaptive-cognitive-twin-v1-contract.md).
 
 Stage 15 может предлагать versioned, explainable, reversible and measurable
 adaptation candidates from reviewed evidence and explicit calibration. It must
 remain owner-controlled and must not introduce hidden reinforcement learning,
 unbounded personalization, background monitoring, autonomous goal mutation or
-provider-driven canonical writes.
+provider-driven canonical writes. Реализация 15.1–15.6 выполняется строго
+последовательно после merge и post-merge/deploy gate каждой предыдущей фазы;
+существующие semantics Stage 1–14 не меняются.
 
 ## Stage 16+
 
