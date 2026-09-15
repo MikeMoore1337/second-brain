@@ -26,6 +26,7 @@ import { ProspectiveAuditSurface } from "./prospective-audit-surface";
 import { CognitiveTwinSurface } from "./cognitive-twin-surface";
 import { DecisionCompassSurface } from "./decision-compass-surface";
 import { GrowthSurface } from "./growth-surface";
+import { PersonalExperimentsSurface } from "./personal-experiments-surface";
 import { SemanticNavigation, semanticGroups, type SemanticTool } from "./semantic-navigation";
 
 function renderSemanticTool(tool: SemanticTool): ReactElement | null {
@@ -45,6 +46,7 @@ function renderSemanticTool(tool: SemanticTool): ReactElement | null {
     case "decision-compass": return <DecisionCompassSurface />;
     case "active-learning": return null;
     case "growth-engine": return <GrowthSurface />;
+    case "personal-experiments": return <PersonalExperimentsSurface />;
     default: return tool satisfies never;
   }
 }

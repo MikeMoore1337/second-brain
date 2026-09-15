@@ -22,6 +22,8 @@ def test_main_page_uses_exactly_the_four_semantic_directions() -> None:
     assert source.count('id: "decisions"') == 1
     assert source.count('id: "growth"') == 1
     assert "Personal Experiments" not in source
+    assert 'id: "personal-experiments"' in source
+    assert 'target: "#personal-experiments"' in source
     assert "FoldSection" not in source
     assert "data-semantic-tool-link={tool.id}" in source
     assert "data-semantic-functional-surface={tool.id}" in source
@@ -71,4 +73,4 @@ def test_semantic_navigation_keeps_existing_surface_anchors_and_no_future_stage_
     ):
         assert f'target: "{anchor}"' in source
     assert "Personal Experiments" not in source
-    assert "personal-experiments" not in source
+    assert 'target: "#personal-experiments"' in source

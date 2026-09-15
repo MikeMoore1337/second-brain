@@ -38,21 +38,21 @@ it("renders exactly four semantic directions and removes the old decorative card
     "Решения",
     "Развитие",
   ]);
-  expect(semanticGroups.map((group) => group.tools.length)).toEqual([5, 4, 5, 1]);
+  expect(semanticGroups.map((group) => group.tools.length)).toEqual([5, 4, 5, 2]);
   expect(rendered.querySelector(".pillars")).toBeNull();
   expect(rendered.querySelector("#memory")).toBeNull();
   expect(rendered.querySelector("#growth")).toBeNull();
-  expect(rendered.querySelectorAll(".semantic-tool-link")).toHaveLength(15);
-  expect(rendered.querySelectorAll(".semantic-functional-surface")).toHaveLength(14);
-  expect(rendered.querySelectorAll(".semantic-functional-surface[hidden]")).toHaveLength(14);
+  expect(rendered.querySelectorAll(".semantic-tool-link")).toHaveLength(16);
+  expect(rendered.querySelectorAll(".semantic-functional-surface")).toHaveLength(15);
+  expect(rendered.querySelectorAll(".semantic-functional-surface[hidden]")).toHaveLength(15);
   expect(rendered.querySelectorAll(".semantic-functional-surface > details, .semantic-functional-surface > summary")).toHaveLength(0);
-  expect(rendered.querySelectorAll(".semantic-functional-heading")).toHaveLength(14);
+  expect(rendered.querySelectorAll(".semantic-functional-heading")).toHaveLength(15);
 });
 
 it("keeps one compact navigation entry per tool and activates its mounted surface", async () => {
   const rendered = await renderNavigation();
   const links = Array.from(rendered.querySelectorAll<HTMLAnchorElement>(".semantic-tool-link"));
-  expect(new Set(links.map((link) => link.dataset.semanticToolLink)).size).toBe(15);
+  expect(new Set(links.map((link) => link.dataset.semanticToolLink)).size).toBe(16);
 
   for (const link of links.filter((item) => item.dataset.semanticToolLink !== "active-learning")) {
     await act(async () => link.click());
