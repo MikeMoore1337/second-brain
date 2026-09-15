@@ -37,7 +37,7 @@
 .semantic-group-panel { display:grid; grid-template-rows:0fr; visibility:hidden; opacity:0; transition:grid-template-rows var(--sb-motion-panel) var(--sb-ease-out),opacity var(--sb-motion-panel) var(--sb-ease-out),visibility 0s linear var(--sb-motion-panel); }
 .semantic-group-panel-inner { min-height:0; overflow:hidden; padding:0 22px; }
 .semantic-group.is-open .semantic-group-panel { grid-template-rows:1fr; visibility:visible; opacity:1; transition-delay:0s; }
-.semantic-group.is-open .semantic-group-panel-inner { padding-bottom:22px; }
+.semantic-group.is-open .semantic-group-panel-inner { padding-top:12px; padding-bottom:22px; }
 .semantic-tool-links { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:0 0 18px; }
 .semantic-tool-link { display:grid; grid-template-columns:36px minmax(0,1fr) auto; align-items:center; gap:12px; min-width:0; min-height:80px; padding:12px; border:1px solid transparent; border-radius:14px; color:var(--sb-color-text-primary); text-decoration:none; background:#d8bcff08; transition:background-color var(--sb-motion-micro),border-color var(--sb-motion-micro),transform var(--sb-motion-micro); }
 .semantic-tool-link:hover { border-color:#8d68a8; background:#d8bcff14; transform:translateY(-1px); }
@@ -106,7 +106,7 @@
   .semantic-group-count { grid-column:2; grid-row:2; }
   .semantic-group-chevron { grid-column:3; grid-row:1 / span 2; }
   .semantic-group-panel-inner { padding-inline:14px; }
-  .semantic-group.is-open .semantic-group-panel-inner { padding-bottom:14px; }
+  .semantic-group.is-open .semantic-group-panel-inner { padding-top:10px; padding-bottom:14px; }
   .semantic-tool-links { grid-template-columns:1fr; gap:6px; margin-bottom:14px; }
   .semantic-tool-link { grid-template-columns:36px minmax(0,1fr); min-height:72px; padding:10px; }
   .semantic-tool-open { grid-column:2; }
