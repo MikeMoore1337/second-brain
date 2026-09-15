@@ -156,3 +156,11 @@ def test_russian_ui_mobile_contract_retains_existing_touch_and_width_floor() -> 
     assert "body::before" in styles
     assert ".brand" in styles
     assert ".skip-link" in styles
+
+
+def test_production_ui_does_not_show_development_stage_labels() -> None:
+    for path in WEB_SOURCE_ROOT.rglob("*.tsx"):
+        if "test" in path.relative_to(WEB_SOURCE_ROOT).parts:
+            continue
+        source = path.read_text(encoding="utf-8")
+        assert not re.search(r"(?:Этап|этап|Stage|stage)\s+\d+", source), path

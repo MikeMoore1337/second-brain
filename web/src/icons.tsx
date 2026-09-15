@@ -77,11 +77,16 @@ import retrospective48 from "./assets/icons/retrospective-compact-48.webp";
 import retrospective96 from "./assets/icons/retrospective-compact-96.webp";
 import retrospective192 from "./assets/icons/retrospective-detail-192.webp";
 
-export const ICON_NAMES = ["prospective-audit","retrospective","add","capture","url","text","voice","memory","decision","outcome","timeline","search","open","self-model","self-retrieval","diagnostics","simulate","growth","refresh","save","confirm","cancel","close","expand","collapse","copy","warning","error","success","info","time","relation","pause","play"] as const;
+import compass48 from "./assets/icons/decision-compass-compact-48.webp";
+import compass96 from "./assets/icons/decision-compass-compact-96.webp";
+import compass192 from "./assets/icons/decision-compass-detail-192.webp";
+
+export const ICON_NAMES = ["decision-compass","prospective-audit","retrospective","add","capture","url","text","voice","memory","decision","outcome","timeline","search","open","self-model","self-retrieval","diagnostics","simulate","growth","refresh","save","confirm","cancel","close","expand","collapse","copy","warning","error","success","info","time","relation","pause","play"] as const;
 export type IconName = (typeof ICON_NAMES)[number];
 
 type Artwork = { compact: string; compact2x: string; detail?: string; detail2x?: string };
 const ARTWORK: Record<string, Artwork> = {
+  "decision-compass": { compact: compass48, compact2x: compass96, detail: compass96, detail2x: compass192 },
   "prospective-audit": { compact: audit48, compact2x: audit96, detail: audit96, detail2x: audit192 },
   "retrospective": { compact: retrospective48, compact2x: retrospective96, detail: retrospective96, detail2x: retrospective192 },
   "add": { compact: add48, compact2x: add96, detail: addDetail96, detail2x: addDetail192 },
