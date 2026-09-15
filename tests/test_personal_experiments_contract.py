@@ -58,5 +58,6 @@ def test_stage_14_is_complete_and_stage_15_status_is_factual() -> None:
     assert "EXACT SOURCE/CANDIDATE CORE COMPLETE" in roadmap
     assert "PHASE 15.2 OPERATIONAL PROFILE\nLIFECYCLE COMPLETE" in roadmap
     assert "PHASE 15.3 PROJECTION AND" in roadmap
-    assert "15.4–15.6 are NOT STARTED" in roadmap
+    assert "PHASE 15.4 PRIVATE WEB/API/UI\nIN DELIVERY" in roadmap
+    assert "15.5–15.6 are NOT STARTED" in roadmap
     assert "adaptive-cognitive-twin-v1-contract.md" in roadmap

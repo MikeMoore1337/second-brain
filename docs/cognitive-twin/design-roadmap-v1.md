@@ -36,7 +36,8 @@ Phase 14.6 final release/closeout завершены serial PRs #322, #323, #325
 нормативном контракте. Stage 14 находится в production; Phase 15.0 contract
 по Issue #331 complete, Phase 15.1 exact source/candidate core complete (PR
 #333, merged/deployed as `e233f61feee15b27adc1bc84c43e544eff3fa62f`), а Phase
-15.2 operational store находится в delivery и runtime phases 15.3–15.6 ещё не
+15.2 operational store complete; 15.3 projection/evaluation complete; Phase
+15.4 private Web/API/UI находится в delivery, а runtime phases 15.5–15.6 ещё не
 начаты.
 
 По текущему status после merged Stage 8 QA Cognitive Twin v1 / Stages 1–8
@@ -1580,7 +1581,9 @@ SOURCE/CANDIDATE CORE COMPLETE (PR #333, merged/deployed as
 `e233f61feee15b27adc1bc84c43e544eff3fa62f`); PHASE 15.2 OPERATIONAL STORE
 COMPLETE (PR #334, merged/deployed as
 `f0d3f8a543c602d28ec3913281adf399c1c9e5b7`); PHASE 15.3 PROJECTION AND
-EVALUATION IN DELIVERY; runtime phases 15.4–15.6 = NOT STARTED
+EVALUATION COMPLETE (PR #335, merged/deployed as
+`64c995a294cd7f25977b69e38e592d271a19bed2`); PHASE 15.4 PRIVATE WEB/API/UI
+IN DELIVERY; runtime phases 15.5–15.6 = NOT STARTED
 ~~~
 
 Stage 12A–12E and Stage 13 add no provider, telemetry, background watcher,
@@ -1590,6 +1593,6 @@ its provider-free evaluator, owner-only Web/API/UI, adversarial gate and final
 release/closeout; its production smoke was non-mutating and its exact evidence
 is recorded in [Personal Experiments v1 contract](personal-experiments-v1-contract.md).
 Stage 15 Phase 15.0 contract is complete under Issue #331; Phase 15.1 exact
-source/candidate core and Phase 15.2 operational store are complete; Phase
-15.3 projection/evaluation is in delivery; runtime phases 15.4–15.6 remain
-not started.
+source/candidate core, Phase 15.2 operational store and Phase 15.3
+projection/evaluation are complete; Phase 15.4 private Web/API/UI is in
+delivery; runtime phases 15.5–15.6 remain not started.

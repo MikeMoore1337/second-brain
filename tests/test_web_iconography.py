@@ -41,7 +41,7 @@ def test_different_sections_have_unique_icons() -> None:
         tool_pattern,
         semantic,
     )
-    assert len(sections) == 16
+    assert len(sections) == 17
     names = [name for _, name in sections]
     assert len(names) == len(set(names)), sections
     assert ("decision-compass", "decision-compass") in sections
