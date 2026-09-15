@@ -57,10 +57,13 @@ deploy также останавливается и выводит только 
 После первичного failure выполняется ещё один read-only diagnostic probe с
 `GIT_OPTIONAL_LOCKS=0`, отключёнными `core.fsmonitor` и
 `core.untrackedCache`; его exit code, bounded output и Trace2 помогают
-отличить Git integration/index problem от unreadable repository state. Probe
-никогда не превращает failed primary check в clean result. Все диагностические
-файлы временно сохраняются вне production repositories и удаляются после
-чтения.
+отличить Git integration/index problem от unreadable repository state. До
+комбинированного fallback autodeploy также выполняет три bounded
+one-variable probes: только optional locks, только `core.fsmonitor=false` и
+только `core.untrackedCache=false`. Это позволяет выбрать narrow repository
+fix по evidence, не угадывая причину. Probe никогда не превращает failed
+primary check в clean result. Все диагностические файлы временно сохраняются
+вне production repositories и удаляются после чтения.
 
 Таким образом, сообщение о невозможности проверить clean state не означает
 автоматическую очистку checkout: reset, clean, overwrite и удаление unknown

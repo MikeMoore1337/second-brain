@@ -121,11 +121,41 @@ read_bounded_git_trace_file() {
   sanitize_git_status_diagnostic "$trace"
 }
 
+run_git_status_probe() {
+  local probe_name="$1"
+  shift
+  local output_file stderr_file output stderr probe_exit
+
+  output_file="$(mktemp)" || return 1
+  stderr_file="$(mktemp)" \
+    || {
+      rm -f -- "$output_file" || true
+      return 1
+    }
+  if "$@" >"$output_file" 2>"$stderr_file"; then
+    probe_exit=0
+  else
+    probe_exit=$?
+  fi
+  output="$(read_bounded_git_status_file "$output_file")" \
+    || output="<capture-failed>"
+  stderr="$(read_bounded_git_status_file "$stderr_file")" \
+    || stderr="<capture-failed>"
+  rm -f -- "$output_file" "$stderr_file" \
+    || return 1
+  [[ -n "$output" ]] || output="<empty>"
+  [[ -n "$stderr" ]] || stderr="<empty>"
+  printf 'probe_%s_exit=%s;probe_%s_stderr=%s;probe_%s_stdout=%s' \
+    "$probe_name" "$probe_exit" "$probe_name" "$stderr" \
+    "$probe_name" "$output"
+}
+
 assert_clean_main() {
   local path="$1"
   local label="$2"
   local branch status status_stderr status_trace status_exit
   local fallback_status fallback_stderr fallback_trace fallback_exit
+  local probe_optional_locks probe_fsmonitor probe_untracked_cache
   local status_file status_stderr_file status_trace_file
   local fallback_status_file fallback_stderr_file fallback_trace_file
   local marker marker_path
@@ -168,6 +198,16 @@ assert_clean_main() {
           || true
         die "$label git status failed; exit_code=$status_exit; trace capture failed"
       }
+
+    probe_optional_locks="$(GIT_OPTIONAL_LOCKS=0 run_git_status_probe \
+      optional_locks git -C "$path" status --porcelain=v1 --untracked-files=all)" \
+      || probe_optional_locks="<probe-capture-failed>"
+    probe_fsmonitor="$(run_git_status_probe fsmonitor git -C "$path" \
+      -c core.fsmonitor=false status --porcelain=v1 --untracked-files=all)" \
+      || probe_fsmonitor="<probe-capture-failed>"
+    probe_untracked_cache="$(run_git_status_probe untracked_cache git -C "$path" \
+      -c core.untrackedCache=false status --porcelain=v1 --untracked-files=all)" \
+      || probe_untracked_cache="<probe-capture-failed>"
 
     # This second invocation is diagnostic-only. It disables Git's optional
     # index locks and fsmonitor/untracked-cache integrations to distinguish a
@@ -217,7 +257,7 @@ assert_clean_main() {
     [[ -n "$fallback_stderr" ]] || fallback_stderr="<empty>"
     [[ -n "$fallback_status" ]] || fallback_status="<empty>"
     [[ -n "$fallback_trace" ]] || fallback_trace="<empty>"
-    die "$label git status failed; exit_code=$status_exit; bounded_stderr=$status_stderr; bounded_stdout=$status; trace2=$status_trace; fallback_exit=$fallback_exit; fallback_stderr=$fallback_stderr; fallback_stdout=$fallback_status; fallback_trace2=$fallback_trace"
+    die "$label git status failed; exit_code=$status_exit; bounded_stderr=$status_stderr; bounded_stdout=$status; trace2=$status_trace; $probe_optional_locks; $probe_fsmonitor; $probe_untracked_cache; fallback_exit=$fallback_exit; fallback_stderr=$fallback_stderr; fallback_stdout=$fallback_status; fallback_trace2=$fallback_trace"
   fi
 
   status="$(read_bounded_git_status_file "$status_file")" \
