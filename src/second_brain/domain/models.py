@@ -13,6 +13,12 @@ from uuid import UUID
 
 if TYPE_CHECKING:
     from second_brain.application.goal_progress import DefinitionRecordV1, ObservationRecordV1
+    from second_brain.application.personal_experiments import (
+        PersonalExperimentDefinitionRecordV1,
+        PersonalExperimentLifecycleRecordV1,
+        PersonalExperimentObservationRecordV1,
+        PersonalExperimentReassessmentRecordV1,
+    )
 
 _RFC3339_PATTERN = re.compile(
     r"\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}"
@@ -146,6 +152,10 @@ class NoteRecord:
     outcome_observation: OutcomeObservationRecord | None = None
     goal_progress_definition: DefinitionRecordV1 | None = None
     goal_progress_observation: ObservationRecordV1 | None = None
+    personal_experiment_definition: PersonalExperimentDefinitionRecordV1 | None = None
+    personal_experiment_lifecycle: PersonalExperimentLifecycleRecordV1 | None = None
+    personal_experiment_observation: PersonalExperimentObservationRecordV1 | None = None
+    personal_experiment_reassessment: PersonalExperimentReassessmentRecordV1 | None = None
 
     @property
     def personal_memory_metadata(self) -> PersonalMemoryMetadata | None:

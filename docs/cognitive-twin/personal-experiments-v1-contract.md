@@ -1,6 +1,6 @@
 # Cognitive Twin v3 / Stage 14 — Personal Experiments v1
 
-Статус: **NORMATIVE CONTRACT / PHASE 14.0 COMPLETE; RUNTIME NOT STARTED**.
+Статус: **NORMATIVE CONTRACT / PHASE 14.0 COMPLETE; PHASE 14.1 READ-SIDE RECORDS COMPLETE; WRITER AND WEB RUNTIME NOT STARTED**.
 
 Issue: [#304](https://github.com/MikeMoore1337/second-brain/issues/304).
 Этот документ является единственным нормативным контрактом Stage 14. Он

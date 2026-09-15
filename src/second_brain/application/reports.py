@@ -7,6 +7,14 @@ from enum import StrEnum
 from typing import Any
 
 from second_brain.application.goal_progress import DefinitionRecordV1, ObservationRecordV1
+from second_brain.application.personal_experiments import (
+    PersonalExperimentDefinitionRecordV1,
+    PersonalExperimentLifecycleRecordV1,
+    PersonalExperimentObservationRecordV1,
+    PersonalExperimentReadProjectionV1,
+    PersonalExperimentReassessmentRecordV1,
+    build_personal_experiment_read_projection,
+)
 from second_brain.domain.models import (
     AttachmentRecord,
     DecisionJournalRecord,
@@ -267,6 +275,87 @@ class ScanReport:
                     if note.goal_progress_observation is not None
                 ),
                 key=lambda record: str(record.id),
+            )
+        )
+
+    @property
+    def personal_experiment_definitions(
+        self,
+    ) -> tuple[PersonalExperimentDefinitionRecordV1, ...]:
+        """Вернуть deterministic Stage 14 definition projections текущего scan."""
+
+        return tuple(
+            sorted(
+                (
+                    note.personal_experiment_definition
+                    for note in self.notes
+                    if note.personal_experiment_definition is not None
+                ),
+                key=lambda record: str(record.id),
+            )
+        )
+
+    @property
+    def personal_experiment_lifecycles(
+        self,
+    ) -> tuple[PersonalExperimentLifecycleRecordV1, ...]:
+        """Вернуть deterministic Stage 14 lifecycle projections текущего scan."""
+
+        return tuple(
+            sorted(
+                (
+                    note.personal_experiment_lifecycle
+                    for note in self.notes
+                    if note.personal_experiment_lifecycle is not None
+                ),
+                key=lambda record: str(record.id),
+            )
+        )
+
+    @property
+    def personal_experiment_observations(
+        self,
+    ) -> tuple[PersonalExperimentObservationRecordV1, ...]:
+        """Вернуть deterministic Stage 14 observation-enrollment projections."""
+
+        return tuple(
+            sorted(
+                (
+                    note.personal_experiment_observation
+                    for note in self.notes
+                    if note.personal_experiment_observation is not None
+                ),
+                key=lambda record: str(record.id),
+            )
+        )
+
+    @property
+    def personal_experiment_reassessments(
+        self,
+    ) -> tuple[PersonalExperimentReassessmentRecordV1, ...]:
+        """Вернуть deterministic Stage 14 reassessment projections текущего scan."""
+
+        return tuple(
+            sorted(
+                (
+                    note.personal_experiment_reassessment
+                    for note in self.notes
+                    if note.personal_experiment_reassessment is not None
+                ),
+                key=lambda record: str(record.id),
+            )
+        )
+
+    @property
+    def personal_experiment_read_projection(self) -> PersonalExperimentReadProjectionV1:
+        """Вернуть полный pure read projection четырёх Stage 14 семейств."""
+
+        return build_personal_experiment_read_projection(
+            (
+                *self.personal_experiment_definitions,
+                *self.personal_experiment_lifecycles,
+                *self.personal_experiment_observations,
+                *self.personal_experiment_reassessments,
             )
         )
 

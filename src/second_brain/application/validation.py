@@ -25,6 +25,21 @@ from second_brain.application.goal_progress import (
     validate_observation_against_definition,
     validate_observation_chain,
 )
+from second_brain.application.personal_experiments import (
+    MAX_PERSONAL_EXPERIMENT_RECORDS,
+    PERSONAL_EXPERIMENT_DIAGNOSTIC_MESSAGES,
+    PersonalExperimentDefinitionRecordV1,
+    PersonalExperimentLifecycleRecordV1,
+    PersonalExperimentObservationRecordV1,
+    PersonalExperimentReassessmentRecordV1,
+    PersonalExperimentRecordError,
+    parse_personal_experiment_record,
+    validate_personal_experiment_definition_chain,
+    validate_personal_experiment_lifecycle_chain,
+    validate_personal_experiment_observation_binding,
+    validate_personal_experiment_observation_chain,
+    validate_personal_experiment_reassessment_chain,
+)
 from second_brain.application.personal_memory import (
     personal_memory_diagnostic_message,
     validate_canonical_personal_memory_fields,
@@ -62,6 +77,7 @@ def build_report(snapshot: VaultSnapshot) -> ScanReport:
     _report_duplicate_ids(notes, diagnostics)
     _report_stage2_relations(notes, diagnostics)
     _report_goal_progress_relations(notes, diagnostics)
+    _report_personal_experiment_relations(notes, diagnostics)
     _report_link_diagnostics(notes, snapshot.attachments, snapshot.links, diagnostics)
     return ScanReport(
         vault_path=snapshot.vault_path,
@@ -113,6 +129,12 @@ def _validate_document(
         document.relative_path,
         diagnostics,
     )
+    (
+        personal_experiment_definition,
+        personal_experiment_lifecycle,
+        personal_experiment_observation,
+        personal_experiment_reassessment,
+    ) = _parse_personal_experiment(data, note_id, document.relative_path, diagnostics)
     return NoteRecord(
         relative_path=document.relative_path,
         front_matter=data,
@@ -128,6 +150,10 @@ def _validate_document(
         outcome_observation=outcome_observation,
         goal_progress_definition=goal_progress_definition,
         goal_progress_observation=goal_progress_observation,
+        personal_experiment_definition=personal_experiment_definition,
+        personal_experiment_lifecycle=personal_experiment_lifecycle,
+        personal_experiment_observation=personal_experiment_observation,
+        personal_experiment_reassessment=personal_experiment_reassessment,
     )
 
 
@@ -225,6 +251,307 @@ def _parse_goal_progress(
     if type(record) is ObservationRecordV1:
         return None, record
     return None, None
+
+
+def _parse_personal_experiment(
+    data: Mapping[str, Any],
+    note_id: UUID | None,
+    path: str,
+    diagnostics: list[Diagnostic],
+) -> tuple[
+    PersonalExperimentDefinitionRecordV1 | None,
+    PersonalExperimentLifecycleRecordV1 | None,
+    PersonalExperimentObservationRecordV1 | None,
+    PersonalExperimentReassessmentRecordV1 | None,
+]:
+    """Parse only exact marker-enrolled Stage 14 companion records."""
+
+    try:
+        record = parse_personal_experiment_record(data, note_id=note_id)
+    except PersonalExperimentRecordError as exc:
+        diagnostics.append(
+            Diagnostic(
+                exc.code,
+                PERSONAL_EXPERIMENT_DIAGNOSTIC_MESSAGES.get(
+                    exc.code,
+                    PERSONAL_EXPERIMENT_DIAGNOSTIC_MESSAGES["PERSONAL_EXPERIMENT_INVALID_RECORD"],
+                ),
+                DiagnosticSeverity.ERROR,
+                path,
+            )
+        )
+        return None, None, None, None
+    except TypeError, ValueError, UnicodeError, OverflowError:
+        diagnostics.append(
+            Diagnostic(
+                "PERSONAL_EXPERIMENT_INVALID_RECORD",
+                PERSONAL_EXPERIMENT_DIAGNOSTIC_MESSAGES["PERSONAL_EXPERIMENT_INVALID_RECORD"],
+                DiagnosticSeverity.ERROR,
+                path,
+            )
+        )
+        return None, None, None, None
+    if type(record) is PersonalExperimentDefinitionRecordV1:
+        return record, None, None, None
+    if type(record) is PersonalExperimentLifecycleRecordV1:
+        return None, record, None, None
+    if type(record) is PersonalExperimentObservationRecordV1:
+        return None, None, record, None
+    if type(record) is PersonalExperimentReassessmentRecordV1:
+        return None, None, None, record
+    return None, None, None, None
+
+
+def _report_personal_experiment_relations(
+    notes: Iterable[NoteRecord],
+    diagnostics: list[Diagnostic],
+) -> None:
+    """Validate Stage 14 companion chains and exact Stage 12 source links."""
+
+    current_notes = tuple(notes)
+    paths_by_id: dict[UUID, str] = {}
+    for note in sorted(current_notes, key=lambda item: item.relative_path):
+        if note.note_id is not None:
+            paths_by_id.setdefault(note.note_id, note.relative_path)
+
+    definitions = tuple(
+        sorted(
+            (
+                note.personal_experiment_definition
+                for note in current_notes
+                if note.personal_experiment_definition is not None
+            ),
+            key=lambda record: str(record.id),
+        )
+    )
+    lifecycles = tuple(
+        sorted(
+            (
+                note.personal_experiment_lifecycle
+                for note in current_notes
+                if note.personal_experiment_lifecycle is not None
+            ),
+            key=lambda record: str(record.id),
+        )
+    )
+    observations = tuple(
+        sorted(
+            (
+                note.personal_experiment_observation
+                for note in current_notes
+                if note.personal_experiment_observation is not None
+            ),
+            key=lambda record: str(record.id),
+        )
+    )
+    reassessments = tuple(
+        sorted(
+            (
+                note.personal_experiment_reassessment
+                for note in current_notes
+                if note.personal_experiment_reassessment is not None
+            ),
+            key=lambda record: str(record.id),
+        )
+    )
+    all_records = (*definitions, *lifecycles, *observations, *reassessments)
+    if len(all_records) > MAX_PERSONAL_EXPERIMENT_RECORDS:
+        _append_personal_experiment_diagnostic(
+            diagnostics,
+            "PERSONAL_EXPERIMENT_RECORD_LIMIT_EXCEEDED",
+            None,
+        )
+
+    stage12_definitions_by_id: defaultdict[UUID, list[DefinitionRecordV1]] = defaultdict(list)
+    stage12_observations: list[ObservationRecordV1] = []
+    for note in current_notes:
+        if note.goal_progress_definition is not None:
+            stage12_definitions_by_id[cast(UUID, note.goal_progress_definition.id)].append(
+                note.goal_progress_definition
+            )
+        if note.goal_progress_observation is not None:
+            stage12_observations.append(note.goal_progress_observation)
+
+    for definition in definitions:
+        stage12_matches = stage12_definitions_by_id.get(
+            cast(UUID, definition.goal_progress_definition_id), []
+        )
+        path = paths_by_id.get(cast(UUID, definition.id))
+        if not stage12_matches:
+            _append_personal_experiment_diagnostic(
+                diagnostics,
+                "PERSONAL_EXPERIMENT_SOURCE_MISSING",
+                path,
+            )
+        elif len(stage12_matches) > 1:
+            _append_personal_experiment_diagnostic(
+                diagnostics,
+                "PERSONAL_EXPERIMENT_BINDING_MISMATCH",
+                path,
+            )
+        else:
+            stage12_definition = stage12_matches[0]
+            if (
+                stage12_definition.definition_fingerprint
+                != definition.goal_progress_definition_fingerprint
+                or stage12_definition.goal_source_uuid != definition.goal_source_uuid
+                or stage12_definition.goal_identity_fingerprint
+                != definition.goal_identity_fingerprint
+                or stage12_definition.goal_progress_policy_fingerprint
+                != definition.goal_progress_policy_fingerprint
+            ):
+                _append_personal_experiment_diagnostic(
+                    diagnostics,
+                    "PERSONAL_EXPERIMENT_SOURCE_CHANGED",
+                    path,
+                )
+
+    definitions_by_id: defaultdict[UUID, list[PersonalExperimentDefinitionRecordV1]] = defaultdict(
+        list
+    )
+    for definition in definitions:
+        definitions_by_id[cast(UUID, definition.id)].append(definition)
+
+    def check_definition_target(
+        record_id: UUID | str,
+        definition_id: UUID | str,
+        definition_fingerprint: str,
+    ) -> None:
+        definition_matches = definitions_by_id.get(cast(UUID, definition_id), [])
+        path = paths_by_id.get(cast(UUID, record_id))
+        if not definition_matches:
+            _append_personal_experiment_diagnostic(
+                diagnostics,
+                "PERSONAL_EXPERIMENT_DEFINITION_MISSING",
+                path,
+            )
+        elif len(definition_matches) > 1:
+            _append_personal_experiment_diagnostic(
+                diagnostics,
+                "PERSONAL_EXPERIMENT_DEFINITION_AMBIGUOUS",
+                path,
+            )
+        elif definition_matches[0].experiment_definition_fingerprint != definition_fingerprint:
+            _append_personal_experiment_diagnostic(
+                diagnostics,
+                "PERSONAL_EXPERIMENT_DEFINITION_CHANGED",
+                path,
+            )
+
+    for lifecycle in lifecycles:
+        check_definition_target(
+            lifecycle.id,
+            lifecycle.experiment_definition_id,
+            lifecycle.experiment_definition_fingerprint,
+        )
+    for observation in observations:
+        check_definition_target(
+            observation.id,
+            observation.experiment_definition_id,
+            observation.experiment_definition_fingerprint,
+        )
+    for reassessment in reassessments:
+        check_definition_target(
+            reassessment.id,
+            reassessment.experiment_definition_id,
+            reassessment.experiment_definition_fingerprint,
+        )
+
+    for observation in observations:
+        source = validate_personal_experiment_observation_binding(
+            observation,
+            stage12_observations=stage12_observations,
+        )
+        for issue in source.issues:
+            _append_personal_experiment_diagnostic(
+                diagnostics,
+                issue,
+                paths_by_id.get(cast(UUID, observation.id)),
+            )
+
+    definition_groups: defaultdict[
+        tuple[UUID, str, UUID, str], list[PersonalExperimentDefinitionRecordV1]
+    ] = defaultdict(list)
+    for definition in definitions:
+        definition_groups[
+            (
+                cast(UUID, definition.goal_source_uuid),
+                definition.goal_identity_fingerprint,
+                cast(UUID, definition.goal_progress_definition_id),
+                definition.goal_progress_definition_fingerprint,
+            )
+        ].append(definition)
+    for key in sorted(definition_groups, key=lambda item: tuple(map(str, item))):
+        result = validate_personal_experiment_definition_chain(definition_groups[key])
+        for issue in result.issues:
+            _append_personal_experiment_diagnostic(
+                diagnostics,
+                issue,
+                paths_by_id.get(cast(UUID, definition_groups[key][0].id)),
+            )
+
+    lifecycle_groups: defaultdict[tuple[UUID, str], list[PersonalExperimentLifecycleRecordV1]] = (
+        defaultdict(list)
+    )
+    for lifecycle in lifecycles:
+        lifecycle_groups[
+            (
+                cast(UUID, lifecycle.experiment_definition_id),
+                lifecycle.experiment_definition_fingerprint,
+            )
+        ].append(lifecycle)
+    for lifecycle_key in sorted(lifecycle_groups, key=lambda item: tuple(map(str, item))):
+        lifecycle_result = validate_personal_experiment_lifecycle_chain(
+            lifecycle_groups[lifecycle_key]
+        )
+        for issue in lifecycle_result.issues:
+            _append_personal_experiment_diagnostic(
+                diagnostics,
+                issue,
+                paths_by_id.get(cast(UUID, lifecycle_groups[lifecycle_key][0].id)),
+            )
+
+    observation_groups: defaultdict[
+        tuple[UUID, str], list[PersonalExperimentObservationRecordV1]
+    ] = defaultdict(list)
+    for observation in observations:
+        observation_groups[
+            (
+                cast(UUID, observation.experiment_definition_id),
+                observation.experiment_definition_fingerprint,
+            )
+        ].append(observation)
+    for observation_key in sorted(observation_groups, key=lambda item: tuple(map(str, item))):
+        observation_result = validate_personal_experiment_observation_chain(
+            observation_groups[observation_key]
+        )
+        for issue in observation_result.issues:
+            _append_personal_experiment_diagnostic(
+                diagnostics,
+                issue,
+                paths_by_id.get(cast(UUID, observation_groups[observation_key][0].id)),
+            )
+
+    reassessment_groups: defaultdict[
+        tuple[UUID, str], list[PersonalExperimentReassessmentRecordV1]
+    ] = defaultdict(list)
+    for reassessment in reassessments:
+        reassessment_groups[
+            (
+                cast(UUID, reassessment.experiment_definition_id),
+                reassessment.experiment_definition_fingerprint,
+            )
+        ].append(reassessment)
+    for reassessment_key in sorted(reassessment_groups, key=lambda item: tuple(map(str, item))):
+        reassessment_result = validate_personal_experiment_reassessment_chain(
+            reassessment_groups[reassessment_key]
+        )
+        for issue in reassessment_result.issues:
+            _append_personal_experiment_diagnostic(
+                diagnostics,
+                issue,
+                paths_by_id.get(cast(UUID, reassessment_groups[reassessment_key][0].id)),
+            )
 
 
 def _parse_note_id(data: dict[str, Any], path: str, diagnostics: list[Diagnostic]) -> UUID | None:
@@ -651,6 +978,26 @@ def _report_goal_progress_relations(
                 issue,
                 paths_by_id.get(cast(UUID, observation_group[0].id)),
             )
+
+
+def _append_personal_experiment_diagnostic(
+    diagnostics: list[Diagnostic],
+    code: str,
+    path: str | None,
+) -> None:
+    """Append one fixed Stage 14 diagnostic without exposing record payloads."""
+
+    diagnostics.append(
+        Diagnostic(
+            code,
+            PERSONAL_EXPERIMENT_DIAGNOSTIC_MESSAGES.get(
+                code,
+                PERSONAL_EXPERIMENT_DIAGNOSTIC_MESSAGES["PERSONAL_EXPERIMENT_INVALID_RECORD"],
+            ),
+            DiagnosticSeverity.ERROR,
+            path,
+        )
+    )
 
 
 def _append_goal_progress_diagnostic(
