@@ -4,6 +4,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "docs" / "cognitive-twin" / "personal-experiments-v1-contract.md"
 ROADMAP = ROOT / "docs" / "cognitive-twin" / "cognitive-twin-v3-roadmap.md"
 DESIGN_ROADMAP = ROOT / "docs" / "cognitive-twin" / "design-roadmap-v1.md"
+ADAPTIVE_CONTRACT = ROOT / "docs" / "cognitive-twin" / "adaptive-cognitive-twin-v1-contract.md"
 
 
 def test_personal_experiments_contract_is_complete_design_gate() -> None:
@@ -41,9 +42,10 @@ def test_personal_experiments_contract_is_complete_design_gate() -> None:
         assert literal in text
 
 
-def test_stage_14_is_complete_and_stage_15_status_is_factual() -> None:
+def test_stage_14_and_stage_15_status_is_factual() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     design_roadmap = DESIGN_ROADMAP.read_text(encoding="utf-8")
+    adaptive_contract = ADAPTIVE_CONTRACT.read_text(encoding="utf-8")
     assert (
         "STAGE 14 COMPLETE / PHASES 14.0–14.6 COMPLETE / PRODUCTION\nCLOSEOUT COMPLETE" in roadmap
     )
@@ -59,6 +61,15 @@ def test_stage_14_is_complete_and_stage_15_status_is_factual() -> None:
     assert "PHASE 15.2 OPERATIONAL PROFILE\nLIFECYCLE COMPLETE" in roadmap
     assert "PHASE 15.3 PROJECTION AND" in roadmap
     assert "PHASE 15.4 PRIVATE WEB/API/UI\nCOMPLETE" in roadmap
-    assert "SECURITY/PRIVACY/INTEGRATION/E2E IN DELIVERY" in roadmap
-    assert "runtime phase 15.6 is NOT STARTED" in roadmap
+    assert "SECURITY/PRIVACY/INTEGRATION/E2E COMPLETE" in roadmap
+    assert "PHASE 15.6 FINAL" in roadmap
+    assert "STAGE 15 COMPLETE / PRODUCTION" in roadmap
+    assert "Cognitive Twin v3 = COMPLETE" in design_roadmap
+    assert "Stage 16+\nremains FUTURE / NOT STARTED" in design_roadmap
+    assert "STAGE 15 COMPLETE / PRODUCTION" in adaptive_contract
+    assert "15.5 security/privacy/integration/E2E = COMPLETE" in adaptive_contract
+    assert "15.6 final release/closeout = COMPLETE" in adaptive_contract
+    assert "PR #338" in adaptive_contract
+    assert "Production smoke" in adaptive_contract
+    assert "env change required = no" in adaptive_contract
     assert "adaptive-cognitive-twin-v1-contract.md" in roadmap
