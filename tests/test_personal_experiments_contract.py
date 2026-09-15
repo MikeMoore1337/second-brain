@@ -45,8 +45,7 @@ def test_stage_14_is_complete_but_stage_15_remains_not_started() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     design_roadmap = DESIGN_ROADMAP.read_text(encoding="utf-8")
     assert (
-        "STAGE 14 COMPLETE / PHASES 14.0–14.6 COMPLETE / PRODUCTION\n"
-        "CLOSEOUT COMPLETE" in roadmap
+        "STAGE 14 COMPLETE / PHASES 14.0–14.6 COMPLETE / PRODUCTION\nCLOSEOUT COMPLETE" in roadmap
     )
     assert "Phase 14.1 read-side" in design_roadmap
     assert "Phase 14.2 reviewed Safe Write" in design_roadmap
