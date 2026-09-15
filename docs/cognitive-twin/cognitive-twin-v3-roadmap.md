@@ -110,10 +110,12 @@ Stage 13E завершены указанными Issues/PRs; они не изм
 
 ## Stage 14 — Personal Experiments
 
-**Статус:** DESIGN CONTRACT COMPLETE / RUNTIME NOT STARTED. Контракт
+**Статус:** DESIGN CONTRACT COMPLETE / PHASE 14.1 READ-SIDE RECORDS COMPLETE /
+WRITER AND WEB RUNTIME NOT STARTED. Контракт
 [Personal Experiments v1](personal-experiments-v1-contract.md) принят в Issue
-[#304](https://github.com/MikeMoore1337/second-brain/issues/304); implementation
-gates 14.1–14.6 ещё не начаты.
+[#304](https://github.com/MikeMoore1337/second-brain/issues/304); Phase 14.1
+добавил только immutable DTO, strict parser, exact chain/source validators и
+typed scan projections. Implementation gates 14.2–14.6 ещё не начаты.
 
 Предполагаемый bounded workflow:
 
