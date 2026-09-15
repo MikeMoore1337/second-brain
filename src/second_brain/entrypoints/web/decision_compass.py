@@ -40,6 +40,7 @@ from second_brain.application.growth_advisor import (
     GrowthAdvisorError,
     GrowthAdvisorErrorCode,
     GrowthAdvisorGoalPreviewV1,
+    validate_growth_advisor_preview,
 )
 from second_brain.application.ports import AdvisorPort, CancellationTokenSource
 from second_brain.config import ConfigurationError, load_config
@@ -611,7 +612,11 @@ def install_decision_compass_routes(
             )
             if type(preview) is not GrowthAdvisorGoalPreviewV1:
                 return _error_response(DecisionCompassErrorCodeV1.INTERNAL)
-            return _response(preview.as_dict())
+            try:
+                validated_preview = validate_growth_advisor_preview(preview)
+                return _response(validated_preview.as_dict())
+            except GrowthAdvisorError:
+                return _error_response(DecisionCompassErrorCodeV1.INTERNAL)
         except GrowthAdvisorError as error:
             return _preview_error(error)
         except ValueError, TypeError, UnicodeError:
