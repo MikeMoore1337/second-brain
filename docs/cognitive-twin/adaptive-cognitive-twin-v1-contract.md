@@ -675,6 +675,16 @@ Projection не вызывает provider, не пишет в vault/store и н�
 существующих Simulate Me, Calibration, Behavioral, Growth, Goal Progress,
 Decision Compass или Personal Experiments surfaces.
 
+`source_readiness` использует закрытый порядок четырёх source families:
+`stage9_calibration`, `stage10_behavioral`, `stage12_progress` и
+`stage14_experiment`. В техническом progressive disclosure каждый item
+содержит только readiness, bounded source/reference fingerprints, допустимый
+reference UUID, policy fingerprints и явный `as_of`; raw source body,
+labels и paths не входят в projection. `Stage15SourceFamilyV1.source_pack`
+разрешён только в evaluation `changed_sources`/`unchanged_sources`: active
+profile v1 хранит aggregate activation fingerprint, поэтому evaluation не
+выдумывает attribution отдельной source family.
+
 ## 14. Explicit evaluation
 
 Evaluation — foreground owner action. Input:
@@ -710,6 +720,10 @@ Stage15EvaluationResultV1 {
   evaluation_fingerprint:          HashV1
 }
 ```
+
+При сравнении с baseline в v1 source family для aggregate fingerprint
+называется `source_pack`; это descriptive marker наличия или изменения
+позднего snapshot, а не вывод о причине изменения отдельной source family.
 
 Разрешённая фиксированная фраза:
 
@@ -898,7 +912,12 @@ reject/supersede/revert, idempotency, one-active invariant и source revalidatio
 ### 15.3 — Adaptive projection и evaluation
 
 Добавить новый read/projection path и explicit later descriptive evaluation.
-Не менять существующие Stage1–14 surfaces.
+DTO projection показывает четыре readiness items, exact Goal, active-profile
+valid/stale state, deterministic candidate, structural profile diff и
+progressive provenance. Evaluation принимает только exact active profile,
+explicit UTC cutoff, exact later source snapshot, activation baseline
+fingerprint и fixed evaluation plan. Не менять существующие Stage1–14
+surfaces.
 
 ### 15.4 — Owner-only Web/API/UI
 

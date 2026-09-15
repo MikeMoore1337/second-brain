@@ -1542,7 +1542,9 @@ post-merge CI `34949012024`, automatic deploy `34949240222`, HTTP 200 health
 and an anonymous private-boundary 401 smoke. Stage 14 design, read-side
 records, reviewed Safe Write and provider-free evaluator are complete; its
 Web/API/UI and release gates remain separate. Stage 15 contract and Phase 15.1
-are complete; Phase 15.2 operational store is in delivery.
+are complete; Phase 15.2 operational store is complete (PR #334,
+merged/deployed as `f0d3f8a543c602d28ec3913281adf399c1c9e5b7`); Phase 15.3
+projection and evaluation are in delivery.
 
 The Stage 13 normative design gate is recorded in
 [compare-v2-contract.md](compare-v2-contract.md) under Issue #296. It keeps
@@ -1575,8 +1577,10 @@ Stage 13 Decision Compass / Compare v2 / GrowthCompare v1 = COMPLETE (design Iss
 Stage 14 Personal Experiments = COMPLETE (PHASES 14.0–14.6; production closeout complete)
 Stage 15 Adaptive Twin = PHASE 15.0 CONTRACT COMPLETE; PHASE 15.1 EXACT
 SOURCE/CANDIDATE CORE COMPLETE (PR #333, merged/deployed as
-`e233f61feee15b27adc1bc84c43e544eff3fa62f`); PHASE 15.2 OPERATIONAL STORE IN
-DELIVERY (Issue #331); runtime phases 15.3–15.6 = NOT STARTED
+`e233f61feee15b27adc1bc84c43e544eff3fa62f`); PHASE 15.2 OPERATIONAL STORE
+COMPLETE (PR #334, merged/deployed as
+`f0d3f8a543c602d28ec3913281adf399c1c9e5b7`); PHASE 15.3 PROJECTION AND
+EVALUATION IN DELIVERY; runtime phases 15.4–15.6 = NOT STARTED
 ~~~
 
 Stage 12A–12E and Stage 13 add no provider, telemetry, background watcher,
@@ -1586,5 +1590,6 @@ its provider-free evaluator, owner-only Web/API/UI, adversarial gate and final
 release/closeout; its production smoke was non-mutating and its exact evidence
 is recorded in [Personal Experiments v1 contract](personal-experiments-v1-contract.md).
 Stage 15 Phase 15.0 contract is complete under Issue #331; Phase 15.1 exact
-source/candidate core is complete and Phase 15.2 operational store is in
-delivery; runtime phases 15.3–15.6 remain not started.
+source/candidate core and Phase 15.2 operational store are complete; Phase
+15.3 projection/evaluation is in delivery; runtime phases 15.4–15.6 remain
+not started.
