@@ -436,6 +436,9 @@ def test_nonzero_git_status_is_bounded_fail_closed_and_stops_before_mutation(
     assert "exit_code=73" in result.stderr
     assert "bounded_stderr=fatal: simulated index failure" in result.stderr
     assert "bounded_stdout=simulated status diagnostic on stdout" in result.stderr
+    assert "probe_optional_locks_exit=73" in result.stderr
+    assert "probe_fsmonitor_exit=73" in result.stderr
+    assert "probe_untracked_cache_exit=73" in result.stderr
     assert "fallback_exit=73" in result.stderr
     assert "fallback_stderr=fatal: simulated index failure" in result.stderr
     assert secret_content not in result.stdout + result.stderr
@@ -464,6 +467,7 @@ def test_clean_state_diagnostic_is_bounded_and_precedes_release_mutation() -> No
         "GIT_OPTIONAL_LOCKS=0",
         "core.fsmonitor=false",
         "core.untrackedCache=false",
+        "probe_%s_exit=",
         "bounded_status=",
         "автоматическая очистка запрещена",
     ):
