@@ -63,7 +63,7 @@ try {
     if(width===390 || width===1440) {
       await page.locator('.cinematic-hero').screenshot({path:`${out}/home-full-${width}.png`});
       await audit(page,`initial-${width}`);
-      for (const id of ['capture','decision-journal','timeline','self-model','simulate-me','assistant-compare','self-retrieval','search','diagnostics']) {
+      for (const id of ['capture','decision-journal','timeline','self-model','simulate-me','assistant-compare','self-retrieval','search','diagnostics','personal-experiments']) {
         await screenshot(page,`${id}-${width}`,`#${id}`);
         report.surfaces.push({id,width,...await layout(page)});
       }

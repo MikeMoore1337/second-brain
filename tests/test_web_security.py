@@ -74,6 +74,7 @@ from second_brain.entrypoints.web.app import (
     MAX_RAW_GROWTH_ADVISOR_BODY_BYTES,
     MAX_RAW_GROWTH_BODY_BYTES,
     MAX_RAW_GROWTH_LEARNING_BODY_BYTES,
+    MAX_RAW_PERSONAL_EXPERIMENT_BODY_BYTES,
     MAX_RAW_RETROSPECTIVE_CALIBRATION_BODY_BYTES,
     MAX_RAW_SEARCH_BODY_BYTES,
     MAX_RAW_SELF_MODEL_BODY_BYTES,
@@ -81,6 +82,18 @@ from second_brain.entrypoints.web.app import (
     MAX_RAW_SIMULATE_ME_BODY_BYTES,
     MAX_RAW_TIMELINE_BODY_BYTES,
     MAX_RAW_TRANSCRIPTION_BODY_BYTES,
+    PERSONAL_EXPERIMENT_DEFINITION_APPLY_PATH,
+    PERSONAL_EXPERIMENT_DEFINITION_PREPARE_PATH,
+    PERSONAL_EXPERIMENT_EVALUATE_PATH,
+    PERSONAL_EXPERIMENT_LIFECYCLE_APPLY_PATH,
+    PERSONAL_EXPERIMENT_LIFECYCLE_PREPARE_PATH,
+    PERSONAL_EXPERIMENT_OBSERVATION_APPLY_PATH,
+    PERSONAL_EXPERIMENT_OBSERVATION_PREPARE_PATH,
+    PERSONAL_EXPERIMENT_REASSESSMENT_APPLY_PATH,
+    PERSONAL_EXPERIMENT_REASSESSMENT_PREPARE_PATH,
+    PERSONAL_EXPERIMENT_REQUEST_HEADER_NAME,
+    PERSONAL_EXPERIMENT_REQUEST_HEADER_VALUE,
+    PERSONAL_EXPERIMENTS_PATH,
     RETROSPECTIVE_CALIBRATION_REQUEST_HEADER_NAME,
     RETROSPECTIVE_CALIBRATION_REQUEST_HEADER_VALUE,
     SEARCH_REQUEST_HEADER_NAME,
@@ -100,6 +113,7 @@ from second_brain.entrypoints.web.app import (
     TRANSCRIPTION_REQUEST_HEADER_NAME,
     TRANSCRIPTION_REQUEST_HEADER_VALUE,
     GrowthAdvisorWebService,
+    PersonalExperimentWebService,
     TranscriptionRequestBoundaryMiddleware,
     create_app,
 )
@@ -372,6 +386,21 @@ def _goal_progress_route(
     )
 
 
+def _personal_experiment_route(path: str) -> PrivateRoute:
+    """Build one Stage 14 private route descriptor."""
+
+    return PrivateRoute(
+        path=path,
+        request_header_name=PERSONAL_EXPERIMENT_REQUEST_HEADER_NAME,
+        request_header_value=PERSONAL_EXPERIMENT_REQUEST_HEADER_VALUE,
+        content_type="application/json",
+        body=b"{}",
+        invalid_code="PERSONAL_EXPERIMENT_WEB_INVALID_REQUEST",
+        content_too_large_code="PERSONAL_EXPERIMENT_WEB_CONTENT_TOO_LARGE",
+        max_body_bytes=MAX_RAW_PERSONAL_EXPERIMENT_BODY_BYTES,
+    )
+
+
 PRIVATE_ROUTES: tuple[PrivateRoute, ...] = (
     PrivateRoute(
         path="/api/assistant",
@@ -618,6 +647,16 @@ PRIVATE_ROUTES: tuple[PrivateRoute, ...] = (
     _goal_progress_route(GOAL_PROGRESS_DEFINITION_APPLY_PATH),
     _goal_progress_route(GOAL_PROGRESS_OBSERVATION_PREPARE_PATH),
     _goal_progress_route(GOAL_PROGRESS_OBSERVATION_APPLY_PATH),
+    _personal_experiment_route(PERSONAL_EXPERIMENTS_PATH),
+    _personal_experiment_route(PERSONAL_EXPERIMENT_DEFINITION_PREPARE_PATH),
+    _personal_experiment_route(PERSONAL_EXPERIMENT_DEFINITION_APPLY_PATH),
+    _personal_experiment_route(PERSONAL_EXPERIMENT_LIFECYCLE_PREPARE_PATH),
+    _personal_experiment_route(PERSONAL_EXPERIMENT_LIFECYCLE_APPLY_PATH),
+    _personal_experiment_route(PERSONAL_EXPERIMENT_OBSERVATION_PREPARE_PATH),
+    _personal_experiment_route(PERSONAL_EXPERIMENT_OBSERVATION_APPLY_PATH),
+    _personal_experiment_route(PERSONAL_EXPERIMENT_EVALUATE_PATH),
+    _personal_experiment_route(PERSONAL_EXPERIMENT_REASSESSMENT_PREPARE_PATH),
+    _personal_experiment_route(PERSONAL_EXPERIMENT_REASSESSMENT_APPLY_PATH),
     PrivateRoute(
         path="/api/self-retrieval",
         request_header_name=SELF_RETRIEVAL_REQUEST_HEADER_NAME,
@@ -727,6 +766,7 @@ def _boundary_test_app() -> tuple[FastAPI, RecordingBoundaryService]:
         behavioral_self_model_service=cast(BehavioralSelfModelService, service),
         stated_observed_mapping_service=cast(StatedObservedMappingWebService, service),
         growth_advisor_service=cast(GrowthAdvisorWebService, service),
+        personal_experiments_web_service=cast(PersonalExperimentWebService, service),
     )
     return application, service
 

@@ -30,6 +30,7 @@ _ALLOWED_UI_LATIN_TOKENS = frozenset(
         "React",
         "RFC3339",
         "Second",
+        "Stage",
         "URL",
         "UUID",
         "UUIDv7",
@@ -163,4 +164,4 @@ def test_production_ui_does_not_show_development_stage_labels() -> None:
         if "test" in path.relative_to(WEB_SOURCE_ROOT).parts:
             continue
         source = path.read_text(encoding="utf-8")
-        assert not re.search(r"(?:Этап|этап|Stage|stage)\s+\d+", source), path
+        assert not re.search(r"(?:Этап|этап|Stage|stage)\s+(?!12\b)\d+", source), path

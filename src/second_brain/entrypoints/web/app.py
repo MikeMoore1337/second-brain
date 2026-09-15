@@ -188,6 +188,37 @@ from second_brain.entrypoints.web.legacy_app import (
 from second_brain.entrypoints.web.legacy_app import (
     create_app as _legacy_create_app,
 )
+from second_brain.entrypoints.web.personal_experiments import (
+    MAX_PERSONAL_EXPERIMENT_APPLY_RESPONSE_BYTES,
+    MAX_PERSONAL_EXPERIMENT_REVIEW_RESPONSE_BYTES,
+    MAX_PERSONAL_EXPERIMENT_STATE_RESPONSE_BYTES,
+    MAX_RAW_PERSONAL_EXPERIMENT_BODY_BYTES,
+    PERSONAL_EXPERIMENT_DEFINITION_APPLY_PATH,
+    PERSONAL_EXPERIMENT_DEFINITION_PREPARE_PATH,
+    PERSONAL_EXPERIMENT_EVALUATE_PATH,
+    PERSONAL_EXPERIMENT_LIFECYCLE_APPLY_PATH,
+    PERSONAL_EXPERIMENT_LIFECYCLE_PREPARE_PATH,
+    PERSONAL_EXPERIMENT_OBSERVATION_APPLY_PATH,
+    PERSONAL_EXPERIMENT_OBSERVATION_PREPARE_PATH,
+    PERSONAL_EXPERIMENT_REASSESSMENT_APPLY_PATH,
+    PERSONAL_EXPERIMENT_REASSESSMENT_PREPARE_PATH,
+    PERSONAL_EXPERIMENT_REQUEST_HEADER_NAME,
+    PERSONAL_EXPERIMENT_REQUEST_HEADER_VALUE,
+    PERSONAL_EXPERIMENTS_PATH,
+    PersonalExperimentApplyPayload,
+    PersonalExperimentDefinitionPreparePayload,
+    PersonalExperimentEmptyPayload,
+    PersonalExperimentEvaluationPayload,
+    PersonalExperimentLifecyclePreparePayload,
+    PersonalExperimentObservationPreparePayload,
+    PersonalExperimentReassessmentPreparePayload,
+    PersonalExperimentRequestBoundaryMiddleware,
+    PersonalExperimentWebService,
+    ProductionPersonalExperimentWebService,
+    build_personal_experiments_state,
+    build_production_personal_experiment_web_service,
+    install_personal_experiment_routes,
+)
 from second_brain.entrypoints.web.prospective_audit import (
     MAX_RAW_PROSPECTIVE_AUDIT_BODY_BYTES,
     PROSPECTIVE_AUDIT_REQUEST_HEADER_NAME,
@@ -274,6 +305,7 @@ def create_app(**kwargs: Any) -> FastAPI:
     growth_service = kwargs.pop("growth_web_service", None)
     growth_learning_service = kwargs.pop("growth_learning_web_service", None)
     goal_progress_service = kwargs.pop("goal_progress_web_service", None)
+    personal_experiments_service = kwargs.pop("personal_experiments_web_service", None)
     auth_config = kwargs.pop("web_auth_config", None)
     auth_gateway = kwargs.pop("web_auth_gateway", None)
     auth_clock = kwargs.pop("web_auth_clock", None)
@@ -344,6 +376,12 @@ def create_app(**kwargs: Any) -> FastAPI:
     install_goal_progress_routes(
         app,
         service=goal_progress_service,
+        env_file=env_file,
+        vault_path_override=vault_path_override,
+    )
+    install_personal_experiment_routes(
+        app,
+        service=personal_experiments_service,
         env_file=env_file,
         vault_path_override=vault_path_override,
     )
@@ -525,6 +563,35 @@ __all__ = [
     "ProductionGoalProgressWebService",
     "build_production_goal_progress_web_service",
     "install_goal_progress_routes",
+    "MAX_PERSONAL_EXPERIMENT_APPLY_RESPONSE_BYTES",
+    "MAX_PERSONAL_EXPERIMENT_REVIEW_RESPONSE_BYTES",
+    "MAX_PERSONAL_EXPERIMENT_STATE_RESPONSE_BYTES",
+    "MAX_RAW_PERSONAL_EXPERIMENT_BODY_BYTES",
+    "PERSONAL_EXPERIMENT_DEFINITION_APPLY_PATH",
+    "PERSONAL_EXPERIMENT_DEFINITION_PREPARE_PATH",
+    "PERSONAL_EXPERIMENT_EVALUATE_PATH",
+    "PERSONAL_EXPERIMENT_LIFECYCLE_APPLY_PATH",
+    "PERSONAL_EXPERIMENT_LIFECYCLE_PREPARE_PATH",
+    "PERSONAL_EXPERIMENT_OBSERVATION_APPLY_PATH",
+    "PERSONAL_EXPERIMENT_OBSERVATION_PREPARE_PATH",
+    "PERSONAL_EXPERIMENT_REASSESSMENT_APPLY_PATH",
+    "PERSONAL_EXPERIMENT_REASSESSMENT_PREPARE_PATH",
+    "PERSONAL_EXPERIMENT_REQUEST_HEADER_NAME",
+    "PERSONAL_EXPERIMENT_REQUEST_HEADER_VALUE",
+    "PERSONAL_EXPERIMENTS_PATH",
+    "PersonalExperimentApplyPayload",
+    "PersonalExperimentDefinitionPreparePayload",
+    "PersonalExperimentEmptyPayload",
+    "PersonalExperimentEvaluationPayload",
+    "PersonalExperimentLifecyclePreparePayload",
+    "PersonalExperimentObservationPreparePayload",
+    "PersonalExperimentReassessmentPreparePayload",
+    "PersonalExperimentRequestBoundaryMiddleware",
+    "PersonalExperimentWebService",
+    "ProductionPersonalExperimentWebService",
+    "build_personal_experiments_state",
+    "build_production_personal_experiment_web_service",
+    "install_personal_experiment_routes",
     "WebAuthConfig",
     "create_app",
 ]

@@ -1,0 +1,633 @@
+.personal-experiments-surface {
+  display: grid;
+  gap: 1.15rem;
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--sb-color-accent) 36%, var(--sb-color-line));
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 86% 0%, color-mix(in srgb, var(--sb-color-accent) 12%, transparent), transparent 32%),
+    color-mix(in srgb, var(--sb-color-basin) 90%, transparent);
+  padding: clamp(1rem, 2.4vw, 1.65rem);
+}
+
+.pe-heading,
+.pe-toolbar,
+.pe-section-heading,
+.pe-detail-header,
+.pe-result-header,
+.pe-lifecycle-summary,
+.pe-action-row,
+.pe-experiment-choice,
+.pe-measurement {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.pe-heading {
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.4rem;
+}
+
+.pe-heading > div:first-child,
+.pe-section-heading > div,
+.pe-detail-header > div:first-child {
+  min-width: 0;
+}
+
+.pe-step-number {
+  margin: 0 0 0.35rem;
+  color: var(--sb-color-accent);
+  font-family: var(--sb-font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pe-heading h3,
+.pe-detail-header h3 {
+  max-width: 36ch;
+  margin: 0;
+  color: var(--sb-color-text-primary);
+  font-size: clamp(1.2rem, 2vw, 1.72rem);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+
+.pe-heading > div:first-child > p,
+.pe-detail-header p,
+.pe-section-heading p,
+.pe-editor > p,
+.pe-inline-note,
+.pe-status,
+.pe-empty,
+.pe-empty-state p,
+.pe-result-caveat {
+  margin: 0;
+  color: var(--sb-color-text-secondary);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.pe-heading > div:first-child > p {
+  max-width: 68ch;
+  margin-top: 0.55rem;
+}
+
+.pe-heading-meta {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 0.3rem;
+  color: var(--sb-color-text-tertiary);
+  font-family: var(--sb-font-mono);
+  font-size: 0.68rem;
+  text-align: right;
+}
+
+.pe-toolbar {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--sb-color-line-strong);
+  padding-top: 1rem;
+}
+
+.pe-status {
+  flex: 1 1 18rem;
+  min-width: 12rem;
+}
+
+.pe-button {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--sb-color-line-strong);
+  border-radius: 9px;
+  padding: 0.65rem 0.9rem;
+  color: var(--sb-color-text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 650;
+  line-height: 1.25;
+  transition: background-color 160ms ease-out, border-color 160ms ease-out, color 160ms ease-out;
+}
+
+.pe-button-primary {
+  border-color: var(--sb-color-accent);
+  background: var(--sb-color-accent);
+  color: var(--sb-color-on-accent);
+}
+
+.pe-button-secondary,
+.pe-button-danger {
+  background: transparent;
+}
+
+.pe-button-danger {
+  border-color: var(--sb-color-danger, #ef8b8b);
+  color: var(--sb-color-danger, #ef8b8b);
+}
+
+.pe-button:hover:not(:disabled) {
+  border-color: var(--sb-color-accent-hover);
+}
+
+.pe-button-primary:hover:not(:disabled) {
+  background: var(--sb-color-accent-hover);
+}
+
+.pe-button-danger:hover:not(:disabled) {
+  border-color: var(--sb-color-danger, #ef8b8b);
+  background: color-mix(in srgb, var(--sb-color-danger, #ef8b8b) 12%, transparent);
+}
+
+.pe-button:focus-visible,
+.pe-field input:focus-visible,
+.pe-field select:focus-visible,
+.pe-field textarea:focus-visible,
+.pe-radio input:focus-visible,
+.pe-confirmation input:focus-visible,
+.pe-provenance summary:focus-visible,
+.pe-experiment-choice:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--sb-color-focus) 82%, transparent);
+  outline-offset: 3px;
+}
+
+.pe-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.pe-error,
+.pe-warning,
+.pe-causality-warning {
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--sb-color-danger, #ef8b8b) 58%, var(--sb-color-line));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--sb-color-danger, #ef8b8b) 8%, transparent);
+  padding: 0.8rem 0.9rem;
+  color: var(--sb-color-text-primary);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.pe-causality-warning {
+  font-weight: 650;
+}
+
+.pe-causality-warning-heading {
+  max-width: 72ch;
+}
+
+.pe-experiment-list {
+  display: grid;
+  gap: 0.55rem;
+  border-top: 1px solid var(--sb-color-line-strong);
+  padding-top: 1rem;
+}
+
+.pe-experiment-list h4,
+.pe-section h4,
+.pe-copy-grid h4,
+.pe-observation-columns h4,
+.pe-empty-state h4 {
+  margin: 0;
+  color: var(--sb-color-text-primary);
+  font-size: 0.94rem;
+  font-weight: 650;
+}
+
+.pe-experiment-choice {
+  width: 100%;
+  justify-content: space-between;
+  border: 1px solid var(--sb-color-line);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--sb-color-ink) 42%, transparent);
+  padding: 0.75rem 0.85rem;
+  text-align: left;
+}
+
+.pe-experiment-choice:hover,
+.pe-experiment-choice.is-selected {
+  border-color: var(--sb-color-accent);
+  background: color-mix(in srgb, var(--sb-color-accent) 10%, var(--sb-color-ink));
+}
+
+.pe-experiment-choice > span:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 0.25rem;
+}
+
+.pe-experiment-choice strong,
+.pe-experiment-choice small {
+  overflow-wrap: anywhere;
+}
+
+.pe-experiment-choice strong {
+  color: var(--sb-color-text-primary);
+  font-size: 0.84rem;
+  font-weight: 650;
+}
+
+.pe-experiment-choice small,
+.pe-record-list small,
+.pe-field small {
+  color: var(--sb-color-text-tertiary);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.pe-status-pill {
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-height: 1.7rem;
+  align-items: center;
+  border: 1px solid var(--sb-color-line-strong);
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+  color: var(--sb-color-text-secondary);
+  font-size: 0.7rem;
+  font-weight: 650;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.pe-status-pill-accent {
+  border-color: color-mix(in srgb, var(--sb-color-accent) 70%, var(--sb-color-line));
+  color: var(--sb-color-accent);
+}
+
+.pe-status-pill-danger {
+  border-color: color-mix(in srgb, var(--sb-color-danger, #ef8b8b) 70%, var(--sb-color-line));
+  color: var(--sb-color-danger, #ef8b8b);
+}
+
+.pe-editor,
+.pe-detail,
+.pe-review {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.pe-editor,
+.pe-review {
+  border-top: 1px solid var(--sb-color-line-strong);
+  padding-top: 1.2rem;
+}
+
+.pe-section {
+  display: grid;
+  gap: 0.9rem;
+  min-width: 0;
+  border-top: 1px solid var(--sb-color-line-strong);
+  padding-top: 1.2rem;
+}
+
+.pe-section-first {
+  border-top: 0;
+  padding-top: 0.25rem;
+}
+
+.pe-section-heading {
+  align-items: flex-start;
+}
+
+.pe-step-number {
+  flex: 0 0 2.5rem;
+  margin-top: 0.15rem;
+}
+
+.pe-section-heading h3 {
+  margin: 0;
+  color: var(--sb-color-text-primary);
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.pe-section-heading p {
+  margin-top: 0.35rem;
+}
+
+.pe-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.pe-field-grid-wide {
+  align-items: stretch;
+}
+
+.pe-field,
+.pe-fieldset,
+.pe-reassessment-form {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.pe-field > span,
+.pe-fieldset legend {
+  color: var(--sb-color-text-secondary);
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.pe-field input,
+.pe-field select,
+.pe-field textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--sb-color-line-strong);
+  border-radius: 9px;
+  background: var(--sb-color-ink);
+  color: var(--sb-color-text-primary);
+  padding: 0.65rem 0.75rem;
+  font: inherit;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.pe-field textarea {
+  min-height: 7.5rem;
+  resize: vertical;
+}
+
+.pe-field select:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.pe-fieldset {
+  border: 1px solid var(--sb-color-line);
+  border-radius: 12px;
+  padding: 0.85rem;
+}
+
+.pe-radio,
+.pe-confirmation {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  color: var(--sb-color-text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.pe-radio input,
+.pe-confirmation input {
+  flex: 0 0 auto;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0.1rem 0 0;
+  accent-color: var(--sb-color-accent);
+}
+
+.pe-field-nested {
+  margin-top: 0.35rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--sb-color-line);
+}
+
+.pe-copy-grid,
+.pe-observation-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.pe-copy-grid > div {
+  min-width: 0;
+}
+
+.pe-copy-grid p,
+.pe-baseline,
+.pe-measurement p,
+.pe-lifecycle-summary span,
+.pe-result-header span {
+  margin: 0.35rem 0 0;
+  color: var(--sb-color-text-secondary);
+  font-size: 0.84rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.pe-baseline {
+  margin-top: 0;
+}
+
+.pe-lifecycle-summary {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.pe-lifecycle-summary span {
+  margin: 0;
+}
+
+.pe-action-row {
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
+.pe-observation-columns {
+  align-items: start;
+}
+
+.pe-observation-columns > div {
+  min-width: 0;
+}
+
+.pe-observation-columns h4 {
+  margin-bottom: 0.55rem;
+}
+
+.pe-record-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pe-record-list li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+  border-bottom: 1px solid var(--sb-color-line);
+  padding: 0.6rem 0;
+}
+
+.pe-record-list li > div,
+.pe-record-list li > strong {
+  min-width: 0;
+}
+
+.pe-record-list strong,
+.pe-record-list small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.pe-record-list strong {
+  color: var(--sb-color-text-primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.pe-record-list small {
+  margin-top: 0.25rem;
+}
+
+.pe-measurement,
+.pe-result {
+  display: grid;
+  gap: 0.7rem;
+  align-items: start;
+  border: 1px solid var(--sb-color-line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--sb-color-ink) 38%, transparent);
+  padding: 0.9rem;
+}
+
+.pe-measurement {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.pe-result-header {
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.pe-result-counts,
+.pe-review-fields,
+.pe-provenance dl {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.pe-result-counts {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.pe-result-counts > div,
+.pe-review-fields > div,
+.pe-provenance dl > div {
+  min-width: 0;
+}
+
+.pe-result-counts dt,
+.pe-review-fields dt,
+.pe-provenance dt {
+  color: var(--sb-color-text-tertiary);
+  font-size: 0.7rem;
+}
+
+.pe-result-counts dd,
+.pe-review-fields dd,
+.pe-provenance dd {
+  margin: 0.18rem 0 0;
+  color: var(--sb-color-text-primary);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.pe-review {
+  border: 1px solid color-mix(in srgb, var(--sb-color-accent) 58%, var(--sb-color-line));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--sb-color-accent) 7%, var(--sb-color-basin));
+  padding: 1rem;
+}
+
+.pe-review-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.pe-review-fields > div:last-child {
+  grid-column: 1 / -1;
+}
+
+.pe-provenance {
+  border-top: 1px solid var(--sb-color-line);
+  padding-top: 0.65rem;
+}
+
+.pe-provenance summary {
+  width: fit-content;
+  color: var(--sb-color-text-secondary);
+  cursor: pointer;
+  font-size: 0.76rem;
+}
+
+.pe-provenance dl {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 0.7rem;
+}
+
+.pe-empty-state {
+  display: grid;
+  justify-items: start;
+  gap: 0.7rem;
+  border-top: 1px solid var(--sb-color-line-strong);
+  padding-top: 1rem;
+}
+
+.pe-inline-note {
+  font-size: 0.76rem;
+}
+
+@media (max-width: 720px) {
+  .pe-heading,
+  .pe-detail-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pe-heading-meta {
+    text-align: left;
+  }
+
+  .pe-field-grid,
+  .pe-copy-grid,
+  .pe-observation-columns,
+  .pe-review-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .pe-review-fields > div:last-child {
+    grid-column: auto;
+  }
+
+  .pe-measurement {
+    grid-template-columns: 1fr;
+  }
+
+  .pe-result-counts,
+  .pe-provenance dl {
+    grid-template-columns: 1fr;
+  }
+
+  .pe-action-row .pe-button,
+  .pe-toolbar .pe-button {
+    flex: 1 1 12rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pe-button,
+  .pe-experiment-choice {
+    transition: none;
+  }
+}
