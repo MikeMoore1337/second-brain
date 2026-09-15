@@ -146,7 +146,7 @@ remains owner-reviewed and reversible.
 
 ## Stage 15 — Adaptive Cognitive Twin
 
-**Статус:** PHASE 15.0 CONTRACT COMPLETE under Issue #331; PHASE 15.1
+**Статус:** STAGE 15 COMPLETE / PRODUCTION under Issue #331; PHASE 15.0 CONTRACT COMPLETE under Issue #331; PHASE 15.1
 EXACT SOURCE/CANDIDATE CORE COMPLETE (PR #333, merged/deployed as
 `e233f61feee15b27adc1bc84c43e544eff3fa62f`). PHASE 15.2 OPERATIONAL PROFILE
 LIFECYCLE COMPLETE (PR #334, merged/deployed as
@@ -155,7 +155,9 @@ EVALUATION COMPLETE (PR #335, merged/deployed as
 `64c995a294cd7f25977b69e38e592d271a19bed2`); PHASE 15.4 PRIVATE WEB/API/UI
 COMPLETE (PR #336, merged/deployed as
 `7304488355661d99af1d79f3aac676a328597434`); PHASE 15.5
-SECURITY/PRIVACY/INTEGRATION/E2E IN DELIVERY; runtime phase 15.6 is NOT STARTED. Depends on Stage 9 calibration, Stage 10
+SECURITY/PRIVACY/INTEGRATION/E2E COMPLETE (PR #337, merged/deployed as
+69b66fa6008cc4993d8ca1babe5edeb0e5b3247f); PHASE 15.6 FINAL
+RELEASE/CLOSEOUT COMPLETE via final PR Closes #331. Depends on Stage 9 calibration, Stage 10
 behavioral model, Stage 12 progress and Stage 14 experiments. Нормативная
 граница зафиксирована в [adaptive-cognitive-twin-v1-contract.md](adaptive-cognitive-twin-v1-contract.md).
 
