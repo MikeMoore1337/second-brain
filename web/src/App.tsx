@@ -26,6 +26,7 @@ import { Icon } from "./icons";
 import { applyPwaUpdate, hasPwaUpdate, subscribeToPwaUpdate } from "./pwa";
 import { ProspectiveAuditSurface } from "./prospective-audit-surface";
 import { CognitiveTwinSurface } from "./cognitive-twin-surface";
+import { DecisionCompassSurface } from "./decision-compass-surface";
 
 const navigation = [
   ["#decision-journal", "Журнал решений", "decision"],
@@ -34,6 +35,7 @@ const navigation = [
   ["#simulate-me", "Прогноз", "simulate"],
   ["#prospective-audit", "Аудит прогноза", "prospective-audit"],
   ["#assistant-compare", "Совет и сравнение", "relation"],
+  ["#decision-compass", "Компас решения", "relation"],
   ["#retrospective-calibration", "Ретроспективная проверка", "retrospective"],
   ["#self-retrieval", "Сбор контекста", "self-retrieval"],
   ["#search", "Поиск", "search"],
@@ -162,6 +164,7 @@ export function App(): ReactElement {
                 <FoldSection id="simulate-me" title="Прогноз" icon="simulate"><SimulateMeSurface /></FoldSection>
                 <FoldSection id="prospective-audit" title="Аудит прогноза" icon="prospective-audit"><ProspectiveAuditSurface /></FoldSection>
                 <FoldSection id="assistant-compare" title="Совет и сравнение" icon="relation"><AssistantCompareSurface /></FoldSection>
+                <FoldSection id="decision-compass" title="Компас решения" icon="relation"><DecisionCompassSurface /></FoldSection>
                 <FoldSection id="retrospective-calibration" title="Ретроспективная проверка" icon="retrospective"><RetrospectiveCalibrationSurface /></FoldSection>
                 <FoldSection id="self-retrieval" title="Сбор контекста" icon="self-retrieval"><SelfRetrievalSurface /></FoldSection>
                 <FoldSection id="diagnostics" title="Диагностика" icon="diagnostics"><DiagnosticsSurface /></FoldSection>

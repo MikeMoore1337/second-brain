@@ -3,6 +3,7 @@
 @import "../../src/second_brain/entrypoints/web/static/app.css";
 @import "./cognitive-twin-surface.css";
 @import "./growth-surface.css";
+@import "./decision-compass-surface.css";
 
 .icon {
   display: inline-block;

@@ -20,7 +20,11 @@ import {
   searchNotes,
   retrieveNote,
   transcribeAudio,
+  buildDecisionCompass,
+  executeDecisionCompassAdvisor,
+  previewDecisionCompassAdvisor,
   type FetchLike,
+  type DecisionCompassRequest,
 } from "../api";
 
 const draft = {
@@ -29,6 +33,23 @@ const draft = {
   content: "# Content",
   tags: ["one"],
   links: ["[[related]]"],
+};
+
+const decisionCompassRequest: DecisionCompassRequest = {
+  contract_version: "growth-compare-v1",
+  task: "Выбрать следующий шаг",
+  options: [{ id: "option-a", label: "Сначала прояснить задачу" }],
+  selected_goal: {
+    source_uuid: "0198c8a0-0000-7000-8000-000000000010",
+    identity_fingerprint: "sha256:" + "a".repeat(64),
+  },
+  criteria: [{ id: "criterion-a", label: "Ясность", description: null }],
+  explicit_constraints: [],
+  explicit_context: [],
+  progress_as_of: "2026-09-15T10:00:00Z",
+  behavioral_scope: null,
+  behavioral_option_binding: null,
+  max_result_bytes: 65536,
 };
 
 function ok(payload: unknown): Response {
@@ -227,5 +248,38 @@ describe("same-origin API seam", () => {
       max_result_bytes: 131072,
     });
     expect((fetcher.mock.calls[7][1]?.headers as Record<string, string>)["X-Second-Brain-Request"]).toBe("growth-learning-v1");
+  });
+
+  it("keeps Decision Compass base, Advisor preview and Advisor execute on explicit routes", async () => {
+    const preview = {
+      contract_version: "growth-advisor-v1" as const,
+      goal_source_uuid: decisionCompassRequest.selected_goal!.source_uuid,
+      goal_identity_fingerprint: decisionCompassRequest.selected_goal!.identity_fingerprint,
+      assistant_contract_version: "assistant-v1",
+      advisor_policy_id: "growth-advisor-owner-explicit-goal-v1",
+      goal_text: "Цель",
+      goal_text_utf8_bytes: 8,
+    };
+    const fetcher = vi.fn<FetchLike>()
+      .mockResolvedValueOnce(ok({}))
+      .mockResolvedValueOnce(ok(preview))
+      .mockResolvedValueOnce(ok({}));
+
+    await buildDecisionCompass(decisionCompassRequest, fetcher);
+    await previewDecisionCompassAdvisor(decisionCompassRequest, fetcher);
+    await executeDecisionCompassAdvisor(decisionCompassRequest, preview, fetcher);
+
+    expect(fetcher.mock.calls.map(([path]) => path)).toEqual([
+      "/api/decision-compass",
+      "/api/decision-compass/advisor/preview",
+      "/api/decision-compass/advisor/execute",
+    ]);
+    expect(fetcher.mock.calls.every(([, init]) => (init?.headers as Record<string, string>)["X-Second-Brain-Request"] === "decision-compass-v1")).toBe(true);
+    expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toEqual(decisionCompassRequest);
+    expect(JSON.parse(String(fetcher.mock.calls[2][1]?.body))).toEqual({
+      request: decisionCompassRequest,
+      preview,
+      confirmed: true,
+    });
   });
 });
