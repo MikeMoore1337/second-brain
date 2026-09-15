@@ -135,6 +135,9 @@ _API_HEADERS: Final[dict[str, str]] = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
 }
+_PRIVATE_RESPONSE_KEYS: Final[frozenset[str]] = frozenset(
+    {"content", "raw", "path", "relative_path", "source_body"}
+)
 
 ADAPTIVE_COGNITIVE_TWIN_INVALID_REQUEST: Final[str] = "ADAPTIVE_COGNITIVE_TWIN_INVALID_REQUEST"
 ADAPTIVE_COGNITIVE_TWIN_AUTH_REQUIRED: Final[str] = "ADAPTIVE_COGNITIVE_TWIN_AUTH_REQUIRED"
@@ -342,6 +345,8 @@ def _json_response(
     body: Mapping[str, object], *, max_bytes: int, status_code: int = 200
 ) -> Response:
     try:
+        if _contains_private_response_field(body):
+            raise AdaptiveCognitiveTwinWebError(ADAPTIVE_COGNITIVE_TWIN_SOURCE_UNAVAILABLE)
         encoded = json.dumps(
             dict(body),
             ensure_ascii=False,
@@ -362,6 +367,33 @@ def _json_response(
         media_type="application/json",
         headers=_API_HEADERS,
     )
+
+
+def _contains_private_response_field(
+    value: object,
+    seen: set[int] | None = None,
+) -> bool:
+    """Reject raw/source-bearing fields before any private response is emitted."""
+
+    visited = seen if seen is not None else set()
+    if isinstance(value, Mapping):
+        identity = id(value)
+        if identity in visited:
+            return True
+        visited.add(identity)
+        for key, nested in value.items():
+            if isinstance(key, str) and key.casefold() in _PRIVATE_RESPONSE_KEYS:
+                return True
+            if _contains_private_response_field(nested, visited):
+                return True
+        return False
+    if isinstance(value, (list, tuple)):
+        identity = id(value)
+        if identity in visited:
+            return True
+        visited.add(identity)
+        return any(_contains_private_response_field(item, visited) for item in value)
+    return False
 
 
 def _error_response(code: str, *, status_code: int) -> JSONResponse:

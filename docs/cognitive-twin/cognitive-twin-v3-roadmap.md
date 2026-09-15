@@ -153,7 +153,9 @@ LIFECYCLE COMPLETE (PR #334, merged/deployed as
 `f0d3f8a543c602d28ec3913281adf399c1c9e5b7`); PHASE 15.3 PROJECTION AND
 EVALUATION COMPLETE (PR #335, merged/deployed as
 `64c995a294cd7f25977b69e38e592d271a19bed2`); PHASE 15.4 PRIVATE WEB/API/UI
-IN DELIVERY; runtime phases 15.5–15.6 are NOT STARTED. Depends on Stage 9 calibration, Stage 10
+COMPLETE (PR #336, merged/deployed as
+`7304488355661d99af1d79f3aac676a328597434`); PHASE 15.5
+SECURITY/PRIVACY/INTEGRATION/E2E IN DELIVERY; runtime phase 15.6 is NOT STARTED. Depends on Stage 9 calibration, Stage 10
 behavioral model, Stage 12 progress and Stage 14 experiments. Нормативная
 граница зафиксирована в [adaptive-cognitive-twin-v1-contract.md](adaptive-cognitive-twin-v1-contract.md).
 

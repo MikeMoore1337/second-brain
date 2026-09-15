@@ -19,6 +19,13 @@ function ok(payload: unknown): Response {
   });
 }
 
+function failure(payload: unknown, status = 503): Response {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 describe("Adaptive Cognitive Twin API boundary", () => {
   it("keeps the owner-only request contract and parses lifecycle metadata", async () => {
     const fetcher = vi.fn<FetchLike>().mockResolvedValue(ok({
@@ -54,11 +61,39 @@ describe("Adaptive Cognitive Twin API boundary", () => {
   it("rejects a successful response that tries to cross the selector boundary", async () => {
     const fetcher = vi.fn<FetchLike>().mockResolvedValue(ok({
       web_contract: "adaptive_cognitive_twin_web_v1",
-      projection: { content: "private source material" },
+      projection: { Content: "private source material" },
     }));
 
     await expect(buildAdaptiveCandidate(selection, fetcher)).rejects.toMatchObject({
       status: 502,
+    });
+  });
+
+  it("uses only the closed Russian error catalog, never arbitrary server text", async () => {
+    const fetcher = vi.fn<FetchLike>().mockResolvedValue(failure({
+      error: {
+        code: "ADAPTIVE_COGNITIVE_TWIN_SOURCE_UNAVAILABLE",
+        message: "private filesystem path: C:/secret/vault/Goal.md",
+      },
+    }));
+
+    await expect(loadAdaptiveState({}, fetcher)).rejects.toMatchObject({
+      status: 503,
+      message: "Точный источник адаптивного слоя сейчас недоступен.",
+    });
+  });
+
+  it("does not trust an unknown error code or its private message", async () => {
+    const fetcher = vi.fn<FetchLike>().mockResolvedValue(failure({
+      error: {
+        code: "PRIVATE_INTERNAL_ERROR",
+        message: "secret source body",
+      },
+    }, 500));
+
+    await expect(loadAdaptiveState({}, fetcher)).rejects.toMatchObject({
+      status: 500,
+      message: "Не удалось загрузить адаптивный профиль.",
     });
   });
 });

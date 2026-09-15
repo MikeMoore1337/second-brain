@@ -35,10 +35,12 @@ Phase 14.6 final release/closeout завершены serial PRs #322, #323, #325
 #328 и финальным release PR с `Closes #304`; точная evidence-карта находится в
 нормативном контракте. Stage 14 находится в production; Phase 15.0 contract
 по Issue #331 complete, Phase 15.1 exact source/candidate core complete (PR
-#333, merged/deployed as `e233f61feee15b27adc1bc84c43e544eff3fa62f`), а Phase
+#333, merged/deployed as `e233f61feee15b27adc1bc84c43e544eff3fa62f`), Phase
 15.2 operational store complete; 15.3 projection/evaluation complete; Phase
-15.4 private Web/API/UI находится в delivery, а runtime phases 15.5–15.6 ещё не
-начаты.
+15.4 private Web/API/UI complete (PR #336, merged/deployed as
+`7304488355661d99af1d79f3aac676a328597434`), а Phase 15.5
+security/privacy/integration/E2E находится в delivery; Phase 15.6 ещё не
+начата.
 
 По текущему status после merged Stage 8 QA Cognitive Twin v1 / Stages 1–8
 завершены и находятся в production. Stage 9 — это следующий уровень
@@ -1583,7 +1585,9 @@ COMPLETE (PR #334, merged/deployed as
 `f0d3f8a543c602d28ec3913281adf399c1c9e5b7`); PHASE 15.3 PROJECTION AND
 EVALUATION COMPLETE (PR #335, merged/deployed as
 `64c995a294cd7f25977b69e38e592d271a19bed2`); PHASE 15.4 PRIVATE WEB/API/UI
-IN DELIVERY; runtime phases 15.5–15.6 = NOT STARTED
+COMPLETE (PR #336, merged/deployed as
+`7304488355661d99af1d79f3aac676a328597434`); PHASE 15.5
+SECURITY/PRIVACY/INTEGRATION/E2E IN DELIVERY; runtime phase 15.6 = NOT STARTED
 ~~~
 
 Stage 12A–12E and Stage 13 add no provider, telemetry, background watcher,
@@ -1593,6 +1597,7 @@ its provider-free evaluator, owner-only Web/API/UI, adversarial gate and final
 release/closeout; its production smoke was non-mutating and its exact evidence
 is recorded in [Personal Experiments v1 contract](personal-experiments-v1-contract.md).
 Stage 15 Phase 15.0 contract is complete under Issue #331; Phase 15.1 exact
-source/candidate core, Phase 15.2 operational store and Phase 15.3
-projection/evaluation are complete; Phase 15.4 private Web/API/UI is in
-delivery; runtime phases 15.5–15.6 remain not started.
+source/candidate core, Phase 15.2 operational store, Phase 15.3
+projection/evaluation and Phase 15.4 private Web/API/UI are complete; Phase
+15.5 security/privacy/integration/E2E is in delivery; Phase 15.6 remains not
+started.
