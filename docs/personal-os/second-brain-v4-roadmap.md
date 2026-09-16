@@ -1,6 +1,6 @@
 # Second Brain v4 — Personal Cognitive OS
 
-Статус после Phase 16.6: **STAGE 16 COMPLETE / SECOND BRAIN v4 IN PROGRESS**.
+Статус после Phase 17.0: **STAGE 16 COMPLETE / STAGE 17 IN PROGRESS / SECOND BRAIN v4 IN PROGRESS**.
 
 Этот документ задаёт переход от завершённого Cognitive Twin v3 к новой
 продуктовой генерации. Он не переименовывает и не переопределяет Cognitive
@@ -144,9 +144,12 @@ accepted Strategy Snapshot. Без планирования и execution.
 
 ### Stage 17 — Personal Planning & Commitments
 
-Будущий слой преобразования принятых стратегических решений в owner-controlled
-планы, commitments и bounded portfolio view. Не начат и не проектируется в
-рамках Stage 16.
+Текущий owner-approved этап. Exact accepted Stage16 Strategy Snapshots,
+явно выбранные 1–8 Goals, локальный bounded горизонт, capacity и ограничения
+собираются в provider-free Planning Context Pack, затем в previewed Planning
+Proposal и owner-reviewed Planning Portfolio Snapshot. Это operational intent,
+не execution evidence и не canonical vault state. Нормативный контракт:
+[`personal-planning-v1-contract.md`](./personal-planning-v1-contract.md).
 
 ### Stage 18 — Execution & Feedback
 
@@ -187,7 +190,16 @@ Stage 16 = COMPLETE
 Stage 17–20 = PLANNED / NOT STARTED
 ```
 
+Stage 17 = IN PROGRESS; Stage 18–20 = PLANNED / NOT STARTED.
+
 Stage 17 Issue не создаётся автоматически.
+
+## Phase 17.0 design gate
+
+До runtime-реализации Stage 17 должны быть merged и проверены этот нормативный
+контракт, минимальный status update roadmap, post-merge CI на exact head и
+повторный fetch текущего `origin/main`. Runtime-слои 17.1–17.6 не должны
+расширять authority Stage 16, Cognitive Twin или vault.
 
 ## Phase 16 factual delivery ledger
 
