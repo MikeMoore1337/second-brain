@@ -17,13 +17,28 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Final, cast
-from uuid import UUID
+from uuid import UUID, uuid7
 
+from second_brain.application.assistant import (
+    AssistantAbstentionCode,
+    AssistantContextKind,
+    AssistantError,
+    AssistantExplicitContext,
+    AssistantReasoningEnvelopeV1,
+    AssistantRequest,
+    AssistantResultEnvelopeV1,
+    AssistantResultKind,
+    BuildAssistant,
+    build_assistant_reasoning_envelope,
+    serialize_assistant_reasoning_envelope,
+    serialize_assistant_result_envelope,
+)
 from second_brain.application.growth import (
     GROWTH_POLICY_FINGERPRINT,
     GrowthGoalIdentityV1,
     growth_hash_json,
 )
+from second_brain.application.ports import AdvisorPort, CancellationToken
 from second_brain.domain.models import parse_rfc3339, parse_uuid7
 
 ExecutiveHashV1 = str
@@ -65,10 +80,28 @@ MAX_SOURCE_POLICY_FINGERPRINT_BYTES: Final[int] = 128
 MAX_PACK_CAVEATS: Final[int] = 8
 MAX_CAVEAT_BYTES: Final[int] = 512
 MAX_PACK_BYTES: Final[int] = 64 * 1024
+MAX_ACTION_ID_BYTES: Final[int] = 64
+MAX_ACTION_TITLE_BYTES: Final[int] = 256
+MAX_ACTION_DESCRIPTION_BYTES: Final[int] = 2048
+MAX_ACTION_GOAL_RELATION_BYTES: Final[int] = 512
+MAX_ACTION_SIGNAL_BYTES: Final[int] = 1024
+MAX_ACTION_LISTS: Final[int] = 8
+MAX_PROPOSAL_REASONS: Final[int] = 8
+MAX_PROPOSAL_CAVEATS: Final[int] = 8
+MAX_PROPOSAL_BYTES: Final[int] = 64 * 1024
 
 _RAW_HASH_PATTERN: Final[re.Pattern[str]] = re.compile(r"[0-9a-f]{64}\Z", re.ASCII)
 _GROWTH_HASH_PATTERN: Final[re.Pattern[str]] = re.compile(r"sha256:[0-9a-f]{64}\Z", re.ASCII)
 _REFERENCE_PATTERN: Final[re.Pattern[str]] = re.compile(r"[^\x00-\x1f\x7f-\x9f]+\Z")
+_ACTION_ID_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"[A-Za-z0-9][A-Za-z0-9._:-]{0,63}\Z", re.ASCII
+)
+_PROHIBITED_CANDIDATE_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"(?:`|https?://|www\.|file://|[A-Za-z]:[\\/]|"
+    r"\b(?:powershell|cmd(?:\.exe)?|bash|shell|curl|wget|python|git|npm|docker|ssh|"
+    r"api[_ -]?key|access[_ -]?token|password|secret|browser automation|tool call)\b)",
+    re.IGNORECASE,
+)
 
 
 class ExecutiveContextError(ValueError):
@@ -81,6 +114,22 @@ class ExecutiveContextInvalidError(ExecutiveContextError):
 
 class ExecutivePolicyMismatchError(ExecutiveContextError):
     """A context value belongs to another policy or contract revision."""
+
+
+class ExecutiveStrategyError(RuntimeError):
+    """Safe error at the explicit Stage 16 strategy boundary."""
+
+
+class ExecutiveStrategyCancelledError(ExecutiveStrategyError):
+    """The one explicit strategy operation was cancelled."""
+
+
+class ExecutiveProviderUnavailableError(ExecutiveStrategyError):
+    """The already-approved Advisor boundary is unavailable."""
+
+
+class ExecutiveProviderResultInvalidError(ExecutiveStrategyError):
+    """The Advisor result failed the Assistant or Stage 16 mapping contract."""
 
 
 class ExecutiveSourceAliasV1(StrEnum):
@@ -128,6 +177,36 @@ class ExecutivePackReadinessV1(StrEnum):
 
 
 ExecutivePackReadiness = ExecutivePackReadinessV1
+
+
+class ExecutiveActionKindV1(StrEnum):
+    """Closed non-executable candidate kinds."""
+
+    ACT = "act"
+    INVESTIGATE = "investigate"
+    CLARIFY = "clarify"
+    EXPERIMENT_CANDIDATE = "experiment_candidate"
+    HOLD = "hold"
+
+
+ExecutiveActionKind = ExecutiveActionKindV1
+
+
+class ExecutiveResultStateV1(StrEnum):
+    """Closed proposal and abstention result vocabulary."""
+
+    PROPOSAL = "proposal"
+    INSUFFICIENT_CONTEXT = "insufficient_context"
+    INSUFFICIENT_EVIDENCE = "insufficient_evidence"
+    NOT_COMPARABLE = "not_comparable"
+    SOURCE_CHANGED = "source_changed"
+    CONFLICTING_CONSTRAINTS = "conflicting_constraints"
+    HOLD_CURRENT_STRATEGY = "hold_current_strategy"
+    PROVIDER_UNAVAILABLE = "provider_unavailable"
+    PROVIDER_ABSTAINED = "provider_abstained"
+
+
+ExecutiveResultState = ExecutiveResultStateV1
 
 
 def _invalid() -> ExecutiveContextInvalidError:
@@ -700,6 +779,603 @@ def serialize_executive_context_pack(value: object) -> bytes:
 canonical_executive_context_pack_bytes = serialize_executive_context_pack
 
 
+def _action_id(value: object) -> str:
+    if type(value) is not str or _ACTION_ID_PATTERN.fullmatch(value) is None:
+        raise _invalid()
+    if len(value.encode("ascii")) > MAX_ACTION_ID_BYTES:
+        raise _invalid()
+    return value
+
+
+def _candidate_text(value: object, *, limit: int) -> str:
+    normalized = _text(value, limit=limit)
+    if _PROHIBITED_CANDIDATE_PATTERN.search(normalized) is not None:
+        raise _invalid()
+    return normalized
+
+
+def _candidate_texts(value: object) -> tuple[str, ...]:
+    if type(value) is not tuple or len(value) > MAX_ACTION_LISTS:
+        raise _invalid()
+    normalized = tuple(_candidate_text(item, limit=MAX_CONSTRAINT_BYTES) for item in value)
+    if len(set(normalized)) != len(normalized):
+        raise _invalid()
+    return normalized
+
+
+def _candidate_aliases(value: object) -> tuple[ExecutiveSourceAliasV1, ...]:
+    if type(value) is not tuple or not 1 <= len(value) <= MAX_ACTION_LISTS:
+        raise _invalid()
+    aliases = tuple(_enum_value(item, ExecutiveSourceAliasV1) for item in value)
+    if len(set(aliases)) != len(aliases):
+        raise _invalid()
+    return aliases
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutiveActionCandidateV1:
+    """One bounded, non-executable action candidate."""
+
+    action_id: str
+    kind: ExecutiveActionKindV1 | str
+    title: str
+    description: str
+    basis_aliases: tuple[ExecutiveSourceAliasV1 | str, ...]
+    goal_relation: str
+    expected_observable_signal: str
+    prerequisites: tuple[str, ...] = ()
+    caveats: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        action_id = _action_id(self.action_id)
+        kind = _enum_value(self.kind, ExecutiveActionKindV1)
+        title = _candidate_text(self.title, limit=MAX_ACTION_TITLE_BYTES)
+        description = _candidate_text(self.description, limit=MAX_ACTION_DESCRIPTION_BYTES)
+        aliases = _candidate_aliases(self.basis_aliases)
+        goal_relation = _candidate_text(self.goal_relation, limit=MAX_ACTION_GOAL_RELATION_BYTES)
+        signal = _candidate_text(self.expected_observable_signal, limit=MAX_ACTION_SIGNAL_BYTES)
+        prerequisites = _candidate_texts(self.prerequisites)
+        caveats = _candidate_texts(self.caveats)
+        object.__setattr__(self, "action_id", action_id)
+        object.__setattr__(self, "kind", kind)
+        object.__setattr__(self, "title", title)
+        object.__setattr__(self, "description", description)
+        object.__setattr__(self, "basis_aliases", aliases)
+        object.__setattr__(self, "goal_relation", goal_relation)
+        object.__setattr__(self, "expected_observable_signal", signal)
+        object.__setattr__(self, "prerequisites", prerequisites)
+        object.__setattr__(self, "caveats", caveats)
+
+    def as_dict(self) -> dict[str, object]:
+        """Return the exact candidate wire projection."""
+
+        return {
+            "action_id": self.action_id,
+            "kind": cast(ExecutiveActionKindV1, self.kind).value,
+            "title": self.title,
+            "description": self.description,
+            "basis_aliases": [
+                cast(ExecutiveSourceAliasV1, alias).value for alias in self.basis_aliases
+            ],
+            "goal_relation": self.goal_relation,
+            "expected_observable_signal": self.expected_observable_signal,
+            "prerequisites": list(self.prerequisites),
+            "caveats": list(self.caveats),
+        }
+
+
+ActionCandidateV1 = ExecutiveActionCandidateV1
+
+
+@dataclass(frozen=True, slots=True)
+class StrategyReasoningEnvelopeV1:
+    """Stage16 metadata around the exact Assistant v1 provider envelope."""
+
+    source_pack_fingerprint: ExecutiveHashV1
+    assistant_envelope: AssistantReasoningEnvelopeV1
+
+    def __post_init__(self) -> None:
+        _raw_digest(self.source_pack_fingerprint)
+        if type(self.assistant_envelope) is not AssistantReasoningEnvelopeV1:
+            raise _invalid()
+        serialized = serialize_assistant_reasoning_envelope(self.assistant_envelope)
+        if not serialized:
+            raise _invalid()
+
+    @property
+    def canonical_bytes(self) -> bytes:
+        """Return the same bytes used for preview and the AdvisorPort call."""
+
+        return serialize_assistant_reasoning_envelope(self.assistant_envelope)
+
+    def as_dict(self) -> dict[str, object]:
+        """Return metadata plus the exact Assistant projection."""
+
+        return {
+            "source_pack_fingerprint": self.source_pack_fingerprint,
+            "assistant_envelope": json.loads(self.canonical_bytes.decode("utf-8")),
+        }
+
+
+StrategyReasoningEnvelope = StrategyReasoningEnvelopeV1
+
+
+def _source_context_kind(alias: ExecutiveSourceAliasV1) -> AssistantContextKind:
+    if alias in {
+        ExecutiveSourceAliasV1.GOAL_CURRENT,
+        ExecutiveSourceAliasV1.CALLER_TASK,
+        ExecutiveSourceAliasV1.CALLER_CONSTRAINTS,
+        ExecutiveSourceAliasV1.CALLER_CONTEXT,
+    }:
+        return AssistantContextKind.FACT
+    return AssistantContextKind.BACKGROUND
+
+
+def build_strategy_reasoning_envelope(
+    pack: ExecutiveContextPackV1,
+) -> StrategyReasoningEnvelopeV1:
+    """Project one pack to the existing Assistant canonical boundary."""
+
+    validated = validate_executive_context_pack(pack)
+    if len(validated.goal_text.encode("utf-8")) > 512:
+        raise ExecutiveProviderUnavailableError(
+            "approved Assistant boundary cannot carry the Goal projection"
+        )
+    try:
+        contexts = tuple(
+            AssistantExplicitContext(
+                kind=_source_context_kind(cast(ExecutiveSourceAliasV1, item.alias)),
+                text=_text(
+                    f"{cast(ExecutiveSourceAliasV1, item.alias).value}: {item.summary}",
+                    limit=1024,
+                ),
+            )
+            for item in validated.sources
+        )
+        request = AssistantRequest(
+            task=validated.task,
+            options=(),
+            explicit_constraints=validated.constraints,
+            explicit_goals=(validated.goal_text,),
+            explicit_context=contexts,
+        )
+        assistant = build_assistant_reasoning_envelope(request)
+    except (AssistantError, ExecutiveContextError) as error:
+        raise ExecutiveProviderUnavailableError(
+            "approved Assistant boundary cannot carry the context pack"
+        ) from error
+    return StrategyReasoningEnvelopeV1(
+        source_pack_fingerprint=validated.source_pack_fingerprint,
+        assistant_envelope=assistant,
+    )
+
+
+def serialize_strategy_reasoning_envelope(value: object) -> bytes:
+    """Serialize exactly the Assistant bytes exposed to the provider."""
+
+    if type(value) is not StrategyReasoningEnvelopeV1:
+        raise _invalid()
+    return value.canonical_bytes
+
+
+canonical_strategy_reasoning_bytes = serialize_strategy_reasoning_envelope
+
+
+def _proposal_core(proposal: StrategyProposalV1) -> dict[str, object]:
+    """Build the ordered proposal payload without its own fingerprint."""
+
+    return {
+        "proposal_id": str(proposal.proposal_id),
+        "proposal_version": proposal.proposal_version,
+        "result_state": cast(ExecutiveResultStateV1, proposal.result_state).value,
+        "as_of": _format_timestamp(proposal.as_of),
+        "goal_source_uuid": str(proposal.goal_source_uuid),
+        "goal_identity_fingerprint": proposal.goal_identity_fingerprint,
+        "source_pack_fingerprint": proposal.source_pack_fingerprint,
+        "policy_id": proposal.policy_id,
+        "policy_fingerprint": proposal.policy_fingerprint,
+        "candidates": [candidate.as_dict() for candidate in proposal.candidates],
+        "suggested_order": list(proposal.suggested_order),
+        "reasons": list(proposal.reasons),
+        "caveats": list(proposal.caveats),
+        "provider_fingerprint": proposal.provider_fingerprint,
+    }
+
+
+@dataclass(frozen=True, slots=True)
+class StrategyProposalV1:
+    """Bounded derived proposal; it is not owner intent or executable state."""
+
+    proposal_id: UUID | str
+    proposal_version: str
+    result_state: ExecutiveResultStateV1 | str
+    as_of: datetime
+    goal_source_uuid: UUID | str
+    goal_identity_fingerprint: ExecutiveHashV1
+    source_pack_fingerprint: ExecutiveHashV1
+    policy_id: str
+    policy_fingerprint: ExecutiveHashV1
+    candidates: tuple[ExecutiveActionCandidateV1, ...]
+    suggested_order: tuple[str, ...]
+    reasons: tuple[str, ...]
+    caveats: tuple[str, ...]
+    provider_fingerprint: ExecutiveHashV1
+    proposal_fingerprint: ExecutiveHashV1
+
+    def __post_init__(self) -> None:
+        proposal_id = _uuid7(self.proposal_id)
+        proposal_version = _text(self.proposal_version, limit=16)
+        if proposal_version != "1":
+            raise _policy_mismatch()
+        result_state = _enum_value(self.result_state, ExecutiveResultStateV1)
+        as_of = _timestamp(self.as_of)
+        goal_uuid = _uuid7(self.goal_source_uuid)
+        goal_fp = _hash(self.goal_identity_fingerprint, growth=True)
+        source_fp = _raw_digest(self.source_pack_fingerprint)
+        if self.policy_id != POLICY_ID or self.policy_fingerprint != POLICY_FINGERPRINT:
+            raise _policy_mismatch()
+        if type(self.candidates) is not tuple or len(self.candidates) > MAX_ACTION_LISTS:
+            raise _invalid()
+        if any(type(candidate) is not ExecutiveActionCandidateV1 for candidate in self.candidates):
+            raise _invalid()
+        candidates = tuple(self.candidates)
+        candidate_ids = tuple(candidate.action_id for candidate in candidates)
+        if len(set(candidate_ids)) != len(candidate_ids):
+            raise _invalid()
+        if type(self.suggested_order) is not tuple or len(self.suggested_order) > MAX_ACTION_LISTS:
+            raise _invalid()
+        suggested_order = tuple(_action_id(item) for item in self.suggested_order)
+        if len(set(suggested_order)) != len(suggested_order):
+            raise _invalid()
+        if any(item not in candidate_ids for item in suggested_order):
+            raise _invalid()
+        if result_state is ExecutiveResultStateV1.PROPOSAL:
+            if not candidates or set(suggested_order) != set(candidate_ids):
+                raise _invalid()
+        elif candidates or suggested_order:
+            raise _invalid()
+        if type(self.reasons) is not tuple or not 1 <= len(self.reasons) <= MAX_PROPOSAL_REASONS:
+            raise _invalid()
+        reasons = tuple(_text(item, limit=MAX_CAVEAT_BYTES) for item in self.reasons)
+        if type(self.caveats) is not tuple or len(self.caveats) > MAX_PROPOSAL_CAVEATS:
+            raise _invalid()
+        caveats = tuple(_text(item, limit=MAX_CAVEAT_BYTES) for item in self.caveats)
+        if len(set(reasons)) != len(reasons) or len(set(caveats)) != len(caveats):
+            raise _invalid()
+        provider_fp = _raw_digest(self.provider_fingerprint)
+        proposal_fp = _raw_digest(self.proposal_fingerprint)
+        object.__setattr__(self, "proposal_id", proposal_id)
+        object.__setattr__(self, "proposal_version", proposal_version)
+        object.__setattr__(self, "result_state", result_state)
+        object.__setattr__(self, "as_of", as_of)
+        object.__setattr__(self, "goal_source_uuid", goal_uuid)
+        object.__setattr__(self, "goal_identity_fingerprint", goal_fp)
+        object.__setattr__(self, "source_pack_fingerprint", source_fp)
+        object.__setattr__(self, "policy_id", POLICY_ID)
+        object.__setattr__(self, "policy_fingerprint", POLICY_FINGERPRINT)
+        object.__setattr__(self, "candidates", candidates)
+        object.__setattr__(self, "suggested_order", suggested_order)
+        object.__setattr__(self, "reasons", reasons)
+        object.__setattr__(self, "caveats", caveats)
+        object.__setattr__(self, "provider_fingerprint", provider_fp)
+        expected = _raw_hash(_proposal_core(self))
+        if proposal_fp != expected:
+            raise _invalid()
+        object.__setattr__(self, "proposal_fingerprint", expected)
+        if len(_canonical_bytes(self.as_dict())) > MAX_PROPOSAL_BYTES:
+            raise _invalid()
+
+    def as_dict(self) -> dict[str, object]:
+        """Return the complete bounded proposal projection."""
+
+        return {
+            **_proposal_core(self),
+            "proposal_fingerprint": self.proposal_fingerprint,
+        }
+
+    def to_json(self) -> str:
+        """Return compact canonical proposal JSON."""
+
+        return _canonical_bytes(self.as_dict()).decode("utf-8")
+
+
+StrategyProposal = StrategyProposalV1
+
+
+def _new_proposal(
+    *,
+    proposal_id: UUID,
+    as_of: datetime,
+    result_state: ExecutiveResultStateV1,
+    goal_source_uuid: UUID,
+    goal_identity_fingerprint: ExecutiveHashV1,
+    source_pack_fingerprint: ExecutiveHashV1,
+    candidates: tuple[ExecutiveActionCandidateV1, ...],
+    suggested_order: tuple[str, ...],
+    reasons: tuple[str, ...],
+    caveats: tuple[str, ...],
+    provider_fingerprint: ExecutiveHashV1,
+) -> StrategyProposalV1:
+    core = {
+        "proposal_id": str(proposal_id),
+        "proposal_version": "1",
+        "result_state": result_state.value,
+        "as_of": _format_timestamp(as_of),
+        "goal_source_uuid": str(goal_source_uuid),
+        "goal_identity_fingerprint": goal_identity_fingerprint,
+        "source_pack_fingerprint": source_pack_fingerprint,
+        "policy_id": POLICY_ID,
+        "policy_fingerprint": POLICY_FINGERPRINT,
+        "candidates": [candidate.as_dict() for candidate in candidates],
+        "suggested_order": list(suggested_order),
+        "reasons": list(reasons),
+        "caveats": list(caveats),
+        "provider_fingerprint": provider_fingerprint,
+    }
+    proposal_fingerprint = _raw_hash(core)
+    return StrategyProposalV1(
+        proposal_id=proposal_id,
+        proposal_version="1",
+        result_state=result_state,
+        as_of=as_of,
+        goal_source_uuid=goal_source_uuid,
+        goal_identity_fingerprint=goal_identity_fingerprint,
+        source_pack_fingerprint=source_pack_fingerprint,
+        policy_id=POLICY_ID,
+        policy_fingerprint=POLICY_FINGERPRINT,
+        candidates=candidates,
+        suggested_order=suggested_order,
+        reasons=reasons,
+        caveats=caveats,
+        provider_fingerprint=provider_fingerprint,
+        proposal_fingerprint=proposal_fingerprint,
+    )
+
+
+def _no_provider_fingerprint(reason: str) -> ExecutiveHashV1:
+    return hashlib.sha256(f"stage16-provider-not-called-v1:{reason}".encode("ascii")).hexdigest()
+
+
+def _assistant_abstention_state(code: AssistantAbstentionCode | str) -> ExecutiveResultStateV1:
+    normalized = _enum_value(code, AssistantAbstentionCode)
+    return {
+        AssistantAbstentionCode.INSUFFICIENT_BASIS: ExecutiveResultStateV1.INSUFFICIENT_EVIDENCE,
+        AssistantAbstentionCode.CONFLICTING_EXPLICIT_CONSTRAINTS: (
+            ExecutiveResultStateV1.CONFLICTING_CONSTRAINTS
+        ),
+        AssistantAbstentionCode.AMBIGUOUS_OR_INCOMPARABLE_OPTIONS: (
+            ExecutiveResultStateV1.NOT_COMPARABLE
+        ),
+        AssistantAbstentionCode.UNSUPPORTED_TASK: ExecutiveResultStateV1.INSUFFICIENT_CONTEXT,
+    }[normalized]
+
+
+def _assistant_basis_aliases(
+    result: AssistantResultEnvelopeV1,
+    pack: ExecutiveContextPackV1,
+) -> tuple[ExecutiveSourceAliasV1, ...]:
+    aliases: list[ExecutiveSourceAliasV1] = []
+    for ref in result.evidence_refs:
+        ordinal = ref.ordinal
+        if not 1 <= ordinal <= len(pack.sources):
+            raise _invalid()
+        alias = _enum_value(pack.sources[ordinal - 1].alias, ExecutiveSourceAliasV1)
+        if alias not in aliases:
+            aliases.append(alias)
+    if not aliases:
+        aliases.append(ExecutiveSourceAliasV1.GOAL_CURRENT)
+    if len(aliases) > MAX_ACTION_LISTS:
+        raise _invalid()
+    return tuple(aliases)
+
+
+def build_strategy_proposal_from_assistant_result(
+    pack: ExecutiveContextPackV1,
+    result: AssistantResultEnvelopeV1,
+    *,
+    proposal_id: UUID | str | None = None,
+    as_of: datetime | None = None,
+) -> StrategyProposalV1:
+    """Map one validated Assistant result to a bounded Stage16 proposal."""
+
+    validated_pack = validate_executive_context_pack(pack)
+    if type(result) is not AssistantResultEnvelopeV1:
+        raise ExecutiveProviderResultInvalidError("provider result is malformed")
+    try:
+        provider_bytes = serialize_assistant_result_envelope(result)
+        provider_fingerprint = hashlib.sha256(provider_bytes).hexdigest()
+        kind = _enum_value(result.kind, AssistantResultKind)
+        proposal_time = datetime.now(UTC) if as_of is None else _timestamp(as_of)
+        identifier = uuid7() if proposal_id is None else _uuid7(proposal_id)
+        if kind is AssistantResultKind.RECOMMENDATION:
+            if result.recommendation is None:
+                raise _invalid()
+            rationale = tuple(_text(item, limit=MAX_CAVEAT_BYTES) for item in result.rationale)
+            signal = rationale[1] if len(rationale) > 1 else rationale[0]
+            candidate = ExecutiveActionCandidateV1(
+                action_id="candidate-1",
+                kind=ExecutiveActionKindV1.INVESTIGATE,
+                title="Рекомендация для рассмотрения",
+                description=_candidate_text(
+                    result.recommendation, limit=MAX_ACTION_DESCRIPTION_BYTES
+                ),
+                basis_aliases=_assistant_basis_aliases(result, validated_pack),
+                goal_relation=rationale[0],
+                expected_observable_signal=signal,
+                caveats=tuple(
+                    _candidate_text(item, limit=MAX_CONSTRAINT_BYTES) for item in result.uncertainty
+                ),
+            )
+            return _new_proposal(
+                proposal_id=identifier,
+                as_of=proposal_time,
+                result_state=ExecutiveResultStateV1.PROPOSAL,
+                goal_source_uuid=_uuid7(validated_pack.goal_source_uuid),
+                goal_identity_fingerprint=validated_pack.goal_identity_fingerprint,
+                source_pack_fingerprint=validated_pack.source_pack_fingerprint,
+                candidates=(candidate,),
+                suggested_order=(candidate.action_id,),
+                reasons=rationale,
+                caveats=tuple(_text(item, limit=MAX_CAVEAT_BYTES) for item in result.uncertainty),
+                provider_fingerprint=provider_fingerprint,
+            )
+        if kind is AssistantResultKind.ABSTENTION:
+            if result.abstention_code is None:
+                raise _invalid()
+            state = _assistant_abstention_state(result.abstention_code)
+        else:
+            state = ExecutiveResultStateV1.PROVIDER_ABSTAINED
+        return _new_proposal(
+            proposal_id=identifier,
+            as_of=proposal_time,
+            result_state=state,
+            goal_source_uuid=_uuid7(validated_pack.goal_source_uuid),
+            goal_identity_fingerprint=validated_pack.goal_identity_fingerprint,
+            source_pack_fingerprint=validated_pack.source_pack_fingerprint,
+            candidates=(),
+            suggested_order=(),
+            reasons=tuple(_text(item, limit=MAX_CAVEAT_BYTES) for item in result.rationale),
+            caveats=tuple(_text(item, limit=MAX_CAVEAT_BYTES) for item in result.uncertainty),
+            provider_fingerprint=provider_fingerprint,
+        )
+    except ExecutiveStrategyError:
+        raise
+    except AssistantError, ExecutiveContextError, TypeError, ValueError, UnicodeError:
+        raise ExecutiveProviderResultInvalidError(
+            "provider result failed Stage16 validation"
+        ) from None
+
+
+def _abstention_proposal(
+    pack: ExecutiveContextPackV1,
+    *,
+    state: ExecutiveResultStateV1,
+    reason: str,
+    proposal_id: UUID | str | None,
+    as_of: datetime | None,
+) -> StrategyProposalV1:
+    proposal_time = datetime.now(UTC) if as_of is None else _timestamp(as_of)
+    identifier = uuid7() if proposal_id is None else _uuid7(proposal_id)
+    return _new_proposal(
+        proposal_id=identifier,
+        as_of=proposal_time,
+        result_state=state,
+        goal_source_uuid=_uuid7(pack.goal_source_uuid),
+        goal_identity_fingerprint=pack.goal_identity_fingerprint,
+        source_pack_fingerprint=pack.source_pack_fingerprint,
+        candidates=(),
+        suggested_order=(),
+        reasons=(_text(reason, limit=MAX_CAVEAT_BYTES),),
+        caveats=(),
+        provider_fingerprint=_no_provider_fingerprint(state.value),
+    )
+
+
+class BuildExecutiveStrategy:
+    """Execute one explicit Stage16 generation through the existing AdvisorPort."""
+
+    def __init__(self, advisor: AdvisorPort) -> None:
+        self._advisor = advisor
+
+    def execute(
+        self,
+        pack: ExecutiveContextPackV1,
+        *,
+        cancellation: CancellationToken,
+        proposal_id: UUID | str | None = None,
+        as_of: datetime | None = None,
+    ) -> StrategyProposalV1:
+        """Build a proposal; no call occurs until this explicit method is invoked."""
+
+        validated_pack = validate_executive_context_pack(pack)
+        if cancellation.is_cancelled():
+            raise ExecutiveStrategyCancelledError("strategy generation was cancelled")
+        if validated_pack.readiness is not ExecutivePackReadinessV1.EXACT_CURRENT:
+            state = (
+                ExecutiveResultStateV1.CONFLICTING_CONSTRAINTS
+                if validated_pack.readiness is ExecutivePackReadinessV1.CONFLICT
+                else ExecutiveResultStateV1.INSUFFICIENT_CONTEXT
+            )
+            return _abstention_proposal(
+                validated_pack,
+                state=state,
+                reason="Недостаточно сопоставимого текущего контекста для стратегии.",
+                proposal_id=proposal_id,
+                as_of=as_of,
+            )
+        try:
+            envelope = build_strategy_reasoning_envelope(validated_pack)
+        except ExecutiveProviderUnavailableError:
+            return _abstention_proposal(
+                validated_pack,
+                state=ExecutiveResultStateV1.PROVIDER_UNAVAILABLE,
+                reason="Одобренная граница независимого совета не поддерживает этот контекст.",
+                proposal_id=proposal_id,
+                as_of=as_of,
+            )
+        if cancellation.is_cancelled():
+            raise ExecutiveStrategyCancelledError("strategy generation was cancelled")
+        request = AssistantRequest(
+            task=envelope.assistant_envelope.task,
+            options=envelope.assistant_envelope.options,
+            explicit_constraints=envelope.assistant_envelope.explicit_constraints,
+            explicit_goals=envelope.assistant_envelope.explicit_goals,
+            explicit_context=envelope.assistant_envelope.explicit_context,
+        )
+        try:
+            result = BuildAssistant(self._advisor).execute(request, cancellation=cancellation)
+        except AssistantError as error:
+            if error.code == "ASSISTANT_CANCELLED":
+                raise ExecutiveStrategyCancelledError("strategy generation was cancelled") from None
+            if error.code in {
+                "ASSISTANT_PROVIDER_UNAVAILABLE",
+                "ASSISTANT_TIMEOUT",
+                "ASSISTANT_PROVIDER_FAILURE",
+                "ASSISTANT_INVALID_REQUEST",
+            }:
+                return _abstention_proposal(
+                    validated_pack,
+                    state=ExecutiveResultStateV1.PROVIDER_UNAVAILABLE,
+                    reason="Независимый совет сейчас недоступен.",
+                    proposal_id=proposal_id,
+                    as_of=as_of,
+                )
+            raise ExecutiveProviderResultInvalidError(
+                "provider result failed Stage16 validation"
+            ) from None
+        if cancellation.is_cancelled():
+            raise ExecutiveStrategyCancelledError("strategy generation was cancelled")
+        return build_strategy_proposal_from_assistant_result(
+            validated_pack,
+            result,
+            proposal_id=proposal_id,
+            as_of=as_of,
+        )
+
+
+ExecutiveStrategyGateway = BuildExecutiveStrategy
+
+
+def validate_strategy_proposal(value: object) -> StrategyProposalV1:
+    """Validate a proposal and its canonical fingerprint without provider I/O."""
+
+    if type(value) is not StrategyProposalV1:
+        raise _invalid()
+    expected = _raw_hash(_proposal_core(value))
+    if expected != value.proposal_fingerprint:
+        raise _invalid()
+    return value
+
+
+def serialize_strategy_proposal(value: object) -> bytes:
+    """Serialize a validated proposal as canonical UTF-8 JSON."""
+
+    return _canonical_bytes(validate_strategy_proposal(value).as_dict())
+
+
+canonical_strategy_proposal_bytes = serialize_strategy_proposal
+
+
 __all__ = [
     "CONTRACT_VERSION",
     "EXECUTIVE_CONTRACT_VERSION",
@@ -713,6 +1389,11 @@ __all__ = [
     "POLICY_FINGERPRINT",
     "POLICY_ID",
     "SOURCE_ALIASES",
+    "ActionCandidateV1",
+    "BuildExecutiveStrategy",
+    "ExecutiveActionCandidateV1",
+    "ExecutiveActionKind",
+    "ExecutiveActionKindV1",
     "ExecutiveContextError",
     "ExecutiveContextInvalidError",
     "ExecutiveContextPack",
@@ -721,16 +1402,34 @@ __all__ = [
     "ExecutivePackReadiness",
     "ExecutivePackReadinessV1",
     "ExecutivePolicyMismatchError",
+    "ExecutiveProviderResultInvalidError",
+    "ExecutiveProviderUnavailableError",
+    "ExecutiveResultState",
+    "ExecutiveResultStateV1",
     "ExecutiveSourceAlias",
     "ExecutiveSourceAliasV1",
     "ExecutiveSourceItemV1",
     "ExecutiveSourceProjectionV1",
     "ExecutiveSourceReadiness",
     "ExecutiveSourceReadinessV1",
+    "ExecutiveStrategyCancelledError",
+    "ExecutiveStrategyError",
+    "ExecutiveStrategyGateway",
+    "StrategyProposal",
+    "StrategyProposalV1",
+    "StrategyReasoningEnvelope",
+    "StrategyReasoningEnvelopeV1",
     "build_executive_context_pack",
+    "build_strategy_proposal_from_assistant_result",
+    "build_strategy_reasoning_envelope",
     "canonical_executive_context_pack_bytes",
+    "canonical_strategy_proposal_bytes",
+    "canonical_strategy_reasoning_bytes",
     "compute_goal_identity_fingerprint",
     "goal_identity_fingerprint",
     "serialize_executive_context_pack",
+    "serialize_strategy_proposal",
+    "serialize_strategy_reasoning_envelope",
     "validate_executive_context_pack",
+    "validate_strategy_proposal",
 ]
