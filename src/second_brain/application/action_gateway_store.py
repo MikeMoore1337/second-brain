@@ -10,6 +10,7 @@ from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Final, cast
+from uuid import UUID
 
 from second_brain.application.action_gateway import (
     ACTION_GATEWAY_POLICY_FINGERPRINT,
@@ -497,7 +498,12 @@ class ActionGatewayOperationalStore:
         )
 
     def begin_execution(
-        self, prepared: PreparedExternalActionV1, *, now: datetime
+        self,
+        prepared: PreparedExternalActionV1,
+        *,
+        now: datetime,
+        receipt_kind: ActionReceiptKindV1 = ActionReceiptKindV1.ACTION,
+        parent_receipt_id: UUID | None = None,
     ) -> tuple[ActionReceiptV1, bool]:
         if type(prepared) is not PreparedExternalActionV1:
             raise ActionGatewayInvalidRequestError()
@@ -509,7 +515,12 @@ class ActionGatewayOperationalStore:
                     if existing.intent_fingerprint != _intent_fingerprint_from_prepared(prepared):
                         raise ActionGatewayConflictError()
                     return existing, False
-                receipt = _started_receipt(prepared, now=now)
+                receipt = _started_receipt(
+                    prepared,
+                    now=now,
+                    receipt_kind=receipt_kind,
+                    parent_receipt_id=parent_receipt_id,
+                )
                 return self._append_unlocked(snapshot, receipt), True
         except ActionGatewayStoreError, ActionGatewayError:
             raise
@@ -710,13 +721,19 @@ def _intent_fingerprint_from_prepared(prepared: PreparedExternalActionV1) -> str
     return action_gateway_hash(payload)
 
 
-def _started_receipt(prepared: PreparedExternalActionV1, *, now: object) -> ActionReceiptV1:
+def _started_receipt(
+    prepared: PreparedExternalActionV1,
+    *,
+    now: object,
+    receipt_kind: ActionReceiptKindV1 = ActionReceiptKindV1.ACTION,
+    parent_receipt_id: UUID | None = None,
+) -> ActionReceiptV1:
     from second_brain.application.action_gateway import _utc
 
     started = _utc(now)
     return ActionReceiptV1(
         receipt_id=__import__("uuid").uuid7(),
-        receipt_kind=ActionReceiptKindV1.ACTION,
+        receipt_kind=receipt_kind,
         operation_id_fingerprint=prepared.operation_id_fingerprint,
         prepared_action_id=prepared.prepared_action_id,
         intent_fingerprint=_intent_fingerprint_from_prepared(prepared),
@@ -728,6 +745,7 @@ def _started_receipt(prepared: PreparedExternalActionV1, *, now: object) -> Acti
         payload_fingerprint=prepared.payload_fingerprint,
         state=ActionReceiptStateV1.EXECUTION_STARTED,
         attempt_started_at=started,
+        parent_receipt_id=parent_receipt_id,
     )
 
 
