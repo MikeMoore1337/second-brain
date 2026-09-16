@@ -84,16 +84,20 @@ import compass192 from "./assets/icons/decision-compass-detail-192.webp";
 import experiments48 from "./assets/icons/personal-experiments-compact-48.webp";
 import experiments96 from "./assets/icons/personal-experiments-compact-96.webp";
 import experiments192 from "./assets/icons/personal-experiments-detail-192.webp";
+import personalPlanning48 from "./assets/icons/personal-planning-compact-48.webp";
+import personalPlanning96 from "./assets/icons/personal-planning-compact-96.webp";
+import personalPlanning192 from "./assets/icons/personal-planning-detail-192.webp";
 import adaptiveProfile48 from "./assets/icons/adaptive-profile-compact-48.webp";
 import adaptiveProfile96 from "./assets/icons/adaptive-profile-compact-96.webp";
 import adaptiveProfile192 from "./assets/icons/adaptive-profile-detail-192.webp";
 
-export const ICON_NAMES = ["personal-experiments","decision-compass","prospective-audit","retrospective","adaptive-profile","add","capture","url","text","voice","memory","decision","outcome","timeline","search","open","self-model","self-retrieval","diagnostics","simulate","growth","refresh","save","confirm","cancel","close","expand","collapse","copy","warning","error","success","info","time","relation","pause","play"] as const;
+export const ICON_NAMES = ["personal-experiments","personal-planning","decision-compass","prospective-audit","retrospective","adaptive-profile","add","capture","url","text","voice","memory","decision","outcome","timeline","search","open","self-model","self-retrieval","diagnostics","simulate","growth","refresh","save","confirm","cancel","close","expand","collapse","copy","warning","error","success","info","time","relation","pause","play"] as const;
 export type IconName = (typeof ICON_NAMES)[number];
 
 type Artwork = { compact: string; compact2x: string; detail?: string; detail2x?: string };
 const ARTWORK: Record<string, Artwork> = {
   "personal-experiments": { compact: experiments48, compact2x: experiments96, detail: experiments96, detail2x: experiments192 },
+  "personal-planning": { compact: personalPlanning48, compact2x: personalPlanning96, detail: personalPlanning96, detail2x: personalPlanning192 },
   "adaptive-profile": { compact: adaptiveProfile48, compact2x: adaptiveProfile96, detail: adaptiveProfile96, detail2x: adaptiveProfile192 },
   "decision-compass": { compact: compass48, compact2x: compass96, detail: compass96, detail2x: compass192 },
   "prospective-audit": { compact: audit48, compact2x: audit96, detail: audit96, detail2x: audit192 },
