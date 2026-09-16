@@ -27,8 +27,13 @@ def test_main_page_uses_exactly_the_four_semantic_directions() -> None:
     assert "FoldSection" not in source
     assert "data-semantic-tool-link={tool.id}" in source
     assert "data-semantic-functional-surface={tool.id}" in source
-    assert 'tool.id === "active-learning"' in source
-    assert 'return "simulate-me"' in source
+    assert (
+        '"active-learning": { '
+        'groupId: "decisions", '
+        'toolId: "simulate-me", '
+        'surfaceId: "simulate-me" }' in source
+    )
+    assert 'tool.id === "active-learning"' not in source
     assert "pillars" not in app
     assert "memoryBackdrop" not in app
     assert "growthBackdrop" not in app
@@ -68,7 +73,6 @@ def test_semantic_navigation_keeps_existing_surface_anchors_and_no_future_stage_
         "#prospective-audit",
         "#assistant-compare",
         "#decision-compass",
-        "#active-learning",
         "#growth-engine",
     ):
         assert f'target: "{anchor}"' in source

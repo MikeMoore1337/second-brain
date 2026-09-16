@@ -46,7 +46,6 @@ function renderSemanticTool(tool: SemanticTool): ReactElement | null {
     case "prospective-audit": return <ProspectiveAuditSurface />;
     case "assistant-compare": return <AssistantCompareSurface />;
     case "decision-compass": return <DecisionCompassSurface />;
-    case "active-learning": return null;
     case "growth-engine": return <GrowthSurface />;
     case "personal-strategy": return <PersonalStrategySurface />;
     case "personal-experiments": return <PersonalExperimentsSurface />;
