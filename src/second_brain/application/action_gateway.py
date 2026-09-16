@@ -880,6 +880,12 @@ class PreparedExternalActionV1:
     def fingerprint(self) -> str:
         return action_gateway_hash(self.as_dict())
 
+    @property
+    def intent_fingerprint(self) -> str:
+        """Return the canonical intent identity without operation plaintext."""
+
+        return _intent_fingerprint_from_prepared(self)
+
     @classmethod
     def from_dict(cls, value: object) -> PreparedExternalActionV1:
         allowed = {
@@ -941,6 +947,8 @@ _SAFE_IDENTITY_KEYS: Final[frozenset[str]] = frozenset(
         "issue_number",
         "issue_id",
         "issue_node_id",
+        "comment_id",
+        "comment_node_id",
         "current_state",
         "state",
         "locked",
@@ -961,13 +969,14 @@ def _safe_identity(value: object) -> dict[str, object]:
             "repository",
             "repository_node_id",
             "issue_node_id",
+            "comment_node_id",
             "current_state",
             "state",
             "url",
         }:
             if type(item) is not str or len(item.encode("utf-8")) > MAX_SAFE_IDENTITY_VALUE_BYTES:
                 raise ActionGatewayInvalidRequestError()
-        elif key in {"repository_id", "issue_number", "issue_id"}:
+        elif key in {"repository_id", "issue_number", "issue_id", "comment_id"}:
             if type(item) is not int or isinstance(item, bool) or item <= 0:
                 raise ActionGatewayInvalidRequestError()
         elif key == "locked" and type(item) is not bool:
@@ -1211,6 +1220,60 @@ class ConnectorExecutionResultV1:
         object.__setattr__(self, "safe_error_code", error)
 
 
+@dataclass(frozen=True, slots=True)
+class ConnectorReconciliationResultV1:
+    """Read-only provider result for an explicit uncertain-outcome check."""
+
+    state: ActionReceiptStateV1 | str
+    finished_at: datetime
+    remote_safe_identity: dict[str, object] | None = None
+    remote_url: str | None = None
+    safe_error_code: str | None = None
+
+    def __post_init__(self) -> None:
+        state = _as_receipt_state(self.state)
+        if state not in {
+            ActionReceiptStateV1.RECONCILED_EXECUTED,
+            ActionReceiptStateV1.RECONCILED_NOT_EXECUTED,
+            ActionReceiptStateV1.RECONCILIATION_AMBIGUOUS,
+        }:
+            raise ActionGatewayInvalidRequestError()
+        finished = _utc(self.finished_at)
+        remote = (
+            None if self.remote_safe_identity is None else _safe_identity(self.remote_safe_identity)
+        )
+        if self.remote_url is not None:
+            remote_url = _text(self.remote_url, max_bytes=2048)
+            if (
+                not remote_url.startswith("https://github.com/")
+                or "?" in remote_url
+                or "#" in remote_url
+            ):
+                raise ActionGatewayInvalidRequestError()
+        else:
+            remote_url = None
+        error = None if self.safe_error_code is None else _safe_error_code(self.safe_error_code)
+        if state is ActionReceiptStateV1.RECONCILIATION_AMBIGUOUS and error is None:
+            raise ActionGatewayInvalidRequestError()
+        object.__setattr__(self, "state", state)
+        object.__setattr__(self, "finished_at", finished)
+        object.__setattr__(self, "remote_safe_identity", remote)
+        object.__setattr__(self, "remote_url", remote_url)
+        object.__setattr__(self, "safe_error_code", error)
+
+
+class ActionReconciliationConnectorV1(Protocol):
+    """Optional provider boundary for explicit read-only reconciliation."""
+
+    def reconcile(
+        self,
+        prepared: PreparedExternalActionV1,
+        *,
+        now: datetime,
+    ) -> ConnectorReconciliationResultV1:
+        """Inspect the exact provider identity without mutating it."""
+
+
 class ActionConnectorV1(Protocol):
     """Small provider boundary used by the provider-free core."""
 
@@ -1255,11 +1318,16 @@ class ActionReceiptStoreV1(Protocol):
         prepared: PreparedExternalActionV1,
         *,
         now: datetime,
+        receipt_kind: ActionReceiptKindV1 = ActionReceiptKindV1.ACTION,
+        parent_receipt_id: UUID | None = None,
     ) -> tuple[ActionReceiptV1, bool]:
         """Atomically record execution_started or return an existing lifecycle."""
 
     def append(self, receipt: ActionReceiptV1) -> ActionReceiptV1:
         """Append one receipt lifecycle record."""
+
+    def read_receipts(self) -> tuple[ActionReceiptV1, ...]:
+        """Return the verified append-only history in sequence order."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1571,9 +1639,18 @@ class ActionGatewayCoreV1:
         confirmation: object,
         *,
         now: datetime | None = None,
+        receipt_kind: ActionReceiptKindV1 = ActionReceiptKindV1.ACTION,
+        parent_receipt_id: UUID | None = None,
     ) -> ActionExecutionResultV1:
         if type(prepared) is not PreparedExternalActionV1:
             raise ActionGatewayInvalidRequestError()
+        if receipt_kind not in {
+            ActionReceiptKindV1.ACTION,
+            ActionReceiptKindV1.COMPENSATION,
+        }:
+            raise ActionGatewayInvalidRequestError()
+        if parent_receipt_id is not None:
+            parent_receipt_id = _uuid7(parent_receipt_id)
         current = _utc(now or datetime.now(UTC))
         existing = self._store.find_operation(prepared.operation_id_fingerprint)
         if existing is not None:
@@ -1581,7 +1658,13 @@ class ActionGatewayCoreV1:
                 raise ActionGatewayConflictError()
             self._confirmation.consume(confirmation, prepared, now=current)
             if existing.state is ActionReceiptStateV1.EXECUTION_STARTED:
-                uncertain = self._uncertain_receipt(prepared, existing, now=current)
+                uncertain = self._uncertain_receipt(
+                    prepared,
+                    existing,
+                    now=current,
+                    receipt_kind=receipt_kind,
+                    parent_receipt_id=parent_receipt_id,
+                )
                 return ActionExecutionResultV1(self._store.append(uncertain), True)
             return ActionExecutionResultV1(existing, True)
         self._confirmation.consume(confirmation, prepared, now=current)
@@ -1595,6 +1678,8 @@ class ActionGatewayCoreV1:
                 ActionReceiptStateV1.FAILED_BEFORE_SEND,
                 "provider_revalidation_failed",
                 now=current,
+                receipt_kind=receipt_kind,
+                parent_receipt_id=parent_receipt_id,
             )
             return ActionExecutionResultV1(self._store.append(failed), False)
         if (
@@ -1607,6 +1692,8 @@ class ActionGatewayCoreV1:
                 ActionReceiptStateV1.FAILED_BEFORE_SEND,
                 ActionGatewayTargetChangedError.code,
                 now=current,
+                receipt_kind=receipt_kind,
+                parent_receipt_id=parent_receipt_id,
             )
             return ActionExecutionResultV1(self._store.append(failed), False)
         if (
@@ -1615,15 +1702,30 @@ class ActionGatewayCoreV1:
             == prepared.semantic_payload.get("desired_state")
         ):
             receipt = self._simple_receipt(
-                prepared, ActionReceiptStateV1.ALREADY_SATISFIED, now=current
+                prepared,
+                ActionReceiptStateV1.ALREADY_SATISFIED,
+                now=current,
+                receipt_kind=receipt_kind,
+                parent_receipt_id=parent_receipt_id,
             )
             return ActionExecutionResultV1(self._store.append(receipt), False)
-        started, is_new = self._store.begin_execution(prepared, now=current)
+        started, is_new = self._store.begin_execution(
+            prepared,
+            now=current,
+            receipt_kind=receipt_kind,
+            parent_receipt_id=parent_receipt_id,
+        )
         if not is_new:
             if started.intent_fingerprint != _intent_fingerprint_from_prepared(prepared):
                 raise ActionGatewayConflictError()
             if started.state is ActionReceiptStateV1.EXECUTION_STARTED:
-                uncertain = self._uncertain_receipt(prepared, started, now=current)
+                uncertain = self._uncertain_receipt(
+                    prepared,
+                    started,
+                    now=current,
+                    receipt_kind=receipt_kind,
+                    parent_receipt_id=parent_receipt_id,
+                )
                 return ActionExecutionResultV1(self._store.append(uncertain), True)
             return ActionExecutionResultV1(started, True)
         try:
@@ -1646,7 +1748,14 @@ class ActionGatewayCoreV1:
                 finished_at=current,
                 safe_error_code="provider_outcome_uncertain",
             )
-        result = self._receipt_from_outcome(prepared, started, outcome, now=current)
+        result = self._receipt_from_outcome(
+            prepared,
+            started,
+            outcome,
+            now=current,
+            receipt_kind=receipt_kind,
+            parent_receipt_id=parent_receipt_id,
+        )
         return ActionExecutionResultV1(self._store.append(result), False)
 
     def _receipt_from_outcome(
@@ -1656,6 +1765,8 @@ class ActionGatewayCoreV1:
         outcome: ConnectorExecutionResultV1,
         *,
         now: datetime,
+        receipt_kind: ActionReceiptKindV1,
+        parent_receipt_id: UUID | None,
     ) -> ActionReceiptV1:
         state_map: dict[ActionExecutionOutcomeV1, ActionReceiptStateV1] = {
             ActionExecutionOutcomeV1.EXECUTED: ActionReceiptStateV1.EXECUTED,
@@ -1668,7 +1779,7 @@ class ActionGatewayCoreV1:
         }
         return ActionReceiptV1(
             receipt_id=uuid7(),
-            receipt_kind=ActionReceiptKindV1.ACTION,
+            receipt_kind=receipt_kind,
             operation_id_fingerprint=prepared.operation_id_fingerprint,
             prepared_action_id=prepared.prepared_action_id,
             intent_fingerprint=_intent_fingerprint_from_prepared(prepared),
@@ -1685,15 +1796,21 @@ class ActionGatewayCoreV1:
             remote_safe_identity=outcome.remote_safe_identity,
             remote_url=outcome.remote_url,
             safe_error_code=outcome.safe_error_code,
-            parent_receipt_id=started.receipt_id,
+            parent_receipt_id=parent_receipt_id or started.receipt_id,
         )
 
     def _simple_receipt(
-        self, prepared: PreparedExternalActionV1, state: ActionReceiptStateV1, *, now: datetime
+        self,
+        prepared: PreparedExternalActionV1,
+        state: ActionReceiptStateV1,
+        *,
+        now: datetime,
+        receipt_kind: ActionReceiptKindV1,
+        parent_receipt_id: UUID | None,
     ) -> ActionReceiptV1:
         return ActionReceiptV1(
             receipt_id=uuid7(),
-            receipt_kind=ActionReceiptKindV1.ACTION,
+            receipt_kind=receipt_kind,
             operation_id_fingerprint=prepared.operation_id_fingerprint,
             prepared_action_id=prepared.prepared_action_id,
             intent_fingerprint=_intent_fingerprint_from_prepared(prepared),
@@ -1705,6 +1822,7 @@ class ActionGatewayCoreV1:
             payload_fingerprint=prepared.payload_fingerprint,
             state=state,
             finished_at=now,
+            parent_receipt_id=parent_receipt_id,
         )
 
     def _failure_receipt(
@@ -1714,10 +1832,12 @@ class ActionGatewayCoreV1:
         error: str,
         *,
         now: datetime,
+        receipt_kind: ActionReceiptKindV1,
+        parent_receipt_id: UUID | None,
     ) -> ActionReceiptV1:
         return ActionReceiptV1(
             receipt_id=uuid7(),
-            receipt_kind=ActionReceiptKindV1.ACTION,
+            receipt_kind=receipt_kind,
             operation_id_fingerprint=prepared.operation_id_fingerprint,
             prepared_action_id=prepared.prepared_action_id,
             intent_fingerprint=_intent_fingerprint_from_prepared(prepared),
@@ -1730,14 +1850,21 @@ class ActionGatewayCoreV1:
             state=state,
             finished_at=now,
             safe_error_code=error,
+            parent_receipt_id=parent_receipt_id,
         )
 
     def _uncertain_receipt(
-        self, prepared: PreparedExternalActionV1, started: ActionReceiptV1, *, now: datetime
+        self,
+        prepared: PreparedExternalActionV1,
+        started: ActionReceiptV1,
+        *,
+        now: datetime,
+        receipt_kind: ActionReceiptKindV1,
+        parent_receipt_id: UUID | None,
     ) -> ActionReceiptV1:
         return ActionReceiptV1(
             receipt_id=uuid7(),
-            receipt_kind=ActionReceiptKindV1.ACTION,
+            receipt_kind=receipt_kind,
             operation_id_fingerprint=prepared.operation_id_fingerprint,
             prepared_action_id=prepared.prepared_action_id,
             intent_fingerprint=_intent_fingerprint_from_prepared(prepared),
@@ -1752,7 +1879,7 @@ class ActionGatewayCoreV1:
             sent_at=started.sent_at,
             finished_at=now,
             safe_error_code="execution_started_without_terminal_receipt",
-            parent_receipt_id=started.receipt_id,
+            parent_receipt_id=parent_receipt_id or started.receipt_id,
         )
 
 
@@ -1820,9 +1947,11 @@ __all__ = [
     "ActionReceiptStateV1",
     "ActionReceiptStoreV1",
     "ActionReceiptV1",
+    "ActionReconciliationConnectorV1",
     "ConfirmationCodecV1",
     "ConnectorExecutionResultV1",
     "ConnectorPreparedActionV1",
+    "ConnectorReconciliationResultV1",
     "ConnectorRevalidationV1",
     "ExactTargetIdentityV1",
     "IssueStateV1",

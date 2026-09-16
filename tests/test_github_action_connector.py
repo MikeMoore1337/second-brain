@@ -16,6 +16,7 @@ from second_brain.adapters.actions.github_issues import (
     GITHUB_ACTION_ACCEPT,
     GITHUB_ACTION_API_BASE_URL,
     GITHUB_ACTION_API_VERSION,
+    GITHUB_ACTION_MAX_RECONCILIATION_ITEMS,
     GITHUB_ACTION_USER_AGENT,
     GitHubActionConfigStatusV1,
     GitHubActionConfigurationError,
@@ -32,6 +33,7 @@ from second_brain.application.action_gateway import (
     ActionGatewayConnectorError,
     ActionIntentV1,
     ActionKindV1,
+    ActionReceiptStateV1,
     IssueStateV1,
     PreparedExternalActionV1,
     ReversibilityV1,
@@ -86,6 +88,13 @@ class RecordingOpener:
 
 
 def _response(payload: dict[str, object], status: int = 200) -> FakeResponse:
+    return FakeResponse(
+        status,
+        json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+    )
+
+
+def _list_response(payload: list[object], status: int = 200) -> FakeResponse:
     return FakeResponse(
         status,
         json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
@@ -330,6 +339,41 @@ def test_create_execute_sends_one_exact_post_with_bound_marker() -> None:
     }
 
 
+def test_comment_execute_records_comment_identity_not_issue_identity() -> None:
+    opener = RecordingOpener(
+        [
+            _response(_repository_payload()),
+            _response(_issue_payload()),
+        ]
+    )
+    connector = GitHubIssuesActionConnectorV1(_config(), opener=opener)
+    prepared = _prepared(connector, _intent(ActionKindV1.GITHUB_ISSUE_COMMENT))
+    opener.responses.append(
+        _response(
+            {
+                "id": 909,
+                "node_id": "IC_comment",
+                "body": cast(str, prepared.semantic_payload["comment"]),
+                "html_url": f"https://github.com/{REPOSITORY}/issues/123#issuecomment-909",
+            },
+            status=201,
+        )
+    )
+
+    result = connector.execute(prepared, now=NOW)
+
+    assert result.remote_safe_identity == {
+        "repository": REPOSITORY,
+        "issue_number": 123,
+        "issue_id": 202,
+        "issue_node_id": "I_issue",
+        "comment_id": 909,
+        "comment_node_id": "IC_comment",
+        "url": f"https://github.com/{REPOSITORY}/issues/123",
+    }
+    assert opener.requests[2].get_method() == "POST"
+
+
 def test_set_state_sends_only_state_patch_and_revalidation_is_exact() -> None:
     opener = RecordingOpener(
         [
@@ -353,6 +397,139 @@ def test_set_state_sends_only_state_patch_and_revalidation_is_exact() -> None:
     assert request.full_url == f"{GITHUB_ACTION_API_BASE_URL}/repos/{REPOSITORY}/issues/123"
     assert json.loads(cast(bytes, request.data).decode("utf-8")) == {"state": "closed"}
     assert len(opener.requests) == 5
+
+
+def test_create_reconciliation_uses_one_bounded_marker_list_without_mutation() -> None:
+    opener = RecordingOpener([_response(_repository_payload())])
+    connector = GitHubIssuesActionConnectorV1(_config(), opener=opener)
+    prepared = _prepared(connector, _intent())
+    marker = cast(str, prepared.semantic_payload["marker"])
+    opener.responses.append(
+        _response(_repository_payload()),
+    )
+    opener.responses.append(
+        _list_response(
+            [
+                {
+                    **_mutation_payload(number=321),
+                    "body": f"created {marker}",
+                }
+            ]
+        )
+    )
+
+    result = connector.reconcile(prepared, now=NOW)
+
+    assert result.state is ActionReceiptStateV1.RECONCILED_EXECUTED
+    assert result.remote_safe_identity is not None
+    assert result.remote_safe_identity["issue_number"] == 321
+    assert len(opener.requests) == 3
+    request = opener.requests[2]
+    assert request.get_method() == "GET"
+    assert request.full_url == (
+        f"{GITHUB_ACTION_API_BASE_URL}/repos/{REPOSITORY}/issues"
+        f"?state=all&per_page={GITHUB_ACTION_MAX_RECONCILIATION_ITEMS}&page=1"
+    )
+    assert all(item.get_method() == "GET" for item in opener.requests)
+
+
+def test_marker_reconciliation_is_not_executed_or_ambiguous_by_cardinality() -> None:
+    opener = RecordingOpener([_response(_repository_payload())])
+    connector = GitHubIssuesActionConnectorV1(_config(), opener=opener)
+    prepared = _prepared(connector, _intent())
+    marker = cast(str, prepared.semantic_payload["marker"])
+    opener.responses.extend([_response(_repository_payload()), _list_response([])])
+    not_executed = connector.reconcile(prepared, now=NOW)
+    assert not_executed.state is ActionReceiptStateV1.RECONCILED_NOT_EXECUTED
+
+    opener.responses.extend(
+        [
+            _response(_repository_payload()),
+            _list_response(
+                [
+                    {**_mutation_payload(number=321), "body": marker},
+                    {**_mutation_payload(number=322), "body": marker},
+                ]
+            ),
+        ]
+    )
+    ambiguous = connector.reconcile(prepared, now=NOW)
+    assert ambiguous.state is ActionReceiptStateV1.RECONCILIATION_AMBIGUOUS
+    assert ambiguous.safe_error_code == "reconciliation_ambiguous"
+    assert len(opener.requests) == 5
+
+
+def test_comment_reconciliation_requires_exact_issue_and_returns_comment_identity() -> None:
+    opener = RecordingOpener([_response(_repository_payload()), _response(_issue_payload())])
+    connector = GitHubIssuesActionConnectorV1(_config(), opener=opener)
+    prepared = _prepared(
+        connector,
+        _intent(ActionKindV1.GITHUB_ISSUE_COMMENT),
+    )
+    marker = cast(str, prepared.semantic_payload["marker"])
+    opener.responses.extend(
+        [
+            _response(_repository_payload()),
+            _response(_issue_payload()),
+            _list_response(
+                [
+                    {
+                        "id": 909,
+                        "node_id": "IC_comment",
+                        "body": f"Комментарий\n{marker}",
+                        "html_url": f"https://github.com/{REPOSITORY}/issues/123#issuecomment-909",
+                    }
+                ]
+            ),
+        ]
+    )
+
+    result = connector.reconcile(prepared, now=NOW)
+
+    assert result.state is ActionReceiptStateV1.RECONCILED_EXECUTED
+    assert result.remote_safe_identity == {
+        "repository": REPOSITORY,
+        "issue_number": 123,
+        "issue_id": 202,
+        "issue_node_id": "I_issue",
+        "comment_id": 909,
+        "comment_node_id": "IC_comment",
+        "url": f"https://github.com/{REPOSITORY}/issues/123",
+    }
+    assert len(opener.requests) == 5
+    assert opener.requests[4].get_method() == "GET"
+    assert "comments?per_page=100&page=1" in opener.requests[4].full_url
+
+
+@pytest.mark.parametrize(
+    ("current_state", "expected"),
+    [
+        ("closed", ActionReceiptStateV1.RECONCILED_EXECUTED),
+        ("open", ActionReceiptStateV1.RECONCILED_NOT_EXECUTED),
+    ],
+)
+def test_set_state_reconciliation_compares_exact_state_without_patch(
+    current_state: str, expected: ActionReceiptStateV1
+) -> None:
+    opener = RecordingOpener(
+        [
+            _response(_repository_payload()),
+            _response(_issue_payload(state="open")),
+            _response(_repository_payload()),
+            _response(_issue_payload(state=current_state)),
+        ]
+    )
+    connector = GitHubIssuesActionConnectorV1(_config(), opener=opener)
+    prepared = _prepared(
+        connector,
+        _intent(ActionKindV1.GITHUB_ISSUE_SET_STATE, desired_state=IssueStateV1.CLOSED),
+    )
+
+    result = connector.reconcile(prepared, now=NOW)
+
+    assert result.state is expected
+    assert len(opener.requests) == 4
+    assert all(request.get_method() == "GET" for request in opener.requests)
 
 
 @pytest.mark.parametrize(

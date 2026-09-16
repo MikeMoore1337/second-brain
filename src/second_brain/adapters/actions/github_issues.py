@@ -34,8 +34,10 @@ from second_brain.application.action_gateway import (
     ActionGatewayInvalidRequestError,
     ActionIntentV1,
     ActionKindV1,
+    ActionReceiptStateV1,
     ConnectorExecutionResultV1,
     ConnectorPreparedActionV1,
+    ConnectorReconciliationResultV1,
     ConnectorRevalidationV1,
     ExactTargetIdentityV1,
     IssueStateV1,
@@ -53,6 +55,7 @@ GITHUB_ACTION_MAX_RESPONSE_BYTES: Final[int] = 256 * 1024
 GITHUB_ACTION_MAX_REQUEST_BYTES: Final[int] = 128 * 1024
 GITHUB_ACTION_MAX_REPOSITORIES: Final[int] = 32
 GITHUB_ACTION_MAX_TOKEN_BYTES: Final[int] = 4096
+GITHUB_ACTION_MAX_RECONCILIATION_ITEMS: Final[int] = 100
 
 _REPOSITORY_OWNER_MAX_BYTES: Final[int] = 39
 _REPOSITORY_NAME_MAX_BYTES: Final[int] = 100
@@ -307,7 +310,7 @@ def _reject_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object
     return result
 
 
-def _json_response(response: _HttpResponse, *, expected_status: set[int]) -> dict[str, object]:
+def _json_response_document(response: _HttpResponse, *, expected_status: set[int]) -> object:
     try:
         status = response.status
         body = response.read(GITHUB_ACTION_MAX_RESPONSE_BYTES + 1)
@@ -327,6 +330,13 @@ def _json_response(response: _HttpResponse, *, expected_status: set[int]) -> dic
         )
     except (TypeError, ValueError, UnicodeError, json.JSONDecodeError) as exc:
         raise GitHubActionResponseError() from exc
+    if type(decoded) not in {dict, list}:
+        raise GitHubActionResponseError()
+    return decoded
+
+
+def _json_response(response: _HttpResponse, *, expected_status: set[int]) -> dict[str, object]:
+    decoded = _json_response_document(response, expected_status=expected_status)
     if type(decoded) is not dict:
         raise GitHubActionResponseError()
     return cast(dict[str, object], decoded)
@@ -568,6 +578,137 @@ class GitHubIssuesActionConnectorV1:
             )
         )
 
+    def reconcile(
+        self,
+        prepared: PreparedExternalActionV1,
+        *,
+        now: datetime,
+    ) -> ConnectorReconciliationResultV1:
+        """Check one exact marker or state without issuing a mutation."""
+
+        token = self._require_ready()
+        finished = now
+        action_kind = cast(ActionKindV1, prepared.action_kind)
+        repository = self._canonical_repository(cast(str, prepared.semantic_payload["repository"]))
+        owner, repo = _repository_parts(repository)
+        base_path = f"/repos/{quote(owner, safe='')}/{quote(repo, safe='')}"
+        if action_kind is ActionKindV1.GITHUB_ISSUE_CREATE:
+            marker = cast(str, prepared.semantic_payload["marker"])
+            repository_payload = self._request_json("GET", base_path, token=token)
+            repository_target = _repo_target(repository_payload, repository)
+            if not _same_repository_identity(repository_target, prepared.exact_target_identity):
+                return ConnectorReconciliationResultV1(
+                    ActionReceiptStateV1.RECONCILIATION_AMBIGUOUS,
+                    finished,
+                    safe_error_code="reconciliation_ambiguous",
+                )
+            items = self._request_list(
+                f"{base_path}/issues?state=all&per_page={GITHUB_ACTION_MAX_RECONCILIATION_ITEMS}&page=1",
+                token=token,
+            )
+            matches, marker_ambiguous = _marker_matches(items, marker)
+            if marker_ambiguous or len(matches) > 1:
+                return ConnectorReconciliationResultV1(
+                    ActionReceiptStateV1.RECONCILIATION_AMBIGUOUS,
+                    finished,
+                    safe_error_code="reconciliation_ambiguous",
+                )
+            if not matches:
+                return ConnectorReconciliationResultV1(
+                    ActionReceiptStateV1.RECONCILED_NOT_EXECUTED,
+                    finished,
+                )
+            remote = _remote_identity(matches[0], repository, None)
+            return ConnectorReconciliationResultV1(
+                ActionReceiptStateV1.RECONCILED_EXECUTED,
+                finished,
+                remote_safe_identity=remote,
+                remote_url=cast(str, remote["url"]),
+            )
+
+        issue_number = prepared.exact_target_identity.issue_number
+        if issue_number is None:
+            raise ActionGatewayInvalidRequestError()
+        if action_kind is ActionKindV1.GITHUB_ISSUE_COMMENT:
+            marker = cast(str, prepared.semantic_payload["marker"])
+            repository_payload = self._request_json("GET", base_path, token=token)
+            repository_target = _repo_target(repository_payload, repository)
+            issue_payload = self._request_json(
+                "GET", f"{base_path}/issues/{issue_number}", token=token
+            )
+            issue = _issue_target(issue_payload, repository, issue_number, repository_target)
+            if issue.as_dict() != prepared.exact_target_identity.as_dict():
+                return ConnectorReconciliationResultV1(
+                    ActionReceiptStateV1.RECONCILIATION_AMBIGUOUS,
+                    finished,
+                    safe_error_code="reconciliation_ambiguous",
+                )
+            items = self._request_list(
+                f"{base_path}/issues/{issue_number}/comments?per_page="
+                f"{GITHUB_ACTION_MAX_RECONCILIATION_ITEMS}&page=1",
+                token=token,
+            )
+            matches, marker_ambiguous = _marker_matches(items, marker)
+            if marker_ambiguous or len(matches) > 1:
+                return ConnectorReconciliationResultV1(
+                    ActionReceiptStateV1.RECONCILIATION_AMBIGUOUS,
+                    finished,
+                    safe_error_code="reconciliation_ambiguous",
+                )
+            if not matches:
+                return ConnectorReconciliationResultV1(
+                    ActionReceiptStateV1.RECONCILED_NOT_EXECUTED,
+                    finished,
+                )
+            remote = _comment_identity(
+                matches[0],
+                repository,
+                prepared.exact_target_identity,
+            )
+            return ConnectorReconciliationResultV1(
+                ActionReceiptStateV1.RECONCILED_EXECUTED,
+                finished,
+                remote_safe_identity=remote,
+                remote_url=cast(str, remote["url"]),
+            )
+
+        repository_payload = self._request_json("GET", base_path, token=token)
+        repository_target = _repo_target(repository_payload, repository)
+        issue_payload = self._request_json("GET", f"{base_path}/issues/{issue_number}", token=token)
+        issue = _issue_target(issue_payload, repository, issue_number, repository_target)
+        bound = prepared.exact_target_identity
+        if not _same_issue_identity(issue, bound):
+            return ConnectorReconciliationResultV1(
+                ActionReceiptStateV1.RECONCILIATION_AMBIGUOUS,
+                finished,
+                safe_error_code="reconciliation_ambiguous",
+            )
+        desired = cast(str, prepared.semantic_payload["desired_state"])
+        if cast(IssueStateV1, issue.current_state).value == desired:
+            state = ActionReceiptStateV1.RECONCILED_EXECUTED
+        elif (
+            cast(IssueStateV1, issue.current_state).value
+            == cast(IssueStateV1, bound.current_state).value
+        ):
+            state = ActionReceiptStateV1.RECONCILED_NOT_EXECUTED
+        else:
+            state = ActionReceiptStateV1.RECONCILIATION_AMBIGUOUS
+        return ConnectorReconciliationResultV1(
+            state,
+            finished,
+            remote_safe_identity={
+                **issue.safe_identity(),
+                "state": cast(IssueStateV1, issue.current_state).value,
+                "url": f"https://github.com/{repository}/issues/{issue_number}",
+            },
+            remote_url=f"https://github.com/{repository}/issues/{issue_number}",
+            safe_error_code=(
+                "reconciliation_ambiguous"
+                if state is ActionReceiptStateV1.RECONCILIATION_AMBIGUOUS
+                else None
+            ),
+        )
+
     def execute(
         self,
         prepared: PreparedExternalActionV1,
@@ -617,7 +758,11 @@ class GitHubIssuesActionConnectorV1:
         except ActionGatewayConnectorError:
             raise
         finished = self.clock()
-        remote = _remote_identity(payload, repository, issue_number)
+        remote = (
+            _comment_identity(payload, repository, prepared.exact_target_identity)
+            if action_kind is ActionKindV1.GITHUB_ISSUE_COMMENT
+            else _remote_identity(payload, repository, issue_number)
+        )
         remote_url = cast(str, remote["url"])
         return ConnectorExecutionResultV1(
             ActionExecutionOutcomeV1.EXECUTED,
@@ -628,7 +773,7 @@ class GitHubIssuesActionConnectorV1:
             remote_url=remote_url,
         )
 
-    def _request_json(
+    def _request_document(
         self,
         method: str,
         path: str,
@@ -637,7 +782,8 @@ class GitHubIssuesActionConnectorV1:
         body: Mapping[str, object] | None = None,
         expected_status: set[int] | None = None,
         mutation: bool = False,
-    ) -> dict[str, object]:
+        expect_list: bool = False,
+    ) -> object:
         if method not in {"GET", "POST", "PATCH"} or not path.startswith("/repos/"):
             raise ActionGatewayInvalidRequestError()
         encoded_body: bytes | None = None
@@ -668,7 +814,12 @@ class GitHubIssuesActionConnectorV1:
         try:
             response = self.opener(request, timeout=self.timeout_seconds)
             with response:
-                return _json_response(response, expected_status=expected)
+                decoded = _json_response_document(response, expected_status=expected)
+                if (expect_list and type(decoded) is not list) or (
+                    not expect_list and type(decoded) is not dict
+                ):
+                    raise GitHubActionResponseError()
+                return decoded
         except urllib.error.HTTPError as exc:
             status = exc.code
             if mutation:
@@ -704,6 +855,45 @@ class GitHubIssuesActionConnectorV1:
             )
             raise ActionGatewayConnectorError(outcome, code) from None
 
+    def _request_json(
+        self,
+        method: str,
+        path: str,
+        *,
+        token: str,
+        body: Mapping[str, object] | None = None,
+        expected_status: set[int] | None = None,
+        mutation: bool = False,
+    ) -> dict[str, object]:
+        decoded = self._request_document(
+            method,
+            path,
+            token=token,
+            body=body,
+            expected_status=expected_status,
+            mutation=mutation,
+        )
+        if type(decoded) is not dict:
+            raise ActionGatewayInvalidRequestError()
+        return cast(dict[str, object], decoded)
+
+    def _request_list(
+        self,
+        path: str,
+        *,
+        token: str,
+    ) -> list[object]:
+        decoded = self._request_document(
+            "GET",
+            path,
+            token=token,
+            expected_status={200},
+            expect_list=True,
+        )
+        if type(decoded) is not list:
+            raise ActionGatewayInvalidRequestError()
+        return cast(list[object], decoded)
+
 
 def _remote_identity(
     payload: Mapping[str, object], repository: str, issue_number: int | None
@@ -728,7 +918,13 @@ def _remote_identity(
         result["state"] = state
     if issue_number is not None and number != issue_number:
         raise GitHubActionResponseError()
-    raw_url = _safe_text(payload.get("html_url"), max_bytes=512)
+    url = _canonical_issue_url(payload.get("html_url"), repository)
+    result["url"] = url
+    return result
+
+
+def _canonical_issue_url(value: object, repository: str) -> str:
+    raw_url = _safe_text(value, max_bytes=512)
     if "?" in raw_url:
         raise GitHubActionResponseError()
     url = raw_url.split("#", maxsplit=1)[0]
@@ -738,8 +934,79 @@ def _remote_identity(
     issue_suffix = url[len(expected_prefix) :]
     if not issue_suffix.isdecimal() or not 1 <= int(issue_suffix) <= 2**31 - 1:
         raise GitHubActionResponseError()
-    result["url"] = url
-    return result
+    return url
+
+
+def _marker_matches(items: list[object], marker: str) -> tuple[list[dict[str, object]], bool]:
+    if len(items) > GITHUB_ACTION_MAX_RECONCILIATION_ITEMS:
+        raise ActionGatewayConnectorError(
+            ActionExecutionOutcomeV1.FAILED_BEFORE_SEND,
+            "reconciliation_response_invalid",
+        )
+    matches: list[dict[str, object]] = []
+    ambiguous = False
+    for item in items:
+        if type(item) is not dict:
+            raise ActionGatewayConnectorError(
+                ActionExecutionOutcomeV1.FAILED_BEFORE_SEND,
+                "reconciliation_response_invalid",
+            )
+        body = item.get("body")
+        if type(body) is not str:
+            continue
+        occurrences = body.count(marker)
+        if occurrences == 1:
+            matches.append(cast(dict[str, object], item))
+        elif occurrences > 1:
+            ambiguous = True
+    return matches, ambiguous
+
+
+def _same_repository_identity(
+    current: ExactTargetIdentityV1,
+    bound: ExactTargetIdentityV1,
+) -> bool:
+    return (
+        current.repository.casefold() == bound.repository.casefold()
+        and current.repository_id == bound.repository_id
+        and current.repository_node_id == bound.repository_node_id
+    )
+
+
+def _same_issue_identity(
+    current: ExactTargetIdentityV1,
+    bound: ExactTargetIdentityV1,
+) -> bool:
+    return (
+        current.repository.casefold() == bound.repository.casefold()
+        and current.repository_id == bound.repository_id
+        and current.repository_node_id == bound.repository_node_id
+        and current.issue_number == bound.issue_number
+        and current.issue_id == bound.issue_id
+        and current.issue_node_id == bound.issue_node_id
+        and current.locked == bound.locked
+    )
+
+
+def _comment_identity(
+    payload: Mapping[str, object],
+    repository: str,
+    issue_target: ExactTargetIdentityV1,
+) -> dict[str, object]:
+    issue_number = issue_target.issue_number
+    issue_id = issue_target.issue_id
+    issue_node_id = issue_target.issue_node_id
+    if issue_number is None or issue_id is None or issue_node_id is None:
+        raise GitHubActionResponseError()
+    return {
+        "repository": repository,
+        "issue_number": issue_number,
+        "issue_id": issue_id,
+        "issue_node_id": issue_node_id,
+        "comment_id": _safe_int(payload.get("id")),
+        "comment_node_id": _safe_text(payload.get("node_id"), max_bytes=256),
+        "url": _canonical_issue_url(payload.get("html_url"), repository),
+    }
 
 
 __all__ = [
