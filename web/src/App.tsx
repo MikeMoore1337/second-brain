@@ -30,6 +30,7 @@ import { PersonalStrategySurface } from "./personal-strategy-surface";
 import { PersonalPlanningSurface } from "./personal-planning-surface";
 import { PersonalExperimentsSurface } from "./personal-experiments-surface";
 import { AdaptiveCognitiveTwinSurface } from "./adaptive-cognitive-twin-surface";
+import { ExecutionFeedbackSurface } from "./execution-feedback-surface";
 import { SemanticNavigation, semanticGroups, type SemanticTool } from "./semantic-navigation";
 
 function renderSemanticTool(tool: SemanticTool): ReactElement | null {
@@ -52,6 +53,7 @@ function renderSemanticTool(tool: SemanticTool): ReactElement | null {
     case "personal-planning": return <PersonalPlanningSurface />;
     case "personal-experiments": return <PersonalExperimentsSurface />;
     case "adaptive-cognitive-twin": return <AdaptiveCognitiveTwinSurface />;
+    case "execution-feedback": return <ExecutionFeedbackSurface />;
     default: return tool satisfies never;
   }
 }
