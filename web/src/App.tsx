@@ -27,6 +27,7 @@ import { CognitiveTwinSurface } from "./cognitive-twin-surface";
 import { DecisionCompassSurface } from "./decision-compass-surface";
 import { GrowthSurface } from "./growth-surface";
 import { PersonalStrategySurface } from "./personal-strategy-surface";
+import { PersonalPlanningSurface } from "./personal-planning-surface";
 import { PersonalExperimentsSurface } from "./personal-experiments-surface";
 import { AdaptiveCognitiveTwinSurface } from "./adaptive-cognitive-twin-surface";
 import { SemanticNavigation, semanticGroups, type SemanticTool } from "./semantic-navigation";
@@ -48,6 +49,7 @@ function renderSemanticTool(tool: SemanticTool): ReactElement | null {
     case "decision-compass": return <DecisionCompassSurface />;
     case "growth-engine": return <GrowthSurface />;
     case "personal-strategy": return <PersonalStrategySurface />;
+    case "personal-planning": return <PersonalPlanningSurface />;
     case "personal-experiments": return <PersonalExperimentsSurface />;
     case "adaptive-cognitive-twin": return <AdaptiveCognitiveTwinSurface />;
     default: return tool satisfies never;

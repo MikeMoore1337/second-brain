@@ -250,6 +250,33 @@ from second_brain.entrypoints.web.personal_experiments import (
     build_production_personal_experiment_web_service,
     install_personal_experiment_routes,
 )
+from second_brain.entrypoints.web.personal_planning import (
+    MAX_PERSONAL_PLANNING_CONTEXT_RESPONSE_BYTES,
+    MAX_PERSONAL_PLANNING_GENERATE_RESPONSE_BYTES,
+    MAX_PERSONAL_PLANNING_MUTATION_RESPONSE_BYTES,
+    MAX_PERSONAL_PLANNING_STATE_RESPONSE_BYTES,
+    MAX_RAW_PERSONAL_PLANNING_BODY_BYTES,
+    PERSONAL_PLANNING_ACCEPT_PATH,
+    PERSONAL_PLANNING_CONTEXT_PATH,
+    PERSONAL_PLANNING_EDIT_PATH,
+    PERSONAL_PLANNING_GENERATE_PATH,
+    PERSONAL_PLANNING_REQUEST_HEADER_NAME,
+    PERSONAL_PLANNING_REQUEST_HEADER_VALUE,
+    PERSONAL_PLANNING_STATE_PATH,
+    PersonalPlanningAcceptPayload,
+    PersonalPlanningContextPayload,
+    PersonalPlanningContextRequest,
+    PersonalPlanningEditPayload,
+    PersonalPlanningEmptyPayload,
+    PersonalPlanningGeneratePayload,
+    PersonalPlanningRequestBoundaryMiddleware,
+    PersonalPlanningSourceChangedError,
+    PersonalPlanningSourceUnavailableError,
+    PersonalPlanningWebService,
+    ProductionPersonalPlanningWebService,
+    build_production_personal_planning_web_service,
+    install_personal_planning_routes,
+)
 from second_brain.entrypoints.web.personal_strategy import (
     MAX_PERSONAL_STRATEGY_ACCEPT_RESPONSE_BYTES,
     MAX_PERSONAL_STRATEGY_CONTEXT_RESPONSE_BYTES,
@@ -368,6 +395,9 @@ def create_app(**kwargs: Any) -> FastAPI:
     personal_strategy_service = kwargs.pop("personal_strategy_web_service", None)
     if personal_strategy_service is None:
         personal_strategy_service = kwargs.pop("personal_strategy_service", None)
+    personal_planning_service = kwargs.pop("personal_planning_web_service", None)
+    if personal_planning_service is None:
+        personal_planning_service = kwargs.pop("personal_planning_service", None)
     adaptive_cognitive_twin_service = kwargs.pop("adaptive_cognitive_twin_web_service", None)
     auth_config = kwargs.pop("web_auth_config", None)
     auth_gateway = kwargs.pop("web_auth_gateway", None)
@@ -457,6 +487,12 @@ def create_app(**kwargs: Any) -> FastAPI:
     install_personal_strategy_routes(
         app,
         service=personal_strategy_service,
+        env_file=env_file,
+        vault_path_override=vault_path_override,
+    )
+    install_personal_planning_routes(
+        app,
+        service=personal_planning_service,
         env_file=env_file,
         vault_path_override=vault_path_override,
     )
@@ -693,6 +729,31 @@ __all__ = [
     "ProductionPersonalStrategyWebService",
     "build_production_personal_strategy_web_service",
     "install_personal_strategy_routes",
+    "MAX_PERSONAL_PLANNING_CONTEXT_RESPONSE_BYTES",
+    "MAX_PERSONAL_PLANNING_GENERATE_RESPONSE_BYTES",
+    "MAX_PERSONAL_PLANNING_MUTATION_RESPONSE_BYTES",
+    "MAX_PERSONAL_PLANNING_STATE_RESPONSE_BYTES",
+    "MAX_RAW_PERSONAL_PLANNING_BODY_BYTES",
+    "PERSONAL_PLANNING_ACCEPT_PATH",
+    "PERSONAL_PLANNING_CONTEXT_PATH",
+    "PERSONAL_PLANNING_EDIT_PATH",
+    "PERSONAL_PLANNING_GENERATE_PATH",
+    "PERSONAL_PLANNING_REQUEST_HEADER_NAME",
+    "PERSONAL_PLANNING_REQUEST_HEADER_VALUE",
+    "PERSONAL_PLANNING_STATE_PATH",
+    "PersonalPlanningAcceptPayload",
+    "PersonalPlanningContextPayload",
+    "PersonalPlanningContextRequest",
+    "PersonalPlanningEditPayload",
+    "PersonalPlanningEmptyPayload",
+    "PersonalPlanningGeneratePayload",
+    "PersonalPlanningRequestBoundaryMiddleware",
+    "PersonalPlanningSourceChangedError",
+    "PersonalPlanningSourceUnavailableError",
+    "PersonalPlanningWebService",
+    "ProductionPersonalPlanningWebService",
+    "build_production_personal_planning_web_service",
+    "install_personal_planning_routes",
     "ADAPTIVE_COGNITIVE_TWIN_ACTIVATE_PATH",
     "ADAPTIVE_COGNITIVE_TWIN_CANDIDATE_PATH",
     "ADAPTIVE_COGNITIVE_TWIN_EVALUATE_PATH",
