@@ -48,6 +48,7 @@ it("renders exactly four semantic directions and removes the old decorative card
   expect(rendered.querySelectorAll(".semantic-functional-surface > details, .semantic-functional-surface > summary")).toHaveLength(0);
   expect(rendered.querySelectorAll(".semantic-functional-heading")).toHaveLength(19);
   expect(rendered.querySelector('[data-semantic-tool-link="active-learning"]')).toBeNull();
+  expect(rendered.querySelector('[data-semantic-tool-link="execution-feedback"] [data-icon="execution-feedback"]')).not.toBeNull();
 });
 
 it("keeps one compact navigation entry per tool and activates its mounted surface", async () => {
