@@ -217,8 +217,7 @@ def _app(service: _Service) -> FastAPI:
     )
 
 
-def test_state_and_context_are_read_only_until_explicit_generate(tmp_path) -> None:
-    del tmp_path
+def test_state_and_context_are_read_only_until_explicit_generate() -> None:
     goal = _goal()
     pack = _pack(goal)
     service = _Service(pack, _proposal(pack))
