@@ -1,0 +1,580 @@
+.personal-planning-surface {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+  background: var(--sb-gradient-cognitive-surface), color-mix(in srgb, var(--sb-color-basin) 76%, transparent);
+}
+
+.personal-planning-heading,
+.personal-planning-panel-heading,
+.personal-planning-toolbar,
+.personal-planning-actions,
+.personal-planning-heading-meta,
+.personal-planning-item-toolbar,
+.personal-planning-boundary,
+.personal-planning-caveats,
+.personal-planning-kind {
+  display: flex;
+  min-width: 0;
+  gap: 0.75rem;
+}
+
+.personal-planning-heading {
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.personal-planning-heading > div:first-child,
+.personal-planning-panel-heading > div:first-child,
+.personal-planning-item,
+.personal-planning-field,
+.personal-planning-goal-copy {
+  min-width: 0;
+}
+
+.personal-planning-heading h2 {
+  max-width: 25ch;
+  margin: 0;
+  color: var(--sb-color-text-primary);
+  font-size: clamp(1.45rem, 2.7vw, 2.1rem);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+}
+
+.personal-planning-heading p,
+.personal-planning-panel-heading p,
+.personal-planning-field small,
+.personal-planning-live,
+.personal-planning-muted,
+.personal-planning-empty p {
+  margin: 0;
+  color: var(--sb-color-text-secondary);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.personal-planning-heading p {
+  max-width: 68ch;
+  margin-top: 0.6rem;
+}
+
+.personal-planning-heading-meta {
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  color: var(--sb-color-text-tertiary);
+  font-family: var(--sb-font-mono);
+  font-size: 0.68rem;
+}
+
+.personal-planning-heading-meta span,
+.personal-planning-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.personal-planning-boundary {
+  align-items: flex-start;
+  padding: 0.9rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--sb-color-accent) 32%, transparent);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--sb-color-accent) 8%, transparent);
+  color: var(--sb-color-text-secondary);
+}
+
+.personal-planning-boundary p {
+  max-width: 88ch;
+  margin: 0;
+  line-height: 1.55;
+}
+
+.personal-planning-toolbar,
+.personal-planning-actions {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.personal-planning-toolbar {
+  border-top: 1px solid var(--sb-color-line-strong);
+  padding-top: 1rem;
+}
+
+.personal-planning-live {
+  min-height: 1.5rem;
+}
+
+.personal-planning-builder,
+.personal-planning-input-grid,
+.personal-planning-goals,
+.personal-planning-items,
+.personal-planning-reasons,
+.personal-planning-preview,
+.personal-planning-panel,
+.personal-planning-current,
+.personal-planning-provenance {
+  display: grid;
+  gap: 1rem;
+}
+
+.personal-planning-builder {
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  align-items: start;
+}
+
+.personal-planning-panel {
+  min-width: 0;
+  padding: clamp(1rem, 2.5vw, 1.5rem);
+  border: 1px solid var(--sb-color-line-strong);
+  border-radius: 1.25rem;
+  background: color-mix(in srgb, var(--sb-color-basin) 80%, transparent);
+}
+
+.personal-planning-panel-heading {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.personal-planning-panel-heading h3 {
+  margin: 0;
+  color: var(--sb-color-text-primary);
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.personal-planning-panel-heading p {
+  margin-top: 0.35rem;
+}
+
+.personal-planning-count,
+.personal-planning-state-chip {
+  flex: 0 0 auto;
+  border: 1px solid var(--sb-color-line-strong);
+  border-radius: 999px;
+  padding: 0.42rem 0.65rem;
+  color: var(--sb-color-text-primary);
+  font-size: 0.76rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.personal-planning-state-chip[data-state="exact_current"],
+.personal-planning-state-chip[data-state="current"] {
+  border-color: var(--sb-color-success);
+}
+
+.personal-planning-state-chip[data-state="incomplete"],
+.personal-planning-state-chip[data-state="stale"] {
+  border-color: var(--sb-color-warning);
+}
+
+.personal-planning-state-chip[data-state="source_changed"],
+.personal-planning-state-chip[data-state="capacity_conflict"] {
+  border-color: var(--sb-color-danger);
+}
+
+.personal-planning-goal {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.7rem;
+  align-items: start;
+  padding: 0.85rem;
+  border: 1px solid var(--sb-color-line);
+  border-radius: 0.95rem;
+  background: color-mix(in srgb, var(--sb-color-void) 36%, transparent);
+  cursor: pointer;
+}
+
+.personal-planning-goal[data-selected="true"],
+.personal-planning-item[data-selected="true"] {
+  border-color: var(--sb-color-accent);
+  background: color-mix(in srgb, var(--sb-color-accent) 7%, var(--sb-color-void));
+}
+
+.personal-planning-goal[data-eligible="false"] {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.personal-planning-goal input,
+.personal-planning-item-toolbar input[type="checkbox"] {
+  width: 1.2rem;
+  height: 1.2rem;
+  margin-top: 0.1rem;
+  accent-color: var(--sb-color-accent);
+}
+
+.personal-planning-goal-copy strong,
+.personal-planning-goal-copy span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.personal-planning-goal-copy strong {
+  color: var(--sb-color-text-primary);
+}
+
+.personal-planning-goal-copy span {
+  margin-top: 0.25rem;
+  color: var(--sb-color-text-tertiary);
+  font-size: 0.76rem;
+}
+
+.personal-planning-goal-mark {
+  color: var(--sb-color-success);
+}
+
+.personal-planning-order {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding-left: 1.6rem;
+  color: var(--sb-color-text-secondary);
+}
+
+.personal-planning-order li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.personal-planning-order li span {
+  overflow-wrap: anywhere;
+}
+
+.personal-planning-input-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.personal-planning-field {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.personal-planning-field > span,
+.personal-planning-reasons > strong,
+.personal-planning-item-meta dt {
+  color: var(--sb-color-text-primary);
+  font-size: 0.86rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.personal-planning-field small {
+  display: block;
+  font-weight: 450;
+}
+
+.personal-planning-field input,
+.personal-planning-field textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--sb-color-line-strong);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--sb-color-void) 68%, var(--sb-color-basin));
+  color: var(--sb-color-text-primary);
+  font: inherit;
+  line-height: 1.45;
+}
+
+.personal-planning-field input,
+.personal-planning-field textarea {
+  padding: 0.7rem 0.8rem;
+}
+
+.personal-planning-field textarea {
+  resize: vertical;
+}
+
+.personal-planning-button,
+.personal-planning-icon-button {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--sb-color-line-strong);
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.9rem;
+  color: var(--sb-color-text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 650;
+  line-height: 1.25;
+  transition: background-color 160ms ease-out, border-color 160ms ease-out, color 160ms ease-out, transform 160ms ease-out;
+}
+
+.personal-planning-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.personal-planning-button-primary {
+  border-color: var(--sb-color-accent);
+  background: var(--sb-color-accent);
+  color: var(--sb-color-on-accent);
+}
+
+.personal-planning-button-secondary,
+.personal-planning-icon-button {
+  background: transparent;
+}
+
+.personal-planning-button:hover:not(:disabled),
+.personal-planning-icon-button:hover:not(:disabled) {
+  border-color: var(--sb-color-accent-hover);
+  transform: translateY(-1px);
+}
+
+.personal-planning-button-primary:hover:not(:disabled) {
+  background: var(--sb-color-accent-hover);
+}
+
+.personal-planning-button:disabled,
+.personal-planning-icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+  transform: none;
+}
+
+.personal-planning-button:focus-visible,
+.personal-planning-icon-button:focus-visible,
+.personal-planning-field input:focus-visible,
+.personal-planning-field textarea:focus-visible,
+.personal-planning-goal input:focus-visible,
+.personal-planning-item input:focus-visible,
+.personal-planning-preview summary:focus-visible,
+.personal-planning-provenance summary:focus-visible {
+  outline: var(--sb-focus-width) solid var(--sb-color-accent);
+  outline-offset: 3px;
+}
+
+.personal-planning-preview,
+.personal-planning-provenance {
+  padding: 0.9rem;
+  border: 1px solid var(--sb-color-line);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--sb-color-void) 52%, transparent);
+}
+
+.personal-planning-preview summary,
+.personal-planning-provenance summary {
+  color: var(--sb-color-text-primary);
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.personal-planning-preview pre {
+  max-width: 100%;
+  max-height: 20rem;
+  margin: 0;
+  overflow: auto;
+  padding: 0.85rem;
+  border: 1px solid var(--sb-color-line);
+  border-radius: 0.7rem;
+  background: var(--sb-color-void);
+  color: var(--sb-color-text-secondary);
+  font: 0.74rem/1.5 var(--sb-font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.personal-planning-preview dl,
+.personal-planning-provenance dl,
+.personal-planning-item-meta {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.personal-planning-preview dl div,
+.personal-planning-provenance dl div,
+.personal-planning-item-meta div {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.35fr) minmax(0, 1fr);
+  gap: 0.65rem;
+}
+
+.personal-planning-preview dt,
+.personal-planning-provenance dt,
+.personal-planning-item-meta dt {
+  color: var(--sb-color-text-tertiary);
+  font-size: 0.76rem;
+}
+
+.personal-planning-preview dd,
+.personal-planning-provenance dd,
+.personal-planning-item-meta dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--sb-color-text-secondary);
+  font-size: 0.8rem;
+}
+
+.personal-planning-items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.personal-planning-item {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+  border: 1px solid var(--sb-color-line);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--sb-color-void) 42%, transparent);
+}
+
+.personal-planning-item-toolbar {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.personal-planning-item-toolbar label {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--sb-color-text-primary);
+  font-weight: 650;
+}
+
+.personal-planning-kind {
+  color: var(--sb-color-accent);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.personal-planning-position {
+  margin-left: auto;
+  color: var(--sb-color-text-tertiary);
+  font-size: 0.76rem;
+}
+
+.personal-planning-item > strong {
+  color: var(--sb-color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.personal-planning-item > p {
+  margin: 0;
+  color: var(--sb-color-text-secondary);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.personal-planning-reasons ul,
+.personal-planning-caveats ul {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--sb-color-text-secondary);
+  line-height: 1.5;
+}
+
+.personal-planning-caveats {
+  align-items: flex-start;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--sb-color-warning);
+  border-radius: 0.9rem;
+  color: var(--sb-color-text-secondary);
+}
+
+.personal-planning-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--sb-color-danger);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--sb-color-danger) 8%, transparent);
+  color: var(--sb-color-danger-strong);
+}
+
+.personal-planning-empty {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 1rem;
+  border: 1px solid var(--sb-color-line);
+  border-radius: 1rem;
+  color: var(--sb-color-text-secondary);
+}
+
+@media (max-width: 860px) {
+  .personal-planning-heading,
+  .personal-planning-panel-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .personal-planning-heading-meta {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .personal-planning-builder {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .personal-planning-surface {
+    margin-inline: -0.25rem;
+    padding: 1rem;
+    border-radius: 1.25rem;
+  }
+
+  .personal-planning-input-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .personal-planning-actions,
+  .personal-planning-toolbar {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .personal-planning-button {
+    width: 100%;
+  }
+
+  .personal-planning-state-chip {
+    align-self: flex-start;
+  }
+}
+
+@media (max-width: 430px) {
+  .personal-planning-preview dl div,
+  .personal-planning-provenance dl div,
+  .personal-planning-item-meta div {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+
+  .personal-planning-position {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 360px) {
+  .personal-planning-item-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .personal-planning-button,
+  .personal-planning-icon-button {
+    transition: none;
+  }
+}

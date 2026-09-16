@@ -86,6 +86,7 @@ from second_brain.entrypoints.web.app import (
     MAX_RAW_GROWTH_BODY_BYTES,
     MAX_RAW_GROWTH_LEARNING_BODY_BYTES,
     MAX_RAW_PERSONAL_EXPERIMENT_BODY_BYTES,
+    MAX_RAW_PERSONAL_PLANNING_BODY_BYTES,
     MAX_RAW_PERSONAL_STRATEGY_BODY_BYTES,
     MAX_RAW_RETROSPECTIVE_CALIBRATION_BODY_BYTES,
     MAX_RAW_SEARCH_BODY_BYTES,
@@ -106,6 +107,13 @@ from second_brain.entrypoints.web.app import (
     PERSONAL_EXPERIMENT_REQUEST_HEADER_NAME,
     PERSONAL_EXPERIMENT_REQUEST_HEADER_VALUE,
     PERSONAL_EXPERIMENTS_PATH,
+    PERSONAL_PLANNING_ACCEPT_PATH,
+    PERSONAL_PLANNING_CONTEXT_PATH,
+    PERSONAL_PLANNING_EDIT_PATH,
+    PERSONAL_PLANNING_GENERATE_PATH,
+    PERSONAL_PLANNING_REQUEST_HEADER_NAME,
+    PERSONAL_PLANNING_REQUEST_HEADER_VALUE,
+    PERSONAL_PLANNING_STATE_PATH,
     PERSONAL_STRATEGY_ACCEPT_PATH,
     PERSONAL_STRATEGY_CONTEXT_PATH,
     PERSONAL_STRATEGY_GENERATE_PATH,
@@ -451,6 +459,21 @@ def _personal_strategy_route(path: str) -> PrivateRoute:
     )
 
 
+def _personal_planning_route(path: str) -> PrivateRoute:
+    """Build one Stage 17.4 owner-only planning route descriptor."""
+
+    return PrivateRoute(
+        path=path,
+        request_header_name=PERSONAL_PLANNING_REQUEST_HEADER_NAME,
+        request_header_value=PERSONAL_PLANNING_REQUEST_HEADER_VALUE,
+        content_type="application/json",
+        body=b"{}",
+        invalid_code="PERSONAL_PLANNING_INVALID_REQUEST",
+        content_too_large_code="PERSONAL_PLANNING_REQUEST_TOO_LARGE",
+        max_body_bytes=MAX_RAW_PERSONAL_PLANNING_BODY_BYTES,
+    )
+
+
 PRIVATE_ROUTES: tuple[PrivateRoute, ...] = (
     PrivateRoute(
         path="/api/assistant",
@@ -720,6 +743,11 @@ PRIVATE_ROUTES: tuple[PrivateRoute, ...] = (
     _personal_strategy_route(PERSONAL_STRATEGY_GENERATE_PATH),
     _personal_strategy_route(PERSONAL_STRATEGY_REJECT_PATH),
     _personal_strategy_route(PERSONAL_STRATEGY_ACCEPT_PATH),
+    _personal_planning_route(PERSONAL_PLANNING_STATE_PATH),
+    _personal_planning_route(PERSONAL_PLANNING_CONTEXT_PATH),
+    _personal_planning_route(PERSONAL_PLANNING_GENERATE_PATH),
+    _personal_planning_route(PERSONAL_PLANNING_ACCEPT_PATH),
+    _personal_planning_route(PERSONAL_PLANNING_EDIT_PATH),
     PrivateRoute(
         path="/api/self-retrieval",
         request_header_name=SELF_RETRIEVAL_REQUEST_HEADER_NAME,
@@ -1109,7 +1137,10 @@ def test_every_private_route_enforces_raw_body_cap_before_parser(route: PrivateR
         (route.request_header_name, route.request_header_value),
         ("content-length", str(route.max_body_bytes + 1)),
     ]
-    if route.request_header_value == PERSONAL_STRATEGY_REQUEST_HEADER_VALUE:
+    if route.request_header_value in {
+        PERSONAL_STRATEGY_REQUEST_HEADER_VALUE,
+        PERSONAL_PLANNING_REQUEST_HEADER_VALUE,
+    }:
         headers.insert(1, ("origin", LOOPBACK_BASE_URL))
 
     application, service = _boundary_test_app()
@@ -1151,7 +1182,10 @@ def test_every_private_route_enforces_streamed_raw_body_cap(
         ("content-type", route.content_type),
         (route.request_header_name, route.request_header_value),
     ]
-    if route.request_header_value == PERSONAL_STRATEGY_REQUEST_HEADER_VALUE:
+    if route.request_header_value in {
+        PERSONAL_STRATEGY_REQUEST_HEADER_VALUE,
+        PERSONAL_PLANNING_REQUEST_HEADER_VALUE,
+    }:
         headers.insert(1, ("origin", LOOPBACK_BASE_URL))
     if declared_length is not None:
         headers.append(("content-length", declared_length))
