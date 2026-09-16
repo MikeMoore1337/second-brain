@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import cast
@@ -154,6 +155,7 @@ class _Service:
     proposal: StrategyProposalV1
     generate_calls: int = 0
     accepted: object | None = None
+    revalidated_pack: ExecutiveContextPackV1 | None = None
 
     def state(self) -> dict[str, object]:
         return {"goals": [], "current_snapshots": [], "eligible_goal_count": 0}
@@ -164,7 +166,7 @@ class _Service:
 
     def revalidate_context(self, pack: ExecutiveContextPackV1) -> ExecutiveContextPackV1:
         del pack
-        return self.pack
+        return self.pack if self.revalidated_pack is None else self.revalidated_pack
 
     def current_snapshot(self, pack: ExecutiveContextPackV1) -> dict[str, object] | None:
         del pack
@@ -339,3 +341,166 @@ def test_boundary_rejects_missing_origin_unknown_fields_and_wrong_method() -> No
     assert missing_origin.status_code == 400
     assert unknown.status_code == 400
     assert wrong_method.status_code == 405
+
+
+def test_json_boundary_rejects_duplicate_keys_and_nonfinite_values() -> None:
+    goal = _goal()
+    pack = _pack(goal)
+    service = _Service(pack, _proposal(pack))
+
+    with TestClient(_app(service), base_url=BASE_URL) as client:
+        duplicate = client.post(
+            PERSONAL_STRATEGY_STATE_PATH,
+            headers=_headers(),
+            content=b'{"duplicate":1,"duplicate":2}',
+        )
+        nonfinite = client.post(
+            PERSONAL_STRATEGY_CONTEXT_PATH,
+            headers=_headers(),
+            content=(
+                '{"goal_source_uuid":"'
+                f"{goal.source_note_uuid}"
+                '","goal_identity_fingerprint":"'
+                f"{goal_identity_fingerprint(goal)}"
+                '","task":NaN,"constraints":[],"current_context":""}'
+            ).encode(),
+        )
+
+    assert duplicate.status_code == 400
+    assert duplicate.json()["error"]["code"] == "PERSONAL_STRATEGY_INVALID_REQUEST"
+    assert nonfinite.status_code == 400
+    assert nonfinite.json()["error"]["code"] == "PERSONAL_STRATEGY_INVALID_REQUEST"
+    assert service.generate_calls == 0
+
+
+def test_changed_context_pack_is_rejected_before_provider_call() -> None:
+    goal = _goal()
+    pack = _pack(goal)
+    changed_pack = build_executive_context_pack(
+        goal,
+        goal_text=pack.goal_text,
+        task="Другая задача после review",
+        constraints=pack.constraints,
+        current_context=pack.current_context,
+        sources=pack.sources,
+        as_of=pack.as_of,
+        expected_goal_identity_fingerprint=goal_identity_fingerprint(goal),
+    )
+    service = _Service(pack, _proposal(pack))
+
+    with TestClient(_app(service), base_url=BASE_URL) as client:
+        response = client.post(
+            PERSONAL_STRATEGY_GENERATE_PATH,
+            headers=_headers(),
+            json={"context_pack": changed_pack.as_dict(), "provider_preview": "ignored"},
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "PERSONAL_STRATEGY_SOURCE_CHANGED"
+    assert service.generate_calls == 0
+
+
+def test_revalidation_rejects_current_source_projection_change() -> None:
+    goal = _goal()
+    pack = _pack(goal)
+    changed_pack = build_executive_context_pack(
+        goal,
+        goal_text=pack.goal_text,
+        task=pack.task,
+        constraints=("Другая проверяемая оговорка",),
+        current_context=pack.current_context,
+        sources=pack.sources,
+        as_of=pack.as_of,
+        expected_goal_identity_fingerprint=goal_identity_fingerprint(goal),
+    )
+    service = _Service(pack, _proposal(pack), revalidated_pack=changed_pack)
+
+    with TestClient(_app(service), base_url=BASE_URL) as client:
+        response = client.post(
+            PERSONAL_STRATEGY_GENERATE_PATH,
+            headers=_headers(),
+            json={"context_pack": pack.as_dict(), "provider_preview": "ignored"},
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "PERSONAL_STRATEGY_SOURCE_CHANGED"
+    assert service.generate_calls == 0
+
+
+def test_tampered_proposal_and_reviewed_action_fail_closed_without_append() -> None:
+    goal = _goal()
+    pack = _pack(goal)
+    proposal = _proposal(pack)
+    service = _Service(pack, proposal)
+    tampered_proposal = json.loads(proposal.to_json())
+    tampered_proposal["candidates"][0]["title"] = "Подменённый кандидат"
+    reviewed = build_reviewed_action(proposal.candidates[0]).as_dict()
+    reviewed["edited"] = True
+
+    with TestClient(_app(service), base_url=BASE_URL) as client:
+        bad_proposal = client.post(
+            PERSONAL_STRATEGY_ACCEPT_PATH,
+            headers=_headers(),
+            json={
+                "context_pack": pack.as_dict(),
+                "proposal": tampered_proposal,
+                "selected_actions": [],
+                "operation_id": str(uuid7()),
+                "expected_prior_snapshot_id": None,
+                "expected_prior_snapshot_fingerprint": None,
+            },
+        )
+        bad_review = client.post(
+            PERSONAL_STRATEGY_ACCEPT_PATH,
+            headers=_headers(),
+            json={
+                "context_pack": pack.as_dict(),
+                "proposal": proposal.as_dict(),
+                "selected_actions": [reviewed],
+                "operation_id": str(uuid7()),
+                "expected_prior_snapshot_id": None,
+                "expected_prior_snapshot_fingerprint": None,
+            },
+        )
+
+    assert bad_proposal.status_code == 400
+    assert bad_review.status_code == 400
+    assert service.accepted is None
+
+
+def test_provider_error_is_bounded_and_never_echoes_private_details() -> None:
+    class _UnavailableService(_Service):
+        def generate(self, pack: ExecutiveContextPackV1) -> StrategyProposalV1:
+            del pack
+            self.generate_calls += 1
+            raise RuntimeError("C:/private/vault/secret-provider-response")
+
+    goal = _goal()
+    pack = _pack(goal)
+    service = _UnavailableService(pack, _proposal(pack))
+
+    with TestClient(_app(service), base_url=BASE_URL) as client:
+        context = client.post(
+            PERSONAL_STRATEGY_CONTEXT_PATH,
+            headers=_headers(),
+            json={
+                "goal_source_uuid": str(goal.source_note_uuid),
+                "goal_identity_fingerprint": goal_identity_fingerprint(goal),
+                "task": pack.task,
+                "constraints": list(pack.constraints),
+                "current_context": pack.current_context,
+            },
+        ).json()
+        response = client.post(
+            PERSONAL_STRATEGY_GENERATE_PATH,
+            headers=_headers(),
+            json={
+                "context_pack": context["context_pack"],
+                "provider_preview": context["provider_preview"]["canonical_json"],
+            },
+        )
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "PERSONAL_STRATEGY_SOURCE_UNAVAILABLE"
+    assert "secret-provider-response" not in response.text
+    assert "C:/private" not in response.text
