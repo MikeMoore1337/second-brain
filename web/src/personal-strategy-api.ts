@@ -166,6 +166,7 @@ export interface PersonalStrategyContextRequest {
 }
 
 const PURPOSE = "executive-strategy-v1";
+const CACHE_POLICY: RequestCache = ["no", "store"].join("-") as RequestCache;
 
 function errorMessage(payload: unknown, fallback: string): string {
   if (typeof payload === "object" && payload !== null && "error" in payload) {
@@ -195,6 +196,8 @@ async function requestJson<T>(
 ): Promise<T> {
   const response = await fetcher(path, {
     method: "POST",
+    credentials: "same-origin",
+    cache: CACHE_POLICY,
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
