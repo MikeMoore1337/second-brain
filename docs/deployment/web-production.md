@@ -182,6 +182,25 @@ owner отдельно предоставляет только существу�
 contract. Они не нужны для обычного `doctor`, `vault validate` и health
 smoke.
 
+Stage 19 action connector остаётся отключённым, если эти optional variables
+отсутствуют или имеют неполную конфигурацию. Для включения owner отдельно
+задаёт только следующие значения для exact allowlisted repository:
+
+```text
+SECOND_BRAIN_ACTION_GITHUB_ENABLED=true
+SECOND_BRAIN_ACTION_GITHUB_TOKEN=<fine-grained GitHub token>
+SECOND_BRAIN_ACTION_GITHUB_REPOSITORIES=MikeMoore1337/second-brain
+```
+
+Token должен иметь только минимальные Issues read/write и Metadata read на
+нужном repository, храниться в защищённом `/srv/second-brain/runtime/web.env`
+с mode `600` и никогда не попадать в браузер, логи, receipts, Git или vault.
+Не задавайте `SECOND_BRAIN_ACTION_GITHUB_ENABLED=true` до отдельного owner
+checkpoint с credential provisioning. Без этого checkpoint production
+runtime остаётся в безопасном disabled режиме; приложение при неполной
+конфигурации продолжает запускаться и сообщает только безопасный статус
+недоступной credential.
+
 Для layout выше относительный `SECOND_BRAIN_VAULT_PATH` разрешается от
 каталога `web.env` и должен указывать на sibling `second-brain-vault`. Не
 используйте `deploy/env.example` как production Web env file: его строгий

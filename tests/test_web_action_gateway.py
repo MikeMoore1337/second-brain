@@ -14,7 +14,9 @@ from second_brain.application.action_gateway import (
     ACTION_GATEWAY_CONNECTOR,
     ACTION_GATEWAY_CREDENTIAL_PROFILE_ID,
     ACTION_GATEWAY_POLICY_ID,
+    ActionExecutionOutcomeV1,
     ActionExecutionResultV1,
+    ActionGatewayConnectorError,
     ActionIntentV1,
     ActionKindV1,
     ActionReceiptKindV1,
@@ -160,6 +162,7 @@ class RecordingActionService:
     prepared: PreparedExternalActionV1 = field(default_factory=_prepared)
     calls: list[str] = field(default_factory=list)
     receipts: tuple[ActionReceiptV1, ...] = ()
+    prepare_error: BaseException | None = None
 
     def status(self) -> ActionGatewayStatusV1:
         self.calls.append("status")
@@ -173,6 +176,8 @@ class RecordingActionService:
         self, intent: ActionIntentV1, *, now: datetime | None = None
     ) -> PreparedExternalActionV1:
         del now
+        if self.prepare_error is not None:
+            raise self.prepare_error
         self.calls.append(f"prepare:{intent.operation_id}")
         return self.prepared
 
@@ -278,13 +283,42 @@ def test_action_boundary_requires_same_origin_and_bounded_json() -> None:
             content=b"x" * (MAX_RAW_ACTION_GATEWAY_BODY_BYTES + 1),
             headers=_headers(),
         )
+        duplicate_json = client.post(
+            ACTION_GATEWAY_STATUS_PATH,
+            content=b'{"unexpected":true,"unexpected":false}',
+            headers=_headers(),
+        )
         get_response = client.get(ACTION_GATEWAY_STATUS_PATH, headers=_headers())
 
     assert extra.status_code == 400
     assert foreign_origin.status_code == 400
     assert missing_origin.status_code == 400
     assert oversized.status_code == 413
+    assert duplicate_json.status_code == 400
     assert get_response.status_code == 405
+    assert service.calls == []
+
+
+def test_provider_error_is_mapped_without_leaking_connector_detail() -> None:
+    service = RecordingActionService(
+        prepare_error=ActionGatewayConnectorError(
+            ActionExecutionOutcomeV1.FAILED_BEFORE_SEND,
+            "provider_secret_internal",
+        )
+    )
+    with TestClient(_app(service), base_url=BASE_URL) as client:
+        response = client.post(
+            ACTION_GATEWAY_PREPARE_PATH,
+            json=_intent_payload(),
+            headers=_headers(),
+        )
+
+    assert response.status_code == 503
+    assert response.json()["error"] == {
+        "code": "PROVIDER_UNAVAILABLE",
+        "message": "Интеграция GitHub сейчас недоступна.",
+    }
+    assert "provider_secret_internal" not in response.text
     assert service.calls == []
 
 
