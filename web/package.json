@@ -8,6 +8,7 @@
     "qa:personal-planning": "node qa/personal-planning.mjs",
     "qa:login": "node qa/login.mjs",
     "qa:prospective-audit": "node qa/prospective-audit.mjs",
+    "qa:execution-feedback": "node qa/execution-feedback.mjs",
     "qa:performance": "node qa/performance.mjs",
     "qa:pwa": "node qa/pwa.mjs",
     "qa:pwa:browser": "node qa/pwa-browser.mjs",
