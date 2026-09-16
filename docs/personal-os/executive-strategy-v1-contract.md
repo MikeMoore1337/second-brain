@@ -1,6 +1,6 @@
 # Executive Strategy v1 — Stage 16 normative contract
 
-Статус после Phase 16.0: **NORMATIVE CONTRACT / DESIGN GATE COMPLETE / RUNTIME NOT IMPLEMENTED**.
+Статус после Phase 16.6: **NORMATIVE CONTRACT / RUNTIME COMPLETE / CLOSEOUT VERIFIED**.
 
 Контракт задаёт только Personal Strategy / Executive Layer v1. Cognitive Twin
 v3 и контракты Stage 1–15 остаются authority для собственных семантик.
@@ -406,9 +406,10 @@ Stage 1–15 regression coverage; fix only Stage16 boundary defects.
 
 ### 16.6 — Final release/closeout
 
-Собрать factual delivery ledger, exact-head full Python 3.14/frontend/security
-gate, CI, standard automatic deploy, `/healthz`, anonymous route protection,
-no-vault/no-real-strategy smoke, cleanup and close Issue #339.
+Фактически выполнено: собран delivery ledger, пройдены exact-head full Python
+3.14/frontend/security gates, CI и standard automatic deploy, проверены
+`/healthz`, anonymous route protection и no-vault/no-real-strategy smoke,
+выполнен scoped cleanup и закрыт Issue #339.
 
 ## 19. Acceptance boundary
 
@@ -422,17 +423,34 @@ vault mutation.
 
 ## 20. Delivery status fields
 
-After the Phase 16.0 merge and until factual closeout the following remain:
+After the Phase 16.6 closeout the following status is authoritative:
 
 ```text
 Stage 16 v4 design gate = COMPLETE (Phase 16.0)
-Executive Context Pack = not implemented
-explicit Strategy reasoning boundary = not implemented
-Strategy Proposal = not implemented
-reviewed operational Strategy Snapshot = not implemented
-owner-only Web/API/UI = not implemented
-security/E2E gate = not implemented
+Executive Context Pack = COMPLETE (Phase 16.1)
+explicit Strategy reasoning boundary = COMPLETE (Phase 16.2)
+Strategy Proposal = COMPLETE (Phase 16.2)
+reviewed operational Strategy Snapshot = COMPLETE (Phase 16.3)
+owner-only Web/API/UI = COMPLETE (Phase 16.4)
+security/E2E gate = COMPLETE (Phase 16.5)
+release/production/closeout = COMPLETE (Phase 16.6)
 ```
 
-Final status may be updated only in Phase 16.6 with exact PR/CI/deploy
-evidence. Stage 17 remains planned/not started.
+Stage 17 remains planned/not started.
+
+## 21. Factual delivery ledger
+
+The ledger records the final exact-head checks for runtime phases 16.0–16.5.
+The Phase 16.6 closeout PR and final report record its own merge/CI/deploy
+identifiers after those workflows complete. Deploy is the standard automatic
+workflow from the corresponding merge SHA.
+
+| Phase | PR | Merge SHA | PR CI | Post-merge CI | Deploy |
+| --- | --- | --- | --- | --- | --- |
+| 16.0 | [#340](https://github.com/MikeMoore1337/second-brain/pull/340) | `8b3e8ab7fe4e7294294be44c36a02eb4c49dc86e` | `35057554104` | `35057756065` | `35057913595` |
+| 16.1 | [#341](https://github.com/MikeMoore1337/second-brain/pull/341) | `b12d8fa5379cf3ca0160b9aa071ffec5c04c52d2` | `35058866284` | `35059072965` | `35059241332` |
+| 16.2 | [#342](https://github.com/MikeMoore1337/second-brain/pull/342) | `91491b5b79f460a871b9921478b2ebb3c03e5912` | `35060300561` | `35060514564` | `35060713890` |
+| 16.3 | [#343](https://github.com/MikeMoore1337/second-brain/pull/343) | `05a30aa687e9cdb5aceff7690c0ffcde1fbc9373` | `35062757876` | `35063009719` | `35063238859` |
+| 16.4 | [#344](https://github.com/MikeMoore1337/second-brain/pull/344) | `b15da49213224a23b2aad6899c50634faaee7f91` | `35067551979` | `35067848504` | `35068068955` |
+| 16.5 | [#345](https://github.com/MikeMoore1337/second-brain/pull/345) | `e9eee57d5e14b37aecb3fd0d6794637571b84117` | `35069788511` | `35070002528` | `35070279603` |
+Intermediate PRs use `Refs #339`; only the final closeout PR uses `Closes #339`.

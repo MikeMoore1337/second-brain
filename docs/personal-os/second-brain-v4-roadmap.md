@@ -1,6 +1,6 @@
 # Second Brain v4 — Personal Cognitive OS
 
-Статус после Phase 16.0: **DESIGN GATE COMPLETE / RUNTIME NOT IMPLEMENTED**.
+Статус после Phase 16.6: **STAGE 16 COMPLETE / SECOND BRAIN v4 IN PROGRESS**.
 
 Этот документ задаёт переход от завершённого Cognitive Twin v3 к новой
 продуктовой генерации. Он не переименовывает и не переопределяет Cognitive
@@ -137,7 +137,7 @@ secrets, provider payload/result или accepted private snapshot.
 
 ### Stage 16 — Personal Strategy / Executive Layer
 
-Текущий owner-approved этап. Exact one-Goal context, provider-free Executive
+Завершённый owner-approved этап. Exact one-Goal context, provider-free Executive
 Context Pack, явный preview и strategy reasoning через существующую Advisor
 границу, bounded Strategy Proposal, owner review/edit/select и versioned
 accepted Strategy Snapshot. Без планирования и execution.
@@ -176,8 +176,9 @@ accepted Strategy Snapshot. Без планирования и execution.
 * post-merge CI на exact head;
 * повторный fetch текущего `origin/main`.
 
-После завершения этого gate статус Stage 16 runtime остаётся незавершённым и
-меняется только фактическим closeout:
+Этот блок фиксирует исторический design gate Phase 16.0. Runtime-статус Stage 16
+изменён только фактическим closeout Phase 16.6 после exact-head CI, стандартного
+deploy и production smoke:
 
 ```text
 Cognitive Twin v3 = COMPLETE
@@ -187,3 +188,24 @@ Stage 17–20 = PLANNED / NOT STARTED
 ```
 
 Stage 17 Issue не создаётся автоматически.
+
+## Phase 16 factual delivery ledger
+
+Каждая runtime-фаза 16.0–16.5 доставлялась отдельным PR от изолированной ветки.
+В таблице указаны только финальные exact-head CI и post-merge CI; deploy
+запускался автоматически от соответствующего merge SHA. Evidence финального
+closeout Phase 16.6 фиксируется в closeout PR и финальном отчёте после получения
+его собственных merge/CI/deploy идентификаторов.
+
+| Phase | PR | Merge SHA | PR CI | Post-merge CI | Deploy |
+| --- | --- | --- | --- | --- | --- |
+| 16.0 | [#340](https://github.com/MikeMoore1337/second-brain/pull/340) | `8b3e8ab7fe4e7294294be44c36a02eb4c49dc86e` | `35057554104` | `35057756065` | `35057913595` |
+| 16.1 | [#341](https://github.com/MikeMoore1337/second-brain/pull/341) | `b12d8fa5379cf3ca0160b9aa071ffec5c04c52d2` | `35058866284` | `35059072965` | `35059241332` |
+| 16.2 | [#342](https://github.com/MikeMoore1337/second-brain/pull/342) | `91491b5b79f460a871b9921478b2ebb3c03e5912` | `35060300561` | `35060514564` | `35060713890` |
+| 16.3 | [#343](https://github.com/MikeMoore1337/second-brain/pull/343) | `05a30aa687e9cdb5aceff7690c0ffcde1fbc9373` | `35062757876` | `35063009719` | `35063238859` |
+| 16.4 | [#344](https://github.com/MikeMoore1337/second-brain/pull/344) | `b15da49213224a23b2aad6899c50634faaee7f91` | `35067551979` | `35067848504` | `35068068955` |
+| 16.5 | [#345](https://github.com/MikeMoore1337/second-brain/pull/345) | `e9eee57d5e14b37aecb3fd0d6794637571b84117` | `35069788511` | `35070002528` | `35070279603` |
+Промежуточные PR используют `Refs #339`; финальный closeout PR должен использовать
+только `Closes #339`. Исторические transient failures отдельных попыток CI не
+являются merged evidence: для каждой фазы в ledger сохранён последний зелёный
+exact-head результат.
