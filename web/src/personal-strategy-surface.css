@@ -1,0 +1,616 @@
+.personal-strategy-surface {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+  background: var(--sb-gradient-cognitive-surface), color-mix(in srgb, var(--sb-color-basin) 76%, transparent);
+}
+
+.personal-strategy-heading,
+.personal-strategy-panel-heading,
+.personal-strategy-toolbar,
+.personal-strategy-section-title,
+.personal-strategy-candidate-toolbar,
+.personal-strategy-actions,
+.personal-strategy-heading-meta,
+.personal-strategy-goal-summary,
+.personal-strategy-candidate-kind,
+.personal-strategy-error,
+.personal-strategy-boundary,
+.personal-strategy-caveats {
+  display: flex;
+  min-width: 0;
+  gap: 0.75rem;
+}
+
+.personal-strategy-heading {
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.personal-strategy-heading > div:first-child,
+.personal-strategy-panel-heading > div:first-child,
+.personal-strategy-goal-summary > div,
+.personal-strategy-candidate,
+.personal-strategy-field {
+  min-width: 0;
+}
+
+.personal-strategy-heading h2 {
+  max-width: 25ch;
+  margin: 0;
+  color: var(--sb-color-text-primary);
+  font-size: clamp(1.45rem, 2.7vw, 2.1rem);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+}
+
+.personal-strategy-heading p,
+.personal-strategy-panel-heading p,
+.personal-strategy-field small,
+.personal-strategy-goal-summary span,
+.personal-strategy-live,
+.personal-strategy-muted,
+.personal-strategy-preview p,
+.personal-strategy-empty p {
+  margin: 0;
+  color: var(--sb-color-text-secondary);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.personal-strategy-heading p {
+  max-width: 68ch;
+  margin-top: 0.6rem;
+}
+
+.personal-strategy-heading-meta {
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  color: var(--sb-color-text-tertiary);
+  font-family: var(--sb-font-mono);
+  font-size: 0.68rem;
+}
+
+.personal-strategy-heading-meta span,
+.personal-strategy-candidate-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.personal-strategy-boundary {
+  align-items: flex-start;
+  padding: 0.9rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--sb-color-accent) 32%, transparent);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--sb-color-accent) 8%, transparent);
+  color: var(--sb-color-text-secondary);
+}
+
+.personal-strategy-boundary p {
+  max-width: 88ch;
+  margin: 0;
+  line-height: 1.55;
+}
+
+.personal-strategy-toolbar,
+.personal-strategy-actions {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.personal-strategy-toolbar {
+  border-top: 1px solid var(--sb-color-line-strong);
+  padding-top: 1rem;
+}
+
+.personal-strategy-live {
+  min-height: 1.5rem;
+}
+
+.personal-strategy-form,
+.personal-strategy-panel,
+.personal-strategy-sources,
+.personal-strategy-reason-block,
+.personal-strategy-preview,
+.personal-strategy-snapshot {
+  display: grid;
+  gap: 1rem;
+}
+
+.personal-strategy-form {
+  padding-top: 0.25rem;
+}
+
+.personal-strategy-input-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.personal-strategy-field {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.personal-strategy-field > span,
+.personal-strategy-reason-block > strong,
+.personal-strategy-candidate-meta dt {
+  color: var(--sb-color-text-primary);
+  font-size: 0.86rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.personal-strategy-field small {
+  display: block;
+  font-weight: 450;
+}
+
+.personal-strategy-field input,
+.personal-strategy-field textarea,
+.personal-strategy-field select,
+.personal-strategy-form select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--sb-color-line-strong);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--sb-color-void) 68%, var(--sb-color-basin));
+  color: var(--sb-color-text-primary);
+  font: inherit;
+  line-height: 1.45;
+}
+
+.personal-strategy-field input,
+.personal-strategy-field textarea {
+  padding: 0.7rem 0.8rem;
+}
+
+.personal-strategy-field select,
+.personal-strategy-form select {
+  padding: 0.7rem 2rem 0.7rem 0.8rem;
+}
+
+.personal-strategy-field textarea {
+  resize: vertical;
+}
+
+.personal-strategy-button,
+.personal-strategy-icon-button {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--sb-color-line-strong);
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.9rem;
+  color: var(--sb-color-text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 650;
+  line-height: 1.25;
+  transition: background-color 160ms ease-out, border-color 160ms ease-out, color 160ms ease-out, transform 160ms ease-out;
+}
+
+.personal-strategy-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.personal-strategy-button-primary {
+  border-color: var(--sb-color-accent);
+  background: var(--sb-color-accent);
+  color: var(--sb-color-on-accent);
+}
+
+.personal-strategy-button-secondary,
+.personal-strategy-button-danger,
+.personal-strategy-icon-button {
+  background: transparent;
+}
+
+.personal-strategy-button-danger {
+  border-color: var(--sb-color-danger);
+  color: var(--sb-color-danger-strong);
+}
+
+.personal-strategy-button:hover:not(:disabled),
+.personal-strategy-icon-button:hover:not(:disabled) {
+  border-color: var(--sb-color-accent-hover);
+  transform: translateY(-1px);
+}
+
+.personal-strategy-button-primary:hover:not(:disabled) {
+  background: var(--sb-color-accent-hover);
+}
+
+.personal-strategy-button-danger:hover:not(:disabled) {
+  border-color: var(--sb-color-danger-strong);
+  background: color-mix(in srgb, var(--sb-color-danger) 10%, transparent);
+}
+
+.personal-strategy-button:disabled,
+.personal-strategy-icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+  transform: none;
+}
+
+.personal-strategy-button:focus-visible,
+.personal-strategy-icon-button:focus-visible,
+.personal-strategy-field input:focus-visible,
+.personal-strategy-field textarea:focus-visible,
+.personal-strategy-field select:focus-visible,
+.personal-strategy-form select:focus-visible,
+.personal-strategy-candidate input:focus-visible,
+.personal-strategy-preview summary:focus-visible,
+.personal-strategy-snapshot summary:focus-visible {
+  outline: var(--sb-focus-width) solid var(--sb-color-accent);
+  outline-offset: 3px;
+}
+
+.personal-strategy-goal-summary {
+  align-items: flex-start;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--sb-color-line);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--sb-color-basin) 82%, transparent);
+}
+
+.personal-strategy-goal-summary strong,
+.personal-strategy-goal-summary span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.personal-strategy-goal-summary strong {
+  color: var(--sb-color-text-primary);
+}
+
+.personal-strategy-panel {
+  margin-top: 0.3rem;
+  padding: clamp(1rem, 2.5vw, 1.5rem);
+  border: 1px solid var(--sb-color-line-strong);
+  border-radius: 1.25rem;
+  background: color-mix(in srgb, var(--sb-color-basin) 80%, transparent);
+}
+
+.personal-strategy-panel-heading {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.personal-strategy-panel-heading h3,
+.personal-strategy-section-title h3 {
+  margin: 0;
+  color: var(--sb-color-text-primary);
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.personal-strategy-panel-heading p {
+  margin-top: 0.35rem;
+}
+
+.personal-strategy-state-chip {
+  flex: 0 0 auto;
+  border: 1px solid var(--sb-color-line-strong);
+  border-radius: 999px;
+  padding: 0.42rem 0.65rem;
+  color: var(--sb-color-text-primary);
+  font-size: 0.76rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.personal-strategy-state-chip[data-state="exact_current"],
+.personal-strategy-state-chip[data-state="current"] {
+  border-color: var(--sb-color-success);
+}
+
+.personal-strategy-state-chip[data-state="incomplete"],
+.personal-strategy-state-chip[data-state="stale"] {
+  border-color: var(--sb-color-warning);
+}
+
+.personal-strategy-state-chip[data-state="conflict"],
+.personal-strategy-state-chip[data-state="source_changed"] {
+  border-color: var(--sb-color-danger);
+}
+
+.personal-strategy-section-title {
+  align-items: center;
+}
+
+.personal-strategy-sources ul,
+.personal-strategy-reason-block ul,
+.personal-strategy-caveats ul {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.personal-strategy-sources > ul {
+  padding-left: 0;
+  list-style: none;
+}
+
+.personal-strategy-sources li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: start;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--sb-color-line);
+}
+
+.personal-strategy-sources li:last-child {
+  border-bottom: 0;
+}
+
+.personal-strategy-sources li strong,
+.personal-strategy-sources li span,
+.personal-strategy-sources li p {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.personal-strategy-sources li strong {
+  color: var(--sb-color-text-primary);
+}
+
+.personal-strategy-sources li span {
+  color: var(--sb-color-text-tertiary);
+  font-size: 0.76rem;
+}
+
+.personal-strategy-sources li p {
+  margin: 0.25rem 0 0;
+  color: var(--sb-color-text-secondary);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.personal-strategy-state-mark {
+  display: inline-grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  place-items: center;
+  border: 1px solid var(--sb-color-line-strong);
+  border-radius: 50%;
+  color: var(--sb-color-text-primary);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.personal-strategy-sources li[data-state="exact_current"] .personal-strategy-state-mark {
+  border-color: var(--sb-color-success);
+  color: var(--sb-color-success);
+}
+
+.personal-strategy-caveats {
+  align-items: flex-start;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--sb-color-warning);
+  border-radius: 0.9rem;
+  color: var(--sb-color-text-secondary);
+}
+
+.personal-strategy-caveats ul {
+  flex: 1;
+}
+
+.personal-strategy-preview,
+.personal-strategy-snapshot {
+  padding: 0.9rem;
+  border: 1px solid var(--sb-color-line);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--sb-color-void) 52%, transparent);
+}
+
+.personal-strategy-preview summary,
+.personal-strategy-snapshot summary {
+  color: var(--sb-color-text-primary);
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.personal-strategy-preview pre {
+  max-width: 100%;
+  max-height: 20rem;
+  margin: 0;
+  overflow: auto;
+  padding: 0.85rem;
+  border: 1px solid var(--sb-color-line);
+  border-radius: 0.7rem;
+  background: var(--sb-color-void);
+  color: var(--sb-color-text-secondary);
+  font: 0.74rem/1.5 var(--sb-font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.personal-strategy-provenance,
+.personal-strategy-candidate-meta {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.personal-strategy-provenance div,
+.personal-strategy-candidate-meta div {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.35fr) minmax(0, 1fr);
+  gap: 0.65rem;
+}
+
+.personal-strategy-provenance dt,
+.personal-strategy-candidate-meta dt {
+  color: var(--sb-color-text-tertiary);
+  font-size: 0.76rem;
+}
+
+.personal-strategy-provenance dd,
+.personal-strategy-candidate-meta dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--sb-color-text-secondary);
+  font-size: 0.8rem;
+}
+
+.personal-strategy-candidates {
+  display: grid;
+  gap: 0.9rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: strategy-candidate;
+}
+
+.personal-strategy-candidate {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+  border: 1px solid var(--sb-color-line);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--sb-color-void) 42%, transparent);
+}
+
+.personal-strategy-candidate[data-selected="true"] {
+  border-color: var(--sb-color-accent);
+}
+
+.personal-strategy-candidate-toolbar {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.personal-strategy-candidate-toolbar label {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--sb-color-text-primary);
+  font-weight: 650;
+}
+
+.personal-strategy-candidate-toolbar input[type="checkbox"] {
+  width: 1.2rem;
+  height: 1.2rem;
+  accent-color: var(--sb-color-accent);
+}
+
+.personal-strategy-order {
+  margin-left: auto;
+  color: var(--sb-color-text-tertiary);
+  font-size: 0.76rem;
+}
+
+.personal-strategy-order-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.personal-strategy-icon-button {
+  display: inline-grid;
+  width: 2.75rem;
+  padding: 0;
+  place-items: center;
+}
+
+.personal-strategy-candidate-kind {
+  color: var(--sb-color-accent);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.personal-strategy-error {
+  align-items: flex-start;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--sb-color-danger);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--sb-color-danger) 8%, transparent);
+  color: var(--sb-color-danger-strong);
+}
+
+.personal-strategy-empty {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 1rem;
+  border: 1px solid var(--sb-color-warning);
+  border-radius: 0.9rem;
+  color: var(--sb-color-text-secondary);
+}
+
+@media (max-width: 860px) {
+  .personal-strategy-heading,
+  .personal-strategy-panel-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .personal-strategy-heading-meta {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 640px) {
+  .personal-strategy-surface {
+    margin-inline: -0.25rem;
+    padding: 1rem;
+    border-radius: 1.25rem;
+  }
+
+  .personal-strategy-input-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .personal-strategy-actions,
+  .personal-strategy-toolbar {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .personal-strategy-button {
+    width: 100%;
+  }
+
+  .personal-strategy-state-chip {
+    align-self: flex-start;
+  }
+}
+
+@media (max-width: 430px) {
+  .personal-strategy-provenance div,
+  .personal-strategy-candidate-meta div {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+
+  .personal-strategy-order {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 360px) {
+  .personal-strategy-candidate-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .personal-strategy-button,
+  .personal-strategy-icon-button {
+    transition: none;
+  }
+}

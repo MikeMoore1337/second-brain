@@ -250,6 +250,34 @@ from second_brain.entrypoints.web.personal_experiments import (
     build_production_personal_experiment_web_service,
     install_personal_experiment_routes,
 )
+from second_brain.entrypoints.web.personal_strategy import (
+    MAX_PERSONAL_STRATEGY_ACCEPT_RESPONSE_BYTES,
+    MAX_PERSONAL_STRATEGY_CONTEXT_RESPONSE_BYTES,
+    MAX_PERSONAL_STRATEGY_GENERATE_RESPONSE_BYTES,
+    MAX_PERSONAL_STRATEGY_MUTATION_RESPONSE_BYTES,
+    MAX_PERSONAL_STRATEGY_STATE_RESPONSE_BYTES,
+    MAX_RAW_PERSONAL_STRATEGY_BODY_BYTES,
+    PERSONAL_STRATEGY_ACCEPT_PATH,
+    PERSONAL_STRATEGY_CONTEXT_PATH,
+    PERSONAL_STRATEGY_GENERATE_PATH,
+    PERSONAL_STRATEGY_REJECT_PATH,
+    PERSONAL_STRATEGY_REQUEST_HEADER_NAME,
+    PERSONAL_STRATEGY_REQUEST_HEADER_VALUE,
+    PERSONAL_STRATEGY_STATE_PATH,
+    PersonalStrategyAcceptPayload,
+    PersonalStrategyContextPayload,
+    PersonalStrategyContextRequest,
+    PersonalStrategyEmptyPayload,
+    PersonalStrategyGeneratePayload,
+    PersonalStrategyRejectPayload,
+    PersonalStrategyRequestBoundaryMiddleware,
+    PersonalStrategySourceChangedError,
+    PersonalStrategySourceUnavailableError,
+    PersonalStrategyWebService,
+    ProductionPersonalStrategyWebService,
+    build_production_personal_strategy_web_service,
+    install_personal_strategy_routes,
+)
 from second_brain.entrypoints.web.prospective_audit import (
     MAX_RAW_PROSPECTIVE_AUDIT_BODY_BYTES,
     PROSPECTIVE_AUDIT_REQUEST_HEADER_NAME,
@@ -337,6 +365,9 @@ def create_app(**kwargs: Any) -> FastAPI:
     growth_learning_service = kwargs.pop("growth_learning_web_service", None)
     goal_progress_service = kwargs.pop("goal_progress_web_service", None)
     personal_experiments_service = kwargs.pop("personal_experiments_web_service", None)
+    personal_strategy_service = kwargs.pop("personal_strategy_web_service", None)
+    if personal_strategy_service is None:
+        personal_strategy_service = kwargs.pop("personal_strategy_service", None)
     adaptive_cognitive_twin_service = kwargs.pop("adaptive_cognitive_twin_web_service", None)
     auth_config = kwargs.pop("web_auth_config", None)
     auth_gateway = kwargs.pop("web_auth_gateway", None)
@@ -420,6 +451,12 @@ def create_app(**kwargs: Any) -> FastAPI:
     install_adaptive_cognitive_twin_routes(
         app,
         service=adaptive_cognitive_twin_service,
+        env_file=env_file,
+        vault_path_override=vault_path_override,
+    )
+    install_personal_strategy_routes(
+        app,
+        service=personal_strategy_service,
         env_file=env_file,
         vault_path_override=vault_path_override,
     )
@@ -630,6 +667,32 @@ __all__ = [
     "build_personal_experiments_state",
     "build_production_personal_experiment_web_service",
     "install_personal_experiment_routes",
+    "MAX_PERSONAL_STRATEGY_ACCEPT_RESPONSE_BYTES",
+    "MAX_PERSONAL_STRATEGY_CONTEXT_RESPONSE_BYTES",
+    "MAX_PERSONAL_STRATEGY_GENERATE_RESPONSE_BYTES",
+    "MAX_PERSONAL_STRATEGY_MUTATION_RESPONSE_BYTES",
+    "MAX_PERSONAL_STRATEGY_STATE_RESPONSE_BYTES",
+    "MAX_RAW_PERSONAL_STRATEGY_BODY_BYTES",
+    "PERSONAL_STRATEGY_ACCEPT_PATH",
+    "PERSONAL_STRATEGY_CONTEXT_PATH",
+    "PERSONAL_STRATEGY_GENERATE_PATH",
+    "PERSONAL_STRATEGY_REJECT_PATH",
+    "PERSONAL_STRATEGY_REQUEST_HEADER_NAME",
+    "PERSONAL_STRATEGY_REQUEST_HEADER_VALUE",
+    "PERSONAL_STRATEGY_STATE_PATH",
+    "PersonalStrategyAcceptPayload",
+    "PersonalStrategyContextPayload",
+    "PersonalStrategyContextRequest",
+    "PersonalStrategyEmptyPayload",
+    "PersonalStrategyGeneratePayload",
+    "PersonalStrategyRejectPayload",
+    "PersonalStrategyRequestBoundaryMiddleware",
+    "PersonalStrategySourceChangedError",
+    "PersonalStrategySourceUnavailableError",
+    "PersonalStrategyWebService",
+    "ProductionPersonalStrategyWebService",
+    "build_production_personal_strategy_web_service",
+    "install_personal_strategy_routes",
     "ADAPTIVE_COGNITIVE_TWIN_ACTIVATE_PATH",
     "ADAPTIVE_COGNITIVE_TWIN_CANDIDATE_PATH",
     "ADAPTIVE_COGNITIVE_TWIN_EVALUATE_PATH",

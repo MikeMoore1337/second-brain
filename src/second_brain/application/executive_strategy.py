@@ -414,6 +414,36 @@ class ExecutiveSourceItemV1:
             "as_of": None if self.as_of is None else _format_timestamp(self.as_of),
         }
 
+    @classmethod
+    def from_dict(cls, value: object) -> ExecutiveSourceItemV1:
+        """Rebuild one source item from its closed canonical projection."""
+
+        if type(value) is not dict:
+            raise _invalid()
+        expected = {
+            "alias",
+            "readiness",
+            "reference_id",
+            "reference_fingerprint",
+            "summary",
+            "policy_fingerprints",
+            "as_of",
+        }
+        if set(value) != expected:
+            raise _invalid()
+        policies = value["policy_fingerprints"]
+        if type(policies) is not list:
+            raise _invalid()
+        return cls(
+            alias=value["alias"],
+            readiness=value["readiness"],
+            reference_id=value["reference_id"],
+            reference_fingerprint=value["reference_fingerprint"],
+            summary=value["summary"],
+            policy_fingerprints=tuple(cast(list[str], policies)),
+            as_of=value["as_of"],
+        )
+
 
 ExecutiveSourceProjectionV1 = ExecutiveSourceItemV1
 
@@ -540,6 +570,54 @@ class ExecutiveContextPackV1:
         """Return compact canonical UTF-8 JSON as text."""
 
         return _canonical_bytes(self.as_dict()).decode("utf-8")
+
+    @classmethod
+    def from_dict(cls, value: object) -> ExecutiveContextPackV1:
+        """Rebuild a pack only from its exact bounded JSON projection."""
+
+        if type(value) is not dict:
+            raise _invalid()
+        expected = {
+            "contract_version",
+            "pack_version",
+            "as_of",
+            "goal_source_uuid",
+            "goal_identity_fingerprint",
+            "goal_text",
+            "task",
+            "constraints",
+            "current_context",
+            "sources",
+            "readiness",
+            "pack_caveats",
+            "policy_id",
+            "policy_fingerprint",
+            "source_pack_fingerprint",
+        }
+        if set(value) != expected:
+            raise _invalid()
+        constraints = value["constraints"]
+        sources = value["sources"]
+        caveats = value["pack_caveats"]
+        if type(constraints) is not list or type(sources) is not list or type(caveats) is not list:
+            raise _invalid()
+        return cls(
+            contract_version=value["contract_version"],
+            pack_version=value["pack_version"],
+            as_of=value["as_of"],
+            goal_source_uuid=value["goal_source_uuid"],
+            goal_identity_fingerprint=value["goal_identity_fingerprint"],
+            goal_text=value["goal_text"],
+            task=value["task"],
+            constraints=tuple(cast(list[str], constraints)),
+            current_context=value["current_context"],
+            sources=tuple(ExecutiveSourceItemV1.from_dict(item) for item in sources),
+            readiness=value["readiness"],
+            pack_caveats=tuple(cast(list[str], caveats)),
+            policy_id=value["policy_id"],
+            policy_fingerprint=value["policy_fingerprint"],
+            source_pack_fingerprint=value["source_pack_fingerprint"],
+        )
 
 
 ExecutiveContextPack = ExecutiveContextPackV1
@@ -1494,6 +1572,54 @@ class StrategyProposalV1:
         """Return compact canonical proposal JSON."""
 
         return _canonical_bytes(self.as_dict()).decode("utf-8")
+
+    @classmethod
+    def from_dict(cls, value: object) -> StrategyProposalV1:
+        """Rebuild a proposal only from its exact bounded JSON projection."""
+
+        if type(value) is not dict:
+            raise _invalid()
+        expected = {
+            "proposal_id",
+            "proposal_version",
+            "result_state",
+            "as_of",
+            "goal_source_uuid",
+            "goal_identity_fingerprint",
+            "source_pack_fingerprint",
+            "policy_id",
+            "policy_fingerprint",
+            "candidates",
+            "suggested_order",
+            "reasons",
+            "caveats",
+            "provider_fingerprint",
+            "proposal_fingerprint",
+        }
+        if set(value) != expected:
+            raise _invalid()
+        list_fields = ("candidates", "suggested_order", "reasons", "caveats")
+        if any(type(value[field]) is not list for field in list_fields):
+            raise _invalid()
+        return cls(
+            proposal_id=value["proposal_id"],
+            proposal_version=value["proposal_version"],
+            result_state=value["result_state"],
+            as_of=value["as_of"],
+            goal_source_uuid=value["goal_source_uuid"],
+            goal_identity_fingerprint=value["goal_identity_fingerprint"],
+            source_pack_fingerprint=value["source_pack_fingerprint"],
+            policy_id=value["policy_id"],
+            policy_fingerprint=value["policy_fingerprint"],
+            candidates=tuple(
+                ExecutiveActionCandidateV1.from_dict(item) for item in value["candidates"]
+            ),
+            suggested_order=tuple(cast(list[str], value["suggested_order"])),
+            reasons=tuple(cast(list[str], value["reasons"])),
+            caveats=tuple(cast(list[str], value["caveats"])),
+            provider_fingerprint=value["provider_fingerprint"],
+            proposal_fingerprint=value["proposal_fingerprint"],
+        )
 
 
 StrategyProposal = StrategyProposalV1
