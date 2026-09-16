@@ -1,6 +1,6 @@
 # Second Brain v4 — Personal Cognitive OS
 
-Статус после Phase 17.0: **STAGE 16 COMPLETE / STAGE 17 IN PROGRESS / SECOND BRAIN v4 IN PROGRESS**.
+Статус после Phase 17.6: **STAGE 16 COMPLETE / STAGE 17 COMPLETE / SECOND BRAIN v4 IN PROGRESS**.
 
 Этот документ задаёт переход от завершённого Cognitive Twin v3 к новой
 продуктовой генерации. Он не переименовывает и не переопределяет Cognitive
@@ -142,7 +142,7 @@ Context Pack, явный preview и strategy reasoning через существ
 границу, bounded Strategy Proposal, owner review/edit/select и versioned
 accepted Strategy Snapshot. Без планирования и execution.
 
-### Stage 17 — Personal Planning & Commitments
+### Stage 17 — Personal Planning & Commitments — COMPLETE
 
 Текущий owner-approved этап. Exact accepted Stage16 Strategy Snapshots,
 явно выбранные 1–8 Goals, локальный bounded горизонт, capacity и ограничения
@@ -190,7 +190,7 @@ Stage 16 = COMPLETE
 Stage 17–20 = PLANNED / NOT STARTED
 ```
 
-Stage 17 = IN PROGRESS; Stage 18–20 = PLANNED / NOT STARTED.
+Stage 17 = COMPLETE; Stage 18–20 = PLANNED / NOT STARTED.
 
 Stage 17 Issue не создаётся автоматически.
 
@@ -221,3 +221,22 @@ closeout Phase 16.6 фиксируется в closeout PR и финальном 
 только `Closes #339`. Исторические transient failures отдельных попыток CI не
 являются merged evidence: для каждой фазы в ledger сохранён последний зелёный
 exact-head результат.
+
+## Phase 17 factual delivery ledger
+
+Каждая runtime-фаза 17.0–17.5 доставлена отдельным PR из свежего
+изолированного worktree. В таблице сохранены финальные зелёные exact-head PR
+CI, post-merge CI и стандартный production deploy соответствующего merge SHA.
+
+| Phase | PR | Merge SHA | PR CI | Post-merge CI | Deploy |
+| --- | --- | --- | --- | --- | --- |
+| 17.0 | [#350](https://github.com/MikeMoore1337/second-brain/pull/350) | `cf5776f91ac2af1d523a7265db8b942b2065b580` | [35078641030](https://github.com/MikeMoore1337/second-brain/actions/runs/35078641030) | [35078919710](https://github.com/MikeMoore1337/second-brain/actions/runs/35078919710) | [35079216691](https://github.com/MikeMoore1337/second-brain/actions/runs/35079216691) |
+| 17.1 | [#351](https://github.com/MikeMoore1337/second-brain/pull/351) | `cc6cadaf1d67584e4c0f2adec10278ce4baa1b60` | [35081513361](https://github.com/MikeMoore1337/second-brain/actions/runs/35081513361) | [35081831705](https://github.com/MikeMoore1337/second-brain/actions/runs/35081831705) | [35082177879](https://github.com/MikeMoore1337/second-brain/actions/runs/35082177879) |
+| 17.2 | [#352](https://github.com/MikeMoore1337/second-brain/pull/352) | `aec9323a40fa4f531cd16d67e480a2fc39cc5025` | [35084518436](https://github.com/MikeMoore1337/second-brain/actions/runs/35084518436) | [35084823535](https://github.com/MikeMoore1337/second-brain/actions/runs/35084823535) | [35085154751](https://github.com/MikeMoore1337/second-brain/actions/runs/35085154751) |
+| 17.3 | [#353](https://github.com/MikeMoore1337/second-brain/pull/353) | `d53a070eaff589bb53747707e72da876d32f5720` | [35087421580](https://github.com/MikeMoore1337/second-brain/actions/runs/35087421580) | [35087684590](https://github.com/MikeMoore1337/second-brain/actions/runs/35087684590) | [35087951240](https://github.com/MikeMoore1337/second-brain/actions/runs/35087951240) |
+| 17.4 | [#354](https://github.com/MikeMoore1337/second-brain/pull/354) | `8944484d578ffee4e54c9aa806354301d3293f6d` | [35093329446](https://github.com/MikeMoore1337/second-brain/actions/runs/35093329446) | [35093653010](https://github.com/MikeMoore1337/second-brain/actions/runs/35093653010) | [35093965938](https://github.com/MikeMoore1337/second-brain/actions/runs/35093965938) |
+| 17.5 | [#355](https://github.com/MikeMoore1337/second-brain/pull/355) | `b0cd4c5cee7775ef26402edaf4723c011e4119e7` | [35096545806](https://github.com/MikeMoore1337/second-brain/actions/runs/35096545806) | [35096818330](https://github.com/MikeMoore1337/second-brain/actions/runs/35096818330) | [35097060936](https://github.com/MikeMoore1337/second-brain/actions/runs/35097060936) |
+
+Финальный closeout 17.6 выполняется отдельным PR с `Closes #348`; его merge
+SHA, exact-head CI, post-merge CI, deploy, production smoke и закрытие Issue
+#348 фиксируются в финальном delivery report после завершения workflow.
