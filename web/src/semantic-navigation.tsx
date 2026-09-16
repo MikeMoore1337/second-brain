@@ -58,7 +58,6 @@ export const semanticGroups = [
       { id: "prospective-audit", label: "Аудит прогноза", description: "Сохрани прогноз до решения и свяжи его с журналом явно.", target: "#prospective-audit", icon: "prospective-audit", availability: "available", renderSurface: true },
       { id: "assistant-compare", label: "Совет и сравнение", description: "Поставь независимый совет рядом с прогнозом твоего выбора.", target: "#assistant-compare", icon: "relation", availability: "available", renderSurface: true },
       { id: "decision-compass", label: "Компас решения", description: "Собери цель, варианты и контекст в проверяемый срез.", target: "#decision-compass", icon: "decision-compass", availability: "available", renderSurface: true },
-      { id: "active-learning", label: "Уточнить модель выбора", description: "Ответь на один вопрос и реши сам, станет ли ответ частью памяти.", target: "#active-learning", icon: "info", availability: "available", renderSurface: false },
     ],
   },
   {
@@ -91,11 +90,20 @@ function toolCount(count: number): string {
 }
 
 function surfaceIdForTool(tool: SemanticTool): string | null {
-  if (tool.id === "active-learning") return "simulate-me";
   return tool.renderSurface ? tool.id : null;
 }
 
+const NESTED_SURFACE_ALIASES: Readonly<Record<string, { readonly groupId: SemanticGroupId; readonly toolId: string; readonly surfaceId: string }>> = {
+  "active-learning": { groupId: "decisions", toolId: "simulate-me", surfaceId: "simulate-me" },
+};
+
 function findTool(targetId: string): { readonly group: SemanticGroup; readonly tool: SemanticTool; readonly surfaceId: string } | null {
+  const alias = NESTED_SURFACE_ALIASES[targetId];
+  if (alias) {
+    const group = semanticGroups.find((item) => item.id === alias.groupId);
+    const tool = group?.tools.find((item) => item.id === alias.toolId);
+    if (group && tool) return { group, tool, surfaceId: alias.surfaceId };
+  }
   for (const group of semanticGroups) {
     for (const tool of group.tools) {
       if (tool.target.slice(1) !== targetId) continue;
