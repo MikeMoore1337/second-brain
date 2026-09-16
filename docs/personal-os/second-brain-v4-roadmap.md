@@ -180,11 +180,23 @@ bounded JSONL operational storage, deterministic feedback formulas, descriptive
 calibration, private API boundary, Russian responsive UI и ожидаемый deployment
 статус `env change required: no`.
 
-### Stage 19 — Controlled External Integrations & Action Gateway
+### Stage 19 — Controlled External Integrations & Action Gateway — IN PROGRESS
 
-Будущая изолированная граница Calendar/Email/GitHub и других внешних систем с
-отдельными consent, credentials, target validation, dry-run, audit и rollback
-правилами. Stage 16 её не подключает.
+Нормативный контракт Stage 19: [`action-gateway-v1-contract.md`](./action-gateway-v1-contract.md).
+
+Stage 19 добавляет только owner-controlled Action Gateway с отдельными
+consent, credential, exact target validation, preview, at-most-once, audit,
+reconciliation и compensation правилами. В v1 runtime обязателен только
+закрытый GitHub Issues catalog (`create`, `comment`, `set_state`); Calendar и
+Email остаются deferred. Никакое действие не запускается Stage 16–18,
+Advisor/LLM, background scheduler или Stage 20.
+
+#### Current factual status
+
+- Phase 19.0: COMPLETE; normative contract/design gate merged.
+- Phase 19.1–19.6: not started.
+- Stage 19: IN PROGRESS.
+- Stage 20: PLANNED / NOT STARTED.
 
 ### Stage 20 — Personal Agent / Chief of Staff
 
