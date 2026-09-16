@@ -1,6 +1,6 @@
 # Second Brain v4 — Personal Cognitive OS
 
-Статус после Phase 17.6: **STAGE 16 COMPLETE / STAGE 17 COMPLETE / STAGE 18 IN PROGRESS / SECOND BRAIN v4 IN PROGRESS**.
+Статус после Phase 18.6: **STAGE 16 COMPLETE / STAGE 17 COMPLETE / STAGE 18 COMPLETE / SECOND BRAIN v4 IN PROGRESS**.
 
 Этот документ задаёт переход от завершённого Cognitive Twin v3 к новой
 продуктовой генерации. Он не переименовывает и не переопределяет Cognitive
@@ -151,7 +151,7 @@ Proposal и owner-reviewed Planning Portfolio Snapshot. Это operational inten
 не execution evidence и не canonical vault state. Нормативный контракт:
 [`personal-planning-v1-contract.md`](./personal-planning-v1-contract.md).
 
-### Stage 18 — Execution & Feedback — IN PROGRESS
+### Stage 18 — Execution & Feedback — COMPLETE
 
 Нормативный контракт Stage 18: [`execution-feedback-v1-contract.md`](./execution-feedback-v1-contract.md).
 
@@ -159,14 +159,17 @@ Stage 18 добавляет bounded owner-only execution events поверх imm
 accepted plan Stage 17, deterministic projections, feedback и descriptive
 calibration. Stage17 contracts and semantics remain unchanged; no vault, Git,
 provider/LLM или browser-local private storage is used. Delivery is serial from
-18.0 through 18.6. Stage 19 is not started automatically.
+18.0 through 18.6 and is complete. Stage 19 is not started automatically.
+
+Фактическая delivery ledger: [`stage18-delivery-ledger.md`](./stage18-delivery-ledger.md).
 
 #### Current factual status
 
 - Stage 16: COMPLETE.
 - Stage 17: COMPLETE; PR #356 is merged and Issue #348 is closed.
-- Stage 18.0: contract/design gate in progress.
-- Stage 18.1–18.6: planned in this serial lane.
+- Stage 18.0: COMPLETE; contract/design gate merged.
+- Stage 18.1–18.5: COMPLETE; runtime, store, projections, API and UI merged and deployed.
+- Stage 18.6: COMPLETE; final closeout PR, Issue #357 closure and production smoke.
 - Stage 19–20: planned, not started.
 
 #### Phase 18.0 design gate
@@ -207,10 +210,11 @@ deploy и production smoke:
 Cognitive Twin v3 = COMPLETE
 Second Brain v4 = IN PROGRESS
 Stage 16 = COMPLETE
-Stage 17–20 = PLANNED / NOT STARTED
+Stage 17–18 = COMPLETE
+Stage 19–20 = PLANNED / NOT STARTED
 ```
 
-Stage 17 = COMPLETE; Stage 18–20 = PLANNED / NOT STARTED.
+Stage 17–18 = COMPLETE; Stage 19–20 = PLANNED / NOT STARTED.
 
 Stage 17 Issue не создаётся автоматически.
 
