@@ -47,6 +47,13 @@ from second_brain.entrypoints.web.app import (
     DIAGNOSTICS_REQUEST_HEADER_VALUE,
     DRAFT_REQUEST_HEADER_NAME,
     DRAFT_REQUEST_HEADER_VALUE,
+    EXECUTION_FEEDBACK_CALIBRATION_PATH,
+    EXECUTION_FEEDBACK_CORRECTION_PATH,
+    EXECUTION_FEEDBACK_EVENT_PATH,
+    EXECUTION_FEEDBACK_FEEDBACK_PATH,
+    EXECUTION_FEEDBACK_REQUEST_HEADER_NAME,
+    EXECUTION_FEEDBACK_REQUEST_HEADER_VALUE,
+    EXECUTION_FEEDBACK_STATE_PATH,
     GOAL_PROGRESS_DEFINITION_APPLY_PATH,
     GOAL_PROGRESS_DEFINITION_PREPARE_PATH,
     GOAL_PROGRESS_OBSERVATION_APPLY_PATH,
@@ -81,6 +88,7 @@ from second_brain.entrypoints.web.app import (
     MAX_RAW_DECISION_COMPASS_BODY_BYTES,
     MAX_RAW_DIAGNOSTICS_BODY_BYTES,
     MAX_RAW_DRAFT_BODY_BYTES,
+    MAX_RAW_EXECUTION_FEEDBACK_BODY_BYTES,
     MAX_RAW_GOAL_PROGRESS_BODY_BYTES,
     MAX_RAW_GROWTH_ADVISOR_BODY_BYTES,
     MAX_RAW_GROWTH_BODY_BYTES,
@@ -474,6 +482,21 @@ def _personal_planning_route(path: str) -> PrivateRoute:
     )
 
 
+def _execution_feedback_route(path: str, body: bytes = b"{}") -> PrivateRoute:
+    """Build one Stage 18 route descriptor with the shared private boundary."""
+
+    return PrivateRoute(
+        path=path,
+        request_header_name=EXECUTION_FEEDBACK_REQUEST_HEADER_NAME,
+        request_header_value=EXECUTION_FEEDBACK_REQUEST_HEADER_VALUE,
+        content_type="application/json",
+        body=body,
+        invalid_code="EXECUTION_FEEDBACK_INVALID_REQUEST",
+        content_too_large_code="EXECUTION_FEEDBACK_REQUEST_TOO_LARGE",
+        max_body_bytes=MAX_RAW_EXECUTION_FEEDBACK_BODY_BYTES,
+    )
+
+
 PRIVATE_ROUTES: tuple[PrivateRoute, ...] = (
     PrivateRoute(
         path="/api/assistant",
@@ -748,6 +771,11 @@ PRIVATE_ROUTES: tuple[PrivateRoute, ...] = (
     _personal_planning_route(PERSONAL_PLANNING_GENERATE_PATH),
     _personal_planning_route(PERSONAL_PLANNING_ACCEPT_PATH),
     _personal_planning_route(PERSONAL_PLANNING_EDIT_PATH),
+    _execution_feedback_route(EXECUTION_FEEDBACK_STATE_PATH),
+    _execution_feedback_route(EXECUTION_FEEDBACK_EVENT_PATH),
+    _execution_feedback_route(EXECUTION_FEEDBACK_FEEDBACK_PATH),
+    _execution_feedback_route(EXECUTION_FEEDBACK_CALIBRATION_PATH),
+    _execution_feedback_route(EXECUTION_FEEDBACK_CORRECTION_PATH),
     PrivateRoute(
         path="/api/self-retrieval",
         request_header_name=SELF_RETRIEVAL_REQUEST_HEADER_NAME,
@@ -919,7 +947,7 @@ def test_every_private_route_rejects_boundary_metadata_before_service(
     assert service.calls == []
     assert payload["error"]["code"] == route.invalid_code
     assert set(payload["error"]) == {"code", "message"}
-    assert response_headers["cache-control"] == "no-store"
+    assert response_headers["cache-control"] in {"no-store", "no-store, private"}
     assert response_headers["x-content-type-options"] == "nosniff"
     assert response_headers["referrer-policy"] == "no-referrer"
     assert response_headers["x-frame-options"] == "DENY"
@@ -1067,7 +1095,7 @@ def test_transcription_stream_cap_rejects_before_downstream_invocation() -> None
 
     assert status == 413
     assert json.loads(body)["error"]["code"] == "TRANSCRIPTION_CONTENT_TOO_LARGE"
-    assert response_headers["cache-control"] == "no-store"
+    assert response_headers["cache-control"] in {"no-store", "no-store, private"}
     assert receive_calls == 2
     assert downstream_calls == 0
 
@@ -1114,7 +1142,7 @@ def test_every_private_route_rejects_duplicate_security_headers_before_body_read
     assert status == 400
     assert receive_calls == 0
     assert service.calls == []
-    assert response_headers["cache-control"] == "no-store"
+    assert response_headers["cache-control"] in {"no-store", "no-store, private"}
     assert response_headers["x-content-type-options"] == "nosniff"
     assert response_headers["referrer-policy"] == "no-referrer"
     assert response_headers["x-frame-options"] == "DENY"
@@ -1140,6 +1168,7 @@ def test_every_private_route_enforces_raw_body_cap_before_parser(route: PrivateR
     if route.request_header_value in {
         PERSONAL_STRATEGY_REQUEST_HEADER_VALUE,
         PERSONAL_PLANNING_REQUEST_HEADER_VALUE,
+        EXECUTION_FEEDBACK_REQUEST_HEADER_VALUE,
     }:
         headers.insert(1, ("origin", LOOPBACK_BASE_URL))
 
@@ -1154,7 +1183,7 @@ def test_every_private_route_enforces_raw_body_cap_before_parser(route: PrivateR
     assert status == 413
     assert receive_calls == 0
     assert service.calls == []
-    assert response_headers["cache-control"] == "no-store"
+    assert response_headers["cache-control"] in {"no-store", "no-store, private"}
     assert response_headers["x-content-type-options"] == "nosniff"
     assert response_headers["referrer-policy"] == "no-referrer"
     assert response_headers["x-frame-options"] == "DENY"
@@ -1185,6 +1214,7 @@ def test_every_private_route_enforces_streamed_raw_body_cap(
     if route.request_header_value in {
         PERSONAL_STRATEGY_REQUEST_HEADER_VALUE,
         PERSONAL_PLANNING_REQUEST_HEADER_VALUE,
+        EXECUTION_FEEDBACK_REQUEST_HEADER_VALUE,
     }:
         headers.insert(1, ("origin", LOOPBACK_BASE_URL))
     if declared_length is not None:
@@ -1202,7 +1232,7 @@ def test_every_private_route_enforces_streamed_raw_body_cap(
     assert status == 413
     assert receive_calls >= 2
     assert service.calls == []
-    assert response_headers["cache-control"] == "no-store"
+    assert response_headers["cache-control"] in {"no-store", "no-store, private"}
     assert response_headers["x-content-type-options"] == "nosniff"
     assert response_headers["referrer-policy"] == "no-referrer"
     assert response_headers["x-frame-options"] == "DENY"
@@ -1245,7 +1275,7 @@ def test_private_routes_are_post_only_and_cacheless_on_method_errors(
         response = client.request(method, path)
 
     assert response.status_code == 405
-    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["cache-control"] in {"no-store", "no-store, private"}
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["referrer-policy"] == "no-referrer"
     assert response.headers["x-frame-options"] == "DENY"

@@ -122,6 +122,36 @@ from second_brain.entrypoints.web.decision_compass import (
     build_production_decision_compass_service,
     install_decision_compass_routes,
 )
+from second_brain.entrypoints.web.execution_feedback import (
+    EXECUTION_FEEDBACK_CALIBRATION_PATH,
+    EXECUTION_FEEDBACK_CORRECTION_PATH,
+    EXECUTION_FEEDBACK_EVENT_PATH,
+    EXECUTION_FEEDBACK_FEEDBACK_PATH,
+    EXECUTION_FEEDBACK_REQUEST_HEADER_NAME,
+    EXECUTION_FEEDBACK_REQUEST_HEADER_VALUE,
+    EXECUTION_FEEDBACK_STATE_PATH,
+    MAX_EXECUTION_FEEDBACK_CALIBRATION_RESPONSE_BYTES,
+    MAX_EXECUTION_FEEDBACK_FEEDBACK_RESPONSE_BYTES,
+    MAX_EXECUTION_FEEDBACK_MUTATION_RESPONSE_BYTES,
+    MAX_EXECUTION_FEEDBACK_STATE_RESPONSE_BYTES,
+    MAX_RAW_EXECUTION_FEEDBACK_BODY_BYTES,
+    ExecutionFeedbackCalibrationPayload,
+    ExecutionFeedbackCorrectionPayload,
+    ExecutionFeedbackEmptyPayload,
+    ExecutionFeedbackEventPayload,
+    ExecutionFeedbackFeedbackPayload,
+    ExecutionFeedbackInvalidRequestError,
+    ExecutionFeedbackPlanSelectionPayload,
+    ExecutionFeedbackRequestBoundaryMiddleware,
+    ExecutionFeedbackSourceUnavailableError,
+    ExecutionFeedbackStalePlanError,
+    ExecutionFeedbackStateConflictError,
+    ExecutionFeedbackWebError,
+    ExecutionFeedbackWebService,
+    ProductionExecutionFeedbackWebService,
+    build_production_execution_feedback_web_service,
+    install_execution_feedback_routes,
+)
 from second_brain.entrypoints.web.goal_progress import (
     GOAL_PROGRESS_DEFINITION_APPLY_PATH,
     GOAL_PROGRESS_DEFINITION_PREPARE_PATH,
@@ -398,6 +428,9 @@ def create_app(**kwargs: Any) -> FastAPI:
     personal_planning_service = kwargs.pop("personal_planning_web_service", None)
     if personal_planning_service is None:
         personal_planning_service = kwargs.pop("personal_planning_service", None)
+    execution_feedback_service = kwargs.pop("execution_feedback_web_service", None)
+    if execution_feedback_service is None:
+        execution_feedback_service = kwargs.pop("execution_feedback_service", None)
     adaptive_cognitive_twin_service = kwargs.pop("adaptive_cognitive_twin_web_service", None)
     auth_config = kwargs.pop("web_auth_config", None)
     auth_gateway = kwargs.pop("web_auth_gateway", None)
@@ -493,6 +526,13 @@ def create_app(**kwargs: Any) -> FastAPI:
     install_personal_planning_routes(
         app,
         service=personal_planning_service,
+        env_file=env_file,
+        vault_path_override=vault_path_override,
+    )
+    install_execution_feedback_routes(
+        app,
+        service=execution_feedback_service,
+        planning_service=personal_planning_service,
         env_file=env_file,
         vault_path_override=vault_path_override,
     )
@@ -754,6 +794,34 @@ __all__ = [
     "ProductionPersonalPlanningWebService",
     "build_production_personal_planning_web_service",
     "install_personal_planning_routes",
+    "EXECUTION_FEEDBACK_CALIBRATION_PATH",
+    "EXECUTION_FEEDBACK_CORRECTION_PATH",
+    "EXECUTION_FEEDBACK_EVENT_PATH",
+    "EXECUTION_FEEDBACK_FEEDBACK_PATH",
+    "EXECUTION_FEEDBACK_REQUEST_HEADER_NAME",
+    "EXECUTION_FEEDBACK_REQUEST_HEADER_VALUE",
+    "EXECUTION_FEEDBACK_STATE_PATH",
+    "MAX_EXECUTION_FEEDBACK_CALIBRATION_RESPONSE_BYTES",
+    "MAX_EXECUTION_FEEDBACK_FEEDBACK_RESPONSE_BYTES",
+    "MAX_EXECUTION_FEEDBACK_MUTATION_RESPONSE_BYTES",
+    "MAX_EXECUTION_FEEDBACK_STATE_RESPONSE_BYTES",
+    "MAX_RAW_EXECUTION_FEEDBACK_BODY_BYTES",
+    "ExecutionFeedbackCalibrationPayload",
+    "ExecutionFeedbackCorrectionPayload",
+    "ExecutionFeedbackEmptyPayload",
+    "ExecutionFeedbackEventPayload",
+    "ExecutionFeedbackFeedbackPayload",
+    "ExecutionFeedbackInvalidRequestError",
+    "ExecutionFeedbackPlanSelectionPayload",
+    "ExecutionFeedbackRequestBoundaryMiddleware",
+    "ExecutionFeedbackSourceUnavailableError",
+    "ExecutionFeedbackStalePlanError",
+    "ExecutionFeedbackStateConflictError",
+    "ExecutionFeedbackWebError",
+    "ExecutionFeedbackWebService",
+    "ProductionExecutionFeedbackWebService",
+    "build_production_execution_feedback_web_service",
+    "install_execution_feedback_routes",
     "ADAPTIVE_COGNITIVE_TWIN_ACTIVATE_PATH",
     "ADAPTIVE_COGNITIVE_TWIN_CANDIDATE_PATH",
     "ADAPTIVE_COGNITIVE_TWIN_EVALUATE_PATH",
