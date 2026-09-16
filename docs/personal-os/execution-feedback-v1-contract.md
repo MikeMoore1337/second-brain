@@ -1,6 +1,6 @@
 # Execution & Feedback v1 — контракт Stage 18
 
-**Статус:** NORMATIVE CONTRACT / STAGE 18 IN PROGRESS  
+**Статус:** NORMATIVE CONTRACT / STAGE 18 COMPLETE
 **Контракт:** `execution-feedback-v1`  
 **Владелец:** только owner, через приватные web/API поверхности  
 **Дата фиксации:** 2026-09-16
@@ -325,3 +325,11 @@ owner-approved contract update.
 Результат каждой фазы обязан содержать exact commit/PR/merge SHA, fresh
 exact-head checks, full/focused test commands, frontend and deploy evidence,
 store path impact, vault/Git/provider/no-action assertions and any blocker.
+
+## 14. Factual closeout
+
+Stage 18 завершён после serial delivery 18.0–18.6, exact-head CI, post-merge
+CI, стандартного automatic production deploy и non-mutating production smoke.
+Фактическая ledger с идентификаторами фаз находится в
+[`stage18-delivery-ledger.md`](./stage18-delivery-ledger.md). Финальный PR
+закрывает Issue #357 через `Closes #357`; Stage 19 не начинается автоматически.
