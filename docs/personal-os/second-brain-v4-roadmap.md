@@ -1,6 +1,6 @@
 # Second Brain v4 — Personal Cognitive OS
 
-Статус после Phase 17.6: **STAGE 16 COMPLETE / STAGE 17 COMPLETE / SECOND BRAIN v4 IN PROGRESS**.
+Статус после Phase 17.6: **STAGE 16 COMPLETE / STAGE 17 COMPLETE / STAGE 18 IN PROGRESS / SECOND BRAIN v4 IN PROGRESS**.
 
 Этот документ задаёт переход от завершённого Cognitive Twin v3 к новой
 продуктовой генерации. Он не переименовывает и не переопределяет Cognitive
@@ -151,11 +151,31 @@ Proposal и owner-reviewed Planning Portfolio Snapshot. Это operational inten
 не execution evidence и не canonical vault state. Нормативный контракт:
 [`personal-planning-v1-contract.md`](./personal-planning-v1-contract.md).
 
-### Stage 18 — Execution & Feedback
+### Stage 18 — Execution & Feedback — IN PROGRESS
 
-Будущий слой явного выполнения согласованных внутренних действий и сбора
-проверяемой обратной связи. Он должен получить отдельный контракт обучения и
-калибровки; принятие Stage 16 само по себе не является training evidence.
+Нормативный контракт Stage 18: [`execution-feedback-v1-contract.md`](./execution-feedback-v1-contract.md).
+
+Stage 18 добавляет bounded owner-only execution events поверх immutable
+accepted plan Stage 17, deterministic projections, feedback и descriptive
+calibration. Stage17 contracts and semantics remain unchanged; no vault, Git,
+provider/LLM или browser-local private storage is used. Delivery is serial from
+18.0 through 18.6. Stage 19 is not started automatically.
+
+#### Current factual status
+
+- Stage 16: COMPLETE.
+- Stage 17: COMPLETE; PR #356 is merged and Issue #348 is closed.
+- Stage 18.0: contract/design gate in progress.
+- Stage 18.1–18.6: planned in this serial lane.
+- Stage 19–20: planned, not started.
+
+#### Phase 18.0 design gate
+
+Нормативный контракт фиксирует exact Stage17 identity binding, executable item
+kinds, lifecycle и stale-source fail-closed rules, append-only void correction,
+bounded JSONL operational storage, deterministic feedback formulas, descriptive
+calibration, private API boundary, Russian responsive UI и ожидаемый deployment
+статус `env change required: no`.
 
 ### Stage 19 — Controlled External Integrations & Action Gateway
 
