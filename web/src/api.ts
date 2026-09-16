@@ -968,6 +968,121 @@ export interface PersonalMemoryPayload {
   readonly domain: string | null;
 }
 
+export type ActionGatewayActionKind =
+  | "github.issue.create"
+  | "github.issue.comment"
+  | "github.issue.set_state";
+
+export type ActionGatewayState = "open" | "closed";
+
+export interface ActionGatewayCatalogItem {
+  readonly action_kind: ActionGatewayActionKind;
+  readonly risk: "controlled_write";
+  readonly reversibility: "supported" | "compensation_only" | "not_supported";
+}
+
+export interface ActionGatewayStatusResponse {
+  readonly contract: "action-gateway-v1";
+  readonly connector: "github_issues";
+  readonly policy_id: string;
+  readonly credential_profile_id: string;
+  readonly status: "disabled" | "ready" | "credential_unavailable";
+  readonly configured: boolean;
+  readonly ready: boolean;
+  readonly repositories: readonly string[];
+  readonly store_status: string;
+  readonly action_catalog: readonly ActionGatewayCatalogItem[];
+  readonly owner_confirmation_required: true;
+  readonly background_execution: false;
+}
+
+export interface ActionGatewayIntent {
+  readonly contract_version: "action-intent-v1";
+  readonly operation_id: string;
+  readonly action_kind: ActionGatewayActionKind;
+  readonly connector: "github_issues";
+  readonly repository: string;
+  readonly issue_number?: number;
+  readonly title?: string;
+  readonly body?: string;
+  readonly comment?: string;
+  readonly desired_state?: ActionGatewayState;
+}
+
+export interface ActionGatewayPrepared {
+  readonly prepared_action_id: string;
+  readonly contract_version: "prepared-external-action-v1";
+  readonly operation_id_fingerprint: string;
+  readonly action_kind: ActionGatewayActionKind;
+  readonly risk: "controlled_write";
+  readonly connector: "github_issues";
+  readonly connector_policy_id: string;
+  readonly credential_profile_id: string;
+  readonly exact_target_identity: Readonly<Record<string, unknown>>;
+  readonly preflight_fingerprint: string;
+  readonly semantic_payload: Readonly<Record<string, unknown>>;
+  readonly payload_fingerprint: string;
+  readonly preview: string;
+  readonly preview_fingerprint: string;
+  readonly prepared_at: string;
+  readonly expires_at: string;
+  readonly reversibility: "supported" | "compensation_only" | "not_supported";
+  readonly provenance: Readonly<Record<string, unknown>> | null;
+}
+
+export interface ActionGatewayPreparedResponse {
+  readonly prepared: ActionGatewayPrepared;
+  readonly confirmation_token: string;
+  readonly parent_receipt_id?: string;
+}
+
+export type ActionGatewayReceiptState =
+  | "already_satisfied"
+  | "execution_started"
+  | "executed"
+  | "failed_before_send"
+  | "failed_confirmed_no_mutation"
+  | "outcome_uncertain"
+  | "reconciled_executed"
+  | "reconciled_not_executed"
+  | "reconciliation_ambiguous"
+  | "compensation_prepared";
+
+export interface ActionGatewayReceipt {
+  readonly receipt_id: string;
+  readonly receipt_kind: "action" | "reconciliation" | "compensation";
+  readonly operation_id_fingerprint: string;
+  readonly prepared_action_id: string;
+  readonly intent_fingerprint: string;
+  readonly action_kind: ActionGatewayActionKind;
+  readonly risk: "controlled_write";
+  readonly connector_policy_id: string;
+  readonly credential_profile_id: string;
+  readonly target_safe_identity: Readonly<Record<string, unknown>>;
+  readonly payload_fingerprint: string;
+  readonly state: ActionGatewayReceiptState;
+  readonly attempt_started_at: string | null;
+  readonly sent_at: string | null;
+  readonly finished_at: string | null;
+  readonly remote_safe_identity: Readonly<Record<string, unknown>> | null;
+  readonly remote_url: string | null;
+  readonly safe_error_code: string | null;
+  readonly parent_receipt_id: string | null;
+  readonly reconciliation_receipt_id: string | null;
+  readonly compensation_receipt_id: string | null;
+}
+
+export interface ActionGatewayExecutionResponse {
+  readonly receipt: ActionGatewayReceipt;
+  readonly replayed: boolean;
+}
+
+export interface ActionGatewayHistoryResponse {
+  readonly receipts: readonly ActionGatewayReceipt[];
+  readonly count: number;
+  readonly truncated: boolean;
+}
+
 export interface FetchLike {
   (input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 }
@@ -1521,4 +1636,99 @@ export function prepareOutcome(outcome: OutcomePayload, fetcher: FetchLike = fet
 
 export function applyOutcome(confirmationToken: string, outcome: OutcomePayload, fetcher: FetchLike = fetchDefault): Promise<SavedNoteResponse> {
   return requestJson("/api/drafts/outcome-observation/save/apply", "draft-v1", { confirmation_token: confirmationToken, outcome }, fetcher, "Не удалось сохранить результат.");
+}
+
+export function loadActionGatewayStatus(
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<ActionGatewayStatusResponse> {
+  return requestJson(
+    "/api/action-gateway/status",
+    "action-gateway-v1",
+    {},
+    fetcher,
+    "Не удалось проверить доступность действий.",
+    signal,
+  );
+}
+
+export function prepareActionGatewayAction(
+  intent: ActionGatewayIntent,
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<ActionGatewayPreparedResponse> {
+  return requestJson(
+    "/api/action-gateway/prepare",
+    "action-gateway-v1",
+    { intent },
+    fetcher,
+    "Не удалось подготовить действие.",
+    signal,
+  );
+}
+
+export function executeActionGatewayAction(
+  prepared: ActionGatewayPrepared,
+  confirmationToken: string,
+  parentReceiptId: string | null = null,
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<ActionGatewayExecutionResponse> {
+  return requestJson(
+    "/api/action-gateway/execute",
+    "action-gateway-v1",
+    {
+      prepared,
+      confirmation_token: confirmationToken,
+      ...(parentReceiptId === null ? {} : { parent_receipt_id: parentReceiptId }),
+    },
+    fetcher,
+    "Не удалось выполнить действие.",
+    signal,
+  );
+}
+
+export function reconcileActionGatewayAction(
+  prepared: ActionGatewayPrepared,
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<ActionGatewayExecutionResponse> {
+  return requestJson(
+    "/api/action-gateway/reconcile",
+    "action-gateway-v1",
+    { prepared },
+    fetcher,
+    "Не удалось проверить результат действия.",
+    signal,
+  );
+}
+
+export function prepareActionGatewayCompensation(
+  parentReceiptId: string,
+  operationId: string,
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<ActionGatewayPreparedResponse> {
+  return requestJson(
+    "/api/action-gateway/compensation/prepare",
+    "action-gateway-v1",
+    { parent_receipt_id: parentReceiptId, operation_id: operationId },
+    fetcher,
+    "Не удалось подготовить компенсацию.",
+    signal,
+  );
+}
+
+export function loadActionGatewayHistory(
+  fetcher: FetchLike = fetchDefault,
+  signal?: AbortSignal,
+): Promise<ActionGatewayHistoryResponse> {
+  return requestJson(
+    "/api/action-gateway/history",
+    "action-gateway-v1",
+    {},
+    fetcher,
+    "Не удалось загрузить историю действий.",
+    signal,
+  );
 }

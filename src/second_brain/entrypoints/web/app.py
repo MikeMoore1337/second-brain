@@ -8,6 +8,24 @@ from typing import Any
 from fastapi import FastAPI
 
 from second_brain.entrypoints.web import legacy_app as _legacy_app
+from second_brain.entrypoints.web.action_gateway import (
+    ACTION_GATEWAY_COMPENSATION_PREPARE_PATH,
+    ACTION_GATEWAY_EXECUTE_PATH,
+    ACTION_GATEWAY_HISTORY_PATH,
+    ACTION_GATEWAY_PREPARE_PATH,
+    ACTION_GATEWAY_RECONCILE_PATH,
+    ACTION_GATEWAY_REQUEST_HEADER_NAME,
+    ACTION_GATEWAY_REQUEST_HEADER_VALUE,
+    ACTION_GATEWAY_STATUS_PATH,
+    MAX_RAW_ACTION_GATEWAY_BODY_BYTES,
+    ActionGatewayCompensationPreparePayload,
+    ActionGatewayEmptyPayload,
+    ActionGatewayIntentPayload,
+    ActionGatewayPreparedPayload,
+    ActionGatewayReconcilePayload,
+    ActionGatewayRequestBoundaryMiddleware,
+    install_action_gateway_routes,
+)
 from second_brain.entrypoints.web.active_personal_learning import (
     ACTIVE_LEARNING_QUESTIONS_PATH,
     ACTIVE_LEARNING_REQUEST_HEADER_NAME,
@@ -432,6 +450,7 @@ def create_app(**kwargs: Any) -> FastAPI:
     if execution_feedback_service is None:
         execution_feedback_service = kwargs.pop("execution_feedback_service", None)
     adaptive_cognitive_twin_service = kwargs.pop("adaptive_cognitive_twin_web_service", None)
+    action_gateway_service = kwargs.pop("action_gateway_service", None)
     auth_config = kwargs.pop("web_auth_config", None)
     auth_gateway = kwargs.pop("web_auth_gateway", None)
     auth_clock = kwargs.pop("web_auth_clock", None)
@@ -533,6 +552,12 @@ def create_app(**kwargs: Any) -> FastAPI:
         app,
         service=execution_feedback_service,
         planning_service=personal_planning_service,
+        env_file=env_file,
+        vault_path_override=vault_path_override,
+    )
+    install_action_gateway_routes(
+        app,
+        service=action_gateway_service,
         env_file=env_file,
         vault_path_override=vault_path_override,
     )
@@ -851,6 +876,22 @@ __all__ = [
     "ProductionAdaptiveCognitiveTwinWebService",
     "build_production_adaptive_cognitive_twin_web_service",
     "install_adaptive_cognitive_twin_routes",
+    "ACTION_GATEWAY_COMPENSATION_PREPARE_PATH",
+    "ACTION_GATEWAY_EXECUTE_PATH",
+    "ACTION_GATEWAY_HISTORY_PATH",
+    "ACTION_GATEWAY_PREPARE_PATH",
+    "ACTION_GATEWAY_RECONCILE_PATH",
+    "ACTION_GATEWAY_REQUEST_HEADER_NAME",
+    "ACTION_GATEWAY_REQUEST_HEADER_VALUE",
+    "ACTION_GATEWAY_STATUS_PATH",
+    "MAX_RAW_ACTION_GATEWAY_BODY_BYTES",
+    "ActionGatewayCompensationPreparePayload",
+    "ActionGatewayEmptyPayload",
+    "ActionGatewayIntentPayload",
+    "ActionGatewayPreparedPayload",
+    "ActionGatewayReconcilePayload",
+    "ActionGatewayRequestBoundaryMiddleware",
+    "install_action_gateway_routes",
     "WebAuthConfig",
     "create_app",
 ]

@@ -9,6 +9,7 @@ import "./page-atmosphere.css";
 import "./compact-glass.css";
 import "./semantic-navigation.css";
 import "./execution-feedback-surface.css";
+import "./action-gateway-surface.css";
 import "./login.css";
 
 const rootElement = document.getElementById("root");
