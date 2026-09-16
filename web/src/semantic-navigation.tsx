@@ -68,7 +68,7 @@ export const semanticGroups = [
     tools: [
       { id: "growth-engine", label: "Цели и прогресс", description: "Проверь цель, измеряемый прогресс, совет и следующий шаг.", target: "#growth-engine", icon: "growth", availability: "available", renderSurface: true },
       { id: "personal-strategy", label: "Личная стратегия", description: "Собери точный контекст цели, проверь предложение и прими только выбранную версию.", target: "#personal-strategy", icon: "save", availability: "available", renderSurface: true },
-      { id: "personal-planning", label: "Личное планирование", description: "Собери портфель целей, вместимость и проверяемый план без автоисполнения.", target: "#personal-planning", icon: "time", availability: "available", renderSurface: true },
+      { id: "personal-planning", label: "Личное планирование", description: "Собери портфель целей, вместимость и проверяемый план без автоисполнения.", target: "#personal-planning", icon: "personal-planning", availability: "available", renderSurface: true },
       { id: "personal-experiments", label: "Личные эксперименты", description: "Проверь свою гипотезу и оцени изменения по правилу измерения прогресса цели.", target: "#personal-experiments", icon: "personal-experiments", availability: "available", renderSurface: true },
       { id: "adaptive-cognitive-twin", label: "Адаптивный профиль", description: "Собери проверяемое предложение для нового способа представления контекста.", target: "#adaptive-cognitive-twin", icon: "adaptive-profile", availability: "available", renderSurface: true },
     ],

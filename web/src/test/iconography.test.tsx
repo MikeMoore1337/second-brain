@@ -9,6 +9,7 @@ describe("local icon system", () => {
     expect(ICON_NAMES).toContain("growth");
     expect(ICON_NAMES).toContain("self-retrieval");
     expect(ICON_NAMES).toContain("relation");
+    expect(ICON_NAMES).toContain("personal-planning");
     expect(ICON_NAMES).toContain("adaptive-profile");
     for (const name of ICON_NAMES) {
       const markup = renderToStaticMarkup(<Icon name={name} />);
