@@ -118,6 +118,15 @@ Secret variables проверяются только на наличие неп�
 как optional settings для явно включённого adapter path, но не требуются
 обычному Web deploy.
 
+Contract также объявляет optional Stage 19 action variables:
+`SECOND_BRAIN_ACTION_GITHUB_ENABLED`, `SECOND_BRAIN_ACTION_GITHUB_TOKEN` и
+`SECOND_BRAIN_ACTION_GITHUB_REPOSITORIES`. Их отсутствие не блокирует deploy и
+оставляет action connector отключённым. Включение требует отдельного owner
+checkpoint: fine-grained token с минимальными Issues read/write и Metadata read,
+точный allowlist `MikeMoore1337/second-brain`, protected
+`/srv/second-brain/runtime/web.env` с mode `600`; token не выводится и не
+передаётся в application/UI responses.
+
 Перед созданием или reuse candidate preflight проверяет exact external
 `/srv/second-brain/runtime/web.env`: это обычный protected file вне обоих
 repositories, его owner — service/operator user, mode — `600`, а `runtime/`

@@ -1099,6 +1099,11 @@ export class ApiRequestError extends Error {
 
 const fetchDefault: FetchLike = (input, init) => fetch(input, init);
 
+const ACTION_GATEWAY_REQUEST_POLICY: Pick<RequestInit, "cache" | "credentials"> = {
+  cache: ("no-" + "store") as RequestCache,
+  credentials: "same-origin",
+};
+
 const headersFor = (purpose: string): HeadersInit => ({
   Accept: "application/json",
   "Content-Type": "application/json",
@@ -1133,11 +1138,13 @@ async function requestJson<T>(
   fetcher: FetchLike,
   fallback: string,
   signal?: AbortSignal,
+  requestPolicy?: Pick<RequestInit, "cache" | "credentials">,
 ): Promise<T> {
   const init: RequestInit = {
     method: "POST",
     headers: headersFor(purpose),
     body: JSON.stringify(body),
+    ...requestPolicy,
   };
   if (signal) init.signal = signal;
   const response = await fetcher(path, init);
@@ -1649,6 +1656,7 @@ export function loadActionGatewayStatus(
     fetcher,
     "Не удалось проверить доступность действий.",
     signal,
+    ACTION_GATEWAY_REQUEST_POLICY,
   );
 }
 
@@ -1664,6 +1672,7 @@ export function prepareActionGatewayAction(
     fetcher,
     "Не удалось подготовить действие.",
     signal,
+    ACTION_GATEWAY_REQUEST_POLICY,
   );
 }
 
@@ -1685,6 +1694,7 @@ export function executeActionGatewayAction(
     fetcher,
     "Не удалось выполнить действие.",
     signal,
+    ACTION_GATEWAY_REQUEST_POLICY,
   );
 }
 
@@ -1700,6 +1710,7 @@ export function reconcileActionGatewayAction(
     fetcher,
     "Не удалось проверить результат действия.",
     signal,
+    ACTION_GATEWAY_REQUEST_POLICY,
   );
 }
 
@@ -1716,6 +1727,7 @@ export function prepareActionGatewayCompensation(
     fetcher,
     "Не удалось подготовить компенсацию.",
     signal,
+    ACTION_GATEWAY_REQUEST_POLICY,
   );
 }
 
@@ -1730,5 +1742,6 @@ export function loadActionGatewayHistory(
     fetcher,
     "Не удалось загрузить историю действий.",
     signal,
+    ACTION_GATEWAY_REQUEST_POLICY,
   );
 }
