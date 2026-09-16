@@ -206,7 +206,7 @@ describe("React Web parity shell", () => {
     expect(host.querySelectorAll('[data-semantic-group]')).toHaveLength(4);
     expect(Array.from(host.querySelectorAll('[data-semantic-group] > .semantic-group-summary h3')).map((heading) => heading.textContent)).toEqual(["Память", "Понимание себя", "Решения", "Развитие"]);
     expect(host.querySelector("#hero-title")?.textContent).toContain("Second");
-    for (const id of ["decision-journal", "timeline", "self-model", "cognitive-twin", "simulate-me", "prospective-audit", "assistant-compare", "decision-compass", "retrospective-calibration", "self-retrieval", "active-learning", "diagnostics", "search", "capture", "growth-engine", "personal-experiments"]) {
+    for (const id of ["decision-journal", "timeline", "self-model", "cognitive-twin", "simulate-me", "prospective-audit", "assistant-compare", "decision-compass", "retrospective-calibration", "self-retrieval", "active-learning", "diagnostics", "search", "capture", "growth-engine", "personal-strategy", "personal-experiments"]) {
       expect(host.querySelector("#" + id), id).not.toBeNull();
     }
     expect(host.querySelector("#memory")).toBeNull();
