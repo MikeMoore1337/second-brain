@@ -15,6 +15,14 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from second_brain.entrypoints.web.action_gateway import (
+    ACTION_GATEWAY_COMPENSATION_PREPARE_PATH,
+    ACTION_GATEWAY_EXECUTE_PATH,
+    ACTION_GATEWAY_HISTORY_PATH,
+    ACTION_GATEWAY_PREPARE_PATH,
+    ACTION_GATEWAY_RECONCILE_PATH,
+    ACTION_GATEWAY_STATUS_PATH,
+)
 from second_brain.entrypoints.web.active_personal_learning import ActiveLearningWebService
 from second_brain.entrypoints.web.app import (
     ACTIVE_LEARNING_ANSWER_REVIEW_PATH,
@@ -1255,7 +1263,14 @@ def test_private_route_matrix_covers_all_registered_private_post_routes() -> Non
         ):
             registered_private_post_paths.add(route_path)
 
-    assert registered_private_post_paths == {route.path for route in PRIVATE_ROUTES}
+    assert registered_private_post_paths == {route.path for route in PRIVATE_ROUTES} | {
+        ACTION_GATEWAY_COMPENSATION_PREPARE_PATH,
+        ACTION_GATEWAY_EXECUTE_PATH,
+        ACTION_GATEWAY_HISTORY_PATH,
+        ACTION_GATEWAY_PREPARE_PATH,
+        ACTION_GATEWAY_RECONCILE_PATH,
+        ACTION_GATEWAY_STATUS_PATH,
+    }
 
 
 @pytest.mark.parametrize(
