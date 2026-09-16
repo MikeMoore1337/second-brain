@@ -1,6 +1,6 @@
 # Personal Planning v1 — нормативный контракт Stage 17
 
-Статус: **DESIGN GATE / NORMATIVE CONTRACT / STAGE 17 IN PROGRESS**.
+Статус: **NORMATIVE CONTRACT / STAGE 17 COMPLETE**.
 
 Контракт добавляет к Second Brain v4 bounded-слой личного планирования и
 явных commitments. Он начинается только от exact owner-reviewed состояния
@@ -382,7 +382,28 @@ reduced motion и отсутствие horizontal overflow. Native single-select
 | 17.5 | adversarial security/privacy/store/API/E2E and Stage 1–16 regression gate |
 | 17.6 | factual ledger, exact-head full gate, standard autodeploy, non-mutating smoke, close #348 |
 
-## 16. Delivery and final flags
+## 16. Factual delivery ledger
+
+Каждая runtime-фаза 17.0–17.5 доставлена отдельным PR из свежего
+изолированного worktree. В таблице сохранены финальные зелёные exact-head PR
+CI, post-merge CI и стандартный production deploy соответствующего merge SHA.
+Исторические transient failures не являются merged evidence.
+
+| Фаза | PR | Merge SHA | PR CI | Post-merge CI | Deploy |
+| --- | --- | --- | --- | --- | --- |
+| 17.0 | [#350](https://github.com/MikeMoore1337/second-brain/pull/350) | `cf5776f91ac2af1d523a7265db8b942b2065b580` | [35078641030](https://github.com/MikeMoore1337/second-brain/actions/runs/35078641030) | [35078919710](https://github.com/MikeMoore1337/second-brain/actions/runs/35078919710) | [35079216691](https://github.com/MikeMoore1337/second-brain/actions/runs/35079216691) |
+| 17.1 | [#351](https://github.com/MikeMoore1337/second-brain/pull/351) | `cc6cadaf1d67584e4c0f2adec10278ce4baa1b60` | [35081513361](https://github.com/MikeMoore1337/second-brain/actions/runs/35081513361) | [35081831705](https://github.com/MikeMoore1337/second-brain/actions/runs/35081831705) | [35082177879](https://github.com/MikeMoore1337/second-brain/actions/runs/35082177879) |
+| 17.2 | [#352](https://github.com/MikeMoore1337/second-brain/pull/352) | `aec9323a40fa4f531cd16d67e480a2fc39cc5025` | [35084518436](https://github.com/MikeMoore1337/second-brain/actions/runs/35084518436) | [35084823535](https://github.com/MikeMoore1337/second-brain/actions/runs/35084823535) | [35085154751](https://github.com/MikeMoore1337/second-brain/actions/runs/35085154751) |
+| 17.3 | [#353](https://github.com/MikeMoore1337/second-brain/pull/353) | `d53a070eaff589bb53747707e72da876d32f5720` | [35087421580](https://github.com/MikeMoore1337/second-brain/actions/runs/35087421580) | [35087684590](https://github.com/MikeMoore1337/second-brain/actions/runs/35087684590) | [35087951240](https://github.com/MikeMoore1337/second-brain/actions/runs/35087951240) |
+| 17.4 | [#354](https://github.com/MikeMoore1337/second-brain/pull/354) | `8944484d578ffee4e54c9aa806354301d3293f6d` | [35093329446](https://github.com/MikeMoore1337/second-brain/actions/runs/35093329446) | [35093653010](https://github.com/MikeMoore1337/second-brain/actions/runs/35093653010) | [35093965938](https://github.com/MikeMoore1337/second-brain/actions/runs/35093965938) |
+| 17.5 | [#355](https://github.com/MikeMoore1337/second-brain/pull/355) | `b0cd4c5cee7775ef26402edaf4723c011e4119e7` | [35096545806](https://github.com/MikeMoore1337/second-brain/actions/runs/35096545806) | [35096818330](https://github.com/MikeMoore1337/second-brain/actions/runs/35096818330) | [35097060936](https://github.com/MikeMoore1337/second-brain/actions/runs/35097060936) |
+
+Финальный closeout 17.6 выполняется этим PR с `Closes #348`; его собственные
+merge SHA, exact-head CI, post-merge CI, deploy, non-mutating production smoke
+и закрытие Issue #348 фиксируются в финальном delivery report после завершения
+соответствующих workflow. PR 17.0–17.5 используют `Refs #348`.
+
+## 17. Delivery and final flags
 
 Каждая фаза начинается со свежего exact `origin/main`, использует один
 изолированный Stage17 worktree, проходит focused/repository gates, PR under
