@@ -10,6 +10,7 @@ describe("local icon system", () => {
     expect(ICON_NAMES).toContain("self-retrieval");
     expect(ICON_NAMES).toContain("relation");
     expect(ICON_NAMES).toContain("personal-planning");
+    expect(ICON_NAMES).toContain("execution-feedback");
     expect(ICON_NAMES).toContain("adaptive-profile");
     for (const name of ICON_NAMES) {
       const markup = renderToStaticMarkup(<Icon name={name} />);
@@ -24,6 +25,8 @@ describe("local icon system", () => {
     expect(renderToStaticMarkup(<Icon name="search" size={64} />)).toContain('search-detail');
     expect(renderToStaticMarkup(<Icon name="adaptive-profile" size={20} />)).toContain('adaptive-profile-compact');
     expect(renderToStaticMarkup(<Icon name="adaptive-profile" size={64} />)).toContain('adaptive-profile-detail');
+    expect(renderToStaticMarkup(<Icon name="execution-feedback" size={20} />)).toContain('execution-feedback-compact');
+    expect(renderToStaticMarkup(<Icon name="execution-feedback" size={64} />)).toContain('execution-feedback-detail');
   });
 
   it("gives a meaningful accessible name when an icon is standalone", () => {
