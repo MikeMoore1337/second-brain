@@ -1,6 +1,6 @@
 # Controlled External Integrations & Action Gateway v1 — контракт Stage 19
 
-**Статус:** NORMATIVE CONTRACT / STAGE 19 IN PROGRESS (design gate complete)
+**Статус:** NORMATIVE CONTRACT / STAGE 19 COMPLETE
 
 **Контракт:** `action-gateway-v1`
 
@@ -8,6 +8,7 @@
 
 **Владелец:** только owner, через приватные Web/API поверхности
 **Дата design gate:** 2026-09-16
+**Дата closeout:** 2026-09-17
 
 Этот документ является нормативной границей Stage 19. Он разрешает только
 явно подготовленные и отдельно подтверждённые действия владельца. Он не
@@ -620,7 +621,7 @@ machinery в Stage19 v1 не добавляются.
 текущего `origin/main`. Только финальный closeout PR использует `Closes #366`;
 промежуточные PR используют `Refs #366`.
 
-## 19. Design-gate status
+## 19. Design-gate status (historical)
 
 На design gate подтверждено:
 
@@ -634,6 +635,29 @@ Stage 19 = IN PROGRESS
 Stage 20 = PLANNED / NOT STARTED
 ```
 
-Runtime implementation 19.1–19.6 не считается начатой этим документом до
+На design gate runtime implementation 19.1–19.6 не считалась начатой до
 последовательного delivery. Этот contract не меняет Stage16–18 semantics,
 second-brain-vault или реальные vault data.
+
+## 20. Factual delivery status
+
+После последовательного delivery Phase 19.0–19.6 фактический статус Stage 19:
+
+```text
+Cognitive Twin v3 = COMPLETE
+Second Brain v4 = IN PROGRESS
+Stage 16 = COMPLETE
+Stage 17 = COMPLETE
+Stage 18 = COMPLETE
+Stage 19 = COMPLETE
+Stage 20 = PLANNED / NOT STARTED
+```
+
+Нормативный contract, provider-neutral core, append-only receipt/audit store,
+GitHub Issues connector, prepare/confirm/execute orchestration,
+reconciliation, compensation boundary, owner-only Web/API/UI и security/E2E
+gate доставлены и проверены. Production connector остаётся `disabled`, пока
+owner не provision-ит отдельный GitHub action credential; это не расширяет
+login OAuth и не блокирует безопасный runtime. Фактические PR, merge SHA,
+exact-head CI, post-merge CI и deploy собраны в
+[`stage19-delivery-ledger.md`](./stage19-delivery-ledger.md).
