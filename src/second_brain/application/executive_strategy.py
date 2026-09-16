@@ -89,6 +89,8 @@ MAX_ACTION_LISTS: Final[int] = 8
 MAX_PROPOSAL_REASONS: Final[int] = 8
 MAX_PROPOSAL_CAVEATS: Final[int] = 8
 MAX_PROPOSAL_BYTES: Final[int] = 64 * 1024
+MAX_SNAPSHOT_SELECTED_ACTIONS: Final[int] = 8
+MAX_SNAPSHOT_BYTES: Final[int] = 128 * 1024
 
 _RAW_HASH_PATTERN: Final[re.Pattern[str]] = re.compile(r"[0-9a-f]{64}\Z", re.ASCII)
 _GROWTH_HASH_PATTERN: Final[re.Pattern[str]] = re.compile(r"sha256:[0-9a-f]{64}\Z", re.ASCII)
@@ -812,6 +814,14 @@ def _candidate_aliases(value: object) -> tuple[ExecutiveSourceAliasV1, ...]:
     return aliases
 
 
+def _wire_list(value: object) -> tuple[object, ...]:
+    """Accept only JSON arrays when reconstructing a typed DTO."""
+
+    if type(value) is not list:
+        raise _invalid()
+    return tuple(cast(list[object], value))
+
+
 @dataclass(frozen=True, slots=True)
 class ExecutiveActionCandidateV1:
     """One bounded, non-executable action candidate."""
@@ -863,8 +873,415 @@ class ExecutiveActionCandidateV1:
             "caveats": list(self.caveats),
         }
 
+    @classmethod
+    def from_dict(cls, value: object) -> ExecutiveActionCandidateV1:
+        """Rebuild a candidate from its closed canonical JSON projection."""
+
+        if type(value) is not dict:
+            raise _invalid()
+        expected = {
+            "action_id",
+            "kind",
+            "title",
+            "description",
+            "basis_aliases",
+            "goal_relation",
+            "expected_observable_signal",
+            "prerequisites",
+            "caveats",
+        }
+        if set(value) != expected:
+            raise _invalid()
+        return cls(
+            action_id=value["action_id"],
+            kind=value["kind"],
+            title=value["title"],
+            description=value["description"],
+            basis_aliases=cast(
+                tuple[ExecutiveSourceAliasV1 | str, ...], _wire_list(value["basis_aliases"])
+            ),
+            goal_relation=value["goal_relation"],
+            expected_observable_signal=value["expected_observable_signal"],
+            prerequisites=cast(tuple[str, ...], _wire_list(value["prerequisites"])),
+            caveats=cast(tuple[str, ...], _wire_list(value["caveats"])),
+        )
+
 
 ActionCandidateV1 = ExecutiveActionCandidateV1
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewedActionV1:
+    """One owner-reviewed action preserving both generated and reviewed text."""
+
+    action_id: str
+    kind: ExecutiveActionKindV1 | str
+    generated: ExecutiveActionCandidateV1
+    reviewed: ExecutiveActionCandidateV1
+    edited: bool
+
+    def __post_init__(self) -> None:
+        action_id = _action_id(self.action_id)
+        kind = _enum_value(self.kind, ExecutiveActionKindV1)
+        if (
+            type(self.generated) is not ExecutiveActionCandidateV1
+            or type(self.reviewed) is not ExecutiveActionCandidateV1
+            or self.generated.action_id != action_id
+            or self.reviewed.action_id != action_id
+            or self.generated.kind is not kind
+            or self.reviewed.kind is not kind
+            or self.generated.basis_aliases != self.reviewed.basis_aliases
+            or type(self.edited) is not bool
+            or self.edited != (self.generated != self.reviewed)
+        ):
+            raise _invalid()
+        object.__setattr__(self, "action_id", action_id)
+        object.__setattr__(self, "kind", kind)
+
+    @property
+    def generated_candidate(self) -> ExecutiveActionCandidateV1:
+        """Compatibility name for callers that prefer an explicit noun."""
+
+        return self.generated
+
+    @property
+    def reviewed_candidate(self) -> ExecutiveActionCandidateV1:
+        """Compatibility name for callers that prefer an explicit noun."""
+
+        return self.reviewed
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "action_id": self.action_id,
+            "kind": cast(ExecutiveActionKindV1, self.kind).value,
+            "generated": self.generated.as_dict(),
+            "reviewed": self.reviewed.as_dict(),
+            "edited": self.edited,
+        }
+
+    @classmethod
+    def from_dict(cls, value: object) -> ReviewedActionV1:
+        if type(value) is not dict:
+            raise _invalid()
+        expected = {"action_id", "kind", "generated", "reviewed", "edited"}
+        if set(value) != expected:
+            raise _invalid()
+        return cls(
+            action_id=value["action_id"],
+            kind=value["kind"],
+            generated=ExecutiveActionCandidateV1.from_dict(value["generated"]),
+            reviewed=ExecutiveActionCandidateV1.from_dict(value["reviewed"]),
+            edited=value["edited"],
+        )
+
+
+ReviewedAction = ReviewedActionV1
+
+
+def build_reviewed_action(
+    candidate: ExecutiveActionCandidateV1,
+    *,
+    reviewed: ExecutiveActionCandidateV1 | None = None,
+) -> ReviewedActionV1:
+    """Bind an optional bounded owner edit to one exact generated candidate."""
+
+    if type(candidate) is not ExecutiveActionCandidateV1:
+        raise _invalid()
+    reviewed_candidate = candidate if reviewed is None else reviewed
+    if type(reviewed_candidate) is not ExecutiveActionCandidateV1:
+        raise _invalid()
+    return ReviewedActionV1(
+        action_id=candidate.action_id,
+        kind=candidate.kind,
+        generated=candidate,
+        reviewed=reviewed_candidate,
+        edited=candidate != reviewed_candidate,
+    )
+
+
+class StrategySnapshotStateV1(StrEnum):
+    """Closed lifecycle state for one accepted strategy version."""
+
+    CURRENT = "current"
+    SUPERSEDED = "superseded"
+    DEACTIVATED = "deactivated"
+
+
+StrategySnapshotState = StrategySnapshotStateV1
+
+
+def _snapshot_core(snapshot: StrategySnapshotV1) -> dict[str, object]:
+    """Build snapshot identity bytes without the self-referential fingerprint."""
+
+    return {
+        "snapshot_id": str(snapshot.snapshot_id),
+        "sequence": snapshot.sequence,
+        "state": cast(StrategySnapshotStateV1, snapshot.state).value,
+        "goal_source_uuid": str(snapshot.goal_source_uuid),
+        "goal_identity_fingerprint": snapshot.goal_identity_fingerprint,
+        "source_pack_fingerprint": snapshot.source_pack_fingerprint,
+        "proposal_fingerprint": snapshot.proposal_fingerprint,
+        "selected_actions": [action.as_dict() for action in snapshot.selected_actions],
+        "policy_id": snapshot.policy_id,
+        "policy_fingerprint": snapshot.policy_fingerprint,
+        "reviewed_at": _format_timestamp(snapshot.reviewed_at),
+        "accepted_at": _format_timestamp(snapshot.accepted_at),
+        "prior_snapshot_id": (
+            str(snapshot.prior_snapshot_id) if snapshot.prior_snapshot_id is not None else None
+        ),
+        "prior_snapshot_fingerprint": snapshot.prior_snapshot_fingerprint,
+    }
+
+
+@dataclass(frozen=True, slots=True)
+class StrategySnapshotV1:
+    """Immutable, owner-accepted operational strategy state."""
+
+    snapshot_id: UUID | str
+    sequence: int
+    state: StrategySnapshotStateV1 | str
+    goal_source_uuid: UUID | str
+    goal_identity_fingerprint: ExecutiveHashV1
+    source_pack_fingerprint: ExecutiveHashV1
+    proposal_fingerprint: ExecutiveHashV1
+    selected_actions: tuple[ReviewedActionV1, ...]
+    policy_id: str
+    policy_fingerprint: ExecutiveHashV1
+    reviewed_at: datetime
+    accepted_at: datetime
+    prior_snapshot_id: UUID | str | None
+    prior_snapshot_fingerprint: ExecutiveHashV1 | None
+    snapshot_fingerprint: ExecutiveHashV1
+
+    def __post_init__(self) -> None:
+        snapshot_id = _uuid7(self.snapshot_id)
+        if (
+            type(self.sequence) is not int
+            or isinstance(self.sequence, bool)
+            or not 1 <= self.sequence <= (1 << 64) - 1
+        ):
+            raise _invalid()
+        state = _enum_value(self.state, StrategySnapshotStateV1)
+        goal_uuid = _uuid7(self.goal_source_uuid)
+        goal_fp = _hash(self.goal_identity_fingerprint, growth=True)
+        source_fp = _raw_digest(self.source_pack_fingerprint)
+        proposal_fp = _raw_digest(self.proposal_fingerprint)
+        if self.policy_id != POLICY_ID or self.policy_fingerprint != POLICY_FINGERPRINT:
+            raise _policy_mismatch()
+        if type(self.selected_actions) is not tuple:
+            raise _invalid()
+        if len(self.selected_actions) > MAX_SNAPSHOT_SELECTED_ACTIONS:
+            raise _invalid()
+        if any(type(action) is not ReviewedActionV1 for action in self.selected_actions):
+            raise _invalid()
+        actions = tuple(self.selected_actions)
+        if len({action.action_id for action in actions}) != len(actions):
+            raise _invalid()
+        reviewed_at = _timestamp(self.reviewed_at)
+        accepted_at = _timestamp(self.accepted_at)
+        if reviewed_at > accepted_at:
+            raise _invalid()
+        prior_id = None if self.prior_snapshot_id is None else _uuid7(self.prior_snapshot_id)
+        prior_fp = (
+            None
+            if self.prior_snapshot_fingerprint is None
+            else _raw_digest(self.prior_snapshot_fingerprint)
+        )
+        if (prior_id is None) != (prior_fp is None):
+            raise _invalid()
+        if prior_id == snapshot_id:
+            raise _invalid()
+        supplied_fp = _raw_digest(self.snapshot_fingerprint)
+        object.__setattr__(self, "snapshot_id", snapshot_id)
+        object.__setattr__(self, "sequence", self.sequence)
+        object.__setattr__(self, "state", state)
+        object.__setattr__(self, "goal_source_uuid", goal_uuid)
+        object.__setattr__(self, "goal_identity_fingerprint", goal_fp)
+        object.__setattr__(self, "source_pack_fingerprint", source_fp)
+        object.__setattr__(self, "proposal_fingerprint", proposal_fp)
+        object.__setattr__(self, "selected_actions", actions)
+        object.__setattr__(self, "policy_id", POLICY_ID)
+        object.__setattr__(self, "policy_fingerprint", POLICY_FINGERPRINT)
+        object.__setattr__(self, "reviewed_at", reviewed_at)
+        object.__setattr__(self, "accepted_at", accepted_at)
+        object.__setattr__(self, "prior_snapshot_id", prior_id)
+        object.__setattr__(self, "prior_snapshot_fingerprint", prior_fp)
+        expected = _raw_hash(_snapshot_core(self))
+        if supplied_fp != expected:
+            raise _invalid()
+        object.__setattr__(self, "snapshot_fingerprint", expected)
+        if len(_canonical_bytes(self.as_dict())) > MAX_SNAPSHOT_BYTES:
+            raise _invalid()
+
+    def as_dict(self) -> dict[str, object]:
+        return {**_snapshot_core(self), "snapshot_fingerprint": self.snapshot_fingerprint}
+
+    def to_json(self) -> str:
+        return _canonical_bytes(self.as_dict()).decode("utf-8")
+
+    @classmethod
+    def from_dict(cls, value: object) -> StrategySnapshotV1:
+        if type(value) is not dict:
+            raise _invalid()
+        expected = {
+            "snapshot_id",
+            "sequence",
+            "state",
+            "goal_source_uuid",
+            "goal_identity_fingerprint",
+            "source_pack_fingerprint",
+            "proposal_fingerprint",
+            "selected_actions",
+            "policy_id",
+            "policy_fingerprint",
+            "reviewed_at",
+            "accepted_at",
+            "prior_snapshot_id",
+            "prior_snapshot_fingerprint",
+            "snapshot_fingerprint",
+        }
+        if set(value) != expected:
+            raise _invalid()
+        selected = _wire_list(value["selected_actions"])
+        return cls(
+            snapshot_id=value["snapshot_id"],
+            sequence=value["sequence"],
+            state=value["state"],
+            goal_source_uuid=value["goal_source_uuid"],
+            goal_identity_fingerprint=value["goal_identity_fingerprint"],
+            source_pack_fingerprint=value["source_pack_fingerprint"],
+            proposal_fingerprint=value["proposal_fingerprint"],
+            selected_actions=tuple(ReviewedActionV1.from_dict(item) for item in selected),
+            policy_id=value["policy_id"],
+            policy_fingerprint=value["policy_fingerprint"],
+            reviewed_at=value["reviewed_at"],
+            accepted_at=value["accepted_at"],
+            prior_snapshot_id=value["prior_snapshot_id"],
+            prior_snapshot_fingerprint=value["prior_snapshot_fingerprint"],
+            snapshot_fingerprint=value["snapshot_fingerprint"],
+        )
+
+
+StrategySnapshot = StrategySnapshotV1
+
+
+def _new_snapshot(
+    *,
+    snapshot_id: UUID,
+    sequence: int,
+    state: StrategySnapshotStateV1,
+    proposal: StrategyProposalV1,
+    selected_actions: tuple[ReviewedActionV1, ...],
+    reviewed_at: datetime,
+    accepted_at: datetime,
+    prior_snapshot_id: UUID | None,
+    prior_snapshot_fingerprint: ExecutiveHashV1 | None,
+) -> StrategySnapshotV1:
+    core = {
+        "snapshot_id": str(snapshot_id),
+        "sequence": sequence,
+        "state": state.value,
+        "goal_source_uuid": str(proposal.goal_source_uuid),
+        "goal_identity_fingerprint": proposal.goal_identity_fingerprint,
+        "source_pack_fingerprint": proposal.source_pack_fingerprint,
+        "proposal_fingerprint": proposal.proposal_fingerprint,
+        "selected_actions": [action.as_dict() for action in selected_actions],
+        "policy_id": POLICY_ID,
+        "policy_fingerprint": POLICY_FINGERPRINT,
+        "reviewed_at": _format_timestamp(reviewed_at),
+        "accepted_at": _format_timestamp(accepted_at),
+        "prior_snapshot_id": str(prior_snapshot_id) if prior_snapshot_id is not None else None,
+        "prior_snapshot_fingerprint": prior_snapshot_fingerprint,
+    }
+    return StrategySnapshotV1(
+        snapshot_id=snapshot_id,
+        sequence=sequence,
+        state=state,
+        goal_source_uuid=proposal.goal_source_uuid,
+        goal_identity_fingerprint=proposal.goal_identity_fingerprint,
+        source_pack_fingerprint=proposal.source_pack_fingerprint,
+        proposal_fingerprint=proposal.proposal_fingerprint,
+        selected_actions=selected_actions,
+        policy_id=POLICY_ID,
+        policy_fingerprint=POLICY_FINGERPRINT,
+        reviewed_at=reviewed_at,
+        accepted_at=accepted_at,
+        prior_snapshot_id=prior_snapshot_id,
+        prior_snapshot_fingerprint=prior_snapshot_fingerprint,
+        snapshot_fingerprint=_raw_hash(core),
+    )
+
+
+def build_strategy_snapshot(
+    proposal: StrategyProposalV1,
+    selected_actions: tuple[ReviewedActionV1, ...],
+    *,
+    sequence: int,
+    reviewed_at: datetime,
+    accepted_at: datetime,
+    prior_snapshot: StrategySnapshotV1 | None = None,
+    snapshot_id: UUID | str | None = None,
+) -> StrategySnapshotV1:
+    """Build one accepted snapshot after exact proposal/action review checks."""
+
+    validated = validate_strategy_proposal(proposal)
+    if validated.result_state is not ExecutiveResultStateV1.PROPOSAL:
+        raise _invalid()
+    if type(selected_actions) is not tuple:
+        raise _invalid()
+    candidates = {candidate.action_id: candidate for candidate in validated.candidates}
+    for action in selected_actions:
+        if type(action) is not ReviewedActionV1 or action.action_id not in candidates:
+            raise _invalid()
+        if action.generated != candidates[action.action_id]:
+            raise _invalid()
+    if len({action.action_id for action in selected_actions}) != len(selected_actions):
+        raise _invalid()
+    if prior_snapshot is not None:
+        validate_strategy_snapshot(prior_snapshot)
+        if (
+            prior_snapshot.state is not StrategySnapshotStateV1.CURRENT
+            or prior_snapshot.goal_source_uuid != validated.goal_source_uuid
+            or prior_snapshot.goal_identity_fingerprint != validated.goal_identity_fingerprint
+            or prior_snapshot.policy_fingerprint != validated.policy_fingerprint
+        ):
+            raise _invalid()
+    identifier = uuid7() if snapshot_id is None else _uuid7(snapshot_id)
+    return _new_snapshot(
+        snapshot_id=identifier,
+        sequence=sequence,
+        state=StrategySnapshotStateV1.CURRENT,
+        proposal=validated,
+        selected_actions=selected_actions,
+        reviewed_at=reviewed_at,
+        accepted_at=accepted_at,
+        prior_snapshot_id=(
+            None if prior_snapshot is None else cast(UUID, prior_snapshot.snapshot_id)
+        ),
+        prior_snapshot_fingerprint=(
+            None if prior_snapshot is None else prior_snapshot.snapshot_fingerprint
+        ),
+    )
+
+
+def validate_strategy_snapshot(value: object) -> StrategySnapshotV1:
+    """Validate an immutable snapshot and its canonical fingerprint."""
+
+    if type(value) is not StrategySnapshotV1:
+        raise _invalid()
+    expected = _raw_hash(_snapshot_core(value))
+    if expected != value.snapshot_fingerprint:
+        raise _invalid()
+    return value
+
+
+def serialize_strategy_snapshot(value: object) -> bytes:
+    """Serialize one accepted snapshot as canonical UTF-8 JSON."""
+
+    return _canonical_bytes(validate_strategy_snapshot(value).as_dict())
+
+
+canonical_strategy_snapshot_bytes = serialize_strategy_snapshot
 
 
 @dataclass(frozen=True, slots=True)
@@ -1415,21 +1832,32 @@ __all__ = [
     "ExecutiveStrategyCancelledError",
     "ExecutiveStrategyError",
     "ExecutiveStrategyGateway",
+    "ReviewedAction",
+    "ReviewedActionV1",
     "StrategyProposal",
     "StrategyProposalV1",
     "StrategyReasoningEnvelope",
     "StrategyReasoningEnvelopeV1",
+    "StrategySnapshot",
+    "StrategySnapshotState",
+    "StrategySnapshotStateV1",
+    "StrategySnapshotV1",
     "build_executive_context_pack",
+    "build_reviewed_action",
     "build_strategy_proposal_from_assistant_result",
     "build_strategy_reasoning_envelope",
+    "build_strategy_snapshot",
     "canonical_executive_context_pack_bytes",
     "canonical_strategy_proposal_bytes",
     "canonical_strategy_reasoning_bytes",
+    "canonical_strategy_snapshot_bytes",
     "compute_goal_identity_fingerprint",
     "goal_identity_fingerprint",
     "serialize_executive_context_pack",
     "serialize_strategy_proposal",
     "serialize_strategy_reasoning_envelope",
+    "serialize_strategy_snapshot",
     "validate_executive_context_pack",
     "validate_strategy_proposal",
+    "validate_strategy_snapshot",
 ]
