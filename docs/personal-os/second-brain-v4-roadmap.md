@@ -1,6 +1,6 @@
 # Second Brain v4 — Personal Cognitive OS
 
-Статус после Phase 18.6: **STAGE 16 COMPLETE / STAGE 17 COMPLETE / STAGE 18 COMPLETE / SECOND BRAIN v4 IN PROGRESS**.
+Статус после Phase 19.6: **STAGE 16 COMPLETE / STAGE 17 COMPLETE / STAGE 18 COMPLETE / STAGE 19 COMPLETE / SECOND BRAIN v4 IN PROGRESS**.
 
 Этот документ задаёт переход от завершённого Cognitive Twin v3 к новой
 продуктовой генерации. Он не переименовывает и не переопределяет Cognitive
@@ -180,7 +180,7 @@ bounded JSONL operational storage, deterministic feedback formulas, descriptive
 calibration, private API boundary, Russian responsive UI и ожидаемый deployment
 статус `env change required: no`.
 
-### Stage 19 — Controlled External Integrations & Action Gateway — IN PROGRESS
+### Stage 19 — Controlled External Integrations & Action Gateway — COMPLETE
 
 Нормативный контракт Stage 19: [`action-gateway-v1-contract.md`](./action-gateway-v1-contract.md).
 
@@ -189,14 +189,20 @@ consent, credential, exact target validation, preview, at-most-once, audit,
 reconciliation и compensation правилами. В v1 runtime обязателен только
 закрытый GitHub Issues catalog (`create`, `comment`, `set_state`); Calendar и
 Email остаются deferred. Никакое действие не запускается Stage 16–18,
-Advisor/LLM, background scheduler или Stage 20.
+Advisor/LLM, background scheduler или Stage 20. Delivery Stage 19.0–19.6
+завершена отдельными PR, exact-head CI, post-merge CI, automatic production
+deploy и non-mutating production smoke.
 
 #### Current factual status
 
-- Phase 19.0: COMPLETE; normative contract/design gate merged.
-- Phase 19.1–19.6: not started.
-- Stage 19: IN PROGRESS.
+- Phase 19.0–19.5: COMPLETE; contract, core/store, GitHub adapter,
+  orchestration, private Web/API/UI и security/E2E slices merged and deployed.
+- Phase 19.6: COMPLETE; final ledger, full gate, production smoke and
+  credential readiness recorded.
+- Stage 19: COMPLETE.
 - Stage 20: PLANNED / NOT STARTED.
+
+Фактическая delivery ledger: [`stage19-delivery-ledger.md`](./stage19-delivery-ledger.md).
 
 ### Stage 20 — Personal Agent / Chief of Staff
 
