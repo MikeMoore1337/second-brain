@@ -656,8 +656,47 @@ Stage 20 = PLANNED / NOT STARTED
 Нормативный contract, provider-neutral core, append-only receipt/audit store,
 GitHub Issues connector, prepare/confirm/execute orchestration,
 reconciliation, compensation boundary, owner-only Web/API/UI и security/E2E
-gate доставлены и проверены. Production connector остаётся `disabled`, пока
-owner не provision-ит отдельный GitHub action credential; это не расширяет
-login OAuth и не блокирует безопасный runtime. Фактические PR, merge SHA,
-exact-head CI, post-merge CI и deploy собраны в
-[`stage19-delivery-ledger.md`](./stage19-delivery-ledger.md).
+gate доставлены и проверены. Фактический post-closeout production status
+зафиксирован в следующем разделе; он не изменяет нормативный contract или
+runtime semantics. Фактические PR, merge SHA, exact-head CI, post-merge CI и
+deploy собраны в [`stage19-delivery-ledger.md`](./stage19-delivery-ledger.md).
+
+## 21. Post-closeout live activation status
+
+После исходного завершения Stage 19 по PR #374 владелец настроил отдельный
+production credential для action connector и проверил его 2026-09-17. Это
+фактическое продолжение завершённого Stage 19, а не новая runtime-фаза и не
+изменение правил `prepare`/`confirm`/`execute`.
+
+Владелец предоставил следующие production-свидетельства:
+
+```text
+production GitHub action connector = enabled
+configuration status = ready
+exact allowlist = MikeMoore1337/second-brain
+credential profile = github-actions-primary
+credential verified through real read-only GitHub repository preflight = YES
+repository_id = 1354056312
+repository_node_id = R_kgDOULVCeA
+owner confirmation required = true
+background execution = false
+operational receipt store = ready
+receipt_count at activation verification = 0
+external mutation during activation verification = NO
+HUMAN_REQUIRED = NO
+full live closeout = COMPLETE
+```
+
+Для отдельного fine-grained GitHub token владелец подтвердил только
+`Metadata: Read-only` и `Issues: Read and write` для exact repository выше.
+Значение token не записывается и не раскрывается в Git, документации, Issue,
+PR, CI, логах, receipts, vault или browser output. Текущий Web login OAuth
+остаётся только login credential для проверки identity; для action connector
+используется отдельный credential.
+
+Активация была проверена read-only preflight реального GitHub API:
+`prepare()` подтвердил credential и identity allowlist, `execute()` не
+вызывался, GitHub `POST`/`PATCH` mutation не отправлялись. Production
+`/healthz` вернул 200 после завершения обычного запуска сервиса. Во время
+активации не менялись Stage 18 data и `second-brain-vault`; Stage 20 не
+запускался.

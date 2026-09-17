@@ -59,8 +59,7 @@
   verified green merge выполнялся bounded dry-run; активный текущий worktree
   сохранялся, unknown/dirty/active paths не удалялись.
 
-Until the owner provisions the separate live action credential, the honest
-operational state is:
+At the original PR #374 closeout, the recorded operational state was:
 
 ```text
 Stage 19 implementation COMPLETE: YES
@@ -68,5 +67,138 @@ GitHub action connector code COMPLETE: YES
 GitHub live connector enabled: NO
 HUMAN_REQUIRED: GitHub action credential provisioning
 Stage 19 full live closeout: PENDING
+Stage 20 started: NO
+```
+
+## Post-closeout live activation follow-up (Issue #375)
+
+Это отдельное фактическое продолжение после исторического завершения
+реализации 19.0–19.6. Оно не является Phase 19.7, не переопределяет Issue
+#366 и не изменяет семантику Stage 19 runtime.
+
+Issue: [#375](https://github.com/MikeMoore1337/second-brain/issues/375)
+
+Сведения о delivery этого продолжения заполняются только фактическими данными
+после создания, merge и post-merge lifecycle:
+
+| Поле | Фактическое значение |
+| --- | --- |
+| PR | будет добавлен после создания PR |
+| Merge SHA | будет добавлен после merge |
+| Exact-head CI | будет добавлен после прохождения required checks |
+| Post-merge CI | будет добавлен после merge |
+| Automatic deploy | будет добавлен, если lifecycle его запустит |
+
+### Production-свидетельства, подтверждённые владельцем — 2026-09-17
+
+После перезапуска production-сервиса владелец подтвердил
+`second-brain-web.service`:
+`ActiveState=active`, `SubState=running`; Uvicorn слушал `127.0.0.1:8123`, а
+`/healthz` вернул `HTTP 200` и `{"status":"ok"}` с существующими security
+headers. Первый неуспешный curl был startup race до начала прослушивания
+порта; последующие service status/logs показали штатный запуск.
+
+Защищённая production-конфигурация была проверена без вывода секрета:
+
+```text
+SECOND_BRAIN_ACTION_GITHUB_ENABLED=true
+SECOND_BRAIN_ACTION_GITHUB_TOKEN=<owner-managed secret; value never recorded>
+SECOND_BRAIN_ACTION_GITHUB_REPOSITORIES=MikeMoore1337/second-brain
+/srv/second-brain/runtime/web.env = second-brain:second-brain, mode 600
+TOKEN_SET=yes
+```
+
+Владелец настроил fine-grained GitHub token только с правами `Metadata:
+Read-only` и `Issues: Read and write` для `MikeMoore1337/second-brain`. Не
+документируются и не подразумеваются permissions для `Contents`, `Pull
+requests`, `Actions`, `Workflows`, `Administration`, `Deployments`, `Secrets`,
+`Variables`, `Environments`, `Webhooks`, repository administration или
+classic broad repo scope.
+
+Статус Safe Action Gateway получен вызовом production-кода под пользователем
+`second-brain` с production env file:
+
+```text
+contract = action-gateway-v1
+connector = github_issues
+policy_id = github-issues-v1
+credential_profile_id = github-actions-primary
+status = ready
+configured = true
+ready = true
+repositories = MikeMoore1337/second-brain
+store_status = not_checked (gateway status probe)
+owner_confirmation_required = true
+background_execution = false
+```
+
+Закрытый каталог действий остался прежним:
+
+| Action kind | Risk | Reversibility |
+| --- | --- | --- |
+| `github.issue.create` | `controlled_write` | `compensation_only` |
+| `github.issue.comment` | `controlled_write` | `not_supported` |
+| `github.issue.set_state` | `controlled_write` | `supported` |
+
+Реальный production-адаптер GitHub выполнил тот же read-only preflight, что и
+`prepare()`, без вызова `execute()` и без `POST`/`PATCH` mutation:
+
+```text
+credential_status = ready
+repository = MikeMoore1337/second-brain
+repository_id = 1354056312
+repository_node_id = R_kgDOULVCeA
+issue_number = null
+issue_id = null
+issue_node_id = null
+current_state = null
+locked = null
+preflight_ok = true
+mutation_executed = false
+```
+
+Operational store Action Gateway был инициализирован и проверен реальным
+production service code вне vault, repository, release и worktree:
+
+```text
+store_root = /srv/second-brain/runtime/prospective-audit/action-gateway
+store_exists = true
+receipt_count = 0
+.store.lock = mode 0600, size 0
+manifest.json = mode 0600, size 200
+receipts.jsonl = mode 0600, size 0
+github_mutation_executed = false
+```
+
+Инициализация store не является внешним GitHub action. При проверке активации не
+создавались GitHub issue/comment/state mutation и новый Stage19 receipt;
+мутация GitHub action не выполнялась. Значение token ни разу
+не записывалось и не раскрывалось в Git, docs, Issue, PR, CI, logs, receipts,
+vault или browser output. Web login OAuth не использовался как action
+credential; Stage 18 data и `second-brain-vault` не менялись.
+
+Итоговый фактический status:
+
+```text
+Stage 19 implementation COMPLETE: YES
+GitHub action connector code COMPLETE: YES
+GitHub live connector enabled: YES
+GitHub live credential configured: YES
+GitHub credential read-only preflight verified: YES
+exact repository allowlist verified: YES
+Action Gateway operational store ready: YES
+owner confirmation required for every controlled write: YES
+background execution: NO
+autonomous external action: NO
+external mutation during credential activation validation: NO
+receipt created during activation validation: NO
+login OAuth reused for actions: NO
+Stage18 auto-completion from actions: NO
+vault changed by activation: NO
+second-brain-vault repository changed: NO
+Calendar runtime: DEFERRED
+Email runtime: DEFERRED
+HUMAN_REQUIRED: NO
+Stage 19 full live closeout: COMPLETE
 Stage 20 started: NO
 ```
