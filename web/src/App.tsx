@@ -32,6 +32,7 @@ import { PersonalExperimentsSurface } from "./personal-experiments-surface";
 import { AdaptiveCognitiveTwinSurface } from "./adaptive-cognitive-twin-surface";
 import { ExecutionFeedbackSurface } from "./execution-feedback-surface";
 import { ActionGatewaySurface } from "./action-gateway-surface";
+import { PersonalAgentSurface } from "./personal-agent-surface";
 import { SemanticNavigation, semanticGroups, type SemanticTool } from "./semantic-navigation";
 
 function renderSemanticTool(tool: SemanticTool): ReactElement | null {
@@ -164,13 +165,14 @@ export function App(): ReactElement {
           <a className="brand" href="#main-content" aria-label="Second Brain — начало">
             <img className="brand-brain" src={brainMark} srcSet={`${brainMark} 1x, ${brainMark2x} 2x`} width={44} height={44} alt="" />
             <span className="brand-copy"><span className="brand-eyebrow">Личная система знаний</span><span className="brand-name">Second Brain</span></span>
-          </a><div className="topbar-actions"><nav className="quick-nav" aria-label="Навигация по направлениям"><SectionMenu groups={semanticGroups} />{showActionSurface && <a className="action-nav-link" href="#action-gateway"><Icon name="relation" size={18} />Действия</a>}</nav>{showAccountControl && <AccountControl />}</div>
+          </a><div className="topbar-actions"><nav className="quick-nav" aria-label="Навигация по направлениям"><SectionMenu groups={semanticGroups} />{showActionSurface && <><a className="action-nav-link" href="#chief-of-staff"><Icon name="relation" size={18} />Агент</a><a className="action-nav-link" href="#action-gateway"><Icon name="relation" size={18} />Действия</a></>}</nav>{showAccountControl && <AccountControl />}</div>
         </header>
         <div className="workspace-frame">
           <div className="workspace-content">
             <main id="main-content" tabIndex={-1}>
               <CinematicHero />
               <SemanticNavigation renderTool={renderSemanticTool} />
+              {showActionSurface && <PersonalAgentSurface />}
               {showActionSurface && <ActionGatewaySurface />}
             </main>
             <footer className="footer"><span>Локально по умолчанию</span><span className="footer-line" aria-hidden="true" /><span>Приватные знания, осознанное развитие</span></footer>

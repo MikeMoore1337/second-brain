@@ -1348,6 +1348,12 @@ def build_agent_run_proposal_from_advisor_result(
     )
 
 
+def parse_agent_run_step(value: object) -> AgentRunStepV1:
+    """Parse one owner-reviewed step through the closed proposal vocabulary."""
+
+    return _step_from_dict(value)
+
+
 class BuildPersonalAgentRun:
     """Build one proposal only after an explicit foreground caller invokes it."""
 
@@ -1468,6 +1474,7 @@ __all__ = [
     "BuildPersonalAgentRun",
     "build_agent_reasoning_envelope",
     "build_agent_run_proposal_from_advisor_result",
+    "parse_agent_run_step",
     "serialize_agent_reasoning_envelope",
     "serialize_agent_run_proposal",
     "validate_agent_run_proposal",

@@ -1,0 +1,889 @@
+.personal-agent-surface {
+  --agent-accent: #c49aff;
+  --agent-accent-soft: #9b7bff;
+  --agent-panel: #100c18;
+  --agent-panel-raised: #171020;
+  --agent-panel-muted: #0c0912;
+  --agent-line: #3d2f4f;
+  --agent-line-strong: #60476e;
+  scroll-margin-top: 32px;
+}
+
+.topbar .action-nav-link {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border: 1px solid var(--sb-color-line-strong);
+  border-radius: 24px;
+  color: var(--sb-color-text-secondary);
+  text-decoration: none;
+}
+
+.topbar .action-nav-link:hover,
+.topbar .action-nav-link:focus-visible {
+  border-color: var(--agent-accent);
+  background: var(--sb-color-focus);
+  color: var(--sb-color-text-primary);
+}
+
+.personal-agent-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+  gap: 32px;
+  align-items: start;
+}
+
+.personal-agent-kicker,
+.personal-agent-eyebrow {
+  display: block;
+  margin: 0 0 10px;
+  color: var(--agent-accent);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .16em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.personal-agent-heading h2 {
+  margin: 0 0 12px;
+  color: var(--sb-color-text-primary);
+  font-size: clamp(32px, 4vw, 50px);
+  font-weight: 570;
+  letter-spacing: -.06em;
+  line-height: 1;
+}
+
+.personal-agent-lead,
+.personal-agent-panel-lead {
+  max-width: 68ch;
+  margin: 0;
+  color: var(--sb-color-text-secondary);
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.personal-agent-status-card,
+.personal-agent-mission,
+.personal-agent-explainer,
+.personal-agent-context-panel,
+.personal-agent-proposal-panel,
+.personal-agent-run-panel,
+.personal-agent-history {
+  min-width: 0;
+  border: 1px solid var(--agent-line);
+  border-radius: 14px;
+  background: var(--agent-panel);
+}
+
+.personal-agent-status-card {
+  display: grid;
+  gap: 9px;
+  padding: 18px;
+}
+
+.personal-agent-status-label,
+.personal-agent-meta-label {
+  color: var(--sb-color-text-tertiary);
+  font-size: 11px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.personal-agent-status-card > span:not(.personal-agent-status-label):not(.personal-agent-status-pill) {
+  color: var(--sb-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.personal-agent-status-pill,
+.personal-agent-count,
+.personal-agent-readonly,
+.personal-agent-risk,
+.personal-agent-run-id {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  padding: 6px 9px;
+  border: 1px solid #6d5a8a;
+  border-radius: 999px;
+  color: #eadcff;
+  font-size: 11px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.personal-agent-status-pill[data-status="credential_unavailable"],
+.personal-agent-status-pill[data-status="disabled"] {
+  border-color: #8d687f;
+  color: #f0cfe1;
+}
+
+.personal-agent-principles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 28px 0;
+  padding: 14px 0;
+  border-top: 1px solid var(--sb-color-line);
+  border-bottom: 1px solid var(--sb-color-line);
+  color: var(--sb-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.personal-agent-principles span::before {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin: 0 8px 1px 0;
+  border-radius: 50%;
+  background: var(--agent-accent);
+  content: "";
+}
+
+.personal-agent-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(250px, .65fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.personal-agent-mission {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 22px;
+}
+
+.personal-agent-explainer,
+.personal-agent-context-panel,
+.personal-agent-proposal-panel,
+.personal-agent-run-panel,
+.personal-agent-history {
+  padding: 22px;
+}
+
+.personal-agent-panel-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.personal-agent-panel-heading:first-child,
+.personal-agent-mission > .personal-agent-panel-heading {
+  grid-column: 1 / -1;
+}
+
+.personal-agent-panel-heading h3,
+.personal-agent-explainer h3,
+.personal-agent-run-panel h4,
+.personal-agent-prepared-panel h4,
+.personal-agent-history h3 {
+  margin: 0;
+  color: var(--sb-color-text-primary);
+  font-size: 20px;
+  font-weight: 570;
+  letter-spacing: -.035em;
+  line-height: 1.2;
+}
+
+.personal-agent-explainer h3 {
+  margin-bottom: 16px;
+}
+
+.personal-agent-explainer ol {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding-left: 20px;
+  color: var(--sb-color-text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.personal-agent-explainer li::marker {
+  color: var(--agent-accent);
+  font-weight: 600;
+}
+
+.personal-agent-explainer strong,
+.personal-agent-explainer p,
+.personal-agent-explainer li strong {
+  color: var(--sb-color-text-primary);
+}
+
+.personal-agent-explainer p {
+  margin: 22px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--sb-color-line);
+  color: var(--sb-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.personal-agent-plan-picker {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.personal-agent-plan-picker legend,
+.personal-agent-subheading > span {
+  margin-bottom: 4px;
+  color: var(--sb-color-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.personal-agent-plan-item {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+  align-items: start;
+  padding: 12px 13px;
+  border: 1px solid var(--agent-line);
+  border-radius: 10px;
+  background: var(--agent-panel-raised);
+  color: var(--sb-color-text-secondary);
+  cursor: pointer;
+  transition: border-color 160ms ease-out, background 160ms ease-out;
+}
+
+.personal-agent-plan-item:hover,
+.personal-agent-plan-item[data-selected="true"] {
+  border-color: var(--agent-accent);
+  background: #1d1428;
+}
+
+.personal-agent-plan-item input {
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  accent-color: var(--agent-accent-soft);
+}
+
+.personal-agent-plan-item span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.personal-agent-plan-item strong {
+  color: var(--sb-color-text-primary);
+  font-size: 13px;
+  font-weight: 570;
+  overflow-wrap: anywhere;
+}
+
+.personal-agent-plan-item small,
+.personal-agent-subheading small {
+  color: var(--sb-color-text-tertiary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.personal-agent-field {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.personal-agent-field-wide {
+  grid-column: 1 / -1;
+}
+
+.personal-agent-field > span {
+  color: var(--sb-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.personal-agent-field :is(input, textarea, select) {
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  border: 1px solid var(--agent-line-strong);
+  border-radius: 10px;
+  background: var(--agent-panel-raised);
+  color: var(--sb-color-text-primary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.personal-agent-field :is(input, textarea) {
+  padding: 10px 12px;
+}
+
+.personal-agent-field select {
+  padding: 8px 12px;
+}
+
+.personal-agent-field textarea {
+  min-height: 112px;
+  resize: vertical;
+}
+
+.personal-agent-field :is(input, textarea, select):focus,
+.personal-agent-inline-field textarea:focus {
+  border-color: var(--agent-accent);
+  box-shadow: 0 0 0 3px #8b5cf622;
+  outline: none;
+}
+
+.personal-agent-field :is(input, textarea, select):disabled,
+.personal-agent-inline-field textarea:disabled,
+.personal-agent-plan-item:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: .62;
+}
+
+.personal-agent-external-fields {
+  display: grid;
+  gap: 10px;
+  padding: 15px;
+  border: 1px solid var(--agent-line);
+  border-radius: 10px;
+  background: var(--agent-panel-muted);
+}
+
+.personal-agent-subheading {
+  display: grid;
+  gap: 3px;
+}
+
+.personal-agent-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.personal-agent-form-actions,
+.personal-agent-panel-actions,
+.personal-agent-step-actions,
+.personal-agent-run-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.personal-agent-form-actions > span,
+.personal-agent-panel-actions > span {
+  color: var(--sb-color-text-tertiary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.personal-agent-primary,
+.personal-agent-secondary,
+.personal-agent-quiet-button {
+  min-height: 44px;
+  padding: 9px 13px;
+  border: 1px solid var(--agent-line-strong);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--sb-color-text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: border-color 160ms ease-out, background 160ms ease-out, color 160ms ease-out, opacity 160ms ease-out;
+}
+
+.personal-agent-primary {
+  border-color: var(--agent-accent);
+  background: var(--agent-accent);
+  color: #191126;
+}
+
+.personal-agent-primary:hover,
+.personal-agent-primary:focus-visible {
+  border-color: #e5d4ff;
+  background: #e5d4ff;
+}
+
+.personal-agent-secondary:hover,
+.personal-agent-secondary:focus-visible,
+.personal-agent-quiet-button:hover,
+.personal-agent-quiet-button:focus-visible {
+  border-color: var(--agent-accent);
+  background: #211631;
+}
+
+.personal-agent-primary:disabled,
+.personal-agent-secondary:disabled,
+.personal-agent-quiet-button:disabled {
+  cursor: not-allowed;
+  opacity: .52;
+}
+
+.personal-agent-danger-button {
+  color: #f0cfe1;
+}
+
+.personal-agent-rotate-icon {
+  transform: rotate(270deg);
+}
+
+.personal-agent-context-panel,
+.personal-agent-proposal-panel,
+.personal-agent-run-panel,
+.personal-agent-history {
+  display: grid;
+  gap: 18px;
+  margin-top: 24px;
+}
+
+.personal-agent-context-grid,
+.personal-agent-run-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.personal-agent-context-grid > div,
+.personal-agent-run-summary > div {
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--agent-line);
+  border-radius: 10px;
+  background: var(--agent-panel-raised);
+}
+
+.personal-agent-context-grid p,
+.personal-agent-run-summary strong {
+  display: block;
+  margin: 8px 0 0;
+  color: var(--sb-color-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.personal-agent-preview,
+.personal-agent-provenance,
+.personal-agent-provenance-inline {
+  min-width: 0;
+  border-top: 1px solid var(--agent-line);
+  color: var(--sb-color-text-secondary);
+}
+
+.personal-agent-preview summary,
+.personal-agent-provenance summary,
+.personal-agent-provenance-inline summary {
+  min-height: 44px;
+  padding-top: 13px;
+  color: var(--sb-color-text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.personal-agent-preview pre,
+.personal-agent-prepared-panel pre {
+  max-height: 360px;
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  border: 1px solid var(--agent-line);
+  border-radius: 10px;
+  background: var(--agent-panel-muted);
+  color: #ddcef3;
+  font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.personal-agent-preview p,
+.personal-agent-provenance-inline p {
+  margin: 9px 0 0;
+  color: var(--sb-color-text-tertiary);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.personal-agent-step-list,
+.personal-agent-run-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.personal-agent-step,
+.personal-agent-run-step {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 13px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--agent-line);
+  border-radius: 10px;
+  background: var(--agent-panel-raised);
+}
+
+.personal-agent-step[data-step-kind="stage19_action"],
+.personal-agent-run-step[data-step-state="waiting_stage19"] {
+  border-color: #745b91;
+}
+
+.personal-agent-step-index,
+.personal-agent-run-step-marker {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--agent-accent);
+  border-radius: 50%;
+  color: var(--agent-accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.personal-agent-step-body,
+.personal-agent-run-step > div:last-child {
+  min-width: 0;
+}
+
+.personal-agent-step-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.personal-agent-step-heading > div:first-child {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.personal-agent-step-kind {
+  color: var(--agent-accent);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.personal-agent-step-heading strong {
+  color: var(--sb-color-text-primary);
+  font-size: 14px;
+  font-weight: 570;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.personal-agent-step-id,
+.personal-agent-run-id {
+  flex: 0 0 auto;
+  max-width: 220px;
+  color: var(--sb-color-text-tertiary);
+  font: 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.personal-agent-step-note,
+.personal-agent-owner-needed p,
+.personal-agent-stage19-gate p,
+.personal-agent-prepared-panel > p {
+  margin: 9px 0 0;
+  color: var(--sb-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.personal-agent-action-facts,
+.personal-agent-provenance dl,
+.personal-agent-provenance-inline dl {
+  display: grid;
+  gap: 7px;
+  margin: 13px 0 0;
+}
+
+.personal-agent-action-facts div,
+.personal-agent-provenance dl div,
+.personal-agent-provenance-inline dl div {
+  display: grid;
+  grid-template-columns: minmax(95px, .35fr) minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+}
+
+.personal-agent-action-facts dt,
+.personal-agent-provenance dt,
+.personal-agent-provenance-inline dt {
+  color: var(--sb-color-text-tertiary);
+  font-size: 11px;
+}
+
+.personal-agent-action-facts dd,
+.personal-agent-provenance dd,
+.personal-agent-provenance-inline dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--sb-color-text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.personal-agent-inline-field {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.personal-agent-inline-field span {
+  color: var(--sb-color-text-tertiary);
+  font-size: 11px;
+}
+
+.personal-agent-inline-field textarea {
+  width: 100%;
+  min-height: 64px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--agent-line-strong);
+  border-radius: 8px;
+  background: var(--agent-panel-muted);
+  color: var(--sb-color-text-primary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.personal-agent-step-actions {
+  margin-top: 12px;
+}
+
+.personal-agent-step-actions .personal-agent-quiet-button {
+  min-height: 44px;
+  padding: 6px 9px;
+  font-size: 11px;
+}
+
+.personal-agent-step-state {
+  flex: 0 0 auto;
+  color: var(--sb-color-text-tertiary);
+  font-size: 11px;
+  text-align: right;
+}
+
+.personal-agent-owner-needed,
+.personal-agent-prepared-panel {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid #745b91;
+  border-radius: 10px;
+  background: #160f20;
+}
+
+.personal-agent-owner-needed h4,
+.personal-agent-prepared-panel h4 {
+  margin: 0;
+}
+
+.personal-agent-owner-form,
+.personal-agent-skip-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.personal-agent-owner-form .personal-agent-primary,
+.personal-agent-skip-form .personal-agent-quiet-button {
+  justify-self: start;
+}
+
+.personal-agent-stage19-gate {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.personal-agent-risk {
+  color: #f0d9ff;
+}
+
+.personal-agent-target {
+  color: var(--sb-color-text-primary) !important;
+  font-weight: 570;
+}
+
+.personal-agent-prepared-panel pre {
+  max-height: 260px;
+}
+
+.personal-agent-run-controls {
+  padding-top: 4px;
+  border-top: 1px solid var(--agent-line);
+}
+
+.personal-agent-run-controls .personal-agent-eyebrow {
+  width: 100%;
+  margin: 0;
+}
+
+.personal-agent-notice,
+.personal-agent-error,
+.personal-agent-empty {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 20px 0 0;
+  padding: 13px 14px;
+  border: 1px solid var(--agent-line);
+  border-radius: 10px;
+  background: var(--agent-panel);
+  color: var(--sb-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.personal-agent-notice .icon,
+.personal-agent-empty .icon {
+  color: var(--agent-accent);
+}
+
+.personal-agent-error {
+  border-color: #8d687f;
+  color: #f0cfe1;
+}
+
+.personal-agent-error .icon {
+  flex: 0 0 auto;
+  color: #f0cfe1;
+}
+
+.personal-agent-empty {
+  margin: 0;
+}
+
+.personal-agent-provenance,
+.personal-agent-history {
+  margin-top: 24px;
+}
+
+.personal-agent-provenance {
+  padding: 14px 0 0;
+}
+
+.personal-agent-history {
+  gap: 10px;
+}
+
+.personal-agent-history > .personal-agent-eyebrow {
+  margin: 0;
+}
+
+.personal-agent-history ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.personal-agent-history li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 10px 0;
+  border-top: 1px solid var(--agent-line);
+  color: var(--sb-color-text-secondary);
+  font-size: 11px;
+}
+
+.personal-agent-history li strong {
+  color: var(--sb-color-text-primary);
+  font-weight: 570;
+}
+
+.personal-agent-history p {
+  margin: 0;
+  color: var(--sb-color-text-tertiary);
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .personal-agent-heading,
+  .personal-agent-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .personal-agent-mission {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 16px;
+  }
+
+  .personal-agent-explainer,
+  .personal-agent-context-panel,
+  .personal-agent-proposal-panel,
+  .personal-agent-run-panel,
+  .personal-agent-history {
+    padding: 16px;
+  }
+
+  .personal-agent-field-wide,
+  .personal-agent-panel-heading:first-child,
+  .personal-agent-mission > .personal-agent-panel-heading {
+    grid-column: auto;
+  }
+
+  .personal-agent-field-grid,
+  .personal-agent-context-grid,
+  .personal-agent-run-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .personal-agent-panel-heading,
+  .personal-agent-step-heading {
+    flex-direction: column;
+  }
+
+  .personal-agent-step-id,
+  .personal-agent-run-id,
+  .personal-agent-step-state {
+    max-width: 100%;
+    text-align: left;
+  }
+
+  .personal-agent-primary,
+  .personal-agent-secondary,
+  .personal-agent-quiet-button {
+    flex: 1 1 150px;
+  }
+
+  .personal-agent-form-actions > span,
+  .personal-agent-panel-actions > span {
+    flex-basis: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .personal-agent-plan-item,
+  .personal-agent-primary,
+  .personal-agent-secondary,
+  .personal-agent-quiet-button {
+    transition: none;
+  }
+}

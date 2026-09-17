@@ -48,6 +48,7 @@ from second_brain.application.execution_feedback import (
 from second_brain.application.execution_feedback_projection import (
     ExecutionFeedbackProjectionError,
     ExecutionFeedbackReportV1,
+    ExecutionItemStateV1,
     build_execution_calibration,
     build_execution_feedback_report,
 )
@@ -831,6 +832,24 @@ class ProductionExecutionFeedbackWebService:
             self._event_records_for_plan(events, plan),
             source_status=status,
         )
+
+    def agent_item_states(
+        self,
+        plan: PlanningPlanV1,
+    ) -> dict[str, ExecutionItemStateV1]:
+        """Return exact Stage18 projections for one reviewed Stage17 plan.
+
+        Stage20 consumes this typed projection instead of the Web JSON report so
+        it cannot accidentally reparse history, notes, or other Stage18 detail.
+        The read remains provider-free and does not create a missing store.
+        """
+
+        if type(plan) is not PlanningPlanV1:
+            raise ExecutionFeedbackSourceUnavailableError()
+        current = self._current_plan()
+        status = self._source_status(plan, current)
+        report = self._report(plan, status, self._read_events())
+        return {item.item_id: item for item in report.item_states}
 
     def _mutation_body(
         self,

@@ -101,6 +101,7 @@ from second_brain.entrypoints.web.app import (
     MAX_RAW_GROWTH_ADVISOR_BODY_BYTES,
     MAX_RAW_GROWTH_BODY_BYTES,
     MAX_RAW_GROWTH_LEARNING_BODY_BYTES,
+    MAX_RAW_PERSONAL_AGENT_BODY_BYTES,
     MAX_RAW_PERSONAL_EXPERIMENT_BODY_BYTES,
     MAX_RAW_PERSONAL_PLANNING_BODY_BYTES,
     MAX_RAW_PERSONAL_STRATEGY_BODY_BYTES,
@@ -111,6 +112,27 @@ from second_brain.entrypoints.web.app import (
     MAX_RAW_SIMULATE_ME_BODY_BYTES,
     MAX_RAW_TIMELINE_BODY_BYTES,
     MAX_RAW_TRANSCRIPTION_BODY_BYTES,
+    PERSONAL_AGENT_ABANDON_PATH,
+    PERSONAL_AGENT_ACCEPT_PATH,
+    PERSONAL_AGENT_ANSWER_PATH,
+    PERSONAL_AGENT_BUILD_PATH,
+    PERSONAL_AGENT_COMPENSATION_CONFIRM_PATH,
+    PERSONAL_AGENT_COMPENSATION_PREPARE_PATH,
+    PERSONAL_AGENT_COMPLETE_PATH,
+    PERSONAL_AGENT_CONFIRM_PATH,
+    PERSONAL_AGENT_CONTEXT_PATH,
+    PERSONAL_AGENT_CONTINUE_PATH,
+    PERSONAL_AGENT_PAUSE_PATH,
+    PERSONAL_AGENT_PREPARE_PATH,
+    PERSONAL_AGENT_RECONCILE_PATH,
+    PERSONAL_AGENT_REQUEST_HEADER_NAME,
+    PERSONAL_AGENT_REQUEST_HEADER_VALUE,
+    PERSONAL_AGENT_RESUME_PATH,
+    PERSONAL_AGENT_REVIEW_PATH,
+    PERSONAL_AGENT_SKIP_PATH,
+    PERSONAL_AGENT_START_PATH,
+    PERSONAL_AGENT_STATE_PATH,
+    PERSONAL_AGENT_SUPERSEDE_PATH,
     PERSONAL_EXPERIMENT_DEFINITION_APPLY_PATH,
     PERSONAL_EXPERIMENT_DEFINITION_PREPARE_PATH,
     PERSONAL_EXPERIMENT_EVALUATE_PATH,
@@ -505,6 +527,21 @@ def _execution_feedback_route(path: str, body: bytes = b"{}") -> PrivateRoute:
     )
 
 
+def _personal_agent_route(path: str, body: bytes = b"{}") -> PrivateRoute:
+    """Build one Stage 20 owner-only route descriptor."""
+
+    return PrivateRoute(
+        path=path,
+        request_header_name=PERSONAL_AGENT_REQUEST_HEADER_NAME,
+        request_header_value=PERSONAL_AGENT_REQUEST_HEADER_VALUE,
+        content_type="application/json",
+        body=body,
+        invalid_code="INVALID_REQUEST",
+        content_too_large_code="INVALID_REQUEST",
+        max_body_bytes=MAX_RAW_PERSONAL_AGENT_BODY_BYTES,
+    )
+
+
 PRIVATE_ROUTES: tuple[PrivateRoute, ...] = (
     PrivateRoute(
         path="/api/assistant",
@@ -784,6 +821,25 @@ PRIVATE_ROUTES: tuple[PrivateRoute, ...] = (
     _execution_feedback_route(EXECUTION_FEEDBACK_FEEDBACK_PATH),
     _execution_feedback_route(EXECUTION_FEEDBACK_CALIBRATION_PATH),
     _execution_feedback_route(EXECUTION_FEEDBACK_CORRECTION_PATH),
+    _personal_agent_route(PERSONAL_AGENT_STATE_PATH),
+    _personal_agent_route(PERSONAL_AGENT_CONTEXT_PATH),
+    _personal_agent_route(PERSONAL_AGENT_BUILD_PATH),
+    _personal_agent_route(PERSONAL_AGENT_REVIEW_PATH),
+    _personal_agent_route(PERSONAL_AGENT_ACCEPT_PATH),
+    _personal_agent_route(PERSONAL_AGENT_START_PATH),
+    _personal_agent_route(PERSONAL_AGENT_PAUSE_PATH),
+    _personal_agent_route(PERSONAL_AGENT_RESUME_PATH),
+    _personal_agent_route(PERSONAL_AGENT_ANSWER_PATH),
+    _personal_agent_route(PERSONAL_AGENT_CONTINUE_PATH),
+    _personal_agent_route(PERSONAL_AGENT_SKIP_PATH),
+    _personal_agent_route(PERSONAL_AGENT_ABANDON_PATH),
+    _personal_agent_route(PERSONAL_AGENT_COMPLETE_PATH),
+    _personal_agent_route(PERSONAL_AGENT_SUPERSEDE_PATH),
+    _personal_agent_route(PERSONAL_AGENT_PREPARE_PATH),
+    _personal_agent_route(PERSONAL_AGENT_CONFIRM_PATH),
+    _personal_agent_route(PERSONAL_AGENT_RECONCILE_PATH),
+    _personal_agent_route(PERSONAL_AGENT_COMPENSATION_PREPARE_PATH),
+    _personal_agent_route(PERSONAL_AGENT_COMPENSATION_CONFIRM_PATH),
     PrivateRoute(
         path="/api/self-retrieval",
         request_header_name=SELF_RETRIEVAL_REQUEST_HEADER_NAME,
@@ -1177,6 +1233,7 @@ def test_every_private_route_enforces_raw_body_cap_before_parser(route: PrivateR
         PERSONAL_STRATEGY_REQUEST_HEADER_VALUE,
         PERSONAL_PLANNING_REQUEST_HEADER_VALUE,
         EXECUTION_FEEDBACK_REQUEST_HEADER_VALUE,
+        PERSONAL_AGENT_REQUEST_HEADER_VALUE,
     }:
         headers.insert(1, ("origin", LOOPBACK_BASE_URL))
 
@@ -1223,6 +1280,7 @@ def test_every_private_route_enforces_streamed_raw_body_cap(
         PERSONAL_STRATEGY_REQUEST_HEADER_VALUE,
         PERSONAL_PLANNING_REQUEST_HEADER_VALUE,
         EXECUTION_FEEDBACK_REQUEST_HEADER_VALUE,
+        PERSONAL_AGENT_REQUEST_HEADER_VALUE,
     }:
         headers.insert(1, ("origin", LOOPBACK_BASE_URL))
     if declared_length is not None:
