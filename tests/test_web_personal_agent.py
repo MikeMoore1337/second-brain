@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -35,6 +35,7 @@ from second_brain.entrypoints.web.personal_agent import (
     PERSONAL_AGENT_STATE_PATH,
     ProductionPersonalAgentWebService,
 )
+from second_brain.entrypoints.web.personal_planning import PersonalPlanningWebService
 from tests.test_personal_agent import _pack_inputs
 from tests.test_web_action_gateway import RecordingActionService
 
@@ -146,7 +147,7 @@ def _service(
     advisor = RecordingAdvisor()
     action_service = RecordingActionService()
     service = ProductionPersonalAgentWebService(
-        planning_service=RecordingPlanningService(plan),
+        planning_service=cast(PersonalPlanningWebService, RecordingPlanningService(plan)),
         execution_service=RecordingExecutionService(states),
         action_gateway_service=action_service,
         advisor=advisor,
