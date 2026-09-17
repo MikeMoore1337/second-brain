@@ -198,11 +198,25 @@ deploy и non-mutating production smoke.
 - Phase 19.0–19.5: COMPLETE; contract, core/store, GitHub adapter,
   orchestration, private Web/API/UI и security/E2E slices merged and deployed.
 - Phase 19.6: COMPLETE; final ledger, full gate, production smoke and
-  credential readiness recorded.
+  implementation closeout, production smoke and initial credential readiness
+  recorded.
+- Post-closeout live activation: COMPLETE; владелец настроил и проверил
+  отдельный production GitHub action credential через реальный read-only
+  repository preflight.
 - Stage 19: COMPLETE.
 - Stage 20: PLANNED / NOT STARTED.
 
 Фактическая delivery ledger: [`stage19-delivery-ledger.md`](./stage19-delivery-ledger.md).
+
+Текущий фактический status Stage 19: production GitHub Issues connector включён и
+готов; exact allowlist — `MikeMoore1337/second-brain`; `repository_id` —
+`1354056312`; `repository_node_id` — `R_kgDOULVCeA`; credential profile —
+`github-actions-primary`. Read-only live credential preflight подтверждён без
+внешней GitHub mutation; owner confirmation остаётся обязательным, background
+execution и autonomous external action отсутствуют. Operational receipt store
+готов, activation verification создала `0` receipts. Значение token не
+записывалось и не раскрывалось; login OAuth не переиспользуется для actions.
+Stage 18 data и vault не менялись, Stage 20 остаётся `PLANNED / NOT STARTED`.
 
 ### Stage 20 — Personal Agent / Chief of Staff
 
