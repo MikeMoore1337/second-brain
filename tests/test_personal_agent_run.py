@@ -15,6 +15,7 @@ from second_brain.application.assistant import (
 )
 from second_brain.application.personal_agent import AgentContextPackV1, build_agent_context_pack
 from second_brain.application.personal_agent_planner import (
+    AgentRunProposalV1,
     build_agent_run_proposal_from_advisor_result,
 )
 from second_brain.application.personal_agent_run import (
@@ -63,7 +64,7 @@ def _recommendation(steps: list[dict[str, object]]) -> AssistantResultEnvelopeV1
     )
 
 
-def _proposal(pack: AgentContextPackV1):
+def _proposal(pack: AgentContextPackV1) -> AgentRunProposalV1:
     return build_agent_run_proposal_from_advisor_result(
         pack,
         _recommendation(
