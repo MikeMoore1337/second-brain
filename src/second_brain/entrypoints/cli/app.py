@@ -30,6 +30,10 @@ from second_brain.application.llm import (
     LlmRequest,
     NoteDraft,
 )
+from second_brain.application.operational_validation import (
+    build_v4_validation_report,
+    render_v4_validation_text,
+)
 from second_brain.application.ports import (
     CancellationTokenSource,
     LlmError,
@@ -117,12 +121,14 @@ proposal_note_app = typer.Typer(help="Proposal-команды для managed not
 research_app = typer.Typer(help="Read-only чтение внешних research sources.")
 llm_app = typer.Typer(help="Networked read-only команды для LLM note drafts.")
 web_app = typer.Typer(help="Локальный Web GUI shell.")
+validation_app = typer.Typer(help="Read-only проверка фактов операционного burn-in.")
 app.add_typer(vault_app, name="vault")
 app.add_typer(note_app, name="note")
 app.add_typer(proposal_app, name="proposal")
 app.add_typer(research_app, name="research")
 app.add_typer(llm_app, name="llm")
 app.add_typer(web_app, name="web")
+app.add_typer(validation_app, name="validation")
 proposal_app.add_typer(proposal_note_app, name="note")
 
 WEB_HOST = "127.0.0.1"
@@ -293,6 +299,38 @@ def self_retrieval(
     except Exception:
         _echo_self_retrieval_error(SelfRetrievalResultInvalidError(), output_format)
         raise typer.Exit(code=2) from None
+    raise typer.Exit(code=0)
+
+
+@validation_app.command("v4-status")
+def validation_v4_status(
+    ctx: typer.Context,
+    output_format: Annotated[
+        OutputFormat,
+        typer.Option("--format", help="Формат отчёта: text или json."),
+    ] = OutputFormat.TEXT,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Короткая форма для --format json."),
+    ] = False,
+) -> None:
+    """Собрать bounded read-only evidence report по Stage16--20."""
+
+    options = _root_options(ctx)
+    if json_output:
+        output_format = OutputFormat.JSON
+    try:
+        report = build_v4_validation_report(options.env_file)
+    except Exception:
+        # The application boundary intentionally exposes no path, exception,
+        # traceback, provider or operational record content.
+        typer.echo("Ошибка validation: отчёт не удалось безопасно собрать.", err=True)
+        raise typer.Exit(code=2) from None
+
+    if output_format is OutputFormat.JSON:
+        typer.echo(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    else:
+        typer.echo(render_v4_validation_text(report))
     raise typer.Exit(code=0)
 
 
