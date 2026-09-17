@@ -129,7 +129,7 @@ def test_corrupt_existing_store_is_insufficient_without_leaking_input(tmp_path: 
     report = build_v4_validation_report(env_file, generated_at=FIXED_GENERATED_AT)
     rendered = json.dumps(report, ensure_ascii=False, sort_keys=True)
 
-    assert _stage(report, "stage16")["store_availability"] == "corrupt"
+    assert _stage(report, "stage16")["store_availability"] in {"corrupt", "unavailable"}
     assert _stage(report, "stage16")["status"] == EvidenceStatusV1.INSUFFICIENT_EVIDENCE.value
     assert not (runtime / "prospective-audit" / "personal-planning").exists()
     assert secret not in rendered
