@@ -83,11 +83,11 @@ Issue: [#375](https://github.com/MikeMoore1337/second-brain/issues/375)
 
 | Поле | Фактическое значение |
 | --- | --- |
-| PR | будет добавлен после создания PR |
-| Merge SHA | будет добавлен после merge |
-| Exact-head CI | будет добавлен после прохождения required checks |
-| Post-merge CI | будет добавлен после merge |
-| Automatic deploy | будет добавлен, если lifecycle его запустит |
+| PR | [#376](https://github.com/MikeMoore1337/second-brain/pull/376) |
+| Merge SHA | `ad7b7ff1d8636936afc3ae8e8a20613c5f79873f` |
+| Exact-head CI | [35181370694](https://github.com/MikeMoore1337/second-brain/actions/runs/35181370694) |
+| Post-merge CI | [35181618549](https://github.com/MikeMoore1337/second-brain/actions/runs/35181618549) |
+| Automatic deploy | [35181833618](https://github.com/MikeMoore1337/second-brain/actions/runs/35181833618) |
 
 ### Production-свидетельства, подтверждённые владельцем — 2026-09-17
 
