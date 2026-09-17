@@ -371,9 +371,7 @@ def test_provider_result_is_closed_and_never_reaches_stage19(
     recommendation: dict[str, object]
     if scenario == "unknown_step":
         recommendation = {
-            "steps": [
-                {"step_id": "bad", "position": 1, "kind": "tool", "command": "curl"}
-            ],
+            "steps": [{"step_id": "bad", "position": 1, "kind": "tool", "command": "curl"}],
             "caveats": [],
         }
     elif scenario == "nested_tool_field":
