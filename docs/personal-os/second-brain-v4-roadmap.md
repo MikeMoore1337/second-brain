@@ -1,6 +1,6 @@
 # Second Brain v4 — Personal Cognitive OS
 
-Статус после Phase 20.0: **STAGE 16 COMPLETE / STAGE 17 COMPLETE / STAGE 18 COMPLETE / STAGE 19 COMPLETE / STAGE 20 IN PROGRESS / SECOND BRAIN v4 IN PROGRESS**.
+Статус после Phase 20.6: **STAGE 16 COMPLETE / STAGE 17 COMPLETE / STAGE 18 COMPLETE / STAGE 19 COMPLETE / STAGE 20 COMPLETE / SECOND BRAIN v4 COMPLETE**.
 
 Этот документ задаёт переход от завершённого Cognitive Twin v3 к новой
 продуктовой генерации. Он не переименовывает и не переопределяет Cognitive
@@ -170,7 +170,7 @@ provider/LLM или browser-local private storage is used. Delivery is serial fr
 - Stage 18.0: COMPLETE; contract/design gate merged.
 - Stage 18.1–18.5: COMPLETE; runtime, store, projections, API and UI merged and deployed.
 - Stage 18.6: COMPLETE; final closeout PR, Issue #357 closure and production smoke.
-- Stage 19: COMPLETE; Stage 20 is now IN PROGRESS under Issue #378.
+- Stage 19: COMPLETE; Stage 20 is COMPLETE under Issue #378 closeout.
 
 #### Phase 18.0 design gate
 
@@ -204,7 +204,7 @@ deploy и non-mutating production smoke.
   отдельный production GitHub action credential через реальный read-only
   repository preflight.
 - Stage 19: COMPLETE.
-- Stage 20: PLANNED / NOT STARTED.
+- Stage 20: COMPLETE; see [`stage20-delivery-ledger.md`](./stage20-delivery-ledger.md).
 
 Фактическая delivery ledger: [`stage19-delivery-ledger.md`](./stage19-delivery-ledger.md).
 
@@ -216,10 +216,10 @@ deploy и non-mutating production smoke.
 execution и autonomous external action отсутствуют. Operational receipt store
 готов, activation verification создала `0` receipts. Значение token не
 записывалось и не раскрывалось; login OAuth не переиспользуется для actions.
-Stage 18 data и vault не менялись, Stage 20 находится в `IN PROGRESS` по
-Issue #378.
+Stage 18 data и vault не менялись, Stage 20 завершён по Issue #378; factual
+closeout зафиксирован в [`stage20-delivery-ledger.md`](./stage20-delivery-ledger.md).
 
-### Stage 20 — Personal Agent / Chief of Staff — IN PROGRESS
+### Stage 20 — Personal Agent / Chief of Staff — COMPLETE
 
 Нормативный контракт Stage 20: [`personal-agent-v1-contract.md`](./personal-agent-v1-contract.md).
 
@@ -234,8 +234,25 @@ approval запрещены.
 Phase 20.0 завершена как design gate: contract фиксирует exact Mission,
 provider-free Context Pack, minimized reasoning envelope, linear typed Run
 Proposal, reviewed lifecycle, one-current-run/one-current-step, Stage19 bridge,
-operational store, privacy и delivery map 20.1–20.6. Stage 20 остаётся
-`IN PROGRESS` до фактического runtime и final closeout.
+operational store, privacy и delivery map 20.1–20.6. Phases 20.1–20.5
+доставили runtime, Web/UI и adversarial gates; Phase 20.6 завершила factual
+ledger, final exact-head gate, production smoke и `Closes #378` closeout.
+
+Фактическая delivery ledger: [`stage20-delivery-ledger.md`](./stage20-delivery-ledger.md).
+
+Текущий factual status:
+
+```text
+Cognitive Twin v3 = COMPLETE
+Second Brain v4 = COMPLETE
+Stage 16 = COMPLETE
+Stage 17 = COMPLETE
+Stage 18 = COMPLETE
+Stage 19 = COMPLETE
+Stage 20 = COMPLETE
+HUMAN_REQUIRED = NO
+Stage 21 = NOT DEFINED / NOT STARTED
+```
 
 ## Phase 16.0 design gate
 
