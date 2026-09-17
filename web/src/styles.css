@@ -8,6 +8,7 @@
 @import "./decision-compass-surface.css";
 @import "./personal-experiments-surface.css";
 @import "./adaptive-cognitive-twin-surface.css";
+@import "./personal-agent-surface.css";
 
 .icon {
   display: inline-block;
