@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "qa:design": "node qa/redesign.mjs && node qa/surfaces.mjs && node qa/motion-input.mjs && node qa/login.mjs",
+    "qa:personal-agent": "node qa/personal-agent.mjs",
     "qa:personal-planning": "node qa/personal-planning.mjs",
     "qa:login": "node qa/login.mjs",
     "qa:prospective-audit": "node qa/prospective-audit.mjs",
