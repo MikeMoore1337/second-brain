@@ -125,6 +125,38 @@ repository/branch, backup-before-FF, FF-only и post-sync validation. Protocol
 `HUMAN_REQUIRED`. Никакие другие production vault writes этой оговоркой не
 разрешаются.
 
+## Graphify и Ponytail в разработке
+
+Graphify и Ponytail разрешены только как локальные инструменты разработки. Они
+не являются частью application/runtime, production, CI или канонического
+хранилища знаний.
+
+- Graphify используется on-demand для ориентации по архитектуре и impact
+  analysis. Если существует `graphify-out/graph.json` и задача требует широкого
+  понимания связей, сначала допустимы `graphify query`, `graphify path` или
+  `graphify explain`, после чего вывод обязательно проверяется по исходному
+  коду, тестам и нормативным контрактам. Graphify не является source of truth.
+- Начальный режим Graphify - локальный code-only AST по текущему checkout
+  `second-brain`. Нельзя сканировать sibling `second-brain-vault`, пути из
+  `SECOND_BRAIN_VAULT_PATH`, секреты, `.env`, runtime/data или другие
+  пользовательские/private каталоги.
+- Semantic extraction, внешние LLM credentials, `--watch`, Git hooks, MCP и
+  фоновые перестроения Graphify не включаются автоматически. Для них требуется
+  отдельная явно сформулированная задача.
+- `graphify-out/` является disposable derived state и не коммитится.
+- Ponytail может использоваться только на host-level Codex. Рекомендуемый
+  стартовый режим для этого проекта - `lite`. `ultra` не используется по
+  умолчанию.
+- Ponytail не может сокращать или обходить validation, error handling,
+  security/privacy, accessibility, обязательные тесты, fail-closed поведение,
+  `HUMAN_REQUIRED`, owner approval или другие правила этого `AGENTS.md`.
+- Инструкции этого репозитория и acceptance criteria текущей задачи имеют
+  приоритет над подсказками Graphify/Ponytail.
+- Caveman в текущий toolchain проекта не добавляется.
+
+Подробная установка, проверка и откат описаны в
+[`docs/development/ai-dev-tooling.md`](docs/development/ai-dev-tooling.md).
+
 ## Проверки разработки
 
 Перед предложением изменения выполните:
