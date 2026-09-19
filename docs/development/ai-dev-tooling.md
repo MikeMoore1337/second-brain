@@ -14,33 +14,78 @@ Graphify используется как disposable code-intelligence слой �
 
 ### Установка на рабочей машине
 
-В PowerShell из любого каталога:
+В PowerShell:
 
 ```powershell
 uv tool install graphifyy
+uv tool update-shell
+```
+
+После перезапуска PowerShell:
+
+```powershell
 graphify --version
 ```
 
 Graphify не добавляется в `pyproject.toml`.
 
-### Первый безопасный запуск
+### Первый безопасный граф
 
-Начинать с code-only AST, без semantic extraction и без внешнего LLM:
+Запускать из корня checkout только в code-only режиме, без semantic extraction
+и без внешнего LLM:
 
 ```powershell
-cd D:\Pet-projects\second-brain
-graphify src
+cd D:\Pet-projects\second-brain-workspace\second-brain
+graphify . --code-only
 ```
 
-После построения графа доступны, например:
+Проверенный baseline на owner workstation: полный code-only граф всего
+репозитория, включая `src`, `tests`, `scripts` и frontend. Non-code файлы
+при таком запуске пропускаются.
+
+После построения графа полезны точечные команды:
 
 ```powershell
-graphify query "Как связаны Self Retrieval и Search?"
+graphify query "How are Self Retrieval and Search connected?"
 graphify path "BuildSelfContext" "SearchVault"
-graphify explain "CreateManagedNote"
+graphify explain "BuildSelfContext"
 ```
 
-`graphify-out/` локальный и игнорируется Git.
+Для архитектурных связей предпочтительнее `path` и `explain`: широкий
+natural-language `query` может вернуть слишком большой подграф.
+
+`graphify-out/` локальный, производный и игнорируется Git.
+
+### Локальный Graphify skill для Codex Desktop
+
+Graphify skill можно установить project-scoped:
+
+```powershell
+graphify install --project --platform codex
+```
+
+Installer также пытается изменить `AGENTS.md` и `.codex/hooks.json`. Эти
+генерируемые изменения не являются каноническими для проекта: правила Graphify
+уже закреплены в репозиторном `AGENTS.md`, а Codex Desktop получает guidance
+через него.
+
+После локальной установки:
+
+```powershell
+git restore -- AGENTS.md .codex/hooks.json
+Remove-Item ".codex\hooks.json.graphify-bak" -Force -ErrorAction SilentlyContinue
+
+if (-not (Select-String -Path ".git\info\exclude" -Pattern "^\.codex/skills/graphify/$" -Quiet -ErrorAction SilentlyContinue)) {
+    Add-Content ".git\info\exclude" ".codex/skills/graphify/"
+}
+```
+
+Каталог `.codex/skills/graphify/` остаётся локально доступен Codex, но не
+коммитится и не vendor'ится в `second-brain`.
+
+В текущем Codex Desktop отдельный callable `@graphify` может не отображаться.
+Это не блокер: при наличии `graphify-out/` Codex использует существующие
+Graphify artifacts и затем подтверждает важные выводы по исходникам и тестам.
 
 ### Что не включаем автоматически
 
@@ -50,14 +95,10 @@ graphify explain "CreateManagedNote"
   `SECOND_BRAIN_VAULT_PATH`;
 - semantic extraction пользовательских/private данных;
 - `graphify --watch`;
-- `graphify hook install`;
+- Git hooks Graphify;
 - MCP server Graphify;
 - API keys или внешние semantic providers ради Graphify;
 - автоматическое перестроение графа в CI или production.
-
-Если code-only граф окажется полезным, отдельной задачей можно оценить граф
-публичной документации `second-brain`. Это не даёт разрешение на обработку
-private vault.
 
 ### Обновление и удаление
 
@@ -66,40 +107,53 @@ uv tool upgrade graphifyy
 # удалить:
 uv tool uninstall graphifyy
 Remove-Item -Recurse -Force graphify-out -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force .codex\skills\graphify -ErrorAction SilentlyContinue
 ```
 
 ## Ponytail
 
-Ponytail подключается к Codex как host-level plugin и не коммитится в
-`second-brain`.
+Ponytail подключается как host-level plugin Codex. Codex CLI нужен только для
+первичной установки и просмотра/trust hooks; ежедневная работа выполняется в
+Codex Desktop.
 
-Установка:
+Если `codex` ещё не установлен:
+
+```powershell
+npm install -g @openai/codex
+codex --version
+```
+
+Установка Ponytail:
 
 ```powershell
 codex plugin marketplace add DietrichGebert/ponytail
 codex plugin add ponytail@ponytail
 ```
 
-После установки перезапустить Codex, открыть `/hooks`, проверить два lifecycle
-hook Ponytail и доверять им только после просмотра. Для этого проекта начинать с:
+После установки один раз открыть интерактивный `codex`, выполнить `/hooks`,
+просмотреть и доверить hooks. Ponytail 4.10.0 регистрирует три lifecycle hook:
+`SessionStart`, `UserPromptSubmit` и `SubagentStart`. Существующие проектные
+hooks, например Impeccable `PostToolUse` и `Stop`, проверяются отдельно.
+
+Затем полностью перезапустить Codex Desktop и включить для нового чата:
 
 ```text
-/ponytail lite
+@ponytail lite
 ```
 
-Не использовать `ultra` как режим по умолчанию. Ponytail не имеет права
-сокращать security/privacy validation, обязательные проверки, accessibility,
-fail-closed gates, `HUMAN_REQUIRED` или owner approval.
+Для `second-brain` рекомендован `lite`: выполняется запрошенная реализация, а
+более простой вариант отмечается отдельно. `ultra` не используется по
+умолчанию.
+
+Ponytail не имеет права сокращать security/privacy validation, error handling,
+обязательные проверки, accessibility, fail-closed gates, `HUMAN_REQUIRED`,
+owner approval или другие правила `AGENTS.md`.
 
 Удаление:
 
 ```powershell
 codex plugin remove ponytail
 ```
-
-Если команда `codex` недоступна в PowerShell, это проблема локальной установки
-Codex CLI/PATH, а не репозитория. Репозиторная интеграция Graphify и правила
-безопасности от этого не зависят.
 
 ## Проверка эффекта
 
