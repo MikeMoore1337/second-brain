@@ -72,3 +72,5 @@ desktop.ini
 .impeccable/*.log
 .impeccable/*.ndjson
 .impeccable/*.pid
+# Локальные производные данные Graphify
+graphify-out/
