@@ -7,6 +7,7 @@ import argparse
 import csv
 import json
 import re
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,6 +34,16 @@ def search(catalog: str, query: str, limit: int = 8) -> list[dict[str, str]]:
     return [row for _, row in matches[:limit]]
 
 
+def format_results(rows: list[dict[str, str]], *, encoding: str) -> str:
+    """Render readable Unicode when supported, ASCII-safe JSON otherwise."""
+    output = json.dumps(rows, ensure_ascii=False, indent=2)
+    try:
+        output.encode(encoding)
+    except UnicodeEncodeError, LookupError:
+        return json.dumps(rows, ensure_ascii=True, indent=2)
+    return output
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--catalog", required=True, choices=sorted(CATALOGS))
@@ -41,7 +52,8 @@ def main() -> None:
     args = parser.parse_args()
     if not 1 <= args.limit <= 30:
         parser.error("--limit must be between 1 and 30")
-    print(json.dumps(search(args.catalog, args.query, args.limit), ensure_ascii=False, indent=2))
+    rows = search(args.catalog, args.query, args.limit)
+    print(format_results(rows, encoding=sys.stdout.encoding or "utf-8"))
 
 
 if __name__ == "__main__":

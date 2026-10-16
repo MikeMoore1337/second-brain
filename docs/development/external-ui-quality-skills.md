@@ -57,3 +57,19 @@ python scripts/search_ui_ux_catalog.py --catalog ux-guidelines --query focus
 
 Результаты справочные: перед любыми визуальными изменениями действуют `DESIGN.md` v7
 и owner approval. Каталог не добавляет новые компоненты или темы сам по себе.
+
+## Локальная проверка на Windows
+
+Если команда `python` в Windows указывает на заглушку Microsoft Store, используй
+установленный Python через `py` (версию подбери по `py -0p`):
+
+```powershell
+py -3.14 -B scripts/check_external_ui_references.py
+py -3.14 -B scripts/search_ui_ux_catalog.py --catalog charts --query progress
+```
+
+Проверка SHA сравнивает исходный Git blob с байтами файла. При извлечении
+репозитория на Windows допускается только стандартное преобразование LF в CRLF;
+любые другие изменения содержимого по-прежнему дают ошибку.
+Каталог возвращает Unicode JSON, а при неподдерживаемых символах текущей
+кодировки терминала - эквивалентный JSON с экранированием Unicode.
