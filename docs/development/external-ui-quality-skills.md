@@ -51,7 +51,7 @@ Taste содержит запреты на фиолетовые тона, gradie
 
 ```powershell
 python scripts/search_ui_ux_catalog.py --catalog charts --query analytics
-python scripts/search_ui_ux_catalog.py --catalog app-interface --query dashboard
+python scripts/search_ui_ux_catalog.py --catalog app-interface --query input
 python scripts/search_ui_ux_catalog.py --catalog ux-guidelines --query focus
 ```
 
