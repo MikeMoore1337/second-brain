@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Offline SHA verification for external skills reference copies."""
+
 from __future__ import annotations
 
 import hashlib

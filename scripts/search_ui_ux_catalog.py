@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Search SHA-pinned UI UX Pro Max CSV reference catalogs without network access."""
+
 from __future__ import annotations
 
 import argparse
