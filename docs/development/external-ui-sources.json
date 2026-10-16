@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "mode": "pinned-read-only-advisory",
+  "sources": {
+    "vercel-labs/agent-skills": {
+      "commit": "063bee94c3f4df8453406c830b0a7df0f2860278",
+      "license": "MIT",
+      "url": "https://github.com/vercel-labs/agent-skills/tree/063bee94c3f4df8453406c830b0a7df0f2860278"
+    },
+    "ibelick/ui-skills": {
+      "commit": "3434a7633027ec6dccfa80ed1eb5716befd4e766",
+      "license": "MIT",
+      "url": "https://github.com/ibelick/ui-skills/tree/3434a7633027ec6dccfa80ed1eb5716befd4e766"
+    },
+    "leonxlnx/taste-skill": {
+      "commit": "f624f37a8c650b9cc550253104925efe4c8de246",
+      "license": "MIT",
+      "url": "https://github.com/leonxlnx/taste-skill/tree/f624f37a8c650b9cc550253104925efe4c8de246"
+    },
+    "nextlevelbuilder/ui-ux-pro-max-skill": {
+      "commit": "56ea9cf174ed86786187daa9de0e6247cb0747e4",
+      "license": "MIT",
+      "url": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill/tree/56ea9cf174ed86786187daa9de0e6247cb0747e4"
+    }
+  },
+  "files": [
+    {
+      "source": "vercel-labs/agent-skills",
+      "ref": "063bee94c3f4df8453406c830b0a7df0f2860278",
+      "upstream_path": "skills/react-best-practices/SKILL.md",
+      "local": ".agents/references/external-quality/vercel/react-best-practices/SKILL.md",
+      "git_blob_sha": "237988de4a66dd8a71d30a2c24ebe1a86b58d04e"
+    },
+    {
+      "source": "vercel-labs/agent-skills",
+      "ref": "063bee94c3f4df8453406c830b0a7df0f2860278",
+      "upstream_path": "skills/react-best-practices/AGENTS.md",
+      "local": ".agents/references/external-quality/vercel/react-best-practices/AGENTS.md",
+      "git_blob_sha": "4e340a50684a8e7811d5bfa4df48bd9989d0fd87"
+    },
+    {
+      "source": "vercel-labs/agent-skills",
+      "ref": "063bee94c3f4df8453406c830b0a7df0f2860278",
+      "upstream_path": "skills/composition-patterns/SKILL.md",
+      "local": ".agents/references/external-quality/vercel/composition-patterns/SKILL.md",
+      "git_blob_sha": "d07025bf943345bc1cf15eb923594f889ff881f0"
+    },
+    {
+      "source": "vercel-labs/agent-skills",
+      "ref": "063bee94c3f4df8453406c830b0a7df0f2860278",
+      "upstream_path": "skills/composition-patterns/AGENTS.md",
+      "local": ".agents/references/external-quality/vercel/composition-patterns/AGENTS.md",
+      "git_blob_sha": "558bf9aa1e36db2161f1633c9bfae14a819f0508"
+    },
+    {
+      "source": "ibelick/ui-skills",
+      "ref": "3434a7633027ec6dccfa80ed1eb5716befd4e766",
+      "upstream_path": "skills/fixing-accessibility/SKILL.md",
+      "local": ".agents/references/external-quality/ui-skills/fixing-accessibility.md",
+      "git_blob_sha": "e2dcd7004645277488a142be152878b7310437e1"
+    },
+    {
+      "source": "ibelick/ui-skills",
+      "ref": "3434a7633027ec6dccfa80ed1eb5716befd4e766",
+      "upstream_path": "skills/fixing-motion-performance/SKILL.md",
+      "local": ".agents/references/external-quality/ui-skills/fixing-motion-performance.md",
+      "git_blob_sha": "7d22f2ecdd3305f73cf202cb9b5a0e4c1d3700e5"
+    },
+    {
+      "source": "ibelick/ui-skills",
+      "ref": "3434a7633027ec6dccfa80ed1eb5716befd4e766",
+      "upstream_path": "skills/improve-ui/SKILL.md",
+      "local": ".agents/references/external-quality/ui-skills/improve-ui.md",
+      "git_blob_sha": "c3ed42a578d3c0ca798ddd122fe0886e9c9acbc0"
+    },
+    {
+      "source": "leonxlnx/taste-skill",
+      "ref": "f624f37a8c650b9cc550253104925efe4c8de246",
+      "upstream_path": "skills/redesign-skill/SKILL.md",
+      "local": ".agents/references/external-quality/taste/redesign-existing-projects.md",
+      "git_blob_sha": "287737220e15cb226e5bd854f7098f698faaf3f0"
+    },
+    {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "ref": "56ea9cf174ed86786187daa9de0e6247cb0747e4",
+      "upstream_path": "src/ui-ux-pro-max/templates/base/quick-reference.md",
+      "local": ".agents/references/external-quality/ui-ux-pro-max/quick-reference.md",
+      "git_blob_sha": "992ad8c792541a9a91cb7731fc8708fc6e87eb50"
+    },
+    {
+      "source": "ibelick/ui-skills",
+      "ref": "3434a7633027ec6dccfa80ed1eb5716befd4e766",
+      "upstream_path": "skills/improve-ui/references/plan-template.md",
+      "local": ".agents/references/external-quality/ui-skills/references/plan-template.md",
+      "git_blob_sha": "e08b3dd0b3a3a4c40a3861e0326e1159558ff7b7"
+    },
+    {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "ref": "56ea9cf174ed86786187daa9de0e6247cb0747e4",
+      "upstream_path": "src/ui-ux-pro-max/data/charts.csv",
+      "local": ".agents/references/external-quality/ui-ux-pro-max/charts.csv",
+      "git_blob_sha": "c6f4f875fd5b34379f24dbb541539492366a1058"
+    },
+    {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "ref": "56ea9cf174ed86786187daa9de0e6247cb0747e4",
+      "upstream_path": "src/ui-ux-pro-max/data/app-interface.csv",
+      "local": ".agents/references/external-quality/ui-ux-pro-max/app-interface.csv",
+      "git_blob_sha": "95e328c807a23be02c9c32c736d0fa19109c6076"
+    },
+    {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "ref": "56ea9cf174ed86786187daa9de0e6247cb0747e4",
+      "upstream_path": "src/ui-ux-pro-max/data/ux-guidelines.csv",
+      "local": ".agents/references/external-quality/ui-ux-pro-max/ux-guidelines.csv",
+      "git_blob_sha": "4e7d52b296537a03513b18b2c3f2b946cc802051"
+    }
+  ]
+}
