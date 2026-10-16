@@ -20,7 +20,7 @@
 - Подтормаживание WebGL/CSS motion: `.agents/references/external-quality/ui-skills/fixing-motion-performance.md`,
   сверять с реальными `design-qa.md` и reduced-motion контракта.
 - Доказательный read-only аудит UI: `.agents/references/external-quality/ui-skills/improve-ui.md`,
-  план `ui-skills/improve-ui/references/plan-template.md`.
+  план `ui-skills/references/plan-template.md`.
 
 ## Только при явном запросе на визуальный эксперимент
 
@@ -46,3 +46,14 @@ Taste содержит запреты на фиолетовые тона, gradie
    и отдельную авторизацию production/deploy.
 5. Новые версии источников - отдельный PR с ручным review diff, SHA и
    повторной offline-проверкой.
+
+## Поиск по локальным каталогам Pro Max (без внешнего CLI)
+
+```powershell
+python scripts/search_ui_ux_catalog.py --catalog charts --query analytics
+python scripts/search_ui_ux_catalog.py --catalog app-interface --query dashboard
+python scripts/search_ui_ux_catalog.py --catalog ux-guidelines --query focus
+```
+
+Результаты справочные: перед любыми визуальными изменениями действуют `DESIGN.md` v7
+и owner approval. Каталог не добавляет новые компоненты или темы сам по себе.

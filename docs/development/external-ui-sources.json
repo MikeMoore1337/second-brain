@@ -91,7 +91,7 @@
       "source": "ibelick/ui-skills",
       "ref": "3434a7633027ec6dccfa80ed1eb5716befd4e766",
       "upstream_path": "skills/improve-ui/references/plan-template.md",
-      "local": ".agents/references/external-quality/ui-skills/improve-ui/references/plan-template.md",
+      "local": ".agents/references/external-quality/ui-skills/references/plan-template.md",
       "git_blob_sha": "e08b3dd0b3a3a4c40a3861e0326e1159558ff7b7"
     },
     {
