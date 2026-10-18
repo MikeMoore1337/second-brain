@@ -9,7 +9,7 @@
 
 [![CI](https://github.com/MikeMoore1337/second-brain/actions/workflows/ci.yml/badge.svg)](https://github.com/MikeMoore1337/second-brain/actions/workflows/ci.yml) &nbsp; ![Python](https://img.shields.io/badge/Python-3.14-161120?logo=python&logoColor=E9D5FF) &nbsp; ![React](https://img.shields.io/badge/React-19-161120?logo=react&logoColor=E9D5FF) &nbsp; [![License](https://img.shields.io/badge/License-Apache--2.0-261538)](LICENSE)
 
-[**Возможности**](#возможности) · [**Быстрый старт**](#быстрый-старт) · [**Архитектура**](#архитектура-в-одной-схеме) · [**Интерфейс**](#интерфейс) · [**Документация**](#документация)
+[**Возможности**](#возможности) · [**Быстрый старт**](#быстрый-старт) · [**Архитектура**](#архитектура-в-одной-схеме) · [**Документация**](#документация)
 
 </div>
 
@@ -33,15 +33,6 @@
 
 > [!IMPORTANT]
 > **Память - не автоматическая истина.** Черновик, вывод модели и результат поиска не становятся достоверной записью без отдельной проверки и разрешённого сохранения.
-
-## Интерфейс
-
-<div align="center">
-  <a href="docs/design/evidence/186-v7/header-1440.png"><img src="docs/design/evidence/186-v7/header-1440.png" width="750" alt="Second Brain - интерфейс для широкого экрана"></a>
-  <a href="docs/design/evidence/186-v7/header-390.png"><img src="docs/design/evidence/186-v7/header-390.png" width="200" alt="Second Brain - интерфейс на телефоне"></a>
-</div>
-
-<sub>Снимки из проверки дизайна на синтетических данных. Публичный production-интерфейс предназначен для авторизованного владельца: открытого демодоступа нет.</sub>
 
 ## Архитектура в одной схеме
 
