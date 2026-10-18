@@ -120,7 +120,6 @@
     <line x1="746" y1="74" x2="746" y2="427" stroke="#c49aff" stroke-opacity=".12"/>
     <circle cx="746" cy="74" r="3" fill="#c49aff" opacity=".45"/>
     <circle cx="746" cy="427" r="3" fill="#c49aff" opacity=".45"/>
-    <text x="88" y="104" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="700" letter-spacing="5" fill="#c49aff">M I K E   M O O R E    /    O P E N   S O U R C E</text>
     <text x="82" y="232" font-family="Segoe UI, Arial, sans-serif" font-size="108" font-weight="800" letter-spacing="-4" fill="#f6f0ff">SECOND</text>
     <text x="82" y="335" font-family="Segoe UI, Arial, sans-serif" font-size="108" font-weight="800" letter-spacing="-4" fill="url(#headline)">BRAIN</text>
     <rect x="88" y="363" width="51" height="3" rx="1.5" fill="#c49aff"/>
