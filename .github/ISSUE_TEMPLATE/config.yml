@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "Документация и поддержка"
+    url: "https://github.com/MikeMoore1337/second-brain/blob/main/SUPPORT.md"
+    about: "Прежде чем создавать Issue, проверьте описание проекта и документацию."
+  - name: "Сообщения о безопасности"
+    url: "https://github.com/MikeMoore1337/second-brain/blob/main/SECURITY.md"
+    about: "Не публикуйте уязвимости и конфиденциальные данные в открытом Issue."

@@ -1,0 +1,44 @@
+name: "Ошибка"
+description: "Сообщить о воспроизводимой проблеме в Second Brain"
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Не публикуйте приватные заметки, реальные пути, токены или конфигурацию vault. Для уязвимостей см. SECURITY.md.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Компонент
+      options: ["Веб-интерфейс", "CLI", "API", "Vault / Safe Write", "Поиск / когнитивные функции", "Развёртывание", "Другое"]
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги воспроизведения
+      description: Используйте только синтетические данные
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Ожидаемое поведение
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Фактическое поведение
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Окружение
+      placeholder: "ОС, версия Python/Node, браузер и commit SHA"
+  - type: textarea
+    id: details
+    attributes:
+      label: Дополнительные данные
+      description: Только обезличенные логи и скриншоты

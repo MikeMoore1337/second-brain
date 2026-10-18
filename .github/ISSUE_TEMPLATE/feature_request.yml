@@ -1,0 +1,37 @@
+name: "Предложение"
+description: "Предложить улучшение или новую возможность"
+title: "[Feature] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Не прикладывайте реальные личные знания или конфигурацию приватного vault.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Пользовательская задача
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Предлагаемое решение
+    validations:
+      required: true
+  - type: textarea
+    id: criteria
+    attributes:
+      label: Как проверить готовность
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Альтернативы и ограничения
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Приватность
+      options:
+        - label: В описании нет секретов, настоящих заметок или данных приватного vault
+          required: true
