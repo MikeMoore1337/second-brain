@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc"><title id="title">Second Brain</title><desc id="desc">Оформление Second Brain: нейронная сеть и фиолетовое свечение.</desc><rect width="1280" height="640" fill="#050407"/><svg x="0" y="70" width="1280" height="500" viewBox="0 0 1440 500" preserveAspectRatio="xMinYMid slice">
-  <title id="title">Second Brain - память, связи, решения</title>
-  <desc id="description">Тёмный фиолетовый баннер с названием Second Brain и авторской схемой нейронных связей в силуэте мозга.</desc>
+
+
   <defs>
     <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#050407"/>
