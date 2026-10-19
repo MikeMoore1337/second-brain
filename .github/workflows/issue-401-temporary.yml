@@ -67,7 +67,7 @@ jobs:
           if (!updates.length || updates.length > 35) throw Error('UNEXPECTED_UPDATE_COUNT ' + updates.length);
           const changed=cp.execFileSync('git',['diff','--name-only'],{encoding:'utf8'}).trim().split('\n').filter(Boolean);
           if (changed.length!==1 || changed[0]!=='web/package-lock.json') throw Error('UNEXPECTED_CHANGED_FILES '+JSON.stringify(changed));
-          const patch=cp.execFileSync('git',['diff','--no-ext-diff','--unified=3','--','web/package-lock.json'],{encoding:'utf8',maxBuffer:500000});
+          const patch=cp.execFileSync('git',['diff','--no-ext-diff','--unified=3','--','package-lock.json'],{encoding:'utf8',maxBuffer:500000});
           if (patch.length<50 || patch.length>200000) throw Error('BAD_PATCH_SIZE '+patch.length);
           console.log('SB401_PACKAGE_UPDATES:'+JSON.stringify(updates));
           console.log('SB401_LOCK_SHA256='+crypto.createHash('sha256').update(afterText).digest('hex'));
