@@ -110,6 +110,9 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Install locked dependencies
         run: npm ci
+      - name: Audit npm dependencies (including dev)
+        if: matrix.os == 'ubuntu-latest'
+        run: npm audit
       - name: Check frontend
         run: npm run check
       - name: Build frontend
