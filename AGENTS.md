@@ -343,8 +343,13 @@ CrewAI, отдельную БД состояния агентов или agent-t
 При задачах по React, доступности, анимации и доказательному UI-аудиту используй
 только профильные **локальные** рекомендации из
 [external-ui-quality-skills.md](docs/development/external-ui-quality-skills.md).
-Это не самостоятельные роли: `impeccable`, `DESIGN.md` v7, `design-qa.md`
-и ограничения на `second-brain-vault` имеют приоритет. Для нового визуального
+`$impeccable` - основной проектный UX/UI-критик (pinned upstream, после `git submodule update --init -- .impeccable`), но не вторая роль и не разрешение на редизайн. `DESIGN.md` v7, `PRODUCT.md`, `design-qa.md`
+и граница `second-brain-vault` всегда имеют приоритет. Для нового визуального
 направления нужен отдельный явный запрос владельца. Не выполнять внешние
 скрипты, не загружать исходники/данные в сторонние сервисы и не добавлять
 конкурирующий дизайн или обязательные CI-зависимости.
+
+
+## Impeccable v4.7.0: защита от шаблонного ИИ-дизайна (2026-10-21)
+
+Для новых пользовательских UI-потоков, улучшения экранов и визуальной критики **вначале** применяй `$impeccable` из `.agents/skills/impeccable/SKILL.md`: изучить актуальные code/render, выполнить `critique` и `audit`, предложить изменения с реальными контрпримерами. Оригинальный upstream закреплён в `.impeccable/` SHA `dad8dbb3aac21ad1fa236c110315ef4abece23e8`; установка и правила - `docs/development/impeccable-adoption.md`. Это проектная инструкция Codex, не new runtime, hook или permission. Учитывай `DESIGN.md` v7, Onest, black/violet, запреты на green/mint и пользовательское vault; не смешивай рекомендации про стандартные SaaS-экраны с действующим авторским дизайном.
