@@ -353,3 +353,8 @@ CrewAI, отдельную БД состояния агентов или agent-t
 ## Impeccable v4.7.0: защита от шаблонного ИИ-дизайна (2026-10-21)
 
 Для новых пользовательских UI-потоков, улучшения экранов и визуальной критики **вначале** применяй `$impeccable` из `.agents/skills/impeccable/SKILL.md`: изучить актуальные code/render, выполнить `critique` и `audit`, предложить изменения с реальными контрпримерами. Оригинальный upstream закреплён в `.impeccable/` SHA `dad8dbb3aac21ad1fa236c110315ef4abece23e8`; установка и правила - `docs/development/impeccable-adoption.md`. Это проектная инструкция Codex, не new runtime, hook или permission. Учитывай `DESIGN.md` v7, Onest, black/violet, запреты на green/mint и пользовательское vault; не смешивай рекомендации про стандартные SaaS-экраны с действующим авторским дизайном.
+
+
+## UX/UI Design Orchestra (2026-10-21)
+
+For a combined UX/UI audit and unified visual proposal of **production React UI only**, route to `$ux-ui-design-orchestra` (`.agents/skills/ux-ui-design-orchestra/SKILL.md`). Default mode `audit-proposal` is READ_ONLY; work on screenshots, observed navigation and accepted `DESIGN.md` v7, not any source changes until explicit owner visual «Принимаю». Existing `second-brain-vault` boundary, Safe Write, privacy, `design-qa.md`, product truth and separate release approval always win. Max 3 real concurrent read-only subagents if actual client tools support them; otherwise report honest sequential passes. See `docs/development/ux-ui-design-orchestra.md`.
