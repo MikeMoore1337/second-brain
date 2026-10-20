@@ -17,9 +17,7 @@ EXPECTED = {
 
 
 def test_toolkit_development_skills_have_pinned_source_and_metadata() -> None:
-    manifest = json.loads(
-        (ROOT / ".agents" / "TOOLKIT_SOURCES.json").read_text(encoding="utf-8")
-    )
+    manifest = json.loads((ROOT / ".agents" / "TOOLKIT_SOURCES.json").read_text(encoding="utf-8"))
     assert manifest["kind"] == "development_guidance_only"
     assert manifest["source_sha"] == PINNED_SHA
     assert set(manifest["skills"]) == EXPECTED
