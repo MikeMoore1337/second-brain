@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class DesignOrchestraAdapterTests(unittest.TestCase):
-    def test_scope_and_vault_boundary(self):
+    def test_scope_and_vault_boundary(self) -> None:
         s = (ROOT / ".agents/skills/ux-ui-design-orchestra/SKILL.md").read_text(encoding="utf-8")
         d = (ROOT / "docs/development/ux-ui-design-orchestra.md").read_text(encoding="utf-8")
         for token in (
