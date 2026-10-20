@@ -32,7 +32,8 @@ def test_toolkit_development_skills_have_pinned_source_and_metadata() -> None:
 
 def test_preexisting_visual_skills_are_preserved() -> None:
     existing = json.loads((ROOT / "skills-lock.json").read_text(encoding="utf-8"))
-    assert {"animate", "prototype", "impeccable"} <= set(existing["skills"])
+    assert {"animate", "prototype"} <= set(existing["skills"])
+    assert (ROOT / ".agents/skills/impeccable/SKILL.md").is_file()
     assert EXPECTED.isdisjoint(existing["skills"])
 
 
