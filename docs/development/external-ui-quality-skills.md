@@ -10,6 +10,8 @@
 в [external-ui-sources.json](external-ui-sources.json). Проверка:
 `python scripts/check_external_ui_references.py`; сеть не нужна.
 
+Для новых UI review дополнительно действуют [ui-evidence-methods.md](ui-evidence-methods.md): конкретный route/state/viewport, живой результат действия, screenshot и статус проверки. Это не дополнительный оркестратор или CI gate.
+
 ## Когда читать
 
 - React render, data fetching, waterfalls, bundle: `.agents/references/external-quality/vercel/react-best-practices/SKILL.md`.
