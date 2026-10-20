@@ -40,7 +40,12 @@ def test_project_local_skill_set_is_exact_and_discoverable() -> None:
     """Payload contains Impeccable and exactly the approved Emil skill set."""
 
     installed = {path.name for path in SKILLS_ROOT.iterdir() if path.is_dir()}
-    assert installed == EXPECTED_SKILLS
+    toolkit = json.loads(
+        (PROJECT_ROOT / ".agents" / "TOOLKIT_SOURCES.json").read_text(encoding="utf-8")
+    )
+    development_skills = set(toolkit["skills"])
+    assert development_skills.isdisjoint(EXPECTED_SKILLS)
+    assert installed == EXPECTED_SKILLS | development_skills
     for skill_name in EXPECTED_SKILLS:
         skill_file = SKILLS_ROOT / skill_name / "SKILL.md"
         assert skill_file.is_file()
