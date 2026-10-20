@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "source_repository": "MikeMoore1337/ai-development-toolkit",
+  "source_sha": "3a9bf14772ab579d37c6f4f9615db505ab6ac259",
+  "kind": "development_guidance_only",
+  "skills": {
+    "security-boundaries": {
+      "source_path": ".agents/skills/security-boundaries/SKILL.md",
+      "target_path": ".agents/skills/security-boundaries/SKILL.md"
+    },
+    "contract-testing": {
+      "source_path": "extensions/qa/skills/contract-testing/SKILL.md",
+      "target_path": ".agents/skills/contract-testing/SKILL.md"
+    },
+    "change-impact-analysis": {
+      "source_path": "extensions/qa/skills/change-impact-analysis/SKILL.md",
+      "target_path": ".agents/skills/change-impact-analysis/SKILL.md"
+    },
+    "fullstack-integration": {
+      "source_path": "extensions/fullstack/skills/fullstack-integration/SKILL.md",
+      "target_path": ".agents/skills/fullstack-integration/SKILL.md"
+    },
+    "research-verification": {
+      "source_path": ".agents/skills/research-verification/SKILL.md",
+      "target_path": ".agents/skills/research-verification/SKILL.md"
+    },
+    "authentication-authorization": {
+      "source_path": "extensions/backend/skills/authentication-authorization/SKILL.md",
+      "target_path": ".agents/skills/authentication-authorization/SKILL.md"
+    },
+    "codebase-knowledge-map": {
+      "source_path": ".agents/skills/codebase-knowledge-map/SKILL.md",
+      "target_path": ".agents/skills/codebase-knowledge-map/SKILL.md"
+    }
+  }
+}
