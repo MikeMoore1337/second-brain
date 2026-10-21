@@ -1,9 +1,9 @@
 # Внешние UI/React-справочники для Second Brain
 
-Это **не исполняемые plugins**, не изменение React GUI и не альтернативный дизайн.
+Дополнительные UI-ссылки в этом документе **не исполняемые plugins**; Impeccable отдельно подключён как project-local UX/UI skill, но не как runtime. Никакого изменения React GUI или альтернативного дизайна не внесено.
 Актуальная визуальная власть - [DESIGN.md](../../DESIGN.md) v7, проверка -
 [design-qa.md](../../design-qa.md), UX/product constraints - `PRODUCT.md`,
-`AGENTS.md`, `impeccable` и другие уже установленные навыки.
+`AGENTS.md`, project-scoped `impeccable` (новый pinned upstream - см. [руководство](impeccable-adoption.md)) и другие уже установленные навыки.
 Запрет на чтение, изменение и публикацию `second-brain-vault` сохраняется.
 
 Каждая локальная копия имеет зафиксированный upstream commit и точный Git blob SHA

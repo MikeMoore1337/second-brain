@@ -20,6 +20,7 @@ EMIL_SKILLS = frozenset(
     }
 )
 EXPECTED_SKILLS = EMIL_SKILLS | {"impeccable"}
+ORCHESTRATION_ADAPTERS = frozenset({"ux-ui-design-orchestra"})
 
 
 def _skill_folder_hash(skill_dir: Path) -> str:
@@ -45,8 +46,8 @@ def test_project_local_skill_set_is_exact_and_discoverable() -> None:
     )
     development_skills = set(toolkit["skills"])
     assert development_skills.isdisjoint(EXPECTED_SKILLS)
-    assert installed == EXPECTED_SKILLS | development_skills
-    for skill_name in EXPECTED_SKILLS:
+    assert installed == EXPECTED_SKILLS | development_skills | ORCHESTRATION_ADAPTERS
+    for skill_name in EXPECTED_SKILLS | ORCHESTRATION_ADAPTERS:
         skill_file = SKILLS_ROOT / skill_name / "SKILL.md"
         assert skill_file.is_file()
         assert skill_file.read_text(encoding="utf-8").strip()
