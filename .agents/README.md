@@ -19,6 +19,13 @@
 Манифест происхождения: [`TOOLKIT_SOURCES.json`](TOOLKIT_SOURCES.json). Он независим от `skills-lock.json` для существующих сторонних UI skills.
 
 
+## QA / Feature Delivery оркестрация при разработке
+
+Для сложной задачи применяй [действующие роли и ограниченную схему проверки](../ai/README.md#оркестрация-разработки---отдельно-от-personal-agent).
+Роли - это только контекст работы над кодом, не новые runtime-агенты:
+один исполнитель изменяет PR, до трёх независимых экспертиз по необходимости
+или честный последовательный режим. Stage 19/20 и частный vault не затрагивать.
+
 ## Impeccable 4.7.0 (основной UX/UI-критик)
 
 Раздел `.agents/skills/impeccable/SKILL.md` указывает на pinned upstream в `.impeccable/`, а не на прежние скрипты 4.2.1. Запуск `$impeccable` возможен после `git submodule update --init -- .impeccable`; см. `../docs/development/impeccable-adoption.md`. Для анимаций можно по необходимости выбрать Emil skills, без смешивания разных дизайн-систем; `DESIGN.md` v7 и `design-qa.md` обязательны.
