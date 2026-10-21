@@ -1,0 +1,36 @@
+name: Temporary locked dependency refresh
+on:
+  push:
+    branches:
+      - design/impeccable-first-class-20261021
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  refresh:
+    if: github.ref == 'refs/heads/design/impeccable-first-class-20261021'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Regenerate lockfile using npm
+        working-directory: web
+        run: npm install --package-lock-only --ignore-scripts --no-fund
+      - name: Validate audited dependencies
+        working-directory: web
+        run: |
+          npm ci --ignore-scripts --no-fund
+          npm audit --audit-level=high
+      - name: Commit generated lockfile only
+        run: |
+          git add -- web/package-lock.json
+          if git diff --cached --quiet; then exit 0; fi
+          git -c user.name="GitHub Actions" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "fix(deps): regenerate audited Vite 8.3.4 lockfile"
+          git push origin HEAD:refs/heads/design/impeccable-first-class-20261021
