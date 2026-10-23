@@ -1669,7 +1669,9 @@ class ActionGatewayCoreV1:
         # nor may an ordinary action be retroactively assigned a parent.
         if (
             receipt_kind is ActionReceiptKindV1.ACTION
-            and (parent_receipt_id is not None or prepared.compensation_parent_receipt_id is not None)
+            and (
+                parent_receipt_id is not None or prepared.compensation_parent_receipt_id is not None
+            )
         ) or (
             receipt_kind is ActionReceiptKindV1.COMPENSATION
             and (
