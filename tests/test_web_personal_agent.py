@@ -590,9 +590,7 @@ def test_stage20_web_prepare_confirm_reconcile_with_real_confirmation_codec(
             *,
             now: datetime | None = None,
         ) -> ActionExecutionResultV1:
-            return gateway.execute_compensation(
-                prepared, confirmation, parent_receipt_id, now=NOW
-            )
+            return gateway.execute_compensation(prepared, confirmation, parent_receipt_id, now=NOW)
 
     service, advisor, mission = _service(tmp_path, action_service=RealConfirmationService())
     mission = replace(
