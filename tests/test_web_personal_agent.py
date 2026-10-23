@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field, replace
+from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -535,3 +536,166 @@ def test_stage19_prepare_is_transient_and_never_executes_before_confirmation(
     assert "confirmation-token-for-page-memory" not in records
     assert "prepared_action_id" not in records
     assert "credential_profile_id" not in records
+
+
+def test_stage20_web_prepare_confirm_reconcile_with_real_confirmation_codec(
+    tmp_path: Path,
+) -> None:
+    from second_brain.application.action_gateway import (
+        ActionExecutionResultV1,
+        ActionIntentV1,
+        PreparedExternalActionV1,
+    )
+    from tests.test_action_gateway_orchestration import NOW, _orchestrator
+
+    gateway, connector = _orchestrator(tmp_path / "gateway")
+
+    class RealConfirmationService(ReadyRecordingActionService):
+        def prepare(
+            self, intent: ActionIntentV1, *, now: datetime | None = None
+        ) -> PreparedExternalActionV1:
+            return gateway.prepare(intent, now=NOW)
+
+        def issue_confirmation(
+            self, prepared: PreparedExternalActionV1, *, now: datetime | None = None
+        ) -> str:
+            return gateway.issue_confirmation(prepared, now=NOW)
+
+        def execute(
+            self,
+            prepared: PreparedExternalActionV1,
+            confirmation: object,
+            *,
+            now: datetime | None = None,
+        ) -> ActionExecutionResultV1:
+            return gateway.execute(prepared, confirmation, now=NOW)
+
+        def reconcile(
+            self, prepared: PreparedExternalActionV1, *, now: datetime | None = None
+        ) -> ActionExecutionResultV1:
+            return gateway.reconcile(prepared, now=NOW)
+
+    service, advisor, mission = _service(
+        tmp_path, action_service=RealConfirmationService()
+    )
+    mission = replace(
+        mission,
+        external_targets=(
+            AgentExternalTargetRefV1(
+                AgentStage19ActionCapabilityV1.GITHUB_ISSUE_CREATE,
+                "MikeMoore1337/second-brain",
+            ),
+        ),
+    )
+    advisor.recommendation = json.dumps(
+        {
+            "steps": [
+                {
+                    "step_id": "action-1",
+                    "position": 1,
+                    "kind": "stage19_action",
+                    "action": {
+                        "action_kind": "github.issue.create",
+                        "repository": "MikeMoore1337/second-brain",
+                        "title": "Синтетическая задача",
+                        "body": "Проверка исключительно локального подставного провайдера.",
+                    },
+                }
+            ],
+            "caveats": [],
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    with TestClient(_app(service), base_url=BASE_URL) as client:
+        context = client.post(
+            PERSONAL_AGENT_CONTEXT_PATH,
+            json={"mission": mission.as_dict()},
+            headers=_headers(),
+        )
+        assert context.status_code == 200
+        built = client.post(
+            PERSONAL_AGENT_BUILD_PATH,
+            json={
+                "mission": mission.as_dict(),
+                "context_pack": context.json()["context_pack"],
+                "provider_preview": context.json()["provider_preview"],
+            },
+            headers=_headers(),
+        )
+        assert built.status_code == 200
+        accepted = client.post(
+            PERSONAL_AGENT_ACCEPT_PATH,
+            json={
+                "mission": mission.as_dict(),
+                "proposal": built.json()["proposal"],
+                "operation_id": "stage20/accept-web",
+            },
+            headers=_headers(),
+        )
+        assert accepted.status_code == 200
+        run_id = accepted.json()["run"]["run_id"]
+        started = client.post(
+            PERSONAL_AGENT_START_PATH,
+            json={
+                "mission": mission.as_dict(),
+                "run_id": run_id,
+                "operation_id": "stage20/start-web",
+            },
+            headers=_headers(),
+        )
+        assert started.status_code == 200
+        prepared = client.post(
+            PERSONAL_AGENT_PREPARE_PATH,
+            json={
+                "mission": mission.as_dict(),
+                "run_id": run_id,
+                "operation_id": "stage20/prepare-web",
+            },
+            headers=_headers(),
+        )
+        assert prepared.status_code == 200
+        dto = prepared.json()["prepared"]
+        assert dto["contract_version"] == "prepared-external-action-v1"
+        assert "semantic_payload" in dto
+        assert connector.execute_calls == 0
+        token = prepared.json()["confirmation_token"]
+        invalid = client.post(
+            PERSONAL_AGENT_CONFIRM_PATH,
+            json={
+                "mission": mission.as_dict(),
+                "run_id": run_id,
+                "prepared": dto,
+                "confirmation_token": token + "tampered",
+                "operation_id": "stage20/confirm-invalid",
+            },
+            headers=_headers(),
+        )
+        assert invalid.status_code >= 400
+        assert connector.execute_calls == 0
+        confirmed = client.post(
+            PERSONAL_AGENT_CONFIRM_PATH,
+            json={
+                "mission": mission.as_dict(),
+                "run_id": run_id,
+                "prepared": dto,
+                "confirmation_token": token,
+                "operation_id": "stage20/confirm-valid",
+            },
+            headers=_headers(),
+        )
+        assert confirmed.status_code == 200
+        assert connector.execute_calls == 1
+        reconciled = client.post(
+            PERSONAL_AGENT_RECONCILE_PATH,
+            json={
+                "mission": mission.as_dict(),
+                "run_id": run_id,
+                "prepared": dto,
+                "operation_id": "stage20/reconcile-web",
+            },
+            headers=_headers(),
+        )
+    assert reconciled.status_code == 200
+    assert connector.execute_calls == 1
+    assert connector.reconcile_calls == 0
