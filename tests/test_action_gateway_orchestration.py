@@ -16,6 +16,7 @@ from second_brain.application.action_gateway import (
     ACTION_GATEWAY_POLICY_ID,
     ActionExecutionOutcomeV1,
     ActionGatewayConnectorError,
+    ActionGatewayInvalidRequestError,
     ActionGatewayTargetChangedError,
     ActionIntentV1,
     ActionKindV1,
@@ -413,6 +414,9 @@ def test_compensation_rejects_another_exact_parent_on_same_target(tmp_path: Path
     assert decoded.fingerprint == compensation.fingerprint
     token = gateway.issue_confirmation(decoded, now=NOW)
     before = connector.execute_calls
+    # Signed compensation must not be accepted by the ordinary action route.
+    with pytest.raises(ActionGatewayInvalidRequestError):
+        gateway.execute(decoded, token, now=NOW)
     with pytest.raises(ActionGatewayCompensationError):
         gateway.execute_compensation(decoded, token, parent_b, now=NOW)
     assert connector.execute_calls == before
