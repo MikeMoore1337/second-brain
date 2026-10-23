@@ -498,9 +498,11 @@ def test_crashed_compensation_is_reconciled_with_original_parent(
 def test_stage20_prepared_rejects_cross_run_replay_with_equal_intent(
     tmp_path: Path,
 ) -> None:
+    from second_brain.application.personal_agent import AgentContextPackV1
     from second_brain.application.personal_agent_run import (
         AgentRunPrepareRequiredError,
         AgentRunService,
+        AgentRunSnapshotV1,
         AgentRunStepStateV1,
         AgentStage19PreparedActionV1,
     )
@@ -517,6 +519,14 @@ def test_stage20_prepared_rejects_cross_run_replay_with_equal_intent(
     )
     matching = SimpleNamespace(_action_intent=lambda *_: left)
     wrong_run = SimpleNamespace(_action_intent=lambda *_: right)
-    assert AgentRunService._assert_prepared(matching, snapshot, None, wrapper) == left
+    run_snapshot = cast(AgentRunSnapshotV1, snapshot)
+    context = cast(AgentContextPackV1, None)
+    assert (
+        AgentRunService._assert_prepared(
+            cast(AgentRunService, matching), run_snapshot, context, wrapper
+        ) == left
+    )
     with pytest.raises(AgentRunPrepareRequiredError):
-        AgentRunService._assert_prepared(wrong_run, snapshot, None, wrapper)
+        AgentRunService._assert_prepared(
+            cast(AgentRunService, wrong_run), run_snapshot, context, wrapper
+        )
