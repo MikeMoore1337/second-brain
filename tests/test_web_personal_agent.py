@@ -541,6 +541,8 @@ def test_stage19_prepare_is_transient_and_never_executes_before_confirmation(
 def test_stage20_web_prepare_confirm_reconcile_with_real_confirmation_codec(
     tmp_path: Path,
 ) -> None:
+    from uuid import UUID, uuid7
+
     from second_brain.application.action_gateway import (
         ActionExecutionResultV1,
         ActionIntentV1,
@@ -574,6 +576,23 @@ def test_stage20_web_prepare_confirm_reconcile_with_real_confirmation_codec(
             self, prepared: PreparedExternalActionV1, *, now: datetime | None = None
         ) -> ActionExecutionResultV1:
             return gateway.reconcile(prepared, now=NOW)
+
+        def prepare_compensation(
+            self, parent_receipt_id: UUID, operation_id: str, *, now: datetime | None = None
+        ) -> PreparedExternalActionV1:
+            return gateway.prepare_compensation(parent_receipt_id, operation_id, now=NOW)
+
+        def execute_compensation(
+            self,
+            prepared: PreparedExternalActionV1,
+            confirmation: object,
+            parent_receipt_id: UUID,
+            *,
+            now: datetime | None = None,
+        ) -> ActionExecutionResultV1:
+            return gateway.execute_compensation(
+                prepared, confirmation, parent_receipt_id, now=NOW
+            )
 
     service, advisor, mission = _service(tmp_path, action_service=RealConfirmationService())
     mission = replace(
@@ -697,3 +716,44 @@ def test_stage20_web_prepare_confirm_reconcile_with_real_confirmation_codec(
     assert reconciled.status_code == 200
     assert connector.execute_calls == 1
     assert connector.reconcile_calls == 0
+    parent_id = str(gateway.history()[-1].receipt_id)
+    with TestClient(_app(service), base_url=BASE_URL) as client:
+        compensation = client.post(
+            PERSONAL_AGENT_COMPENSATION_PREPARE_PATH,
+            json={
+                "run_id": run_id,
+                "parent_receipt_id": parent_id,
+                "operation_id": "stage20/compensation-prep-web",
+            },
+            headers=_headers(),
+        )
+        assert compensation.status_code == 200
+        comp_dto = compensation.json()["prepared"]
+        assert comp_dto["compensation_parent_receipt_id"] == parent_id
+        bad_parent = client.post(
+            PERSONAL_AGENT_COMPENSATION_CONFIRM_PATH,
+            json={
+                "run_id": run_id,
+                "parent_receipt_id": str(uuid7()),
+                "prepared": comp_dto,
+                "confirmation_token": compensation.json()["confirmation_token"],
+                "operation_id": "stage20/compensation-wrong-parent",
+            },
+            headers=_headers(),
+        )
+        assert bad_parent.status_code >= 400
+        assert connector.execute_calls == 1
+        accepted_compensation = client.post(
+            PERSONAL_AGENT_COMPENSATION_CONFIRM_PATH,
+            json={
+                "run_id": run_id,
+                "parent_receipt_id": parent_id,
+                "prepared": comp_dto,
+                "confirmation_token": compensation.json()["confirmation_token"],
+                "operation_id": "stage20/compensation-valid",
+            },
+            headers=_headers(),
+        )
+    assert accepted_compensation.status_code == 200
+    assert connector.execute_calls == 2
+    assert gateway.history()[-1].parent_receipt_id == UUID(parent_id)
