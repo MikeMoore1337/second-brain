@@ -575,9 +575,7 @@ def test_stage20_web_prepare_confirm_reconcile_with_real_confirmation_codec(
         ) -> ActionExecutionResultV1:
             return gateway.reconcile(prepared, now=NOW)
 
-    service, advisor, mission = _service(
-        tmp_path, action_service=RealConfirmationService()
-    )
+    service, advisor, mission = _service(tmp_path, action_service=RealConfirmationService())
     mission = replace(
         mission,
         external_targets=(
