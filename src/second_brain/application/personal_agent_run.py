@@ -1782,7 +1782,12 @@ class AgentRunService:
         }:
             raise AgentRunPrepareRequiredError()
         expected = self._action_intent(snapshot, pack, current)
-        if prepared.prepared.intent_fingerprint != expected.intent_fingerprint:
+        if (
+            prepared.prepared.intent_fingerprint != expected.intent_fingerprint
+            or prepared.prepared.operation_id_fingerprint != expected.operation_id_fingerprint
+        ):
+            # The operation identity includes the exact Run and step. Matching
+            # semantic intent alone would permit cross-Run prepared replay.
             raise AgentRunPrepareRequiredError()
         return expected
 
