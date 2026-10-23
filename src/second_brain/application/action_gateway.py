@@ -862,7 +862,7 @@ class PreparedExternalActionV1:
             )
 
     def as_dict(self) -> dict[str, object]:
-        result = {
+        result: dict[str, object] = {
             "prepared_action_id": str(self.prepared_action_id),
             "contract_version": self.contract_version,
             "operation_id_fingerprint": self.operation_id_fingerprint,
