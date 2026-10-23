@@ -10,7 +10,7 @@ provider-facing request, and never turns reconciliation into a retry.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock
@@ -376,7 +376,8 @@ class ActionGatewayOrchestratorV1:
             raise ActionGatewayCompensationError()
         prepared = self.prepare(intent, now=now)
         self._assert_compensation_target(parent, prepared)
-        return prepared
+        # A confirmation signs prepared.fingerprint, including this exact parent.
+        return replace(prepared, compensation_parent_receipt_id=parent.receipt_id)
 
     def execute_compensation(
         self,
@@ -389,6 +390,11 @@ class ActionGatewayOrchestratorV1:
         """Execute a previously prepared compensation as a distinct receipt."""
 
         parent = self._receipt_by_id(parent_receipt_id)
+        if (
+            type(prepared) is not PreparedExternalActionV1
+            or prepared.compensation_parent_receipt_id != parent.receipt_id
+        ):
+            raise ActionGatewayCompensationError()
         self._assert_compensable_parent(parent)
         self._assert_compensation_target(parent, prepared)
         if prepared.operation_id_fingerprint == parent.operation_id_fingerprint:
@@ -409,7 +415,10 @@ class ActionGatewayOrchestratorV1:
             receipt
             for receipt in receipts
             if receipt.operation_id_fingerprint == prepared.operation_id_fingerprint
-            and _receipt_kind(receipt.receipt_kind) is ActionReceiptKindV1.ACTION
+            and _receipt_kind(receipt.receipt_kind) in {
+                ActionReceiptKindV1.ACTION,
+                ActionReceiptKindV1.COMPENSATION,
+            }
         )
         return matches[-1] if matches else None
 
@@ -434,6 +443,13 @@ class ActionGatewayOrchestratorV1:
             or _action_kind(receipt.action_kind) is not _action_kind(prepared.action_kind)
             or receipt.payload_fingerprint != prepared.payload_fingerprint
             or receipt.target_safe_identity != prepared.exact_target_identity.safe_identity()
+            or (
+                prepared.compensation_parent_receipt_id is not None
+                and (
+                    _receipt_kind(receipt.receipt_kind) is not ActionReceiptKindV1.COMPENSATION
+                    or receipt.parent_receipt_id != prepared.compensation_parent_receipt_id
+                )
+            )
         ):
             raise ActionGatewayConflictError()
 
@@ -457,7 +473,7 @@ class ActionGatewayOrchestratorV1:
         return self._store.append(
             ActionReceiptV1(
                 receipt_id=uuid7(),
-                receipt_kind=ActionReceiptKindV1.ACTION,
+                receipt_kind=receipt.receipt_kind,
                 operation_id_fingerprint=receipt.operation_id_fingerprint,
                 prepared_action_id=receipt.prepared_action_id,
                 intent_fingerprint=receipt.intent_fingerprint,
@@ -472,7 +488,11 @@ class ActionGatewayOrchestratorV1:
                 sent_at=receipt.sent_at,
                 finished_at=finished_at,
                 safe_error_code="execution_started_without_terminal_receipt",
-                parent_receipt_id=receipt.receipt_id,
+                parent_receipt_id=(
+                    receipt.parent_receipt_id
+                    if receipt.receipt_kind is ActionReceiptKindV1.COMPENSATION
+                    else receipt.receipt_id
+                ),
             )
         )
 
