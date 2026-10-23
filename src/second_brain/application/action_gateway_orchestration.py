@@ -415,7 +415,8 @@ class ActionGatewayOrchestratorV1:
             receipt
             for receipt in receipts
             if receipt.operation_id_fingerprint == prepared.operation_id_fingerprint
-            and _receipt_kind(receipt.receipt_kind) in {
+            and _receipt_kind(receipt.receipt_kind)
+            in {
                 ActionReceiptKindV1.ACTION,
                 ActionReceiptKindV1.COMPENSATION,
             }
