@@ -1889,17 +1889,31 @@ class AgentRunService:
     def _assert_compensation_parent(snapshot: AgentRunSnapshotV1, parent_receipt_id: UUID) -> None:
         # Stage 20 may only compensate a verified mutation from this exact Run.
         # A global Stage 19 receipt for another Run is not owner permission.
-        if type(parent_receipt_id) is not UUID or not any(
-            receipt.receipt_id == parent_receipt_id
-            and receipt.receipt_kind is ActionReceiptKindV1.ACTION
-            and receipt.state
-            in {
-                ActionReceiptStateV1.EXECUTED,
-                ActionReceiptStateV1.RECONCILED_EXECUTED,
-            }
-            for receipt in snapshot.receipt_refs
-        ):
+        if type(parent_receipt_id) is not UUID:
             raise AgentRunActionNotAllowedError()
+        refs = snapshot.receipt_refs
+        for receipt in refs:
+            if receipt.receipt_id != parent_receipt_id:
+                continue
+            if (
+                receipt.receipt_kind is ActionReceiptKindV1.ACTION
+                and receipt.state is ActionReceiptStateV1.EXECUTED
+            ):
+                return
+            if (
+                receipt.receipt_kind is ActionReceiptKindV1.RECONCILIATION
+                and receipt.state is ActionReceiptStateV1.RECONCILED_EXECUTED
+                and any(
+                    source.receipt_id == receipt.parent_receipt_id
+                    and source.receipt_kind is ActionReceiptKindV1.ACTION
+                    and source.operation_id_fingerprint == receipt.operation_id_fingerprint
+                    and source.intent_fingerprint == receipt.intent_fingerprint
+                    and source.payload_fingerprint == receipt.payload_fingerprint
+                    for source in refs
+                )
+            ):
+                return
+        raise AgentRunActionNotAllowedError()
 
     def prepare_compensation(
         self,
