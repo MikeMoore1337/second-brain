@@ -535,3 +535,49 @@ def test_stage20_prepared_rejects_cross_run_replay_with_equal_intent(
         AgentRunService._assert_prepared(
             cast(AgentRunService, wrong_run), run_snapshot, context, wrapper
         )
+
+
+
+def test_stage20_accepts_only_lineage_verified_reconciled_parent(tmp_path: Path) -> None:
+    from second_brain.application.personal_agent_run import (
+        AgentRunActionNotAllowedError,
+        AgentRunService,
+        AgentRunSnapshotV1,
+        AgentStage19ReceiptRefV1,
+    )
+
+    gateway, connector = _orchestrator(tmp_path)
+    connector.uncertain = True
+    prepared = gateway.prepare(_intent("reconciled-parent"), now=NOW)
+    uncertain = gateway.execute(
+        prepared, gateway.issue_confirmation(prepared, now=NOW), now=NOW
+    )
+    assert uncertain.receipt.state is ActionReceiptStateV1.OUTCOME_UNCERTAIN
+    connector.reconciliation = ConnectorReconciliationResultV1(
+        ActionReceiptStateV1.RECONCILED_EXECUTED,
+        NOW,
+        remote_safe_identity={
+            "repository": "MikeMoore1337/second-brain",
+            "issue_id": 2,
+            "issue_node_id": "I_issue",
+            "issue_number": 123,
+            "state": "open",
+            "url": "https://github.com/MikeMoore1337/second-brain/issues/123",
+        },
+        remote_url="https://github.com/MikeMoore1337/second-brain/issues/123",
+    )
+    verified = gateway.reconcile(prepared, now=NOW)
+    assert verified.receipt.receipt_kind is ActionReceiptKindV1.RECONCILIATION
+    assert verified.receipt.state is ActionReceiptStateV1.RECONCILED_EXECUTED
+    refs = (
+        AgentStage19ReceiptRefV1.from_result(uncertain),
+        AgentStage19ReceiptRefV1.from_result(verified),
+    )
+    snapshot = cast(AgentRunSnapshotV1, SimpleNamespace(receipt_refs=refs))
+    AgentRunService._assert_compensation_parent(snapshot, verified.receipt.receipt_id)
+    # An unlinked reconciliation is not sufficient proof of Run ownership.
+    isolated = cast(AgentRunSnapshotV1, SimpleNamespace(receipt_refs=refs[1:]))
+    with pytest.raises(AgentRunActionNotAllowedError):
+        AgentRunService._assert_compensation_parent(isolated, verified.receipt.receipt_id)
+    with pytest.raises(AgentRunActionNotAllowedError):
+        AgentRunService._assert_compensation_parent(snapshot, uncertain.receipt.receipt_id)
