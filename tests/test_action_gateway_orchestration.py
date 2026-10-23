@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import cast
 from uuid import UUID
 
@@ -485,3 +486,30 @@ def test_crashed_compensation_is_reconciled_with_original_parent(
         and r.parent_receipt_id == parent.receipt.receipt_id
         for r in history
     )
+
+
+def test_stage20_prepared_rejects_cross_run_replay_with_equal_intent(
+    tmp_path: Path,
+) -> None:
+    from second_brain.application.personal_agent_run import (
+        AgentRunPrepareRequiredError,
+        AgentRunService,
+        AgentRunStepStateV1,
+        AgentStage19PreparedActionV1,
+    )
+
+    gateway, _ = _orchestrator(tmp_path)
+    left = _intent("stage20/run-A/step/action-1")
+    right = _intent("stage20/run-B/step/action-1")
+    assert left.intent_fingerprint == right.intent_fingerprint
+    assert left.operation_id_fingerprint != right.operation_id_fingerprint
+    prepared = gateway.prepare(left, now=NOW)
+    wrapper = AgentStage19PreparedActionV1(prepared)
+    snapshot = SimpleNamespace(
+        steps=(SimpleNamespace(state=AgentRunStepStateV1.CURRENT),),
+    )
+    matching = SimpleNamespace(_action_intent=lambda *_: left)
+    wrong_run = SimpleNamespace(_action_intent=lambda *_: right)
+    assert AgentRunService._assert_prepared(matching, snapshot, None, wrapper) == left
+    with pytest.raises(AgentRunPrepareRequiredError):
+        AgentRunService._assert_prepared(wrong_run, snapshot, None, wrapper)
