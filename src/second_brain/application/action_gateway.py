@@ -1665,6 +1665,19 @@ class ActionGatewayCoreV1:
             raise ActionGatewayInvalidRequestError()
         if parent_receipt_id is not None:
             parent_receipt_id = _uuid7(parent_receipt_id)
+        # A compensation approval must not be repurposed as an ordinary action,
+        # nor may an ordinary action be retroactively assigned a parent.
+        if (
+            receipt_kind is ActionReceiptKindV1.ACTION
+            and (parent_receipt_id is not None or prepared.compensation_parent_receipt_id is not None)
+        ) or (
+            receipt_kind is ActionReceiptKindV1.COMPENSATION
+            and (
+                parent_receipt_id is None
+                or prepared.compensation_parent_receipt_id != parent_receipt_id
+            )
+        ):
+            raise ActionGatewayInvalidRequestError()
         current = _utc(now or datetime.now(UTC))
         existing = self._store.find_operation(prepared.operation_id_fingerprint)
         if existing is not None:
