@@ -387,3 +387,101 @@ def test_disabled_production_status_is_safe_without_store_or_token(tmp_path: Pat
     assert status["ready"] is False
     assert status["repositories"] == []
     assert "token" not in status
+
+
+def test_compensation_rejects_another_exact_parent_on_same_target(tmp_path: Path) -> None:
+    connector = OrchestrationConnector(current_state=IssueStateV1.CLOSED)
+    gateway, connector = _orchestrator(tmp_path, connector)
+    parents = []
+    for op in ("parent-a", "parent-b"):
+        # Identical source + target: target-only checks cannot distinguish parents.
+        connector.current_state = IssueStateV1.CLOSED
+        prepared = gateway.prepare(
+            _intent(op, ActionKindV1.GITHUB_ISSUE_SET_STATE, desired_state=IssueStateV1.OPEN),
+            now=NOW,
+        )
+        parents.append(
+            gateway.execute(prepared, gateway.issue_confirmation(prepared, now=NOW), now=NOW)
+        )
+    parent_a, parent_b = (p.receipt.receipt_id for p in parents)
+    assert parent_a != parent_b
+    compensation = gateway.prepare_compensation(parent_a, "comp-parent-a", now=NOW)
+    assert compensation.compensation_parent_receipt_id == parent_a
+    # Parent is cryptographically part of the HMAC-bound preview.
+    decoded = PreparedExternalActionV1.from_dict(compensation.as_dict())
+    assert decoded.fingerprint == compensation.fingerprint
+    token = gateway.issue_confirmation(decoded, now=NOW)
+    before = connector.execute_calls
+    with pytest.raises(ActionGatewayCompensationError):
+        gateway.execute_compensation(decoded, token, parent_b, now=NOW)
+    assert connector.execute_calls == before
+    accepted = gateway.execute_compensation(decoded, token, parent_a, now=NOW)
+    assert accepted.receipt.parent_receipt_id == parent_a
+    assert connector.execute_calls == before + 1
+
+
+def test_uncertain_compensation_reconciles_without_a_second_mutation(
+    tmp_path: Path,
+) -> None:
+    connector = OrchestrationConnector(current_state=IssueStateV1.CLOSED)
+    gateway, connector = _orchestrator(tmp_path, connector)
+    action = gateway.prepare(
+        _intent("original-to-compensate", ActionKindV1.GITHUB_ISSUE_SET_STATE),
+        now=NOW,
+    )
+    parent = gateway.execute(action, gateway.issue_confirmation(action, now=NOW), now=NOW)
+    compensation = gateway.prepare_compensation(
+        parent.receipt.receipt_id, "comp-uncertain", now=NOW,
+    )
+    connector.uncertain = True
+    uncertain = gateway.execute_compensation(
+        compensation,
+        gateway.issue_confirmation(compensation, now=NOW),
+        parent.receipt.receipt_id,
+        now=NOW,
+    )
+    assert uncertain.receipt.receipt_kind is ActionReceiptKindV1.COMPENSATION
+    assert uncertain.receipt.state is ActionReceiptStateV1.OUTCOME_UNCERTAIN
+    assert uncertain.receipt.parent_receipt_id == parent.receipt.receipt_id
+    connector.reconciliation = ConnectorReconciliationResultV1(
+        ActionReceiptStateV1.RECONCILED_NOT_EXECUTED, NOW,
+    )
+    calls = connector.execute_calls
+    result = gateway.reconcile(compensation, now=NOW)
+    repeat = gateway.reconcile(compensation, now=NOW)
+    assert result.receipt.state is ActionReceiptStateV1.RECONCILED_NOT_EXECUTED
+    assert repeat.replayed is True
+    assert connector.execute_calls == calls
+    assert connector.reconcile_calls == 1
+
+
+def test_crashed_compensation_is_reconciled_with_original_parent(
+    tmp_path: Path,
+) -> None:
+    connector = OrchestrationConnector(current_state=IssueStateV1.CLOSED)
+    gateway, connector = _orchestrator(tmp_path, connector)
+    action = gateway.prepare(
+        _intent("crash-parent", ActionKindV1.GITHUB_ISSUE_SET_STATE), now=NOW,
+    )
+    parent = gateway.execute(action, gateway.issue_confirmation(action, now=NOW), now=NOW)
+    prepared = gateway.prepare_compensation(
+        parent.receipt.receipt_id, "crashed-compensation", now=NOW,
+    )
+    started, created = gateway._store.begin_execution(
+        prepared, now=NOW,
+        receipt_kind=ActionReceiptKindV1.COMPENSATION,
+        parent_receipt_id=parent.receipt.receipt_id,
+    )
+    assert created
+    result = gateway.reconcile(prepared, now=NOW)
+    assert started.state is ActionReceiptStateV1.EXECUTION_STARTED
+    assert result.receipt.state is ActionReceiptStateV1.RECONCILED_NOT_EXECUTED
+    assert connector.execute_calls == 1
+    assert connector.reconcile_calls == 1
+    history = gateway.history()
+    assert any(
+        r.receipt_kind is ActionReceiptKindV1.COMPENSATION
+        and r.state is ActionReceiptStateV1.OUTCOME_UNCERTAIN
+        and r.parent_receipt_id == parent.receipt.receipt_id
+        for r in history
+    )
