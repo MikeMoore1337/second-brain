@@ -799,6 +799,7 @@ class PreparedExternalActionV1:
     expires_at: datetime
     reversibility: ReversibilityV1 | str
     provenance: ActionProvenanceV1 | None = None
+    compensation_parent_receipt_id: UUID | None = None
 
     def __post_init__(self) -> None:
         prepared_id = _uuid7(self.prepared_action_id)
@@ -853,9 +854,14 @@ class PreparedExternalActionV1:
         object.__setattr__(self, "expires_at", expires_at)
         object.__setattr__(self, "preview", preview)
         object.__setattr__(self, "reversibility", reversibility)
+        if self.compensation_parent_receipt_id is not None:
+            object.__setattr__(
+                self, "compensation_parent_receipt_id",
+                _uuid7(self.compensation_parent_receipt_id),
+            )
 
     def as_dict(self) -> dict[str, object]:
-        return {
+        result = {
             "prepared_action_id": str(self.prepared_action_id),
             "contract_version": self.contract_version,
             "operation_id_fingerprint": self.operation_id_fingerprint,
@@ -875,6 +881,11 @@ class PreparedExternalActionV1:
             "reversibility": cast(ReversibilityV1, self.reversibility).value,
             "provenance": None if self.provenance is None else self.provenance.as_dict(),
         }
+        if self.compensation_parent_receipt_id is not None:
+            result["compensation_parent_receipt_id"] = str(
+                self.compensation_parent_receipt_id
+            )
+        return result
 
     @property
     def fingerprint(self) -> str:
@@ -907,6 +918,7 @@ class PreparedExternalActionV1:
             "expires_at",
             "reversibility",
             "provenance",
+            "compensation_parent_receipt_id",
         }
         data = _strict_dict(value, allowed)
         provenance_value = data.get("provenance")
@@ -936,6 +948,9 @@ class PreparedExternalActionV1:
             provenance=None
             if provenance_value is None
             else ActionProvenanceV1.from_dict(provenance_value),
+            compensation_parent_receipt_id=_optional_uuid(
+                data.get("compensation_parent_receipt_id")
+            ),
         )
 
 
