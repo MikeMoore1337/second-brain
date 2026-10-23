@@ -524,7 +524,8 @@ def test_stage20_prepared_rejects_cross_run_replay_with_equal_intent(
     assert (
         AgentRunService._assert_prepared(
             cast(AgentRunService, matching), run_snapshot, context, wrapper
-        ) == left
+        )
+        == left
     )
     with pytest.raises(AgentRunPrepareRequiredError):
         AgentRunService._assert_prepared(
