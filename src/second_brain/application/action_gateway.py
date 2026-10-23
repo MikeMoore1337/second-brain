@@ -1669,7 +1669,14 @@ class ActionGatewayCoreV1:
         current = _utc(now or datetime.now(UTC))
         existing = self._store.find_operation(prepared.operation_id_fingerprint)
         if existing is not None:
-            if existing.intent_fingerprint != _intent_fingerprint_from_prepared(prepared):
+            if (
+                existing.intent_fingerprint != _intent_fingerprint_from_prepared(prepared)
+                or existing.receipt_kind is not receipt_kind
+                or (
+                    receipt_kind is ActionReceiptKindV1.COMPENSATION
+                    and existing.parent_receipt_id != parent_receipt_id
+                )
+            ):
                 raise ActionGatewayConflictError()
             self._confirmation.consume(confirmation, prepared, now=current)
             if existing.state is ActionReceiptStateV1.EXECUTION_STARTED:
@@ -1731,7 +1738,14 @@ class ActionGatewayCoreV1:
             parent_receipt_id=parent_receipt_id,
         )
         if not is_new:
-            if started.intent_fingerprint != _intent_fingerprint_from_prepared(prepared):
+            if (
+                started.intent_fingerprint != _intent_fingerprint_from_prepared(prepared)
+                or started.receipt_kind is not receipt_kind
+                or (
+                    receipt_kind is ActionReceiptKindV1.COMPENSATION
+                    and started.parent_receipt_id != parent_receipt_id
+                )
+            ):
                 raise ActionGatewayConflictError()
             if started.state is ActionReceiptStateV1.EXECUTION_STARTED:
                 uncertain = self._uncertain_receipt(
