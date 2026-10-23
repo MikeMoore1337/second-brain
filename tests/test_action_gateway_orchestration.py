@@ -432,7 +432,9 @@ def test_uncertain_compensation_reconciles_without_a_second_mutation(
     )
     parent = gateway.execute(action, gateway.issue_confirmation(action, now=NOW), now=NOW)
     compensation = gateway.prepare_compensation(
-        parent.receipt.receipt_id, "comp-uncertain", now=NOW,
+        parent.receipt.receipt_id,
+        "comp-uncertain",
+        now=NOW,
     )
     connector.uncertain = True
     uncertain = gateway.execute_compensation(
@@ -445,7 +447,8 @@ def test_uncertain_compensation_reconciles_without_a_second_mutation(
     assert uncertain.receipt.state is ActionReceiptStateV1.OUTCOME_UNCERTAIN
     assert uncertain.receipt.parent_receipt_id == parent.receipt.receipt_id
     connector.reconciliation = ConnectorReconciliationResultV1(
-        ActionReceiptStateV1.RECONCILED_NOT_EXECUTED, NOW,
+        ActionReceiptStateV1.RECONCILED_NOT_EXECUTED,
+        NOW,
     )
     calls = connector.execute_calls
     result = gateway.reconcile(compensation, now=NOW)
@@ -462,14 +465,18 @@ def test_crashed_compensation_is_reconciled_with_original_parent(
     connector = OrchestrationConnector(current_state=IssueStateV1.CLOSED)
     gateway, connector = _orchestrator(tmp_path, connector)
     action = gateway.prepare(
-        _intent("crash-parent", ActionKindV1.GITHUB_ISSUE_SET_STATE), now=NOW,
+        _intent("crash-parent", ActionKindV1.GITHUB_ISSUE_SET_STATE),
+        now=NOW,
     )
     parent = gateway.execute(action, gateway.issue_confirmation(action, now=NOW), now=NOW)
     prepared = gateway.prepare_compensation(
-        parent.receipt.receipt_id, "crashed-compensation", now=NOW,
+        parent.receipt.receipt_id,
+        "crashed-compensation",
+        now=NOW,
     )
     started, created = gateway._store.begin_execution(
-        prepared, now=NOW,
+        prepared,
+        now=NOW,
         receipt_kind=ActionReceiptKindV1.COMPENSATION,
         parent_receipt_id=parent.receipt.receipt_id,
     )
