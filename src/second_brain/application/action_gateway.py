@@ -856,7 +856,8 @@ class PreparedExternalActionV1:
         object.__setattr__(self, "reversibility", reversibility)
         if self.compensation_parent_receipt_id is not None:
             object.__setattr__(
-                self, "compensation_parent_receipt_id",
+                self,
+                "compensation_parent_receipt_id",
                 _uuid7(self.compensation_parent_receipt_id),
             )
 
@@ -882,9 +883,7 @@ class PreparedExternalActionV1:
             "provenance": None if self.provenance is None else self.provenance.as_dict(),
         }
         if self.compensation_parent_receipt_id is not None:
-            result["compensation_parent_receipt_id"] = str(
-                self.compensation_parent_receipt_id
-            )
+            result["compensation_parent_receipt_id"] = str(self.compensation_parent_receipt_id)
         return result
 
     @property
