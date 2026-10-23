@@ -919,7 +919,7 @@ class ProductionPersonalAgentWebService:
         return {
             "web_contract": "personal_agent_prepare_web_v1",
             "run": snapshot.as_dict(),
-            "prepared": prepared.as_dict(),
+            "prepared": prepared.prepared.as_dict(),
             "confirmation_token": token,
         }
 
@@ -968,7 +968,7 @@ class ProductionPersonalAgentWebService:
         token = self._run().issue_stage19_confirmation(prepared)
         return {
             "web_contract": "personal_agent_compensation_prepare_web_v1",
-            "prepared": prepared.as_dict(),
+            "prepared": prepared.prepared.as_dict(),
             "confirmation_token": token,
         }
 

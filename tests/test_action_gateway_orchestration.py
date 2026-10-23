@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import cast
 from uuid import UUID
 
@@ -15,6 +16,7 @@ from second_brain.application.action_gateway import (
     ACTION_GATEWAY_POLICY_ID,
     ActionExecutionOutcomeV1,
     ActionGatewayConnectorError,
+    ActionGatewayInvalidRequestError,
     ActionGatewayTargetChangedError,
     ActionIntentV1,
     ActionKindV1,
@@ -387,3 +389,192 @@ def test_disabled_production_status_is_safe_without_store_or_token(tmp_path: Pat
     assert status["ready"] is False
     assert status["repositories"] == []
     assert "token" not in status
+
+
+def test_compensation_rejects_another_exact_parent_on_same_target(tmp_path: Path) -> None:
+    connector = OrchestrationConnector(current_state=IssueStateV1.CLOSED)
+    gateway, connector = _orchestrator(tmp_path, connector)
+    parents = []
+    for op in ("parent-a", "parent-b"):
+        # Identical source + target: target-only checks cannot distinguish parents.
+        connector.current_state = IssueStateV1.CLOSED
+        prepared = gateway.prepare(
+            _intent(op, ActionKindV1.GITHUB_ISSUE_SET_STATE, desired_state=IssueStateV1.OPEN),
+            now=NOW,
+        )
+        parents.append(
+            gateway.execute(prepared, gateway.issue_confirmation(prepared, now=NOW), now=NOW)
+        )
+    parent_a, parent_b = (p.receipt.receipt_id for p in parents)
+    assert parent_a != parent_b
+    compensation = gateway.prepare_compensation(parent_a, "comp-parent-a", now=NOW)
+    assert compensation.compensation_parent_receipt_id == parent_a
+    # Parent is cryptographically part of the HMAC-bound preview.
+    decoded = PreparedExternalActionV1.from_dict(compensation.as_dict())
+    assert decoded.fingerprint == compensation.fingerprint
+    token = gateway.issue_confirmation(decoded, now=NOW)
+    before = connector.execute_calls
+    # Signed compensation must not be accepted by the ordinary action route.
+    with pytest.raises(ActionGatewayInvalidRequestError):
+        gateway.execute(decoded, token, now=NOW)
+    with pytest.raises(ActionGatewayCompensationError):
+        gateway.execute_compensation(decoded, token, parent_b, now=NOW)
+    assert connector.execute_calls == before
+    accepted = gateway.execute_compensation(decoded, token, parent_a, now=NOW)
+    assert accepted.receipt.parent_receipt_id == parent_a
+    assert connector.execute_calls == before + 1
+
+
+def test_uncertain_compensation_reconciles_without_a_second_mutation(
+    tmp_path: Path,
+) -> None:
+    connector = OrchestrationConnector(current_state=IssueStateV1.CLOSED)
+    gateway, connector = _orchestrator(tmp_path, connector)
+    action = gateway.prepare(
+        _intent("original-to-compensate", ActionKindV1.GITHUB_ISSUE_SET_STATE),
+        now=NOW,
+    )
+    parent = gateway.execute(action, gateway.issue_confirmation(action, now=NOW), now=NOW)
+    compensation = gateway.prepare_compensation(
+        parent.receipt.receipt_id,
+        "comp-uncertain",
+        now=NOW,
+    )
+    connector.uncertain = True
+    uncertain = gateway.execute_compensation(
+        compensation,
+        gateway.issue_confirmation(compensation, now=NOW),
+        parent.receipt.receipt_id,
+        now=NOW,
+    )
+    assert uncertain.receipt.receipt_kind is ActionReceiptKindV1.COMPENSATION
+    assert uncertain.receipt.state is ActionReceiptStateV1.OUTCOME_UNCERTAIN
+    assert uncertain.receipt.parent_receipt_id == parent.receipt.receipt_id
+    connector.reconciliation = ConnectorReconciliationResultV1(
+        ActionReceiptStateV1.RECONCILED_NOT_EXECUTED,
+        NOW,
+    )
+    calls = connector.execute_calls
+    result = gateway.reconcile(compensation, now=NOW)
+    repeat = gateway.reconcile(compensation, now=NOW)
+    assert result.receipt.state is ActionReceiptStateV1.RECONCILED_NOT_EXECUTED
+    assert repeat.replayed is True
+    assert connector.execute_calls == calls
+    assert connector.reconcile_calls == 1
+
+
+def test_crashed_compensation_is_reconciled_with_original_parent(
+    tmp_path: Path,
+) -> None:
+    connector = OrchestrationConnector(current_state=IssueStateV1.CLOSED)
+    gateway, connector = _orchestrator(tmp_path, connector)
+    action = gateway.prepare(
+        _intent("crash-parent", ActionKindV1.GITHUB_ISSUE_SET_STATE),
+        now=NOW,
+    )
+    parent = gateway.execute(action, gateway.issue_confirmation(action, now=NOW), now=NOW)
+    prepared = gateway.prepare_compensation(
+        parent.receipt.receipt_id,
+        "crashed-compensation",
+        now=NOW,
+    )
+    started, created = gateway._store.begin_execution(
+        prepared,
+        now=NOW,
+        receipt_kind=ActionReceiptKindV1.COMPENSATION,
+        parent_receipt_id=parent.receipt.receipt_id,
+    )
+    assert created
+    result = gateway.reconcile(prepared, now=NOW)
+    assert started.state is ActionReceiptStateV1.EXECUTION_STARTED
+    assert result.receipt.state is ActionReceiptStateV1.RECONCILED_NOT_EXECUTED
+    assert connector.execute_calls == 1
+    assert connector.reconcile_calls == 1
+    history = gateway.history()
+    assert any(
+        r.receipt_kind is ActionReceiptKindV1.COMPENSATION
+        and r.state is ActionReceiptStateV1.OUTCOME_UNCERTAIN
+        and r.parent_receipt_id == parent.receipt.receipt_id
+        for r in history
+    )
+
+
+def test_stage20_prepared_rejects_cross_run_replay_with_equal_intent(
+    tmp_path: Path,
+) -> None:
+    from second_brain.application.personal_agent import AgentContextPackV1
+    from second_brain.application.personal_agent_run import (
+        AgentRunPrepareRequiredError,
+        AgentRunService,
+        AgentRunSnapshotV1,
+        AgentRunStepStateV1,
+        AgentStage19PreparedActionV1,
+    )
+
+    gateway, _ = _orchestrator(tmp_path)
+    left = _intent("stage20/run-A/step/action-1")
+    right = _intent("stage20/run-B/step/action-1")
+    assert left.intent_fingerprint == right.intent_fingerprint
+    assert left.operation_id_fingerprint != right.operation_id_fingerprint
+    prepared = gateway.prepare(left, now=NOW)
+    wrapper = AgentStage19PreparedActionV1(prepared)
+    snapshot = SimpleNamespace(
+        steps=(SimpleNamespace(state=AgentRunStepStateV1.CURRENT),),
+    )
+    matching = SimpleNamespace(_action_intent=lambda *_: left)
+    wrong_run = SimpleNamespace(_action_intent=lambda *_: right)
+    run_snapshot = cast(AgentRunSnapshotV1, snapshot)
+    context = cast(AgentContextPackV1, None)
+    assert (
+        AgentRunService._assert_prepared(
+            cast(AgentRunService, matching), run_snapshot, context, wrapper
+        )
+        == left
+    )
+    with pytest.raises(AgentRunPrepareRequiredError):
+        AgentRunService._assert_prepared(
+            cast(AgentRunService, wrong_run), run_snapshot, context, wrapper
+        )
+
+
+def test_stage20_accepts_only_lineage_verified_reconciled_parent(tmp_path: Path) -> None:
+    from second_brain.application.personal_agent_run import (
+        AgentRunActionNotAllowedError,
+        AgentRunService,
+        AgentRunSnapshotV1,
+        AgentStage19ReceiptRefV1,
+    )
+
+    gateway, connector = _orchestrator(tmp_path)
+    connector.uncertain = True
+    prepared = gateway.prepare(_intent("reconciled-parent"), now=NOW)
+    uncertain = gateway.execute(prepared, gateway.issue_confirmation(prepared, now=NOW), now=NOW)
+    assert uncertain.receipt.state is ActionReceiptStateV1.OUTCOME_UNCERTAIN
+    connector.reconciliation = ConnectorReconciliationResultV1(
+        ActionReceiptStateV1.RECONCILED_EXECUTED,
+        NOW,
+        remote_safe_identity={
+            "repository": "MikeMoore1337/second-brain",
+            "issue_id": 2,
+            "issue_node_id": "I_issue",
+            "issue_number": 123,
+            "state": "open",
+            "url": "https://github.com/MikeMoore1337/second-brain/issues/123",
+        },
+        remote_url="https://github.com/MikeMoore1337/second-brain/issues/123",
+    )
+    verified = gateway.reconcile(prepared, now=NOW)
+    assert verified.receipt.receipt_kind is ActionReceiptKindV1.RECONCILIATION
+    assert verified.receipt.state is ActionReceiptStateV1.RECONCILED_EXECUTED
+    refs = (
+        AgentStage19ReceiptRefV1.from_result(uncertain),
+        AgentStage19ReceiptRefV1.from_result(verified),
+    )
+    snapshot = cast(AgentRunSnapshotV1, SimpleNamespace(receipt_refs=refs))
+    AgentRunService._assert_compensation_parent(snapshot, verified.receipt.receipt_id)
+    # An unlinked reconciliation is not sufficient proof of Run ownership.
+    isolated = cast(AgentRunSnapshotV1, SimpleNamespace(receipt_refs=refs[1:]))
+    with pytest.raises(AgentRunActionNotAllowedError):
+        AgentRunService._assert_compensation_parent(isolated, verified.receipt.receipt_id)
+    with pytest.raises(AgentRunActionNotAllowedError):
+        AgentRunService._assert_compensation_parent(snapshot, uncertain.receipt.receipt_id)

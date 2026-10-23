@@ -799,6 +799,7 @@ class PreparedExternalActionV1:
     expires_at: datetime
     reversibility: ReversibilityV1 | str
     provenance: ActionProvenanceV1 | None = None
+    compensation_parent_receipt_id: UUID | None = None
 
     def __post_init__(self) -> None:
         prepared_id = _uuid7(self.prepared_action_id)
@@ -853,9 +854,15 @@ class PreparedExternalActionV1:
         object.__setattr__(self, "expires_at", expires_at)
         object.__setattr__(self, "preview", preview)
         object.__setattr__(self, "reversibility", reversibility)
+        if self.compensation_parent_receipt_id is not None:
+            object.__setattr__(
+                self,
+                "compensation_parent_receipt_id",
+                _uuid7(self.compensation_parent_receipt_id),
+            )
 
     def as_dict(self) -> dict[str, object]:
-        return {
+        result: dict[str, object] = {
             "prepared_action_id": str(self.prepared_action_id),
             "contract_version": self.contract_version,
             "operation_id_fingerprint": self.operation_id_fingerprint,
@@ -875,6 +882,9 @@ class PreparedExternalActionV1:
             "reversibility": cast(ReversibilityV1, self.reversibility).value,
             "provenance": None if self.provenance is None else self.provenance.as_dict(),
         }
+        if self.compensation_parent_receipt_id is not None:
+            result["compensation_parent_receipt_id"] = str(self.compensation_parent_receipt_id)
+        return result
 
     @property
     def fingerprint(self) -> str:
@@ -907,6 +917,7 @@ class PreparedExternalActionV1:
             "expires_at",
             "reversibility",
             "provenance",
+            "compensation_parent_receipt_id",
         }
         data = _strict_dict(value, allowed)
         provenance_value = data.get("provenance")
@@ -936,6 +947,9 @@ class PreparedExternalActionV1:
             provenance=None
             if provenance_value is None
             else ActionProvenanceV1.from_dict(provenance_value),
+            compensation_parent_receipt_id=_optional_uuid(
+                data.get("compensation_parent_receipt_id")
+            ),
         )
 
 
@@ -1651,10 +1665,32 @@ class ActionGatewayCoreV1:
             raise ActionGatewayInvalidRequestError()
         if parent_receipt_id is not None:
             parent_receipt_id = _uuid7(parent_receipt_id)
+        # A compensation approval must not be repurposed as an ordinary action,
+        # nor may an ordinary action be retroactively assigned a parent.
+        if (
+            receipt_kind is ActionReceiptKindV1.ACTION
+            and (
+                parent_receipt_id is not None or prepared.compensation_parent_receipt_id is not None
+            )
+        ) or (
+            receipt_kind is ActionReceiptKindV1.COMPENSATION
+            and (
+                parent_receipt_id is None
+                or prepared.compensation_parent_receipt_id != parent_receipt_id
+            )
+        ):
+            raise ActionGatewayInvalidRequestError()
         current = _utc(now or datetime.now(UTC))
         existing = self._store.find_operation(prepared.operation_id_fingerprint)
         if existing is not None:
-            if existing.intent_fingerprint != _intent_fingerprint_from_prepared(prepared):
+            if (
+                existing.intent_fingerprint != _intent_fingerprint_from_prepared(prepared)
+                or existing.receipt_kind is not receipt_kind
+                or (
+                    receipt_kind is ActionReceiptKindV1.COMPENSATION
+                    and existing.parent_receipt_id != parent_receipt_id
+                )
+            ):
                 raise ActionGatewayConflictError()
             self._confirmation.consume(confirmation, prepared, now=current)
             if existing.state is ActionReceiptStateV1.EXECUTION_STARTED:
@@ -1716,7 +1752,14 @@ class ActionGatewayCoreV1:
             parent_receipt_id=parent_receipt_id,
         )
         if not is_new:
-            if started.intent_fingerprint != _intent_fingerprint_from_prepared(prepared):
+            if (
+                started.intent_fingerprint != _intent_fingerprint_from_prepared(prepared)
+                or started.receipt_kind is not receipt_kind
+                or (
+                    receipt_kind is ActionReceiptKindV1.COMPENSATION
+                    and started.parent_receipt_id != parent_receipt_id
+                )
+            ):
                 raise ActionGatewayConflictError()
             if started.state is ActionReceiptStateV1.EXECUTION_STARTED:
                 uncertain = self._uncertain_receipt(
