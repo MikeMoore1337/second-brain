@@ -537,7 +537,6 @@ def test_stage20_prepared_rejects_cross_run_replay_with_equal_intent(
         )
 
 
-
 def test_stage20_accepts_only_lineage_verified_reconciled_parent(tmp_path: Path) -> None:
     from second_brain.application.personal_agent_run import (
         AgentRunActionNotAllowedError,
@@ -549,9 +548,7 @@ def test_stage20_accepts_only_lineage_verified_reconciled_parent(tmp_path: Path)
     gateway, connector = _orchestrator(tmp_path)
     connector.uncertain = True
     prepared = gateway.prepare(_intent("reconciled-parent"), now=NOW)
-    uncertain = gateway.execute(
-        prepared, gateway.issue_confirmation(prepared, now=NOW), now=NOW
-    )
+    uncertain = gateway.execute(prepared, gateway.issue_confirmation(prepared, now=NOW), now=NOW)
     assert uncertain.receipt.state is ActionReceiptStateV1.OUTCOME_UNCERTAIN
     connector.reconciliation = ConnectorReconciliationResultV1(
         ActionReceiptStateV1.RECONCILED_EXECUTED,
