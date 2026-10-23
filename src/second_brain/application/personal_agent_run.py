@@ -1885,6 +1885,23 @@ class AgentRunService:
             event_kind=AgentRunEventKindV1.RECONCILE_RESULT,
         )
 
+    @staticmethod
+    def _assert_compensation_parent(
+        snapshot: AgentRunSnapshotV1, parent_receipt_id: UUID
+    ) -> None:
+        # Stage 20 may only compensate a verified mutation from this exact Run.
+        # A global Stage 19 receipt for another Run is not owner permission.
+        if type(parent_receipt_id) is not UUID or not any(
+            receipt.receipt_id == parent_receipt_id
+            and receipt.receipt_kind is ActionReceiptKindV1.ACTION
+            and receipt.state in {
+                ActionReceiptStateV1.EXECUTED,
+                ActionReceiptStateV1.RECONCILED_EXECUTED,
+            }
+            for receipt in snapshot.receipt_refs
+        ):
+            raise AgentRunActionNotAllowedError()
+
     def prepare_compensation(
         self,
         run_id: UUID | str,
@@ -1901,6 +1918,7 @@ class AgentRunService:
             AgentRunStateV1.PAUSED,
         }:
             raise AgentRunInvalidTransitionError()
+        self._assert_compensation_parent(snapshot, parent_receipt_id)
         prepared = self._stage19.prepare_compensation(parent_receipt_id, _operation(operation_id))
         return AgentStage19PreparedActionV1(prepared)
 
@@ -1922,6 +1940,9 @@ class AgentRunService:
             AgentRunStateV1.PAUSED,
         }:
             raise AgentRunInvalidTransitionError()
+        self._assert_compensation_parent(snapshot, parent_receipt_id)
+        if prepared.prepared.compensation_parent_receipt_id != parent_receipt_id:
+            raise AgentRunActionNotAllowedError()
         result = self._stage19.execute_compensation(
             prepared.prepared,
             confirmation,
