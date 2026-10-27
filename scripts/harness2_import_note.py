@@ -2,6 +2,7 @@
 
 Does not invoke, embed, reimplement or modify Harness2 or write a private vault.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -43,13 +44,22 @@ def note_from_summary(path: Path) -> str:
     expected = {"task_id", "domain", "k", "seed", "status", "base", "modes", "selections", "errors"}
     if not isinstance(doc, dict) or set(doc) != expected:
         raise UntrustedUpstreamError("UPSTREAM_SCHEMA")
-    if (type(doc["task_id"]) is not str or not SAFE_SLUG.fullmatch(doc["task_id"])
-            or type(doc["domain"]) is not str or not SAFE_SLUG.fullmatch(doc["domain"])
-            or type(doc["k"]) is not int or not 1 <= doc["k"] <= 100
-            or type(doc["status"]) is not str or doc["status"] not in STATUSES
-            or type(doc["modes"]) is not dict or not set(doc["modes"]).issubset(MODES)
-            or type(doc["selections"]) is not dict or not set(doc["selections"]).issubset(MODES)
-            or type(doc["base"]) is not list or type(doc["errors"]) is not list):
+    if (
+        type(doc["task_id"]) is not str
+        or not SAFE_SLUG.fullmatch(doc["task_id"])
+        or type(doc["domain"]) is not str
+        or not SAFE_SLUG.fullmatch(doc["domain"])
+        or type(doc["k"]) is not int
+        or not 1 <= doc["k"] <= 100
+        or type(doc["status"]) is not str
+        or doc["status"] not in STATUSES
+        or type(doc["modes"]) is not dict
+        or not set(doc["modes"]).issubset(MODES)
+        or type(doc["selections"]) is not dict
+        or not set(doc["selections"]).issubset(MODES)
+        or type(doc["base"]) is not list
+        or type(doc["errors"]) is not list
+    ):
         raise UntrustedUpstreamError("INVALID_FIELDS")
     file_hash = hashlib.sha256(raw).hexdigest()
     modes = ", ".join(sorted(doc["modes"])) or "нет"
