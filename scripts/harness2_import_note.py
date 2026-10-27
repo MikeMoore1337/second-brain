@@ -7,10 +7,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-from pathlib import Path
 import re
 import stat
 import sys
+from pathlib import Path
 
 UPSTREAM_SHA = "1cfe254e8d25b15f37048c3730134686abe60335"
 MAX_BYTES = 64 * 1024
@@ -46,7 +46,7 @@ def note_from_summary(path: Path) -> str:
     if (type(doc["task_id"]) is not str or not SAFE_SLUG.fullmatch(doc["task_id"])
             or type(doc["domain"]) is not str or not SAFE_SLUG.fullmatch(doc["domain"])
             or type(doc["k"]) is not int or not 1 <= doc["k"] <= 100
-            or doc["status"] not in STATUSES
+            or type(doc["status"]) is not str or doc["status"] not in STATUSES
             or type(doc["modes"]) is not dict or not set(doc["modes"]).issubset(MODES)
             or type(doc["selections"]) is not dict or not set(doc["selections"]).issubset(MODES)
             or type(doc["base"]) is not list or type(doc["errors"]) is not list):
