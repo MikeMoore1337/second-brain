@@ -1,4 +1,5 @@
 """Bounded metadata-only Harness2 integration; no vault writes."""
+
 from __future__ import annotations
 
 import importlib.util
@@ -17,8 +18,13 @@ spec.loader.exec_module(module)
 def fixture(tmp_path: Path, **replacements: object) -> Path:
     target = tmp_path / "summary.json"
     obj = {
-        "task_id": "case-1", "domain": "work", "k": 1, "seed": 3,
-        "status": "ok", "base": [], "modes": {"agg": {"ok": True}},
+        "task_id": "case-1",
+        "domain": "work",
+        "k": 1,
+        "seed": 3,
+        "status": "ok",
+        "base": [],
+        "modes": {"agg": {"ok": True}},
         "selections": {"agg": {"why": "secret-like freeform model text"}},
         "errors": [],
     }
@@ -38,11 +44,18 @@ def test_valid_note_is_read_only_and_sanitized(tmp_path: Path) -> None:
     assert "secret-like" not in output
 
 
-@pytest.mark.parametrize("update", [
-    {"task_id": "../escape"}, {"domain": "<script>"}, {"k": True},
-    {"k": -1}, {"modes": {"evil": {}}}, {"status": "completed_approved"},
-    {"other": True},
-])
+@pytest.mark.parametrize(
+    "update",
+    [
+        {"task_id": "../escape"},
+        {"domain": "<script>"},
+        {"k": True},
+        {"k": -1},
+        {"modes": {"evil": {}}},
+        {"status": "completed_approved"},
+        {"other": True},
+    ],
+)
 def test_unsafe_metadata_fails_closed(tmp_path: Path, update: dict[str, object]) -> None:
     path = fixture(tmp_path, **update)
     with pytest.raises(module.UntrustedUpstreamError):
