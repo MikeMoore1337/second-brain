@@ -81,6 +81,28 @@ def test_non_upstream_status_rejected(tmp_path: Path, invalid_status: str) -> No
         module.note_from_summary(path)
 
 
+@pytest.mark.parametrize(
+    "native_id", ["legal/task12", "antitrust-competition/case_001", "wb-case-001"]
+)
+def test_original_jobbench_lab_task_identity_accepted(
+    tmp_path: Path, native_id: str
+) -> None:
+    path = fixture(tmp_path, task_id=native_id)
+    note = module.note_from_summary(path)
+    assert native_id in note
+    assert "НЕ ПОДТВЕРЖДЕНА" in note
+
+
+@pytest.mark.parametrize(
+    "unsafe_id", ["../private", "area/../secret", "/area/task1",
+                  "area//task1", "area/task1/another", "area/.", "area/..", "area\\\\task1"]
+)
+def test_unsafe_task_identity_denied(tmp_path: Path, unsafe_id: str) -> None:
+    path = fixture(tmp_path, task_id=unsafe_id)
+    with pytest.raises(module.UntrustedUpstreamError):
+        module.note_from_summary(path)
+
+
 def test_bad_json_and_relative_paths_fail_closed(tmp_path: Path) -> None:
     path = fixture(tmp_path)
     path.write_text("{", encoding="utf-8")
