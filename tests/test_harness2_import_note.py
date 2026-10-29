@@ -82,7 +82,8 @@ def test_non_upstream_status_rejected(tmp_path: Path, invalid_status: str) -> No
 
 
 @pytest.mark.parametrize(
-    "native_id", ["legal/task12", "antitrust-competition/case_001", "wb-case-001"]
+    "native_id",
+    ["legal/task12", "antitrust-competition/case_001", "wb-case-001"],
 )
 def test_original_jobbench_lab_task_identity_accepted(
     tmp_path: Path, native_id: str
@@ -94,8 +95,17 @@ def test_original_jobbench_lab_task_identity_accepted(
 
 
 @pytest.mark.parametrize(
-    "unsafe_id", ["../private", "area/../secret", "/area/task1",
-                  "area//task1", "area/task1/another", "area/.", "area/..", "area\\\\task1"]
+    "unsafe_id",
+    [
+        "../private",
+        "area/../secret",
+        "/area/task1",
+        "area//task1",
+        "area/task1/another",
+        "area/.",
+        "area/..",
+        "area\\\\task1",
+    ],
 )
 def test_unsafe_task_identity_denied(tmp_path: Path, unsafe_id: str) -> None:
     path = fixture(tmp_path, task_id=unsafe_id)
