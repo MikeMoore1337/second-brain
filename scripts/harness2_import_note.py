@@ -16,8 +16,10 @@ from pathlib import Path
 UPSTREAM_SHA = "1cfe254e8d25b15f37048c3730134686abe60335"
 MAX_BYTES = 64 * 1024
 SAFE_SLUG = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}\Z")
+SAFE_TASK_ID = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}(?:/[a-zA-Z0-9][a-zA-Z0-9._-]{0,79})?\Z")
 MODES = {"agg", "seq"}
-STATUSES = {"running", "ok", "partial", "failed"}
+# Exact outcomes produced by pinned upstream harness2/core/schedule.py.
+STATUSES = {"running", "ok", "partial", "skipped", "base-failed"}
 
 
 class UntrustedUpstreamError(ValueError):
@@ -46,7 +48,7 @@ def note_from_summary(path: Path) -> str:
         raise UntrustedUpstreamError("UPSTREAM_SCHEMA")
     if (
         type(doc["task_id"]) is not str
-        or not SAFE_SLUG.fullmatch(doc["task_id"])
+        or not SAFE_TASK_ID.fullmatch(doc["task_id"])
         or type(doc["domain"]) is not str
         or not SAFE_SLUG.fullmatch(doc["domain"])
         or type(doc["k"]) is not int
@@ -65,7 +67,7 @@ def note_from_summary(path: Path) -> str:
     modes = ", ".join(sorted(doc["modes"])) or "нет"
     return (
         "# Harness² - черновик\n\n"
-        f"- Source upstream SHA: {UPSTREAM_SHA}\n"
+        f"- Ожидаемая ревизия upstream (НЕ ПРОВЕРЕНА импортом): {UPSTREAM_SHA}\n"
         f"- Input summary SHA256: {file_hash}\n"
         f"- Задача: {doc['task_id']}\n"
         f"- Домен: {doc['domain']}\n"
