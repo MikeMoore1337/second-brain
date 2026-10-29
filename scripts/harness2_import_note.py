@@ -17,7 +17,8 @@ UPSTREAM_SHA = "1cfe254e8d25b15f37048c3730134686abe60335"
 MAX_BYTES = 64 * 1024
 SAFE_SLUG = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}\Z")
 MODES = {"agg", "seq"}
-STATUSES = {"running", "ok", "partial", "failed"}
+# Exact outcomes produced by pinned upstream harness2/core/schedule.py.
+STATUSES = {"running", "ok", "partial", "skipped", "base-failed"}
 
 
 class UntrustedUpstreamError(ValueError):
