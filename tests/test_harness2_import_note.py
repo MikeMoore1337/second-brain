@@ -85,9 +85,7 @@ def test_non_upstream_status_rejected(tmp_path: Path, invalid_status: str) -> No
     "native_id",
     ["legal/task12", "antitrust-competition/case_001", "wb-case-001"],
 )
-def test_original_jobbench_lab_task_identity_accepted(
-    tmp_path: Path, native_id: str
-) -> None:
+def test_original_jobbench_lab_task_identity_accepted(tmp_path: Path, native_id: str) -> None:
     path = fixture(tmp_path, task_id=native_id)
     note = module.note_from_summary(path)
     assert native_id in note
