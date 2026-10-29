@@ -62,6 +62,24 @@ def test_unsafe_metadata_fails_closed(tmp_path: Path, update: dict[str, object])
         module.note_from_summary(path)
 
 
+@pytest.mark.parametrize("native_status", ["running", "ok", "partial", "skipped", "base-failed"])
+def test_original_upstream_statuses_supported_without_credibility_upgrade(
+    tmp_path: Path, native_status: str
+) -> None:
+    path = fixture(tmp_path, status=native_status)
+    note = module.note_from_summary(path)
+    assert native_status in note
+    assert "НЕ ПОДТВЕРЖДЕНА" in note
+    assert "secret-like" not in note
+
+
+@pytest.mark.parametrize("invalid_status", ["failed", "success", "PASS", "approved"])
+def test_non_upstream_status_rejected(tmp_path: Path, invalid_status: str) -> None:
+    path = fixture(tmp_path, status=invalid_status)
+    with pytest.raises(module.UntrustedUpstreamError):
+        module.note_from_summary(path)
+
+
 def test_bad_json_and_relative_paths_fail_closed(tmp_path: Path) -> None:
     path = fixture(tmp_path)
     path.write_text("{", encoding="utf-8")
