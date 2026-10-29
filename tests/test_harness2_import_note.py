@@ -40,6 +40,7 @@ def test_valid_note_is_read_only_and_sanitized(tmp_path: Path) -> None:
     assert path.read_bytes() == previous
     assert sorted(tmp_path.iterdir()) == [path]
     assert module.UPSTREAM_SHA in output
+    assert "Ожидаемая ревизия upstream (НЕ ПРОВЕРЕНА импортом)" in output
     assert "НЕ ПОДТВЕРЖДЕНА" in output
     assert "secret-like" not in output
 
