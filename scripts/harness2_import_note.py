@@ -66,7 +66,7 @@ def note_from_summary(path: Path) -> str:
     modes = ", ".join(sorted(doc["modes"])) or "нет"
     return (
         "# Harness² - черновик\n\n"
-        f"- Source upstream SHA: {UPSTREAM_SHA}\n"
+        f"- Ожидаемая ревизия upstream (НЕ ПРОВЕРЕНА импортом): {UPSTREAM_SHA}\n"
         f"- Input summary SHA256: {file_hash}\n"
         f"- Задача: {doc['task_id']}\n"
         f"- Домен: {doc['domain']}\n"
