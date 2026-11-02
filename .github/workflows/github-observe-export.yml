@@ -1,0 +1,36 @@
+name: Project GitHub Observe (read only)
+
+# Public metadata only. No checkout, credentials, PR-head execution or user text.
+run-name: >-
+  observe:${{ github.event_name }}:${{ github.event.action }}:${{ github.event.issue.number || github.event.pull_request.number || github.event.workflow_run.id || 0 }}:${{ github.event.workflow_run.conclusion || 'none' }}:${{ github.run_id }}
+
+on:
+  issues:
+    types: [opened, reopened]
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+# Deny even read access to GITHUB_TOKEN; only GitHub-generated run metadata is used.
+permissions: {}
+
+jobs:
+  observe:
+    if: >-
+      ${{ github.event_name != 'workflow_run' || (
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          github.event.workflow_run.head_repository.full_name == github.repository
+      ) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Confirm observation only
+        shell: bash
+        run: |
+          printf '%s\n' 'OBSERVE_ONLY' 'EXECUTION_AUTHORIZED=false' 'NO_MODEL_OR_DATA_ACCESS=true' >> "$GITHUB_STEP_SUMMARY"
