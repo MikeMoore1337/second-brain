@@ -29,9 +29,9 @@ second-brain = "second_brain.entrypoints.cli.app:main"
 dev = [
   "httpx>=0.28,<1",
   "mypy>=1.17,<2",
-  "pytest>=8.4,<10",
+  "pytest>=9.2,<10",
   "pytest-cov>=6.2,<8",
-  "ruff>=0.12,<1",
+  "ruff>=0.17.3,<1",
 ]
 
 [tool.hatch.build.targets.wheel]
