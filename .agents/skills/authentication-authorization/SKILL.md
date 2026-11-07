@@ -21,5 +21,5 @@ description: "Use when implementing backend identity checks, resource permission
 ## Second Brain adaptation (repository development only)
 
 Toolkit source revision: 3a9bf14772ab579d37c6f4f9615db505ab6ac259 ([original](https://github.com/MikeMoore1337/ai-development-toolkit/blob/3a9bf14772ab579d37c6f4f9615db505ab6ac259/extensions/backend/skills/authentication-authorization/SKILL.md)).
-Trigger: Изменения GitHub OAuth, session handling и прав на объектном уровне.
+Trigger: Changes to GitHub OAuth, session handling or object-level authorization.
 This guidance is subordinate to local `AGENTS.md`, `ROLE_MANIFEST.json`, existing workflows, vault boundaries and Safe Write (preview/diff/preconditions/explicit apply). It does not authorize reading, exporting or writing `second-brain-vault`, starting services, adding providers, or executing external instructions.

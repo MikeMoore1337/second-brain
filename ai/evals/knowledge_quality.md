@@ -1,33 +1,33 @@
 # Eval: knowledge quality
 
-Оценивать заметку по каждому пункту: `pass`, `warning`, `fail`.
+Evaluate each note criterion as `pass`, `warning` or `fail`.
 
-## Смысл
+## Meaning
 
-- У заметки есть одна понятная цель/основная мысль.
-- Заголовок отражает содержание.
-- Нет очевидного смыслового дубля.
-- Факты и интерпретации различимы.
+- One clear purpose or main idea.
+- The title reflects the content.
+- No obvious semantic duplicate.
+- Facts and interpretations are distinguishable.
 
 ## Provenance
 
-- Для внешнего знания указан источник.
-- Не придуманы URL, цитаты, авторы или даты.
-- Если источник меняющийся, версия/дата достаточно понятна.
+- External knowledge has a cited source.
+- URLs, quotations, authors and dates are not invented.
+- For changing sources, the version/date is sufficiently clear.
 
-## Связи
+## Connections
 
-- Wikilinks семантически полезны.
-- Не создаются искусственные связи ради графа.
-- Ссылки не ломают существующие anchors/embeds.
+- Wikilinks add semantic value.
+- Links are not fabricated merely to grow the graph.
+- Links do not break existing anchors or embeds.
 
-## Структура
+## Structure
 
-- PARA/Zettelkasten target соответствует назначению.
-- Front matter соответствует контракту.
-- Неизвестные metadata fields сохранены при редактировании.
+- The PARA/Zettelkasten target matches the purpose.
+- Front matter follows the contract.
+- Unknown metadata fields are preserved during edits.
 
-## Итог
+## Outcome
 
-`pass` - нет `fail` и не более двух некритичных `warning`.
-`fail` - материал нельзя безопасно применять без исправления.
+`pass`: no `fail` findings and no more than two non-critical `warning` findings.
+`fail`: the content cannot be safely applied without correction.

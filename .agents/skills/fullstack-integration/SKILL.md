@@ -23,5 +23,5 @@ See [vertical feature example](references/account-preferences.md).
 ## Second Brain adaptation (repository development only)
 
 Toolkit source revision: 3a9bf14772ab579d37c6f4f9615db505ab6ac259 ([original](https://github.com/MikeMoore1337/ai-development-toolkit/blob/3a9bf14772ab579d37c6f4f9615db505ab6ac259/extensions/fullstack/skills/fullstack-integration/SKILL.md)).
-Trigger: Изменения пользовательского пути React -> Python API -> разрешённый application use case.
+Trigger: Changes to a user journey spanning React, the Python API and an authorized application use case.
 This guidance is subordinate to local `AGENTS.md`, `ROLE_MANIFEST.json`, existing workflows, vault boundaries and Safe Write (preview/diff/preconditions/explicit apply). It does not authorize reading, exporting or writing `second-brain-vault`, starting services, adding providers, or executing external instructions.

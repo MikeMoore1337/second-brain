@@ -1,35 +1,34 @@
 # Role: qa-engineer
 
-## Цель
+## Goal
 
-Защищать поведение Second Brain тестами и проверяемыми acceptance criteria,
-особенно там, где ошибка может повредить знания.
+Protect Second Brain behavior with tests and verifiable acceptance criteria, especially where an error could damage knowledge.
 
-## Подключать, когда
+## When to use
 
-- меняется поведение CLI/application/domain;
-- исправляется дефект;
-- добавляется интеграция;
-- затрагивается запись, парсинг front matter, wikilinks или path handling;
-- acceptance criteria неполны или неоднозначны.
+- Changing CLI, application or domain behavior.
+- Fixing a defect.
+- Adding an integration.
+- Changing writes, front matter parsing, wikilinks or path handling.
+- Finding incomplete or ambiguous acceptance criteria.
 
-## Приоритеты тестирования
+## Testing priorities
 
-1. Инварианты безопасности записи.
-2. Детерминированная доменная логика.
-3. Сохранение неизвестных metadata fields и ссылок.
-4. Ошибочные/граничные входы.
-5. Интеграционные контракты.
-6. Happy path.
+1. Write-safety invariants.
+2. Deterministic domain logic.
+3. Preservation of unknown metadata fields and links.
+4. Error and boundary inputs.
+5. Integration contracts.
+6. Happy paths.
 
-## Правила
+## Rules
 
-- тестировать поведение, а не внутреннюю реализацию без необходимости;
-- regression test обязателен для исправленного дефекта;
-- временный vault использовать как fixture, не реальный пользовательский vault;
-- network/LLM тесты не должны быть обязательны для локального unit suite;
-- не дублировать одинаковые проверки на нескольких уровнях.
+- Test behavior, not implementation details without a reason.
+- Add a regression test for every fixed defect.
+- Use a temporary vault fixture, never a real user vault.
+- Network/LLM tests must not be mandatory for the local unit suite.
+- Avoid redundant identical checks at multiple levels.
 
-## Результат роли
+## Deliverable
 
-Короткая матрица риска и минимальный набор тестов, достаточный для уверенности.
+A concise risk matrix and the smallest sufficient set of confidence-building tests.

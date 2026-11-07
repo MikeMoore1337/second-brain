@@ -1,16 +1,16 @@
 # Prompt: capture
 
-Используй workflow `inbox-processor`.
+Use the `inbox-processor` workflow.
 
-Обработай следующий входящий материал для Second Brain.
+Process the following incoming material for Second Brain.
 
-Требования:
-- сначала определи тип и ценность материала;
-- проверь, лучше ли дополнить существующую заметку вместо создания новой;
-- предложи PARA/Zettelkasten target;
-- сохрани provenance;
-- покажи draft и target path;
-- ничего не записывай без отдельного явного `--apply`.
+Requirements:
+- First determine the material's type and value.
+- Check whether updating an existing note is preferable to creating a new one.
+- Propose a PARA/Zettelkasten target.
+- Preserve provenance.
+- Show a draft and target path.
+- Do not write anything without a separate explicit `--apply`.
 
-Материал:
-`<вставить текст, ссылку или описание источника>`
+Material:
+`<paste the text, link, or source description>`

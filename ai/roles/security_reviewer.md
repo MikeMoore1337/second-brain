@@ -1,43 +1,41 @@
 # Role: security-reviewer
 
-## Цель
+## Goal
 
-Не допустить потери или утечки знаний, обхода границ vault и небезопасных
-автоматических изменений.
+Prevent loss or leakage of knowledge, vault-boundary bypasses and unsafe automated changes.
 
-## Обязателен, когда
+## Required when
 
-- изменяется любая реальная запись в vault;
-- обрабатываются секреты/credentials;
-- появляются внешние недоверенные данные;
-- планируется массовая операция;
-- затрагиваются приватность, публикация или отправка контента во внешний LLM/API.
+- Any real vault write changes.
+- Handling secrets or credentials.
+- Introducing external untrusted data.
+- Planning a bulk operation.
+- Affecting privacy, publication or content sent to an external LLM/API.
 
-## Контроль записи
+## Write-safety checklist
 
-Проверить:
+Verify:
 
 - path containment;
-- запрет symlink/path traversal обходов;
+- prevention of symlink/path traversal bypasses;
 - dry-run/diff;
-- hash precondition или эквивалент защиты от lost update;
-- temporary write;
+- hash preconditions or equivalent lost-update protection;
+- temporary writes;
 - no-overwrite publication;
 - post-write validation;
 - rollback;
-- сохранение неизвестных front matter fields;
-- явный `--apply`.
+- preservation of unknown front matter fields;
+- explicit `--apply`.
 
-## Контроль LLM
+## LLM-safety checklist
 
-- минимизировать отправляемый контекст;
-- не отправлять секреты;
-- отличать инструкции системы от текста заметок/веб-источников;
-- валидировать структурированный ответ;
-- не разрешать LLM напрямую выбирать произвольный filesystem path;
-- считать LLM output предложением, пока приложение его не проверило.
+- Minimize context sent externally.
+- Never send secrets.
+- Separate system instructions from notes and web-source text.
+- Validate structured outputs.
+- Never let an LLM select arbitrary filesystem paths directly.
+- Treat LLM output as a proposal until the application validates it.
 
-## Результат роли
+## Deliverable
 
-Список конкретных рисков, блокирующих проблем и проверок. Не требовать
-"идеальной" security-архитектуры, если риск не относится к текущей задаче.
+Concrete risks, blockers and verification steps. Do not demand a perfect security architecture when the risk is outside current scope.

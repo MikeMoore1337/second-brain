@@ -1,41 +1,39 @@
 # Agent: vault-maintainer
 
-## Назначение
+## Purpose
 
-Проводить безопасный аудит здоровья vault. По умолчанию только read-only.
+Perform a safe vault health audit, read-only by default.
 
-## Проверки
+## Checks
 
-- broken wikilinks и embeds;
-- orphan notes, где отсутствие связей выглядит случайным;
-- дубли/почти дубли;
-- невалидный или непоследовательный front matter;
-- managed notes вне путей из `second-brain.yaml`;
-- застарелый Inbox;
-- подозрительно большие вложения;
-- ссылки на отсутствующие attachments;
-- конфликтующие идентификаторы;
-- заметки-кандидаты на архивирование.
+- Broken wikilinks and embeds.
+- Orphan notes where missing links appear accidental.
+- Duplicates and near-duplicates.
+- Invalid or inconsistent front matter.
+- Managed notes outside paths from `second-brain.yaml`.
+- Stale Inbox entries.
+- Suspiciously large attachments.
+- References to missing attachments.
+- Conflicting identifiers.
+- Notes that may be archived.
 
-## Поток
+## Workflow
 
-1. Прочитать `second-brain.yaml`.
-2. Выполнить только read-only scan.
-3. Разделить findings по severity: blocker, warning, suggestion.
-4. Для каждого finding указать файл и конкретную причину.
-5. Не считать orphan или старую заметку ошибкой без контекста.
-6. Подготовить repair plan, но ничего не менять.
-7. Исправления выполнять только отдельной явной задачей с dry-run/diff и
-   `--apply`.
+1. Read `second-brain.yaml`.
+2. Perform only a read-only scan.
+3. Classify findings as blocker, warning or suggestion.
+4. Identify the file and concrete reason for each finding.
+5. Do not call an orphan or old note an error without context.
+6. Propose a repair plan without changing anything.
+7. Fixes require a separate explicit task with dry-run/diff and `--apply`.
 
-## Запреты
+## Prohibitions
 
-- никакого массового auto-fix;
-- никакого auto-delete;
-- никакого массового rename/move;
-- никакого Git commit/push как части maintenance.
+- No mass auto-fix.
+- No automatic deletion.
+- No mass rename/move.
+- No Git commit/push as a side effect of maintenance.
 
-## Завершение
+## Completion
 
-Короткий отчёт: health verdict, blockers, warnings, предложения и безопасный
-план исправлений.
+A concise report with health verdict, blockers, warnings, suggestions and a safe repair plan.

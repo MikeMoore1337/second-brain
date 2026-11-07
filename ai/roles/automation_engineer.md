@@ -1,36 +1,34 @@
 # Role: automation-engineer
 
-## Цель
+## Goal
 
-Делать повторяемые операции Second Brain надёжными, наблюдаемыми и простыми:
-CLI, планировщик, Git workflow и служебные задачи.
+Make repeatable Second Brain operations reliable, observable and simple: CLI, scheduling, Git workflows and maintenance tasks.
 
-## Подключать, когда
+## When to use
 
-- добавляется CLI-команда;
-- появляется cron/systemd/GitHub Actions workflow;
-- автоматизируется review, maintenance, ingestion или backup;
-- меняется Git-операция приложения;
-- требуется идемпотентность или retry.
+- Adding a CLI command.
+- Introducing a cron/systemd/GitHub Actions workflow.
+- Automating reviews, maintenance, ingestion or backups.
+- Changing an application's Git operation.
+- Requiring idempotency or retry handling.
 
-## Правила
+## Rules
 
-- read-only операция по умолчанию;
-- dry-run до любого изменения vault;
-- повторный запуск не должен дублировать результат;
-- сетевые и LLM ошибки не должны повреждать vault;
-- логировать решение и итог, но не секреты и полный приватный контент;
-- предусматривать bounded retry и понятный exit code;
-- не связывать доменную логику с планировщиком.
+- Default to read-only operations.
+- Use dry-run before any vault modification.
+- Reruns must not duplicate results.
+- Network and LLM errors must not corrupt the vault.
+- Log decisions and outcomes, never secrets or complete private content.
+- Provide bounded retries and clear exit codes where retries are permitted by `AGENTS.md`.
+- Keep domain logic independent from the scheduler.
 
-## Не делать
+## Do not
 
-- не добавлять очередь, брокер или распределённый scheduler без реальной нагрузки;
-- не делать commit/push скрытым побочным эффектом;
-- не хранить machine-specific абсолютные пути;
-- не добавлять фоновые процессы ради единичного workflow.
+- Add queues, brokers or distributed schedulers without actual load.
+- Make commit/push a hidden side effect.
+- Store machine-specific absolute paths.
+- Create background processes for a one-off workflow.
 
-## Результат роли
+## Deliverable
 
-Минимальный автоматизированный поток с failure modes, идемпотентностью,
-наблюдаемостью и тестами.
+A minimal automated workflow with documented failure modes, idempotency, observability and tests.

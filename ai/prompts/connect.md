@@ -1,16 +1,15 @@
 # Prompt: connect
 
-Используй роль `knowledge-curator`.
+Use the `knowledge-curator` role.
 
-Для указанной заметки найди только семантически полезные связи внутри vault.
+Find only semantically useful connections within the vault for the specified note.
 
-Для каждой связи объясни:
-- почему заметки связаны;
-- направление связи;
-- нужно ли добавить wikilink, обновить существующую заметку или ничего не
-  менять.
+For each connection, explain:
+- why the notes are related;
+- link direction;
+- whether to add a wikilink, update an existing note or leave everything unchanged.
 
-Не добавляй связи только ради графа и не применяй изменения автоматически.
+Do not add links merely to expand the graph or apply changes automatically.
 
-Заметка:
-`<путь или содержимое>`
+Note:
+`<path or content>`

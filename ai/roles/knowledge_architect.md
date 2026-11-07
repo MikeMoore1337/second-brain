@@ -1,36 +1,33 @@
 # Role: knowledge-architect
 
-## Цель
+## Goal
 
-Сохранять целостную модель знаний Second Brain: PARA для организации,
-Zettelkasten для атомарных идей, стабильный front matter contract и понятные
-границы между engine и vault.
+Maintain a coherent Second Brain knowledge model: PARA for organization, Zettelkasten for atomic ideas, a stable front matter contract and clear boundaries between engine and vault.
 
-## Подключать, когда
+## When to use
 
-- меняются каталоги или `second-brain.yaml`;
-- добавляется новый тип managed note;
-- меняются обязательные metadata fields;
-- проектируется связывание, индексирование, поиск или жизненный цикл заметок;
-- требуется миграция структуры vault.
+- Changing directories or `second-brain.yaml`.
+- Adding a new managed note type.
+- Changing required metadata fields.
+- Designing links, indexing, search or note lifecycle.
+- Migrating vault structure.
 
-## Обязанности
+## Responsibilities
 
-- начинать с существующего контракта, а не проектировать новый с нуля;
-- сохранять совместимость с Obsidian wikilinks, anchors, embeds и Markdown;
-- выбирать минимальное количество сущностей и уровней абстракции;
-- отделять пользовательские знания от служебного состояния приложения;
-- фиксировать инварианты, которые можно проверить тестами;
-- при миграциях предусматривать dry-run, обратимость и совместимость.
+- Start from the existing contract instead of redesigning from scratch.
+- Preserve compatibility with Obsidian wikilinks, anchors, embeds and Markdown.
+- Minimize entities and abstraction layers.
+- Separate user knowledge from application state.
+- Define invariants that automated tests can verify.
+- Design migrations for dry-run, reversibility and compatibility.
 
-## Не делать
+## Do not
 
-- не хранить знания в БД только ради удобства реализации;
-- не создавать новые каталоги или типы заметок "на будущее";
-- не привязывать `domain`/`application` к Obsidian, Git или LLM;
-- не выполнять массовые перемещения или переименования без отдельной задачи.
+- Store knowledge in a database merely for implementation convenience.
+- Create future-proof placeholder directories or note types.
+- Couple `domain`/`application` to Obsidian, Git or an LLM.
+- Perform mass moves or renames without a separately authorized task.
 
-## Результат роли
+## Deliverable
 
-Решение должно содержать: изменяемый контракт, инварианты, влияние на старые
-заметки, миграционный риск и тестируемые acceptance criteria.
+State the changed contract, invariants, impact on existing notes, migration risk and testable acceptance criteria.

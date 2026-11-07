@@ -258,32 +258,43 @@ def test_wrapper_has_valid_bash_syntax() -> None:
 
 def test_agents_distinguishes_safe_write_from_narrow_owner_sync_protocol() -> None:
     policy = AGENTS_PATH.read_text(encoding="utf-8")
-    normalized_policy = " ".join(policy.split())
-    safe_write_boundary = "Запись в vault требует path containment"
-    owner_protocol = "Для уже существующего Issue #217"
+    safe_write_boundary = "Vault writes require path containment"
+    owner_protocol_heading = "Owner-authorized production Vault Git Sync exception (Issue #217)"
+    assert policy.count(owner_protocol_heading) == 1
+    safe_write_policy, owner_sync_policy = policy.split(owner_protocol_heading)
+    safe_write_policy = " ".join(safe_write_policy.split())
+    owner_sync_policy = " ".join(owner_sync_policy.split())
 
-    assert safe_write_boundary in normalized_policy
-    assert owner_protocol in normalized_policy
-    assert "Owner-authorized production Vault Git Sync exception (Issue #217)" in normalized_policy
-    assert normalized_policy.index(safe_write_boundary) < normalized_policy.index(owner_protocol)
+    assert safe_write_boundary in safe_write_policy
+    assert "dry-run/diff" in safe_write_policy
+    assert "hash preconditions" in safe_write_policy
+    assert "no-overwrite publication" in safe_write_policy
+    assert "safe rollback" in safe_write_policy
+    assert "only creation of one managed" in safe_write_policy
+    assert "explicit `--apply`" in safe_write_policy
+
     for required in (
+        "Existing Issue #217, Vault Sync v1",
         "application/user-facing Safe Write",
-        "explicitly owner-authorized",
-        "repository-level production Git sync protocol",
-        "exact-SHA",
+        "repository-level production Git sync",
+        "only with explicit owner authorization",
+        "exact SHA",
         "explicit `--apply`",
         "PRODUCTION_VAULT_SYNC_ENABLED=true",
         "shared lock",
         "clean worktree",
-        "exact repository/branch",
-        "backup-before-FF",
-        "FF-only",
+        "exact repository and branch",
+        "backup before fast-forward",
+        "fast-forward only",
         "post-sync validation",
         "HUMAN_REQUIRED",
-        "auto-conflict-resolution",
-        "произвольной записи в vault",
+        "resolve conflicts automatically",
+        "no other production vault writes",
     ):
-        assert required in normalized_policy
+        assert required in owner_sync_policy
+
+    assert "not Safe Write or general permission" in owner_sync_policy
+    assert "must not reset, rebase, force changes" in owner_sync_policy
 
 
 def test_vault_sync_runbook_documents_owner_operation_and_recovery_contract() -> None:
