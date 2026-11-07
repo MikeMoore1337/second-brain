@@ -1,177 +1,84 @@
-# Инструкции репозитория
+# Repository agent instructions
 
-## Назначение
+## Purpose
 
-Это программный репозиторий `second-brain`. Здесь находятся код приложения,
-контракт конфигурации, тесты, автоматизация, интеграции и документация проекта.
-Пользовательские Markdown-знания находятся в независимом репозитории
-`second-brain-vault` и не должны копироваться сюда.
+This is the `second-brain` application repository, containing application code, configuration contracts, tests, automation, integrations and project documentation. Personal Markdown knowledge belongs in the separate `second-brain-vault` repository. Never copy it here.
 
-## Граница репозитория
+## Repository boundary
 
-- Путь к vault берётся только из явной конфигурации, например
-  `SECOND_BRAIN_VAULT_PATH`; машинные абсолютные пути в коде запрещены.
-- Нельзя добавлять сюда личные заметки, вложения vault или состояние workspace
-  Obsidian.
-- Изменения, ограниченные этим репозиторием, не должны менять
-  `second-brain-vault`.
-- `domain` и `application` не зависят от Obsidian, Git, LLM-провайдера, FastAPI,
-  Telegram или другого способа доставки.
-- Интеграции добавляются только как явные ports/adapters и только в рамках
-  текущей задачи. Пустые будущие модули не создаются.
+- Obtain the vault path only from explicit configuration such as `SECOND_BRAIN_VAULT_PATH`. Do not hardcode machine-specific absolute paths.
+- Never add private notes, vault attachments or Obsidian workspace state to this repository.
+- A task scoped to this repository must not modify `second-brain-vault`.
+- `domain` and `application` must not depend on Obsidian, Git, an LLM provider, FastAPI, Telegram or any other delivery mechanism.
+- Introduce integrations only through explicit ports/adapters when the current task requires them. Do not create speculative empty modules.
 
-## Язык документации
+## Documentation and agent language
 
-Человекочитаемая документация проекта пишется на русском языке. Названия
-технологий, библиотек, команд, CLI-опций, переменных окружения, файлов,
-каталогов, классов, функций и API-полей сохраняются в оригинальном виде.
-Код, тестовые идентификаторы и машинно-читаемые форматы не переводятся.
-Тексты внешних стандартов и лицензий сохраняются в оригинале, а пояснения к
-ним даются по-русски.
+Write human-facing project documentation in **Russian**. Keep technology names, libraries, commands, CLI options, environment variables, paths, classes, functions and API fields unchanged. Do not translate source code, test identifiers or machine-readable formats. Preserve external standards and licenses in their original language and explain them in Russian.
 
-## Язык веб-интерфейса
+Write `AGENTS.md`, agent/role instructions, reusable skills and machine-directed prompts in **English**. This does not change the required language of human documentation, application UI or the owner's conversation.
 
-Пользовательский текст сайта, включая заголовки, кнопки, подписи полей,
-подсказки, состояния загрузки, ошибки, пустые состояния и текст для доступности,
-пишется на русском языке. Английские слова убираются, если они не являются
-названием бренда или необходимым техническим идентификатором. Технические
-идентификаторы и названия технологий можно показывать только с русской
-подписью и только когда они нужны пользователю для проверки или аудита.
-Английские слова нельзя оставлять внутри русской фразы даже если это имя
-внутреннего слоя или операции: `owner`, `review`, `preview`, `provider`,
-`exact`, `Growth`, `Advisor`, `Goal`, `Learning`, `Personal Memory`, `Safe Write`,
-`Lifecycle`, `mapping`, `transient`, `rebuild` и подобные термины получают
-русскую формулировку. Разрешены только бренды и действительно нужные
-технические обозначения с русским контекстом; каноническая подпись для
-идентификатора пользователя GitHub — `GitHub ID`, а не «идентификатор GitHub».
-Перед завершением нужно просмотреть все production-поверхности React, включая
-динамические сообщения, ошибки, пустые состояния, `aria-label` и `placeholder`,
-и прогнать регрессионную проверку русской локализации.
+## Web interface language
 
-Перед завершением изменения веб-интерфейса нужно пройти весь затронутый
-пользовательский путь и проверить русский текст во всех состояниях, включая
-ошибки, пустые результаты, загрузку, подтверждение, `aria-label`, placeholder и
-узкие экраны. Канонические термины и исключения закреплены в
-[`docs/design/russian-ui-language-v1.md`](docs/design/russian-ui-language-v1.md).
+All user-facing website content must be in **Russian**, including headings, buttons, form labels, hints, loading and error states, empty states and accessibility text. Avoid English words unless they are brands or necessary technical identifiers. Show technical identifiers and technology names with a Russian label and only when needed for user verification or audit.
 
-## Иконки разделов и служебные обозначения
+Do not leave English internal-layer terms or operation names inside Russian phrases. This includes `owner`, `review`, `preview`, `provider`, `exact`, `Growth`, `Advisor`, `Goal`, `Learning`, `Personal Memory`, `Safe Write`, `Lifecycle`, `mapping`, `transient`, `rebuild` and similar terms. Use natural Russian alternatives. The canonical label for a GitHub user identifier is `GitHub ID`, not a translated hybrid.
 
-- Разные разделы не могут использовать одинаковую иконку, включая алиасы
-  одного изображения. У каждого раздела должен быть собственный узнаваемый символ.
-- Для одного раздела в меню и заголовке используется один канонический символ.
-  Одинаковые служебные действия могут повторять соответствующие им иконки.
-- Если подходящей уникальной иконки нет, нужно нарисовать новую в существующей
-  визуальной системе и показать владельцу в реальных размерах и контексте.
-  Новые рисунки требуют явного визуального одобрения владельца перед выпуском;
-  до одобрения допустим только локальный кандидат для просмотра.
-- В пользовательском интерфейсе запрещены номера и названия этапов разработки
-  (`Этап 13`, `Stage 12`, `10C` и подобные служебные обозначения), включая
-  заголовки, подписи, подсказки, ошибки и текст для доступности. Они остаются
-  только во внутренней документации. Этапы пользовательской цели и полезная
-  последовательность действий не являются этапами разработки.
+Before completing UI work, inspect every affected production React surface, including dynamic messages, errors, empty/loading/confirmation states, `aria-label`, `placeholder` and narrow viewports. Walk through the full changed user journey and run Russian localization regression checks. Canonical terms and exceptions are defined in [the Russian UI language contract](docs/design/russian-ui-language-v1.md).
 
-Для всех обычных одновыборных native `<select>` в production React UI обязателен
-видимый chevron из same-origin SVG в signal-фиолетовой палитре приложения с
-зарезервированным местом справа. Нельзя заменять его Unicode или emoji и нельзя
-использовать `data:`-изображение; native-семантика, клавиатура и видимый focus
-сохраняются, а в `forced-colors` custom-стрелка отключается. Исключения — только
-`multiple` и списки с `size` больше 1.
+## Section icons and internal labels
 
-## Безопасность
+- Different application sections must not share an icon, including aliases of the same picture. Each section needs a distinctive, recognizable symbol.
+- Within a section, use the same canonical symbol in navigation and its heading. Identical utility actions may reuse their matching action icons.
+- If no suitable unique icon exists, draw one in the established visual system and show it to the owner at actual sizes and in context. A new icon requires explicit owner visual approval before release; until then, it is only a local review candidate.
+- Never expose development stage numbers or names (for example, `Stage 12`, `10C` or their Russian equivalents) in user-facing headings, captions, hints, errors or accessibility text. Keep these only in internal documentation. Stages of a user's goal or a meaningful action sequence are not development stages.
 
-- Local/offline read-only команды не вызывают сеть или LLM.
-- Networked `llm draft` и `research draft` остаются read-only и только возвращают
-  validated `NoteDraft`; они не получают `--apply` и не пишут в vault. Команда
-  `note create-from-draft --file PATH` является отдельной local/offline write
-  operation: dry-run по умолчанию, реальная запись только с явным `--apply`.
-- Explicitly networked read-only команды могут выполнять только заявленную
-  внешнюю read-operation; это не является общим разрешением сети для любых
-  read-only команд. `research read` выполняет максимум одну research
-  operation через свой заявленный research backend, `llm draft` — максимум
-  одну LLM draft operation, а `research draft` — максимум одну research
-  operation, затем максимум одну LLM draft operation.
-- Все эти networked read-only команды не пишут в vault или Git. Для них
-  запрещены retry, fallback, tools и function execution.
-- Credentials для networked LLM остаются внутри существующего adapter/security
-  boundary и не становятся CLI или общим read-only контрактом.
-- Запись в vault требует path containment, dry-run/diff, hash preconditions,
-  временный файл, no-overwrite publication, post-write validation и безопасный
-  rollback. В текущем этапе разрешён только use case создания одной managed
-  note типа `project`, `area`, `resource` или `zettel`; реальная запись
-  выполняется только с явным `--apply`.
-- При точечных изменениях нужно сохранять неизвестные front matter fields и
-  Obsidian wikilinks.
-- Proposal automation для новой managed note пишет только в новую
-  `automation/*` branch и публикует изменения через PR в `main`; прямой
-  automation write/commit/push в `main`, force push и auto-merge запрещены.
-- Proposal dry-run не вызывает network и не меняет vault, Git refs, index или
-  worktree. Apply требует clean/synced `main` и не выполняет pull, rebase, merge
-  или reset автоматически.
-- Секреты и настоящий `.env` не коммитятся.
-- Commit, push, PR, merge и deploy выполняются только по явному запросу.
+Every ordinary single-select native `<select>` in the production React UI must display a same-origin SVG chevron in the application's signal-violet palette, with reserved space on the right. Do not use Unicode, emoji or `data:` images as replacements. Preserve native semantics, keyboard operation and visible focus; disable the custom arrow under `forced-colors`. Exceptions: `multiple` selects and selects with `size` greater than 1.
+
+## Security and Safe Write
+
+- Local/offline read-only commands must not invoke the network or an LLM.
+- Network-enabled `llm draft` and `research draft` stay read-only and return a validated `NoteDraft` only. They must not accept `--apply` or write to the vault. `note create-from-draft --file PATH` is a separate local/offline write operation: dry-run by default; a real write requires explicit `--apply`.
+- Explicitly network-enabled read-only commands may perform only the external read operation they declare. This is not blanket network permission for other read-only commands. `research read` performs at most one research operation through its declared backend, `llm draft` at most one LLM draft operation, and `research draft` at most one research operation followed by at most one LLM draft operation.
+- These networked read-only commands must not write to the vault or Git. Retries, fallbacks, tools and function execution are forbidden for them.
+- Credentials for networked LLM operations stay inside the existing adapter/security boundary. They must not become part of the CLI or general read-only contract.
+- Vault writes require path containment, dry-run/diff, hash preconditions, a temporary file, no-overwrite publication, post-write validation and safe rollback. At the current stage, only creation of one managed `project`, `area`, `resource` or `zettel` note is allowed, with explicit `--apply` for the real write.
+- Preserve unknown front matter fields and Obsidian wikilinks during targeted edits.
+- Proposal automation for a new managed note must write only to a new `automation/*` branch and submit a PR into `main`. Direct automated write/commit/push to `main`, force-push and auto-merge are forbidden.
+- Proposal dry-run must not use the network or change vault data, Git refs, index or worktree. Apply requires a clean and synchronized `main` and must never run pull, rebase, merge or reset automatically.
+- Never commit secrets or a real `.env`.
+- Commit, push, PR, merge and deploy require an explicit user request. Translation of an agent instruction does not itself authorize vault writes or production actions.
 
 ### Owner-authorized production Vault Git Sync exception (Issue #217)
 
-Граница выше относится к обычной application/user-facing Safe Write одной
-managed note и сохраняется без изменений. Для уже существующего Issue #217
-Vault Sync v1 допускается отдельный explicitly owner-authorized
-repository-level production Git sync protocol; это не Safe Write и не общее
-разрешение произвольной записи в vault. Он разрешён только одновременно при
-exact-SHA, explicit `--apply`, отдельном
-`PRODUCTION_VAULT_SYNC_ENABLED=true`, shared lock, clean worktree, exact
-repository/branch, backup-before-FF, FF-only и post-sync validation. Protocol
-не выполняет reset, rebase, force или auto-conflict-resolution; любое
-нарушение gate или safety invariant завершается fail-closed
-`HUMAN_REQUIRED`. Никакие другие production vault writes этой оговоркой не
-разрешаются.
+The preceding boundary applies unchanged to ordinary application/user-facing Safe Write for a single managed note. Existing Issue #217, Vault Sync v1, separately permits a repository-level production Git sync **only with explicit owner authorization**. This is not Safe Write or general permission to write arbitrary vault content.
 
-## 21st.dev для прототипирования интерфейса
+All gates must be satisfied together: exact SHA, explicit `--apply`, separate `PRODUCTION_VAULT_SYNC_ENABLED=true`, a shared lock, clean worktree, exact repository and branch, backup before fast-forward, fast-forward only, and post-sync validation. The protocol must not reset, rebase, force changes or resolve conflicts automatically. Failure of any gate or safety invariant is fail-closed with `HUMAN_REQUIRED`. This exception permits no other production vault writes.
 
-Официальный host-level Codex plugin `21st` разрешён как **необязательный справочник**
-общедоступных React-компонентов для задач UI. Установка и безопасное применение описаны в
-[`docs/development/ai-dev-tooling.md`](docs/development/ai-dev-tooling.md).
-Нельзя передавать в 21st.dev файлы, пути, выдержки или метаданные
-`second-brain-vault`, личные заметки, пользовательские данные, секреты,
-приватные снимки экрана или внутренние документы. Не импортировать внешний код/темы/зависимости,
-не использовать платную генерацию и публикацию без отдельной разрешённой задачи и проверки лицензии.
-Правила российского текста интерфейса, privacy/Safe Write, существующего оформления,
-доступности, тестирования и предварительного одобрения владельцем приоритетнее любого skill/MCP.
+## 21st.dev UI prototyping
 
-## Graphify и Ponytail в разработке
+The official host-level Codex `21st` plugin may serve as an **optional reference** for public React components in UI tasks. Installation and safe use are described in [AI development tooling](docs/development/ai-dev-tooling.md).
 
-Graphify и Ponytail разрешены только как локальные инструменты разработки. Они
-не являются частью application/runtime, production, CI или канонического
-хранилища знаний.
+Never send `second-brain-vault` files, paths, excerpts or metadata, personal notes, user data, secrets, private screenshots or internal documents to 21st.dev. Do not import external code, themes or dependencies, use paid generation or publish anything without a separately authorized task and license review. Russian UI, privacy/Safe Write, existing design, accessibility, testing and owner pre-approval take precedence over any skill or MCP advice.
 
-- Graphify используется on-demand для ориентации по архитектуре и impact
-  analysis. Если существует `graphify-out/graph.json` и задача требует широкого
-  понимания связей, сначала допустимы `graphify query`, `graphify path` или
-  `graphify explain`, после чего вывод обязательно проверяется по исходному
-  коду, тестам и нормативным контрактам. Graphify не является source of truth.
-- Начальный режим Graphify - локальный code-only AST по текущему checkout
-  `second-brain`. Нельзя сканировать sibling `second-brain-vault`, пути из
-  `SECOND_BRAIN_VAULT_PATH`, секреты, `.env`, runtime/data или другие
-  пользовательские/private каталоги.
-- Semantic extraction, внешние LLM credentials, `--watch`, Git hooks, MCP и
-  фоновые перестроения Graphify не включаются автоматически. Для них требуется
-  отдельная явно сформулированная задача.
-- `graphify-out/` является disposable derived state и не коммитится.
-- Ponytail может использоваться только на host-level Codex. Рекомендуемый
-  стартовый режим для этого проекта - `lite`. `ultra` не используется по
-  умолчанию.
-- Ponytail не может сокращать или обходить validation, error handling,
-  security/privacy, accessibility, обязательные тесты, fail-closed поведение,
-  `HUMAN_REQUIRED`, owner approval или другие правила этого `AGENTS.md`.
-- Инструкции этого репозитория и acceptance criteria текущей задачи имеют
-  приоритет над подсказками Graphify/Ponytail.
-- Caveman в текущий toolchain проекта не добавляется.
+## Graphify and Ponytail during development
 
-Подробная установка, проверка и откат описаны в
-[`docs/development/ai-dev-tooling.md`](docs/development/ai-dev-tooling.md).
+Graphify and Ponytail are allowed **only as local development tools**. They are not part of the application/runtime, production, CI or canonical knowledge storage.
 
-## Проверки разработки
+- Use Graphify on demand for architecture navigation and impact analysis. If `graphify-out/graph.json` exists and a task requires broad dependency understanding, `graphify query`, `graphify path` or `graphify explain` may be used first. Verify the output against source code, tests and normative contracts; Graphify is not a source of truth.
+- Graphify's initial mode is local code-only AST analysis of the current `second-brain` checkout. Do not scan sibling `second-brain-vault`, paths from `SECOND_BRAIN_VAULT_PATH`, secrets, `.env`, runtime/data or other personal/private directories.
+- Do not automatically enable semantic extraction, external LLM credentials, `--watch`, Git hooks, MCP or background Graphify rebuilds. Each requires a separately stated task.
+- `graphify-out/` is disposable derived state and must not be committed.
+- Ponytail may be used only with host-level Codex. Its recommended initial mode for this project is `lite`; do not default to `ultra`.
+- Ponytail must not shortcut validation, error handling, security/privacy, accessibility, mandatory tests, fail-closed behavior, `HUMAN_REQUIRED`, owner approval or any rule in this `AGENTS.md`.
+- These instructions and the current task's acceptance criteria take precedence over Graphify/Ponytail suggestions.
+- Do not add Caveman to the current project toolchain.
 
-Перед предложением изменения выполните:
+Setup, verification and rollback: [AI development tooling](docs/development/ai-dev-tooling.md).
+
+## Development checks
+
+Before proposing a change, run:
 
 ```text
 uv run ruff format --check .
@@ -180,181 +87,125 @@ uv run mypy src tests
 uv run pytest
 ```
 
-## Принцип минимально достаточного выполнения
+## Minimum sufficient execution
 
-Экономьте Codex-лимиты: выполняйте только действия, которые дают новую
-информацию или необходимы для реализации и проверки текущей задачи.
+Conserve Codex usage: perform only actions that add new information or are necessary to implement and verify the current task.
 
-- Не повторяйте успешно пройденные проверки, если затрагиваемый ими код не
-  менялся.
-- Проект поддерживает только Python 3.14; не запускайте проверки на нескольких
-  версиях Python.
-- Во время разработки используйте точечные тесты. Полный обязательный набор
-  `ruff` / `mypy` / `pytest` запускайте один раз после завершения изменений.
-- Не перечитывайте неизменившиеся файлы, issue и документацию, которые уже были
-  изучены.
-- Не выполняйте повторные полные аудиты репозитория для локальных изменений.
-- Не запускайте повторно `git status`, `git diff`, `git log` и аналогичные
-  команды без изменения состояния.
-- Не исследуйте заново уже принятые архитектурные решения.
-- Не создавайте дополнительные отчёты, временные артефакты и диагностику без
-  практической необходимости.
-- Группируйте связанные чтения, изменения и проверки и выбирайте минимальный
-  набор команд, достаточный для надёжной проверки результата.
-- После выполнения acceptance criteria и финальной проверки остановитесь; не
-  выполняйте дополнительные действия "на всякий случай".
+- Do not repeat successful checks unless the code they cover has changed.
+- The project supports **Python 3.14 only**. Do not run a multi-version Python test matrix.
+- Run targeted tests during development. Run the full mandatory `ruff` / `mypy` / `pytest` gate once after all changes.
+- Do not reread unchanged files, issues or documentation already inspected.
+- Do not repeat full repository audits for local modifications.
+- Do not rerun `git status`, `git diff`, `git log` or equivalent commands without a state change.
+- Do not re-investigate accepted architecture decisions.
+- Avoid unnecessary extra reports, temporary artifacts and diagnostics.
+- Group related reads, edits and checks; choose the smallest reliable verification set.
+- Stop once acceptance criteria and final verification are satisfied; do not perform speculative extra actions.
 
-Экономия действий не должна приводить к пропуску обязательных acceptance
-criteria, тестов безопасности или проверки непосредственно изменённого
-поведения.
-
+Efficiency must not skip required acceptance criteria, security tests or verification of changed behavior.
 
 ## Role & Agent Pack
 
-В репозитории используется небольшой набор ролей и агентных workflow.
-Их задача - сделать решения Codex последовательными, не создавая сложную
-многоагентную инфраструктуру.
+The repository has a small set of roles and repeatable agent workflows to make Codex decisions consistent without a complex multi-agent infrastructure.
 
-Канонические описания:
+Canonical definitions:
 
-- `ROLE_MANIFEST.json` - реестр ролей;
-- `AGENT_MANIFEST.json` - реестр агентных workflow;
-- `ai/roles/*.md` - обязанности и границы ролей;
-- `ai/agents/*.md` - пошаговые workflow;
-- `ai/prompts/*.md` - готовые входные шаблоны;
-- `ai/evals/*.md` - критерии качества.
+- `ROLE_MANIFEST.json`: role registry;
+- `AGENT_MANIFEST.json`: agent workflow registry;
+- `ai/roles/*.md`: role responsibilities and boundaries;
+- `ai/agents/*.md`: step-by-step workflows;
+- `ai/prompts/*.md`: input templates;
+- `ai/evals/*.md`: quality criteria.
 
-### Условные инженерные skills из AI Development Toolkit
+### Conditional engineering skills from AI Development Toolkit
 
-Для конкретных задач разработки доступны справочные навыки из [`.agents/README.md`](.agents/README.md), закреплённые по SHA Toolkit. Они дополняют роли, но **не** являются агентными workflow, не создают автономную оркестрацию и не дают права на commit/deploy или запись в приватный `second-brain-vault`. Подключать максимум 1-2 по фактической необходимости. Приоритет: этот `AGENTS.md`, текущая задача и роль, затем выбранный skill. Для vault остаются обязательными dry-run/diff, preconditions, explicit apply и `HUMAN_REQUIRED` в установленных случаях.
+Task-specific, SHA-pinned Toolkit reference skills are listed in [`.agents/README.md`](.agents/README.md). They supplement roles but are **not** agent workflows, do not create autonomous orchestration, and grant no commit/deploy or private `second-brain-vault` write permission. Select at most 1-2 when actually needed. Priority: this `AGENTS.md`, current task and role, then selected skill. Vault tasks always retain dry-run/diff, preconditions, explicit apply and `HUMAN_REQUIRED` where required.
 
-### Принцип маршрутизации
+### Role routing
 
-Перед реализацией задачи выберите одну основную роль. Дополнительную роль
-подключайте только если она реально меняет решение или нужна для обязательной
-проверки. Не создавайте искусственную "команду" из всех ролей.
+Choose one primary role before implementation. Add another role only if it materially changes the solution or provides a mandatory review. Do not assemble an artificial team of every role.
 
-| Тип задачи | Основная роль | Дополнительная роль при необходимости |
+| Task | Primary role | Optional secondary role |
 | --- | --- | --- |
-| Структура vault, PARA/Zettelkasten, front matter contract | `knowledge-architect` | `security-reviewer` |
-| Качество заметок, дедупликация, связи | `knowledge-curator` | `knowledge-architect` |
-| CLI, cron, автоматизация, Git workflow | `automation-engineer` | `qa-engineer` |
+| Vault structure, PARA/Zettelkasten, front matter contract | `knowledge-architect` | `security-reviewer` |
+| Note quality, deduplication, links | `knowledge-curator` | `knowledge-architect` |
+| CLI, cron, automation, Git workflow | `automation-engineer` | `qa-engineer` |
 | LLM/API/Telegram/Obsidian/GitHub integrations | `integration-engineer` | `security-reviewer` |
-| Тесты, регрессии, acceptance criteria | `qa-engineer` | профильная роль |
-| Секреты, доступ, запись в vault, privacy | `security-reviewer` | профильная роль |
+| Tests, regressions, acceptance criteria | `qa-engineer` | Subject-matter role |
+| Secrets, access, vault writes, privacy | `security-reviewer` | Subject-matter role |
 
-Если задача затрагивает реальную запись в vault, обработку секретов,
-неподтверждённые внешние данные или потенциально разрушительные операции,
-`security-reviewer` обязателен как контрольная роль.
+A `security-reviewer` is mandatory for real vault writes, secret handling, unverified external data or potentially destructive actions.
 
-### Выбор агентного workflow
+### Agent workflow selection
 
-Агент - это повторяемый workflow, а не постоянно работающий автономный процесс.
+An agent is a repeatable workflow, **not** a permanently running autonomous process.
 
-- `inbox-processor` - разобрать новый входящий материал;
-- `knowledge-distiller` - превратить большой источник в краткое знание и
-  атомарные заметки;
-- `research-agent` - собрать и синтезировать проверяемое исследование;
-- `vault-maintainer` - найти проблемы структуры и качества vault;
-- `review-agent` - провести daily/weekly/monthly review.
+- `inbox-processor`: process newly captured material;
+- `knowledge-distiller`: turn a large source into concise knowledge and atomic notes;
+- `research-agent`: collect and synthesize verifiable research;
+- `vault-maintainer`: find vault structure and quality issues;
+- `review-agent`: conduct daily/weekly/monthly knowledge reviews.
 
-Используйте workflow только когда задача совпадает с его назначением. Для
-обычной разработки отдельный агент не нужен. Этот `review-agent` относится к
-review пользовательского знания, а не к PR/Code Review delivery gate.
+Use a workflow only when it matches the task. Ordinary development needs no separate agent. Here `review-agent` reviews user knowledge, **not** PR/code review release gates.
 
-### Приоритет инструкций
+### Instruction precedence
 
-1. Этот `AGENTS.md` и ограничения безопасности репозитория.
-2. Acceptance criteria текущей задачи.
-3. Профиль выбранной роли.
-4. Workflow выбранного агента.
-5. Шаблон prompt/eval.
+1. This `AGENTS.md` and repository security boundaries.
+2. Current task acceptance criteria.
+3. Selected role profile.
+4. Selected agent workflow.
+5. Prompt/evaluation template.
 
-Роль или агент не могут ослабить правила безопасности, разрешить запись без
-`--apply`, обойти dry-run/diff, изменить границу репозиториев или самостоятельно
-выполнить commit/push/PR/merge/deploy.
+Roles and agents cannot weaken security boundaries, allow writes without `--apply`, bypass dry-run/diff, cross repository boundaries or independently perform commit/push/PR/merge/deploy.
 
 ## Night Shift Development Orchestrator v1
 
-Bounded repository protocol для явно активированного overnight batch описан в
-[`docs/automation/night-shift-v1.md`](docs/automation/night-shift-v1.md), а его
-машиночитаемая policy находится в `config/night-shift-v1.yaml`.
+The bounded repository protocol for an explicitly enabled overnight batch is specified in [Night Shift v1](docs/automation/night-shift-v1.md); the machine-readable policy is `config/night-shift-v1.yaml`.
 
-Codex Code Review разрешён только как bounded финальный semantic gate после
-GREEN exact-head CI. На один PR приходится round 1 и максимум один re-review
-round 2 после подтверждённых blocking `P0/P1`, исправленных одним batch на
-новом head. CLEAN round 1 не запускает повторный review; blocking round 2 даёт
-`HUMAN_REQUIRED`. Pending/completed review текущего SHA переиспользуется.
-MEDIUM/LOW/NIT не запускают re-review. До commit implementer выполняет один
-bounded self-review. Отдельный reviewer subagent, adversarial audit или второй
-LLM verdict не создаётся.
+Codex Code Review is allowed only as a bounded final semantic gate after exact-head GREEN CI: one round 1 per PR and at most one round 2 after confirmed blocking `P0/P1` findings fixed in one batch on a new head. A clean round 1 triggers no further review; blocking round 2 means `HUMAN_REQUIRED`. Reuse pending/completed review for the same SHA. `MEDIUM/LOW/NIT` findings do not trigger a re-review. Before committing, the implementer performs one bounded self-review. Do not create a separate reviewer subagent, adversarial audit or second LLM verdict.
 
-Implementation независимых tasks выполняется параллельно в отдельных
-worktree. Repository-wide `exclusive-write` для обычной implementation
-запрещён; допускаются только task/worktree/finalization/production-scoped
-locks. Единственная repository-scoped serialization — finalization: refresh
-base, conflict resolution, affected verification, final push, exact-head CI,
-Codex Review, merge и release closeout.
+Implement independent tasks concurrently in **separate worktrees**. Repository-wide `exclusive-write` for ordinary implementation is forbidden; only task/worktree/finalization/production-scoped locks are allowed. The only repository-scoped serialized lane is **finalization**: refresh base, resolve conflicts, verify affected code, final push, exact-head CI, Codex Review, merge and release closeout.
 
-Текущие required ruleset checks: `quality`, `windows-ssl-regression`,
-`frontend (ubuntu-latest)` и `frontend (windows-latest)`. Aggregate `checks` не
-является required context текущего ruleset. Готовность определяется этими
-exact-head checks, bounded review gate, отсутствием известных unresolved
-BLOCKER/HIGH, mergeability PR и явно требуемыми human/external gates.
+Current required ruleset checks are `quality`, `windows-ssl-regression`, `frontend (ubuntu-latest)` and `frontend (windows-latest)`. Aggregate `checks` is not a required ruleset context. Readiness requires those exact-head checks, the bounded review gate, no known unresolved BLOCKER/HIGH, a mergeable PR and all explicit human/external gates.
 
-- `enabled_by_default: false`: обычная задача не получает autonomous commit,
-  push, PR или merge права из-за наличия policy;
-- GitHub issue/PR state, existing review threads, exact SHA и CI остаются source
-  of truth;
-- RED/YELLOW gates, failure budget и dependency blocking нельзя обходить;
-- Night Shift не ослабляет Safe Write, privacy, Python 3.14 и границу
-  `second-brain-vault`;
-- этот protocol не добавляет agent runtime, daemon, queue, DB или provider.
-- read-only diagnostics не требуют implementation write lease;
-- после verified GREEN merge применяется bounded Git-only post-task cleanup из
-  [`scripts/worktree_cleanup.py`](scripts/worktree_cleanup.py); его receipt,
-  safety rules и `cleanup_deferred` описаны в
-  [`docs/automation/night-shift-v1.md`](docs/automation/night-shift-v1.md).
+- `enabled_by_default: false`: the presence of this policy does not authorize autonomous commit, push, PR or merge for ordinary tasks.
+- GitHub issue/PR state, existing review threads, exact SHA and CI remain the source of truth.
+- Never bypass RED/YELLOW gates, failure budgets or dependency blockers.
+- Night Shift cannot weaken Safe Write, privacy, Python 3.14 or the `second-brain-vault` boundary.
+- The protocol adds no agent runtime, daemon, queue, DB or provider.
+- Read-only diagnostics do not require an implementation write lease.
+- After a verified GREEN merge, use the bounded Git-only cleanup in [`scripts/worktree_cleanup.py`](scripts/worktree_cleanup.py). Its receipt, safety rules and `cleanup_deferred` are described in [Night Shift v1](docs/automation/night-shift-v1.md).
 
 ### Handoff
 
-Если задача действительно требует смены роли или агента, передайте только:
+When the task genuinely requires a change of role or agent, hand over only:
 
-- цель;
-- подтверждённые факты;
-- изменённые файлы;
-- открытые риски;
-- оставшиеся acceptance criteria.
+- the goal;
+- verified facts;
+- modified files;
+- open risks;
+- remaining acceptance criteria.
 
-Не пересказывайте всю историю задачи и не повторяйте уже выполненную
-диагностику.
+Do not retell the full task history or repeat completed diagnostics.
 
-### Ограничение автономности
+### Autonomy limits
 
-Не добавляйте Supervisor/Manager/Planner Agent, очереди сообщений, LangGraph,
-CrewAI, отдельную БД состояния агентов или agent-to-agent RPC до появления
-конкретной продуктовой необходимости и отдельной архитектурной задачи.
+Do not add Supervisor/Manager/Planner agents, message queues, LangGraph, CrewAI, a separate agent-state database or agent-to-agent RPC without a concrete product need and an independently authorized architecture task.
 
-`second-brain-vault` не хранит определения ролей и агентов. Он остаётся
-каноническим хранилищем пользовательских знаний.
+`second-brain-vault` does not contain role/agent definitions. It remains the canonical repository of personal knowledge.
 
-## Внешние закреплённые справочники UI и React
+## Pinned external UI/React references
 
-При задачах по React, доступности, анимации и доказательному UI-аудиту используй
-только профильные **локальные** рекомендации из
-[external-ui-quality-skills.md](docs/development/external-ui-quality-skills.md).
-`$impeccable` - основной проектный UX/UI-критик (pinned upstream, после `git submodule update --init -- .impeccable`), но не вторая роль и не разрешение на редизайн. `DESIGN.md` v7, `PRODUCT.md`, `design-qa.md`
-и граница `second-brain-vault` всегда имеют приоритет. Для нового визуального
-направления нужен отдельный явный запрос владельца. Не выполнять внешние
-скрипты, не загружать исходники/данные в сторонние сервисы и не добавлять
-конкурирующий дизайн или обязательные CI-зависимости.
+For React, accessibility, motion and evidence-based UI audit tasks, use only the relevant **local** recommendations in [external UI quality skills](docs/development/external-ui-quality-skills.md). `$impeccable` is the main project UX/UI critic (pinned upstream, initialized with `git submodule update --init -- .impeccable`), not an additional role or redesign authorization. `DESIGN.md` v7, `PRODUCT.md`, `design-qa.md` and the `second-brain-vault` boundary take precedence.
 
+A new visual direction requires a separate explicit owner request. Do not execute external scripts, upload source/data to third-party services, introduce a competing design or add mandatory CI dependencies.
 
-## Impeccable v4.7.0: защита от шаблонного ИИ-дизайна (2026-10-21)
+## Impeccable v4.7.0: avoid generic AI-generated design (2026-10-21)
 
-Для новых пользовательских UI-потоков, улучшения экранов и визуальной критики **вначале** применяй `$impeccable` из `.agents/skills/impeccable/SKILL.md`: изучить актуальные code/render, выполнить `critique` и `audit`, предложить изменения с реальными контрпримерами. Оригинальный upstream закреплён в `.impeccable/` SHA `dad8dbb3aac21ad1fa236c110315ef4abece23e8`; установка и правила - `docs/development/impeccable-adoption.md`. Это проектная инструкция Codex, не new runtime, hook или permission. Учитывай `DESIGN.md` v7, Onest, black/violet, запреты на green/mint и пользовательское vault; не смешивай рекомендации про стандартные SaaS-экраны с действующим авторским дизайном.
+For new user-facing UI flows, screen improvements and visual critique, **first** use `$impeccable` from `.agents/skills/impeccable/SKILL.md`: inspect current source/render, run `critique` and `audit`, and propose evidence-based changes with real counterexamples. The original upstream is pinned in `.impeccable/` at SHA `dad8dbb3aac21ad1fa236c110315ef4abece23e8`; setup and requirements are in `docs/development/impeccable-adoption.md`.
 
+This is a project Codex instruction, not a new runtime, hook or permission. Preserve `DESIGN.md` v7, Onest, black/violet colors, the ban on green/mint, and privacy of the user's vault. Do not conflate recommendations for generic SaaS screens with the approved custom design.
 
 ## UX/UI Design Orchestra (2026-10-21)
 
-For a combined UX/UI audit and unified visual proposal of **production React UI only**, route to `$ux-ui-design-orchestra` (`.agents/skills/ux-ui-design-orchestra/SKILL.md`). Default mode `audit-proposal` is READ_ONLY; work on screenshots, observed navigation and accepted `DESIGN.md` v7, not any source changes until explicit owner visual «Принимаю». Existing `second-brain-vault` boundary, Safe Write, privacy, `design-qa.md`, product truth and separate release approval always win. Max 3 real concurrent read-only subagents if actual client tools support them; otherwise report honest sequential passes. See `docs/development/ux-ui-design-orchestra.md`.
+For a combined UX/UI audit and unified visual proposal of **production React UI only**, route to `$ux-ui-design-orchestra` (`.agents/skills/ux-ui-design-orchestra/SKILL.md`). Default `audit-proposal` mode is READ_ONLY: work from screenshots, observed navigation and accepted `DESIGN.md` v7. Do not modify source until explicit owner visual acceptance `«Принимаю»`. The existing `second-brain-vault` boundary, Safe Write, privacy, `design-qa.md`, product truth and separate release approval always take priority. At most three concurrently spawned read-only subagents are allowed when actual client tools support them; otherwise run sequentially and report honestly. See `docs/development/ux-ui-design-orchestra.md`.
