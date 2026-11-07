@@ -259,9 +259,7 @@ def test_wrapper_has_valid_bash_syntax() -> None:
 def test_agents_distinguishes_safe_write_from_narrow_owner_sync_protocol() -> None:
     policy = AGENTS_PATH.read_text(encoding="utf-8")
     safe_write_boundary = "Vault writes require path containment"
-    owner_protocol_heading = (
-        "Owner-authorized production Vault Git Sync exception (Issue #217)"
-    )
+    owner_protocol_heading = "Owner-authorized production Vault Git Sync exception (Issue #217)"
     assert policy.count(owner_protocol_heading) == 1
     safe_write_policy, owner_sync_policy = policy.split(owner_protocol_heading)
     safe_write_policy = " ".join(safe_write_policy.split())
