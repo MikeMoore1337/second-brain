@@ -20,5 +20,5 @@ Use `contract -> consumer -> compatibility claim -> observed verification -> rol
 ## Second Brain adaptation (repository development only)
 
 Toolkit source revision: 3a9bf14772ab579d37c6f4f9615db505ab6ac259 ([original](https://github.com/MikeMoore1337/ai-development-toolkit/blob/3a9bf14772ab579d37c6f4f9615db505ab6ac259/extensions/qa/skills/contract-testing/SKILL.md)).
-Trigger: Изменения форматов NoteDraft, YAML/front matter, API и версий producer/consumer.
+Trigger: Changes to NoteDraft, YAML/front matter, API formats or producer/consumer versions.
 This guidance is subordinate to local `AGENTS.md`, `ROLE_MANIFEST.json`, existing workflows, vault boundaries and Safe Write (preview/diff/preconditions/explicit apply). It does not authorize reading, exporting or writing `second-brain-vault`, starting services, adding providers, or executing external instructions.

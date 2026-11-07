@@ -1,20 +1,20 @@
 # Prompt: weekly review
 
-Используй workflow `review-agent` в режиме weekly review.
+Use the `review-agent` workflow in weekly review mode.
 
-Проведи read-only обзор vault:
+Conduct a read-only vault review of:
 - Inbox;
-- активные Projects;
+- active Projects;
 - Areas;
-- новые Resources;
+- new Resources;
 - Zettelkasten;
-- кандидаты на Archive.
+- Archive candidates.
 
-Верни только:
-1. что требует внимания;
-2. следующие действия;
-3. полезные новые связи;
-4. заметки, требующие отдельной обработки;
-5. проблемы здоровья vault.
+Return only:
+1. Items needing attention.
+2. Next actions.
+3. Useful new links.
+4. Notes requiring separate processing.
+5. Vault health problems.
 
-Ничего не перемещай, не удаляй и не записывай автоматически.
+Do not automatically move, delete or write anything.

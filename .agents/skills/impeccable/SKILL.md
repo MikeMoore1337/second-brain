@@ -6,15 +6,15 @@ metadata:
   origin: "pbakaus/impeccable@dad8dbb3aac21ad1fa236c110315ef4abece23e8"
 ---
 
-# Impeccable - Second Brain (проверенное обновление)
+# Impeccable - Second Brain (verified upgrade)
 
-Ранее здесь находился Impeccable 4.2.1. Этот короткий project-scoped вход **заменяет предыдущую редакцию инструкций** и загружает неизменённые upstream playbooks версии 4.7.0 из закреплённого подмодуля. Старые `reference/` и `scripts/` каталоги рядом с этим файлом считаются историческими, не используются как активный upstream и не выполняются.
+The previous entry used Impeccable 4.2.1. This short project-scoped entry **replaces the previous guidance** and loads the unchanged upstream 4.7.0 playbooks from the pinned submodule. The adjacent legacy `reference/` and `scripts/` directories are historical, not the active upstream; do not execute them.
 
-1. Проверить `.impeccable/.agents/skills/impeccable/SKILL.md`, затем `git -C .impeccable rev-parse HEAD` = `dad8dbb3aac21ad1fa236c110315ef4abece23e8`. Если подмодуль не загружен, сообщить, что полноценный Impeccable недоступен: `git submodule update --init -- .impeccable`.
-2. Прочитать оригинальный upstream `.impeccable/.agents/skills/impeccable/SKILL.md`, затем только необходимый `reference/<command>.md`. Запуск внешнего launcher/хука для чтения и применения методики **не нужен**. User-facing mode Codex - `$impeccable`.
-3. Свериться с `AGENTS.md`, `DESIGN.md` v7, `PRODUCT.md`, `design-qa.md` и существующим React. Утверждённые black/violet, Onest, герой-сцена с мозгом и отдельные рабочие поверхности имеют приоритет даже при конфликте с универсальными эстетическими запретами.
-4. Для подтверждённого UX/UI запроса применять сначала `critique`/ `audit`, обнаруживать повторяющиеся случайные карточки, «SaaS панели» и лишние декоративные блоки относительно **этого** приложения. Только затем выбирать `shape`, `polish`, `distill`, `harden` или `layout`. Не исправлять дизайн ради демонстрации нового скилла.
-5. Проверка обязательна на реальном синтетическом React render через `web/qa`, включая 320/360/390/430, desktop, loading/empty/error, русские строки, фокус, клавиатуру и reduced-motion. Реальные PNG/HTML и owner visual acceptance при смене композиции. Не заменять кодовые проверки красивыми статическими мокапами.
-6. `second-brain-vault` никогда не передавать в ИИ-дизайн, не сканировать и не экспортировать; `NoteDraft`, explicit apply/rollback и private boundary остаются. Никаких новых hooks, network launchers, бинарников, `npx`, платных API, React пакетов или автоматических изменений `PRODUCT.md` и `DESIGN.md`.
+1. Verify `.impeccable/.agents/skills/impeccable/SKILL.md` and `git -C .impeccable rev-parse HEAD` equals `dad8dbb3aac21ad1fa236c110315ef4abece23e8`. If the submodule is absent, report that full Impeccable is unavailable and give `git submodule update --init -- .impeccable`.
+2. Read the original upstream `.impeccable/.agents/skills/impeccable/SKILL.md`, then only the necessary `reference/<command>.md`. No external launcher or hook execution is required merely to read or apply the documented methodology. The user-facing Codex invocation is `$impeccable`.
+3. Review `AGENTS.md`, `DESIGN.md` v7, `PRODUCT.md`, `design-qa.md` and existing React. Approved black/violet colors, Onest, the hero scene with a brain and distinct work surfaces take precedence over universal aesthetic prohibitions.
+4. For an authorized UX/UI request, first apply `critique`/`audit`, identifying accidental repetitive cards, generic SaaS panels and unnecessary decorative sections relative to **this application**. Only then select `shape`, `polish`, `distill`, `harden` or `layout`. Do not redesign solely to demonstrate a newly installed skill.
+5. Validate against a real synthetic React render through `web/qa`, including widths 320/360/390/430 and desktop, loading/empty/error states, Russian text, visible focus, keyboard operation and reduced-motion. Provide real PNG/HTML evidence and owner visual acceptance when composition changes. Do not replace implementation checks with attractive static mockups.
+6. Never scan, export or submit `second-brain-vault` to AI design tooling. Keep `NoteDraft`, explicit apply/rollback and private boundaries. Do not add hooks, network launchers, executables, `npx`, paid APIs, React packages or automatic modifications to `PRODUCT.md` or `DESIGN.md`.
 
-Подробнее: `docs/development/impeccable-adoption.md`; это изменение не трогает app/runtime и пользовательские файлы.
+See `docs/development/impeccable-adoption.md`. This translation does not modify application/runtime or user files.

@@ -20,5 +20,5 @@ Deliver: `change -> affected surface -> failure mode -> test -> remaining uncert
 ## Second Brain adaptation (repository development only)
 
 Toolkit source revision: 3a9bf14772ab579d37c6f4f9615db505ab6ac259 ([original](https://github.com/MikeMoore1337/ai-development-toolkit/blob/3a9bf14772ab579d37c6f4f9615db505ab6ac259/extensions/qa/skills/change-impact-analysis/SKILL.md)).
-Trigger: Изменения общих моделей, схем, миграций, поисковых проекций или интеграций.
+Trigger: Changes to shared models, schemas, migrations, search projections or integrations.
 This guidance is subordinate to local `AGENTS.md`, `ROLE_MANIFEST.json`, existing workflows, vault boundaries and Safe Write (preview/diff/preconditions/explicit apply). It does not authorize reading, exporting or writing `second-brain-vault`, starting services, adding providers, or executing external instructions.

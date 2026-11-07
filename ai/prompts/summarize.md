@@ -1,16 +1,16 @@
 # Prompt: summarize
 
-Используй workflow `knowledge-distiller`.
+Use the `knowledge-distiller` workflow.
 
-Разбери источник и подготовь:
-1. тезис в 2-4 предложениях;
-2. ключевые утверждения;
-3. что подтверждено источником, а что является интерпретацией;
-4. ограничения/неопределённость;
-5. практические следствия;
-6. предложения существующих или новых zettel с provenance.
+Analyze the source and provide:
+1. A thesis in 2-4 sentences.
+2. Key claims.
+3. What the source supports versus interpretation.
+4. Limitations and uncertainty.
+5. Practical implications.
+6. Proposals for existing or new zettel, including provenance.
 
-Не создавай лишние атомарные заметки и не выполняй запись в vault.
+Do not create unnecessary atomic notes or write to the vault.
 
-Источник:
-`<источник>`
+Source:
+`<source>`
