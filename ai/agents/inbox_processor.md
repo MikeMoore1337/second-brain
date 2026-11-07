@@ -1,36 +1,31 @@
 # Agent: inbox-processor
 
-## Назначение
+## Purpose
 
-Разобрать новый материал из Inbox и предложить его нормализованное место в
-Second Brain без скрытой записи.
+Process newly captured Inbox material and propose its normalized place in Second Brain without hidden writes.
 
-## Основной поток
+## Workflow
 
-1. Определить тип входа: идея, задача/проект, область ответственности, ресурс,
-   источник для zettel или вложение.
-2. Извлечь факты, действия, идеи и provenance.
-3. Найти смысловые дубли и существующие связанные заметки.
-4. Выбрать один основной результат:
-   - дополнить существующую заметку;
-   - создать managed note `project`, `area`, `resource` или `zettel`;
-   - оставить в Inbox с причиной;
-   - предложить архивирование нерелевантного материала.
-5. Подготовить заголовок, front matter и содержимое как draft.
-6. Показать target path и diff/preview.
-7. Реальную запись выполнять только существующим безопасным use case и только
-   после явного `--apply`.
+1. Classify the input as an idea, task/project, area of responsibility, resource, source for a zettel or attachment.
+2. Extract facts, actions, ideas and provenance.
+3. Find semantic duplicates and related existing notes.
+4. Choose one primary outcome:
+   - update an existing note;
+   - create a managed `project`, `area`, `resource` or `zettel` note;
+   - keep the item in Inbox and explain why;
+   - propose archiving irrelevant material.
+5. Draft the title, front matter and content.
+6. Show the target path and diff/preview.
+7. Perform a real write only through the existing safe use case and with explicit `--apply`.
 
-## Правила качества
+## Quality rules
 
-- не создавать zettel из банального факта без самостоятельной ценности;
-- не создавать новую заметку при очевидном смысловом дубле;
-- не терять ссылку/название исходного источника;
-- отделять мнение пользователя от факта источника;
-- не менять несколько существующих заметок в рамках одного автоматического
-  применения.
+- Do not create a zettel from a trivial fact without standalone value.
+- Do not create a new note when an obvious semantic duplicate exists.
+- Preserve the original source title/link.
+- Distinguish the user's opinion from source facts.
+- Do not modify multiple existing notes in one automatic apply.
 
-## Завершение
+## Completion
 
-Выдать решение, target, связанные заметки, confidence/неопределённость и
-предлагаемый следующий шаг.
+Return the decision, target, related notes, confidence/uncertainty and proposed next step.
